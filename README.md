@@ -23,7 +23,7 @@ The panel supports English and Chinese. Optional seeded foresight previews event
 
 ## Install
 
-- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download the [v0.2.1 Windows ZIP](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.2.1).
+- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download the [v0.2.2 Windows ZIP](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.2.2).
 - Windows 10/11 x64 only. Install ModTheSpire and BaseMod separately; see [Windows installation](WINDOWS_INSTALL.md). The package includes its native backend, so players need no WSL, separate Python, or source checkout.
 - Developers can use the [native build guide](WINDOWS_PORTABLE.md). Linux, macOS, and Steam Deck builds are not available yet.
 

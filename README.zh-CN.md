@@ -23,7 +23,7 @@
 
 ## 安装
 
-- [订阅 Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)，或下载 [v0.2.1 Windows 包](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.2.1)。
+- [订阅 Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)，或下载 [v0.2.2 Windows 包](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.2.2)。
 - 仅支持 Windows 10/11 x64。ModTheSpire 和 BaseMod 需另行安装，详见 [Windows 安装说明](WINDOWS_INSTALL.md)。发布包自带原生后台，玩家无需 WSL、另装 Python 或克隆源码。
 - 开发者可参考[原生构建说明](WINDOWS_PORTABLE.md)。Linux、macOS 和 Steam Deck 暂无运行包。
 

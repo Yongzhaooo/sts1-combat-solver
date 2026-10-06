@@ -2,6 +2,8 @@
 
 A local combat solver for Slay the Spire 1. You build the deck and choose the route; it searches the current fight, compares potion lines, and can execute one action, a turn, or combat automatically. The panel supports English and Chinese. Card, relic and enemy names follow the game language.
 
+Version 0.2.2 fixes the order of copied attacks played by Distilled Chaos, so relic effects resolve before the following card.
+
 ## Installation
 
 The package targets Windows 10/11 x64 and includes a native backend. No WSL, Python installation, compiler or source checkout is needed. [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843).

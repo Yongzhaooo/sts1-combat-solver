@@ -2829,14 +2829,9 @@ void BattleContext::queuePurgeCard(const CardInstance &c, int target) {
 }
 
 void BattleContext::addPurgeCardToCardQueue(const CardQueueItem &item) {
-    if (cardQueue.size > 0) {
-        auto temp = cardQueue.front();
-        cardQueue.front() = item;
-        cardQueue.pushFront(temp);
-    } else {
-        cardQueue.pushFront(item);
-    }
-
+    // The original queue still contains the current card at index 0 when it
+    // inserts a duplicate at index 1. We have already popped the current card.
+    cardQueue.pushFront(item);
 }
 
 void BattleContext::noOpRollMove() {
