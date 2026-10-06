@@ -1,0 +1,28 @@
+name: Bug report / 错误报告
+description: Report a solver problem with an optional reviewed F6 diagnostic archive / 反馈问题，可附检查后的 F6 诊断包
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Press F6 to export a local report. Review debug.json before attaching the ZIP. GitHub issues are public and linked to your account. Do not attach raw databases, saves, audio or personal information. Bug reporting does not grant AI training permission.
+
+        按 F6 导出本地报告，检查 debug.json 后再附上 ZIP。GitHub Issue 是公开的，并关联你的账号。请勿上传原始数据库、存档、录音或个人信息。错误报告不授权 AI 训练。
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened? / 发生了什么？
+      description: Expected result, actual result and reproduction steps / 预期、实际结果和复现步骤
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions and enabled mods / 版本及启用的模组
+      description: Solver build, game language and enabled mods / 求解器版本、游戏语言及模组列表
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostic
+    attributes:
+      label: Optional reviewed diagnostic ZIP / 可选：检查后的诊断包
+      description: Attach the F6 export here only if suitable for public sharing / 仅在适合公开时附上 F6 导出包

@@ -1,0 +1,25 @@
+# Privacy and optional experience contributions
+
+This policy describes data handling in the default public build of STS1 Combat Solver. The maintainer is CYZ. Prior to public release, the maintainer must establish a functioning private contact channel and finalize official submission workflows. This document does not authorize online telemetry.
+
+The solver operates locally. It does not perform automated background uploads of logs, account credentials, gameplay recordings, or experience datasets. Standard public builds do not access the microphone or generate the private research decision journal. Local debugging utilizes a rolling buffer storing a maximum of 300 events across the latest three runs. Exported diagnostic ZIP archives and experience parts remain on local storage until manually deleted. Exit the game completely before deleting the local debug database; the file is recreated when debugging resumes.
+
+## Diagnostic bug reports
+
+Pressing `F6` exports data from a recent combat encounter to a local archive. The generated file may contain game and mod versions, run seeds, deck compositions, card identifiers, internal RNG states, performed actions, error logs, and contextual diagnostic state. It excludes raw save files, audio recordings, and the full SQLite database file, and strips recognizable account identifiers and local filesystem paths. Data filtering does not constitute guaranteed anonymity; inspect the plaintext JSON before sharing. Submitting a diagnostic bug report is solely intended for debugging and bug resolution; it does not grant authorization to utilize the data for AI model training.
+
+## Voluntary experience contributions
+
+Experience recording is disabled by default on every game launch and only activates upon manual user intervention. It records full exported game observations alongside solver action submissions, including internal RNG and draw pool states explicitly flagged as privileged metadata, relative event timing, and software/mod version details. Game state transitions recorded during human play represent environmental observations rather than validated human action labels. Lossless ZIP/JSONL compression and sequential part numbering preserve complete data sequences. Recording can be toggled at any time; pressing `Shift+F6` finalizes active parts for review. Exporting data locally does not transmit or publish files and does not confer permission for AI training.
+
+Submitting experience data requires a distinct, explicit declaration confirming that you choose to provide the files for evaluating and training the project's gameplay AI. This permission is completely decoupled from bug reporting and routine use of the solver; declining to share experience data does not disable or restrict any solver features. Do not submit third-party data without appropriate legal authority. Do not include personal data within free-text descriptions or custom mod parameters. Authorizing training data contributions does not grant permission for public dataset redistribution or onward sharing; separate agreements are required prior to any redistribution.
+
+## Distribution platforms and retention limits
+
+Files attached to public GitHub issues or Steam discussions become readable and duplicable by third parties and will be associated with your platform account. If public disclosure is unsuitable, use the forthcoming private contribution channel once established. Platforms process network and account metadata under their own independent terms of service. Deleting a local file does not erase previously distributed online copies.
+
+The maintainer proposes the following operational retention targets, to be formally confirmed prior to accepting incoming contributions: private working copies of bug reports should be deleted within 90 days following issue closure, and identifiable training contributions within 12 months, unless an earlier deletion or consent withdrawal request is received. These timelines represent administrative commitments rather than automated in-game deletion routines. Removing source contributions does not ensure that an already trained model can eliminate the downstream effects of those data points; the maintainer must evaluate incoming deletion requests against applicable legal rights rather than promising complete model parameter erasure.
+
+## Governance requirements prior to acceptance
+
+Prior to accepting any user contributions, the project must explicitly publish: operating identity and contact channels, exact processing purposes, applicable legal bases, downstream recipients and service providers, data retention schedules, rights request procedures, and any cross-border transfer arrangements. Open-source licenses do not supersede data protection regulations. Stripping usernames or hashing identifiers does not prevent data from qualifying as personal data if it can still be linked to an identifiable individual. Legal applicability and statutory compliance depend on the jurisdiction where the project operates, user residency, and operational data handling practices.

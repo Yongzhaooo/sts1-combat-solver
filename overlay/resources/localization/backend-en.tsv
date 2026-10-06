@@ -1,0 +1,84 @@
+不主动用药|No active potion use
+不交药击杀|Potion-free kill
+不交药路线包含用药动作|Potion-free route contains potion use
+不用药|No potions
+仅支持|Supports only 
+优先深搜：不交药击杀盗贼|Deep search first: potion-free thief kill
+使用|Use 
+后台已接收，准备工作进程|Request received; preparing worker
+实际状态偏离预测；已停止执行。|Actual state differs from prediction; execution stopped.
+导入战斗状态|Importing combat state
+局面已经变化，请重新计算药水路线。|State changed; recalculate potion routes.
+当前路线已执行完毕。|Route complete.
+心脏路线回放与搜索结果不一致|Heart replay differs from search result
+心脏：全部资源求胜|Heart: all resources available
+战士|Ironclad
+战损最少（可逃跑）|Lowest loss (escape allowed)
+战斗选牌提前关闭|Combat selection closed early
+所选药水路线不可用|Selected potion route unavailable
+打钱|Gold recovery
+执行动作与路线不一致|Action differs from planned route
+拒绝非战斗命令|Non-combat command rejected
+搜索修改了输入快照|Search modified the input snapshot
+搜索战斗路线|Searching combat routes
+搜索超时或引擎退出；请降低预算后重算。|Search timed out or engine exited; reduce budget and retry.
+敌人|Enemy 
+无效搜索预算|Invalid search budget
+无效的|Invalid 
+未知操作|Unknown operation
+本轮尚无可用路线，请增加搜索预算|No available route; increase search budget
+本轮搜索未找到使用路线|No potion-use route found
+本轮未找到完整路线|No complete route found
+校验请求与随机状态|Validating request and RNG state
+核对游戏与模拟状态|Checking game against simulation
+模拟器无法精确导入当前状态：|Cannot import current state exactly: 
+比较用药击杀与最低战损路线|Comparing potion kills and lowest-loss routes
+求解进程意外退出；请重新计算。|Worker exited unexpectedly; recalculate.
+没有可继续执行的路线|No route to resume
+消耗小精灵|Uses Fairy
+消耗蜥蜴尾巴|Uses Lizard Tail
+游戏动画尚未结算，请稍候。|Game animations pending; please wait.
+狂宴|Feed
+生命上限|Max HP
+用药击杀|Potion kill
+用药|Use potion 
+的战斗阶段；选奖励牌、路线和商店由你操作。| combat; you choose rewards, map routes and shops.
+确认选牌后状态偏离预测：|State differs after selection: 
+等待工作进程（启动或加载引擎）|Waiting for worker / engine startup
+结束回合|End turn
+缺少战斗选牌动作导出，请重启游戏加载新版模组。|Missing selection export; restart with updated mods.
+药水：|Potion: 
+药水|Potion
+路线使用了未授权的药水|Route uses an unauthorized potion
+路线回放出现非法动作|Illegal action during replay
+追回金币|Gold recovered 
+选牌：|Select: 
+金| gold
+随机状态导出不完整：|Incomplete RNG export: 
+随机规则|RNG rule
+保命路线：消耗|Survival route: uses 
+保留价值|reserve value
+保留药水；收益未超过用药|Keep potions; benefit below potion 
+启发式）|heuristic)
+小精灵|Fairy
+尾巴|Tail
+心脏：全部资源可用，找到存活胜线即执行|Heart: all resources; execute the first surviving win
+成长不足|Low scaling
+无药未找到胜线，优先保命|No potion-free win; prioritize survival
+未发现明显短板|No obvious weakness found
+未找到可验证的获胜路线，停止自动|No verified win; auto stopped
+满栏且掉药概率高|Full slots and high potion drop chance
+爆发不足|Low burst damage
+牌组评估：|Deck assessment: 
+牌组资料不足，保守留药|Insufficient deck data; keep potions
+省|Save 
+群攻不足|Low area damage
+血；用药门槛| HP; potion threshold 
+近期精英|Upcoming elite
+防御不足|Low defense
+下场小血瓶|Next-fight Blood Vial
+下层火堆羽毛|Next-campfire Feather
+盗贼逃跑，损失约|Thief escapes; estimated loss 
+血| HP
+被塞诅咒|Curse added
+计| valued at 
