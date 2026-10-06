@@ -4,7 +4,7 @@ A local combat solver for Slay the Spire 1. You build the deck and choose the ro
 
 ## Installation
 
-The package targets Windows 10/11 x64 and includes a native backend. No WSL, Python installation, compiler or source checkout is needed. The Workshop item is not yet published.
+The package targets Windows 10/11 x64 and includes a native backend. No WSL, Python installation, compiler or source checkout is needed. [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843).
 
 Subscribe to this item, [ModTheSpire](https://steamcommunity.com/sharedfiles/filedetails/?id=1605060445) and [BaseMod](https://steamcommunity.com/sharedfiles/filedetails/?id=1605833019), then wait for Steam to finish downloading. Choose Play with Mods in Steam. In ModTheSpire, enable BaseMod and STS1 Combat Solver. Communication and state export are integrated into the solver. Remove the previous separate CommunicationMod.jar and SteamStateExport.jar copies supplied with older solver versions.
 

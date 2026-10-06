@@ -1,10 +1,12 @@
-# 尖塔 1 创意工坊发布准备
+# 尖塔 1 创意工坊发布记录
+
+2026-10-06：Windows x64 `v0.2.1` 已公开发布至 [Steam 创意工坊条目 3814773843](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)，源码与 Windows ZIP 见 [Yongzhaooo 的 GitHub Release](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.2.1)。上传配置位于 `public-release/potion-0.2.1-20261006/workshop-upload/config.json`，后续更新应复用条目 ID。公开页面已核对标题、用户指定封面和双语说明；Steam 订阅后的完整对局验收尚未完成。以下保留早期分发研究与发布步骤。
 
 本次研究对象是 Slay the Spire 1，Steam App ID 为 `646570`。尖塔 2 的上传器和打包格式不适用。
 
 ## 已核实的上传入口
 
-游戏安装目录包含 `mod-uploader.jar`。本机已运行其帮助命令，确认以下入口；没有执行上传：
+游戏安装目录包含 `mod-uploader.jar`。本机已通过以下上传入口创建工坊条目：
 
 ```powershell
 java -jar mod-uploader.jar new -w sts1-combat-solver-workshop
@@ -17,7 +19,7 @@ java -jar mod-uploader.jar upload -w sts1-combat-solver-workshop
 
 ## 当前原生包
 
-Windows 原生包已解决冷启动，随包包含 Python 3.14.8 与 C++ 扩展，不再依赖 WSL 或开发 checkout。按用户要求已装入实际游戏，正在由用户测试其它模组兼容性。安装与验证记录见 [WINDOWS_PORTABLE.md](WINDOWS_PORTABLE.md)。尚未上传 Steam；下节为此前开发版的分发缺口记录。
+Windows 原生包已解决冷启动，随包包含 Python 3.14.8 与 C++ 扩展，不再依赖 WSL 或开发 checkout。安装与验证记录见 [WINDOWS_PORTABLE.md](WINDOWS_PORTABLE.md)。下节为此前开发版的分发缺口记录。
 
 ## 先前 WSL 开发包的分发缺口（历史）
 
@@ -39,7 +41,7 @@ Windows 原生包已解决冷启动，随包包含 Python 3.14.8 与 C++ 扩展�
 
 单独说明辉眼预测会读取种子／随机状态并揭示隐藏结果，自动模式可执行出牌和用药，F9 可停止。公开版 F6 导出错误报告，Shift+F6 收尾并打开自愿录制的经验包；默认不录音、不录制私人研究日志，也不自动上传。经验贡献与错误报告的用途、授权分别声明。地图、事件预测不应宣传成普通可见信息下的公平决策。
 
-可用于页面的[英文文案](WORKSHOP_DESCRIPTION.md)与[中文文案](WORKSHOP_DESCRIPTION.zh-CN.md)已经独立准备；发布前补齐真实安装步骤、仓库链接和私密提交渠道。当前文案明确标注尚未发布。
+工坊页面已写入双语安装与限制说明，并链接公开 GitHub 仓库。[英文文案](WORKSHOP_DESCRIPTION.md)与[中文文案](WORKSHOP_DESCRIPTION.zh-CN.md)保留详细说明。
 
 首次上传优先使用私有可见性，在 Steam 上核对实际内容和下载启动，再切换公开。生成的条目 ID 和上传配置保留在专用工作区；更新现有条目时复用该 ID，避免创建重复订阅项。
 

@@ -4,7 +4,7 @@
 
 ## 安装
 
-当前发布包面向 Windows 10/11 x64，包含原生后台，无需 WSL、Python、编译器或源码。工坊条目尚未发布。
+当前发布包面向 Windows 10/11 x64，包含原生后台，无需 WSL、Python、编译器或源码。可在 [Steam 创意工坊订阅](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)。
 
 订阅此条目、[ModTheSpire](https://steamcommunity.com/sharedfiles/filedetails/?id=1605060445) 和 [BaseMod](https://steamcommunity.com/sharedfiles/filedetails/?id=1605833019)，等待下载完成。从 Steam 选择“使用模组启动”，在 ModTheSpire 中勾选 BaseMod 和 STS1 Combat Solver，再启动游戏。通信桥和状态导出已合并到同一个求解器 JAR。升级时移除旧版求解器附带的独立 CommunicationMod.jar 和 SteamStateExport.jar。
 
