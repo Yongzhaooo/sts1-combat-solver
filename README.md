@@ -16,6 +16,10 @@ A local combat advisor and optional executor for *Slay the Spire 1*. It searches
 
 The panel supports English and Chinese. Optional seeded foresight previews events, encounters, and transforms using hidden RNG information beyond ordinary visible play. The [potion score table](POTION_POLICY.zh-CN.md) explains reward swaps and combat use.
 
+## Project goals and progress
+
+The goal is a combat solver for **all four Slay the Spire 1 characters** and a **reinforcement-learning (RL) agent**. RL research and training experiments are already underway. The current release supports Ironclad and colorless cards; Silent, Defect, and Watcher still require simulator work. The four-character solver and RL agent are active goals, not features of this release.
+
 ## Install
 
 - [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download the [v0.2.1 Windows ZIP](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.2.1).
@@ -25,5 +29,3 @@ The panel supports English and Chinese. Optional seeded foresight previews event
 ## Controls and privacy
 
 `F10` / `Enter` toggles combat automation; `F9` stops search and execution; `F8` folds the panel. `F6` exports a local diagnostic report. Experience recording starts off on every launch; `Shift+F6` finalizes a recording you chose to start. Nothing uploads automatically, and the public build does not record audio. Review files before sharing them; see [Privacy](PRIVACY.md).
-
-The long-term goal is a *Slay the Spire* reinforcement-learning agent. Supporting the other three characters requires a new simulation foundation and has no promised release date.
