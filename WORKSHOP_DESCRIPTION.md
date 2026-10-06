@@ -10,17 +10,21 @@ Subscribe to this item, [ModTheSpire](https://steamcommunity.com/sharedfiles/fil
 
 SuperFastMode, SaveStateMod and other nonessential mods are not required. Mods that change combat rules can create unsupported states. Linux, macOS and Steam Deck packages are not available yet.
 
-## Use and limitations
+## How to use
 
-Current support covers Ironclad and colorless cards only. Search uses a finite budget and does not guarantee an optimal solution or perfect simulator parity. You still choose card rewards, paths, shops, rest sites and events. Foresight reads seeds and RNG states to reveal outcomes beyond ordinary visible information.
+- Start an Ironclad run. Click **Language** on the panel to switch between English and Chinese.
+- In combat, click **Recalculate** and compare the completed routes and potion choices. Click a verified route to execute it, or use **Execute one step**, **Execute turn**, or **Auto combat** for the current result.
+- `F10` / `Enter` toggles combat automation; `F9` or **Stop** halts it; `F8` folds the panel.
+- **Auto potion rewards** and **Auto potions + across-combat** are separate switches for reward swaps and later fights. You still choose card rewards, paths, shops, rest sites, and events.
+- `F6` exports a local diagnostic archive. Experience recording starts Off on every launch; after enabling it manually, `Shift+F6` finalizes its files. Inspect files before sharing.
 
-- Click Language to change the panel language; the choice persists after restart.
-- F10 / Enter toggles combat automation; F9 stops search and execution; F8 folds or expands the panel.
-- F6 exports a local diagnostic archive. Inspect its contents before sharing.
-- Experience recording starts Off on every launch. After enabling it manually, Shift+F6 finalizes and opens complete, losslessly compressed experience parts.
+Current support covers Ironclad and colorless cards only. Search uses a finite budget and does not guarantee an optimal solution or perfect simulator parity. Foresight reads seeds and RNG states to reveal outcomes beyond ordinary visible information.
 
 Logs and experience files live in `%LOCALAPPDATA%\STS1CombatSolver`, outside Workshop updates. Nothing uploads automatically and the public build does not record audio. Bug reports do not grant AI training permission; experience files require a separate explicit agreement before training use. A training-data submission channel is not open yet: keep recordings locally and do not post files containing personal information in Workshop discussions. See the included PRIVACY.md for details.
 
-## Development goals
+## Work underway
 
-The long-term goal is a Slay the Spire RL agent. Discussion, feedback and code contributions are welcome. Supporting The Silent, The Defect and The Watcher requires rebuilding the simulator. These and RL are development goals without a promised release date.
+- **Four-character combat solver:** Ironclad is available now; Silent, Defect, and Watcher need further simulator work.
+- **Reinforcement-learning (RL) agent:** Policy research, training, and evaluation experiments are in progress. No RL agent is included in this release.
+
+Discussion, feedback and code contributions are welcome.

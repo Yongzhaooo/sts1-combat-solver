@@ -18,7 +18,8 @@ The panel supports English and Chinese. Optional seeded foresight previews event
 
 ## Project goals and progress
 
-The goal is a combat solver for **all four Slay the Spire 1 characters** and a **reinforcement-learning (RL) agent**. RL research and training experiments are already underway. The current release supports Ironclad and colorless cards; Silent, Defect, and Watcher still require simulator work. The four-character solver and RL agent are active goals, not features of this release.
+- **Four-character combat solver — underway:** The current release supports Ironclad and colorless cards. Silent, Defect, and Watcher need further simulator work.
+- **Reinforcement-learning (RL) agent — underway:** Policy research, training, and evaluation experiments are in progress. An RL agent is not included in this release.
 
 ## Install
 
@@ -26,6 +27,10 @@ The goal is a combat solver for **all four Slay the Spire 1 characters** and a *
 - Windows 10/11 x64 only. Install ModTheSpire and BaseMod separately; see [Windows installation](WINDOWS_INSTALL.md). The package includes its native backend, so players need no WSL, separate Python, or source checkout.
 - Developers can use the [native build guide](WINDOWS_PORTABLE.md). Linux, macOS, and Steam Deck builds are not available yet.
 
-## Controls and privacy
+## How to use
 
-`F10` / `Enter` toggles combat automation; `F9` stops search and execution; `F8` folds the panel. `F6` exports a local diagnostic report. Experience recording starts off on every launch; `Shift+F6` finalizes a recording you chose to start. Nothing uploads automatically, and the public build does not record audio. Review files before sharing them; see [Privacy](PRIVACY.md).
+- **Launch:** After Steam finishes downloading, choose **Play with Mods**. In ModTheSpire, enable BaseMod and STS1 Combat Solver, then start an Ironclad run. Remove old separate `CommunicationMod.jar` and `SteamStateExport.jar` files supplied with previous solver versions.
+- **Read the panel:** Click **Language** to switch the panel between English and Chinese. In combat, click **Recalculate** to search; compare the displayed routes and potion choices. Search has a finite budget, so a route is a recommendation rather than a proof of optimal play.
+- **Execute a route:** Click a completed, verified route to execute it, or use **Execute one step**, **Execute turn**, or **Auto combat** for the current result. `F10` / `Enter` toggles combat automation; `F9` or **Stop** halts search and execution; `F8` folds the panel.
+- **Choose automation scope:** **Auto potion rewards** handles post-combat potion pickup or swaps. **Auto potions + across-combat** handles potion use and later fights. These are separate panel switches. Card rewards, paths, shops, rest sites, and events remain your choices. See the [potion policy](POTION_POLICY.zh-CN.md).
+- **Report a problem:** Press `F6` to export a local diagnostic archive. Experience recording starts off on every launch; if you enable it, `Shift+F6` finalizes its files. Review files before sharing them. Nothing uploads automatically, and the public build does not record audio; see [Privacy](PRIVACY.md).
