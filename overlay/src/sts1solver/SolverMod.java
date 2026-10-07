@@ -857,7 +857,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         long now = System.currentTimeMillis();
         if (busy && (backend == null || !backend.isAlive()
                 || now - sentAt > (budgets[budgetIndex] >= 128000 ? 600000 : 100000))) {
-            fail(I18n.t("后台求解器未响应，请重新计算。详情见 overlay/runtime/backend.log。"));
+            fail(I18n.t("后台求解器未响应，请重新计算。详情见数据目录中的 backend.log。"));
             return;
         }
         if(awaitingAction && now-sentAt>15000){fail(I18n.t("动作未产生可执行的完成状态，请手动检查。"));return;}

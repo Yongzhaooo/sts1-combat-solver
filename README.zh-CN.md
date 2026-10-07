@@ -24,8 +24,44 @@
 ## 安装
 
 - [订阅 Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)，或下载 [v0.2.2 Windows 包](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.2.2)。
-- 仅支持 Windows 10/11 x64。ModTheSpire 和 BaseMod 需另行安装，详见 [Windows 安装说明](WINDOWS_INSTALL.md)。发布包自带原生后台，玩家无需 WSL、另装 Python 或克隆源码。
-- 开发者可参考[原生构建说明](WINDOWS_PORTABLE.md)。Linux、macOS 和 Steam Deck 暂无运行包。
+- 当前已发布的运行包仅支持 Windows 10/11 x64。ModTheSpire 和 BaseMod 需另行安装，详见 [Windows 安装说明](WINDOWS_INSTALL.md)。发布包自带原生后台，玩家无需 WSL、另装 Python 或克隆源码。
+- Windows、macOS、Linux 的本地源码构建见下文。现有 Windows ZIP／工坊运行包不能直接用于 macOS/Linux。
+
+### 三平台原生源码构建
+
+需要 Python 3.11+、CMake 3.19+、C++17 编译器、JDK 9+（`java`、`javac`、`jar`），以及游戏、ModTheSpire 和 BaseMod。macOS 使用 Xcode Command Line Tools；Windows 使用 Visual Studio C++ Build Tools。各操作系统／CPU 架构分别构建，Python 与编译器架构须一致；不要跨平台复制 `.pyd`、`.so` 或虚拟环境。
+
+在仓库根目录执行。macOS/Linux：
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install pybind11==3.1.0
+.venv/bin/python tools/build_solver_runtime.py
+.venv/bin/python tools/check_backend_launcher.py
+.venv/bin/python tools/check_backend_protocol.py
+.venv/bin/python overlay/build.py --game "/path/to/steamapps/common/SlayTheSpire"
+```
+
+Windows（PowerShell）：
+
+```powershell
+py -3 -m venv .venv
+.venv\Scripts\python.exe -m pip install pybind11==3.1.0
+.venv\Scripts\python.exe tools/build_solver_runtime.py
+.venv\Scripts\python.exe tools/check_backend_launcher.py
+.venv\Scripts\python.exe tools/check_backend_protocol.py
+.venv\Scripts\python.exe overlay/build.py --game 'D:\SteamLibrary\steamapps\common\SlayTheSpire'
+```
+
+`--game` 指向 Steam 游戏目录；macOS 指向包含 `SlayTheSpire.app` 的目录。构建器自动查找同一 Steam 库中的工坊依赖；不同库或手动安装时，可显式传入 `--modthespire /path/to/ModTheSpire.jar --basemod /path/to/BaseMod.jar`。
+
+产物为 `overlay/build/STS1CombatSolver.jar`。完全退出游戏后再放入游戏的 `mods` 目录（macOS 启动目录通常是 `SlayTheSpire.app/Contents/Resources`）。先禁用工坊版求解器，将旧求解器 JAR 移出所有加载目录，避免重复加载；保留 BaseMod/ModTheSpire。构建脚本不会修改已安装模组或存档。
+
+这是**本机源码安装版，不是可分发整包**：JAR 记录当前解释器和后台的绝对路径，必须保留源码目录和 `.venv`，移动后重新构建 JAR。不要分发此含本机路径的 JAR。旧 Windows 随包／WSL 流程保留；`overlay/build.py --bundled-windows --game ...` 可生成交给原 Windows 打包器使用的 JAR。
+
+日志与诊断目录：Windows 为 `%LOCALAPPDATA%\STS1CombatSolver`；macOS 为 `~/Library/Application Support/STS1CombatSolver`；Linux 为 `${XDG_STATE_HOME:-$HOME/.local/state}/STS1CombatSolver`（相对的 `XDG_STATE_HOME` 会被忽略）。旧 WSL 模式继续使用原配置目录。
+
+检查覆盖启动路由、原生搜索／回放和工作进程通信，不等同于真实游戏状态一致性或自动用药验收。CI 配置了三平台后台构建，不含专有游戏 JAR；依赖自动化前，请在可控的战士战斗中验证重新计算、回合执行、停止以及两个药水开关。
 
 ## 使用教程
 

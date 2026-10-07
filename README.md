@@ -24,8 +24,44 @@ The panel supports English and Chinese. Optional seeded foresight previews event
 ## Install
 
 - [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download the [v0.2.2 Windows ZIP](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.2.2).
-- Windows 10/11 x64 only. Install ModTheSpire and BaseMod separately; see [Windows installation](WINDOWS_INSTALL.md). The package includes its native backend, so players need no WSL, separate Python, or source checkout.
-- Developers can use the [native build guide](WINDOWS_PORTABLE.md). Linux, macOS, and Steam Deck builds are not available yet.
+- The published package is Windows 10/11 x64 only. Install ModTheSpire and BaseMod separately; see [Windows installation](WINDOWS_INSTALL.md). The package includes its native backend, so players need no WSL, separate Python, or source checkout.
+- For local Windows, macOS or Linux source builds, use the instructions below. This does not turn the existing Windows ZIP/Workshop runtime into a macOS/Linux package.
+
+### Native source build (Windows / macOS / Linux)
+
+Prerequisites: Python 3.11+, CMake 3.19+, a C++17 compiler, JDK 9+ (`java`, `javac`, `jar`), Slay the Spire, ModTheSpire and BaseMod. On macOS install Xcode Command Line Tools; on Windows use Visual Studio C++ Build Tools. Build separately on each OS/CPU architecture with matching Python/compiler architecture. Do not copy `.pyd`/`.so` files or a virtual environment between platforms.
+
+Run from the repository root. On macOS/Linux:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install pybind11==3.1.0
+.venv/bin/python tools/build_solver_runtime.py
+.venv/bin/python tools/check_backend_launcher.py
+.venv/bin/python tools/check_backend_protocol.py
+.venv/bin/python overlay/build.py --game "/path/to/steamapps/common/SlayTheSpire"
+```
+
+On Windows (PowerShell), use the same commands with `.venv\Scripts\python.exe`:
+
+```powershell
+py -3 -m venv .venv
+.venv\Scripts\python.exe -m pip install pybind11==3.1.0
+.venv\Scripts\python.exe tools/build_solver_runtime.py
+.venv\Scripts\python.exe tools/check_backend_launcher.py
+.venv\Scripts\python.exe tools/check_backend_protocol.py
+.venv\Scripts\python.exe overlay/build.py --game 'D:\SteamLibrary\steamapps\common\SlayTheSpire'
+```
+
+`--game` is the Steam game directory, including the directory *containing* `SlayTheSpire.app` on macOS. The builder discovers Workshop dependencies in the same Steam library; for another library or manual installation, pass `--modthespire /path/to/ModTheSpire.jar --basemod /path/to/BaseMod.jar`.
+
+The output is `overlay/build/STS1CombatSolver.jar`. Exit the game before installing it in your game's `mods` directory (on macOS, the launch directory is commonly `SlayTheSpire.app/Contents/Resources`). Disable the Workshop solver and move any old solver JAR outside loaded mod directories first: load only one solver. Leave BaseMod/ModTheSpire installed. The script does not change installed mods or saves.
+
+This is a **local source installation**, not a portable release: the JAR records the absolute interpreter and backend paths. Keep the checkout and `.venv` in place; rebuild the JAR after moving either. Do not distribute this locally configured JAR. The old Windows bundled/WSL workflows remain available; `overlay/build.py --bundled-windows --game ...` builds a JAR for the existing Windows packager.
+
+Logs and diagnostic files live in `%LOCALAPPDATA%\STS1CombatSolver` on Windows, `~/Library/Application Support/STS1CombatSolver` on macOS, and `${XDG_STATE_HOME:-$HOME/.local/state}/STS1CombatSolver` on Linux. A relative `XDG_STATE_HOME` is ignored. Legacy WSL builds retain their configured log directory.
+
+The checks exercise launcher routing, native search/replay and worker communication; they do not prove live-game parity or automatic potion behavior. The CI matrix builds the backend on all three OSes, without proprietary game JARs. Verify Recalculate, turn execution, cancellation and both potion switches in a controlled Ironclad fight before relying on automation.
 
 ## How to use
 

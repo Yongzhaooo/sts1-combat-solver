@@ -32,7 +32,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 发牌和动画结算后自动生成建议|Advice appears after dealing and animations
 变化|Transform
 变化预览 · 点击此处打开试选列表|Transform preview · click to try picks
-后台求解器未响应，请重新计算。详情见 overlay/runtime/backend.log。|Backend not responding. Recalculate; see overlay/runtime/backend.log.
+后台求解器未响应，请重新计算。详情见数据目录中的 backend.log。|Backend not responding. Recalculate; see backend.log in the data directory.
 后台连接中断：|Backend disconnected: 
 奖励牌 / 地图 / 商店始终由你操作|You choose rewards, map and shop actions
 小精灵×|Fairy ×

@@ -8,18 +8,46 @@ import java.util.Properties;
 
 /** Resolves an installed runtime without relying on the launcher's working directory. */
 final class BackendRuntime {
-    static Path dataDirectory(Properties properties) {
-        if (!"windows-bundled".equals(properties.getProperty("runtime")))
-            return Paths.get(properties.getProperty("log")).getParent();
+    static Path dataDirectory(Properties properties) throws IOException {
+        if (properties.getProperty("log") != null) {
+            Path log = configuredPath(properties, "log");
+            if (log.getParent() == null) throw new IOException("Configured log must name a file");
+            return log.getParent();
+        }
+        String os = System.getProperty("os.name");
+        Path home = Paths.get(System.getProperty("user.home"));
+        if (os.startsWith("Mac"))
+            return home.resolve("Library/Application Support/STS1CombatSolver");
+        if (!os.startsWith("Windows")) {
+            String state = System.getenv("XDG_STATE_HOME");
+            Path base = state == null || state.isEmpty() ? home.resolve(".local/state") : Paths.get(state);
+            if (!base.isAbsolute()) base = home.resolve(".local/state");
+            return base.resolve("STS1CombatSolver");
+        }
         String local = System.getenv("LOCALAPPDATA");
-        return (local == null || local.isEmpty() ? Paths.get(System.getProperty("user.home"), "AppData", "Local")
+        return (local == null || local.isEmpty() ? home.resolve("AppData/Local")
                 : Paths.get(local)).resolve("STS1CombatSolver");
     }
 
     static ProcessBuilder process(Properties properties) throws IOException {
-        if (!"windows-bundled".equals(properties.getProperty("runtime")))
+        String mode = properties.getProperty("runtime", "wsl");
+        if ("native".equals(mode)) {
+            Path python = configuredFile(properties, "python"), backend = configuredFile(properties, "backend");
+            if (!Files.isExecutable(python)) throw new IOException("Configured python is not executable: " + python);
+            ProcessBuilder process = new ProcessBuilder(python.toString(), "-X", "utf8", "-B", "-u", backend.toString());
+            process.directory(backend.getParent().toFile());
+            process.environment().remove("PYTHONHOME");
+            process.environment().remove("PYTHONPATH");
+            process.environment().put("STS_SOLVER_DATA", dataDirectory(properties).toString());
+            return process;
+        }
+        if ("wsl".equals(mode)) {
+            if (!System.getProperty("os.name").startsWith("Windows"))
+                throw new IOException("WSL runtime requires Windows; build a native runtime for macOS/Linux");
             return new ProcessBuilder("wsl.exe", "--exec", "env", "PYTHONUTF8=1", "PYTHONIOENCODING=utf-8",
                 properties.getProperty("python"), "-u", properties.getProperty("backend"));
+        }
+        if (!"windows-bundled".equals(mode)) throw new IOException("Unknown solver runtime: " + mode);
         if (!System.getProperty("os.name").startsWith("Windows"))
             throw new IOException("This runtime requires Windows x64");
         Path directory = null;
@@ -36,5 +64,21 @@ final class BackendRuntime {
         process.directory(runtime.toFile());
         process.environment().put("STS_SOLVER_DATA", dataDirectory(properties).toString());
         return process;
+    }
+
+    private static Path configuredFile(Properties properties, String key) throws IOException {
+        Path path = configuredPath(properties, key);
+        if (!Files.isRegularFile(path)) throw new IOException("Native runtime " + key + " file missing: " + path);
+        return path;
+    }
+
+    private static Path configuredPath(Properties properties, String key) throws IOException {
+        String value = properties.getProperty(key);
+        if (value == null || value.isEmpty()) throw new IOException("Missing native runtime property: " + key);
+        try {
+            Path path = Paths.get(value);
+            if (!path.isAbsolute()) throw new IOException("Runtime " + key + " must be an absolute path: " + value);
+            return path;
+        } catch (InvalidPathException failure) { throw new IOException("Invalid runtime path: " + key, failure); }
     }
 }
