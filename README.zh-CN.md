@@ -23,9 +23,9 @@
 
 ## 安装
 
-- [订阅 Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)，或下载 [v0.2.2 Windows 包](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.2.2)。
-- 当前已发布的运行包仅支持 Windows 10/11 x64。ModTheSpire 和 BaseMod 需另行安装，详见 [Windows 安装说明](WINDOWS_INSTALL.md)。发布包自带原生后台，玩家无需 WSL、另装 Python 或克隆源码。
-- Windows、macOS、Linux 的本地源码构建见下文。现有 Windows ZIP／工坊运行包不能直接用于 macOS/Linux。
+- [订阅 Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)，或下载 [v0.3.0 运行包](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.3.0)。
+- 工坊包支持 Windows 10/11 x64 和 macOS 11+（Apple Silicon、Intel）。另行订阅 ModTheSpire、BaseMod，选择“使用模组启动”并勾选 BaseMod 与求解器即可，无需另装 Python、编译器、WSL 或克隆源码。详见 [Windows 安装说明](WINDOWS_INSTALL.md)及 [Mac 安装与发布验证](MACOS_INSTALL.md)。
+- Windows、macOS、Linux 的本地源码构建见下文。Linux／Steam Deck 暂无随工坊分发的运行时。
 
 ### 三平台原生源码构建
 
@@ -61,7 +61,7 @@ py -3 -m venv .venv
 
 日志与诊断目录：Windows 为 `%LOCALAPPDATA%\STS1CombatSolver`；macOS 为 `~/Library/Application Support/STS1CombatSolver`；Linux 为 `${XDG_STATE_HOME:-$HOME/.local/state}/STS1CombatSolver`（相对的 `XDG_STATE_HOME` 会被忽略）。旧 WSL 模式继续使用原配置目录。
 
-检查覆盖启动路由、原生搜索／回放和工作进程通信，不等同于真实游戏状态一致性或自动用药验收。CI 配置了三平台后台构建，不含专有游戏 JAR；依赖自动化前，请在可控的战士战斗中验证重新计算、回合执行、停止以及两个药水开关。
+CI 覆盖 Windows、macOS、Linux 的 Python 3.11／3.14，以及独立构建的 Apple Silicon、Intel 便携包。检查包括原生搜索／回放、真实求解请求、中断、诊断保留／导出、语言和运行时选择。Mac 包用正式 Java 解包逻辑，在中文路径和最小 PATH 下启动随包 Python。这些检查不代表原版机制完全对齐；CI 不分发专有游戏 JAR。
 
 ## 使用教程
 

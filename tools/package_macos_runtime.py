@@ -7,6 +7,7 @@ from pathlib import Path
 import platform
 import sys
 import sysconfig
+import subprocess
 import zipfile
 
 
@@ -45,7 +46,7 @@ def package(python_root, output):
         header = (root / repo / 'combat_engine/third_party/nlohmann/json.hpp').read_text(encoding='utf-8')
         archive.writestr('licenses/nlohmann-json.txt', header.split('*/', 1)[0].removeprefix('/*'))
         archive.writestr('bundle.json', json.dumps({'platform': 'macos-' + platform.machine(),
-            'python': platform.python_version(), 'source_commit': __import__('subprocess').check_output(
+            'python': platform.python_version(), 'source_commit': subprocess.check_output(
                 ['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()}))
     print(output, hashlib.sha256(output.read_bytes()).hexdigest())
 

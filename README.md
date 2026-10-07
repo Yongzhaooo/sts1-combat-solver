@@ -23,9 +23,9 @@ The panel supports English and Chinese. Optional seeded foresight previews event
 
 ## Install
 
-- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download the [v0.2.2 Windows ZIP](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.2.2).
-- The published package is Windows 10/11 x64 only. Install ModTheSpire and BaseMod separately; see [Windows installation](WINDOWS_INSTALL.md). The package includes its native backend, so players need no WSL, separate Python, or source checkout.
-- For local Windows, macOS or Linux source builds, use the instructions below. This does not turn the existing Windows ZIP/Workshop runtime into a macOS/Linux package.
+- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download a [v0.3.0 package](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.3.0).
+- The Workshop package supports Windows 10/11 x64 and macOS 11+ (Apple Silicon and Intel). Install ModTheSpire and BaseMod separately, choose Play with Mods, and enable BaseMod plus STS1 Combat Solver. No separate Python, compiler, WSL or source checkout is needed. See [Windows installation](WINDOWS_INSTALL.md) or [Mac installation and release checks](MACOS_INSTALL.md).
+- Windows, macOS and Linux source builds remain available below. Linux/Steam Deck have no bundled Workshop runtime yet.
 
 ### Native source build (Windows / macOS / Linux)
 
@@ -61,7 +61,7 @@ This is a **local source installation**, not a portable release: the JAR records
 
 Logs and diagnostic files live in `%LOCALAPPDATA%\STS1CombatSolver` on Windows, `~/Library/Application Support/STS1CombatSolver` on macOS, and `${XDG_STATE_HOME:-$HOME/.local/state}/STS1CombatSolver` on Linux. A relative `XDG_STATE_HOME` is ignored. Legacy WSL builds retain their configured log directory.
 
-The checks exercise launcher routing, native search/replay and worker communication; they do not prove live-game parity or automatic potion behavior. The CI matrix builds the backend on all three OSes, without proprietary game JARs. Verify Recalculate, turn execution, cancellation and both potion switches in a controlled Ironclad fight before relying on automation.
+CI covers Python 3.11 and 3.14 on Windows, macOS and Linux, plus separately built Apple Silicon and Intel portable packages. It checks native search/replay, real worker requests and cancellation, diagnostic retention/export, localization and runtime selection. Mac package checks use production Java extraction and the bundled Python in a relocated Unicode path with a minimal PATH. These checks do not prove full live-game parity. CI does not redistribute proprietary game JARs.
 
 ## How to use
 
