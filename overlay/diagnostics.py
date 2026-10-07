@@ -47,7 +47,9 @@ class Reports:
                             (run, floor, battle, now, self.session, kind,
                              json.dumps(payload, ensure_ascii=False)))
             # Delete only owned database rows, never runtime files or user saves.
-            self.db.execute('DELETE FROM runs WHERE id NOT IN (SELECT id FROM runs ORDER BY touched DESC LIMIT 3)')
+            # Wall-clock timestamps can tie (notably Python 3.11 on Windows).
+            # Event insertion order also handles revisiting an older run correctly.
+            self.db.execute('DELETE FROM runs WHERE id NOT IN (SELECT run FROM events GROUP BY run ORDER BY MAX(id) DESC LIMIT 3)')
             self.db.execute('DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY id DESC LIMIT 300)')
 
     def close(self):

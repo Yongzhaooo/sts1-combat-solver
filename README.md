@@ -23,9 +23,45 @@ The panel supports English and Chinese. Optional seeded foresight previews event
 
 ## Install
 
-- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download the [v0.2.2 Windows ZIP](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.2.2).
-- Windows 10/11 x64 only. Install ModTheSpire and BaseMod separately; see [Windows installation](WINDOWS_INSTALL.md). The package includes its native backend, so players need no WSL, separate Python, or source checkout.
-- Developers can use the [native build guide](WINDOWS_PORTABLE.md). Linux, macOS, and Steam Deck builds are not available yet.
+- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download a [v0.3.0 package](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.3.0).
+- The Workshop package supports Windows 10/11 x64 and macOS 11+ (Apple Silicon and Intel). Install ModTheSpire and BaseMod separately, choose Play with Mods, and enable BaseMod plus STS1 Combat Solver. No separate Python, compiler, WSL or source checkout is needed. See [Windows installation](WINDOWS_INSTALL.md) or [Mac installation and release checks](MACOS_INSTALL.md).
+- Windows, macOS and Linux source builds remain available below. Linux/Steam Deck have no bundled Workshop runtime yet.
+
+### Native source build (Windows / macOS / Linux)
+
+Prerequisites: Python 3.11+, CMake 3.19+, a C++17 compiler, JDK 9+ (`java`, `javac`, `jar`), Slay the Spire, ModTheSpire and BaseMod. On macOS install Xcode Command Line Tools; on Windows use Visual Studio C++ Build Tools. Build separately on each OS/CPU architecture with matching Python/compiler architecture. Do not copy `.pyd`/`.so` files or a virtual environment between platforms.
+
+Run from the repository root. On macOS/Linux:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install pybind11==3.1.0
+.venv/bin/python tools/build_solver_runtime.py
+.venv/bin/python tools/check_backend_launcher.py
+.venv/bin/python tools/check_backend_protocol.py
+.venv/bin/python overlay/build.py --game "/path/to/steamapps/common/SlayTheSpire"
+```
+
+On Windows (PowerShell), use the same commands with `.venv\Scripts\python.exe`:
+
+```powershell
+py -3 -m venv .venv
+.venv\Scripts\python.exe -m pip install pybind11==3.1.0
+.venv\Scripts\python.exe tools/build_solver_runtime.py
+.venv\Scripts\python.exe tools/check_backend_launcher.py
+.venv\Scripts\python.exe tools/check_backend_protocol.py
+.venv\Scripts\python.exe overlay/build.py --game 'D:\SteamLibrary\steamapps\common\SlayTheSpire'
+```
+
+`--game` is the Steam game directory, including the directory *containing* `SlayTheSpire.app` on macOS. The builder discovers Workshop dependencies in the same Steam library; for another library or manual installation, pass `--modthespire /path/to/ModTheSpire.jar --basemod /path/to/BaseMod.jar`.
+
+The output is `overlay/build/STS1CombatSolver.jar`. Exit the game before installing it in your game's `mods` directory (on macOS, the launch directory is commonly `SlayTheSpire.app/Contents/Resources`). Disable the Workshop solver and move any old solver JAR outside loaded mod directories first: load only one solver. Leave BaseMod/ModTheSpire installed. The script does not change installed mods or saves.
+
+This is a **local source installation**, not a portable release: the JAR records the absolute interpreter and backend paths. Keep the checkout and `.venv` in place; rebuild the JAR after moving either. Do not distribute this locally configured JAR. The old Windows bundled/WSL workflows remain available; `overlay/build.py --bundled-windows --game ...` builds a JAR for the existing Windows packager.
+
+Logs and diagnostic files live in `%LOCALAPPDATA%\STS1CombatSolver` on Windows, `~/Library/Application Support/STS1CombatSolver` on macOS, and `${XDG_STATE_HOME:-$HOME/.local/state}/STS1CombatSolver` on Linux. A relative `XDG_STATE_HOME` is ignored. Legacy WSL builds retain their configured log directory.
+
+CI covers Python 3.11 and 3.14 on Windows, macOS and Linux, plus separately built Apple Silicon and Intel portable packages. It checks native search/replay, real worker requests and cancellation, diagnostic retention/export, localization and runtime selection. Mac package checks use production Java extraction and the bundled Python in a relocated Unicode path with a minimal PATH. These checks do not prove full live-game parity. CI does not redistribute proprietary game JARs.
 
 ## How to use
 

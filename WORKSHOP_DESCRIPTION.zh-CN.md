@@ -2,15 +2,15 @@
 
 《杀戮尖塔 1》的本地战斗求解器。你负责构筑和选路，它负责搜索当前战斗、比较药水路线，并按你的选择单步执行、执行一回合或自动战斗。面板支持中文和英语；卡牌、遗物和敌人的名称跟随游戏语言。
 
-0.2.2 修正精炼混沌打出双发复制牌的顺序，确保遗物效果在后续牌结算前触发。
+0.3.0 增加 Apple Silicon 与 Intel Mac 随包运行时，保留 Windows 后台和此前战斗修复。
 
 ## 安装
 
-当前发布包面向 Windows 10/11 x64，包含原生后台，无需 WSL、Python、编译器或源码。可在 [Steam 创意工坊订阅](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)。
+发布包支持 Windows 10/11 x64 与 macOS 11+（Apple Silicon、Intel），包含原生后台，无需 WSL、另装 Python、编译器或源码。可在 [Steam 创意工坊订阅](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)。Mac 首次启动后台会自动解包到用户数据目录，请稍候几秒。
 
 订阅此条目、[ModTheSpire](https://steamcommunity.com/sharedfiles/filedetails/?id=1605060445) 和 [BaseMod](https://steamcommunity.com/sharedfiles/filedetails/?id=1605833019)，等待下载完成。从 Steam 选择“使用模组启动”，在 ModTheSpire 中勾选 BaseMod 和 STS1 Combat Solver，再启动游戏。通信桥和状态导出已合并到同一个求解器 JAR。升级时移除旧版求解器附带的独立 CommunicationMod.jar 和 SteamStateExport.jar。
 
-不需要 SuperFastMode、SaveStateMod 或其它非基础模组。修改战斗规则的模组可能产生不支持的状态。Linux、macOS 和 Steam Deck 暂未提供运行包。
+不需要 SuperFastMode、SaveStateMod 或其它非基础模组。修改战斗规则的模组可能产生不支持的状态。Linux 和 Steam Deck 暂未提供运行包。
 
 ## 使用教程
 

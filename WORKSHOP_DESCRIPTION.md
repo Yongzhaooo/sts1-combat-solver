@@ -2,15 +2,15 @@
 
 A local combat solver for Slay the Spire 1. You build the deck and choose the route; it searches the current fight, compares potion lines, and can execute one action, a turn, or combat automatically. The panel supports English and Chinese. Card, relic and enemy names follow the game language.
 
-Version 0.2.2 fixes the order of copied attacks played by Distilled Chaos, so relic effects resolve before the following card.
+Version 0.3.0 adds bundled macOS runtimes for Apple Silicon and Intel, preserving the Windows backend and prior combat fixes.
 
 ## Installation
 
-The package targets Windows 10/11 x64 and includes a native backend. No WSL, Python installation, compiler or source checkout is needed. [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843).
+The package supports Windows 10/11 x64 and macOS 11+ (Apple Silicon and Intel), with native backends included. No WSL, Python installation, compiler or source checkout is needed. [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843). On Mac, the first backend start extracts the matching runtime into your user data directory; allow a few seconds.
 
 Subscribe to this item, [ModTheSpire](https://steamcommunity.com/sharedfiles/filedetails/?id=1605060445) and [BaseMod](https://steamcommunity.com/sharedfiles/filedetails/?id=1605833019), then wait for Steam to finish downloading. Choose Play with Mods in Steam. In ModTheSpire, enable BaseMod and STS1 Combat Solver. Communication and state export are integrated into the solver. Remove the previous separate CommunicationMod.jar and SteamStateExport.jar copies supplied with older solver versions.
 
-SuperFastMode, SaveStateMod and other nonessential mods are not required. Mods that change combat rules can create unsupported states. Linux, macOS and Steam Deck packages are not available yet.
+SuperFastMode, SaveStateMod and other nonessential mods are not required. Mods that change combat rules can create unsupported states. Linux and Steam Deck packages are not available yet.
 
 ## How to use
 

@@ -5,6 +5,7 @@ import tempfile
 import threading
 from pathlib import Path
 from unittest.mock import patch
+from contextlib import closing
 from diagnostics import Reports, AsyncReports
 
 entered, release = threading.Event(), threading.Event()
@@ -16,7 +17,7 @@ class SlowReports(Reports):
 
 with tempfile.TemporaryDirectory() as temp:
     path = Path(temp)/'reports.sqlite3'
-    with patch('diagnostics.Reports', SlowReports):
+    with patch('diagnostics.Reports', SlowReports), patch('diagnostics.time.time_ns', return_value=123):
         reports = AsyncReports(path)
         try:
             for seed in range(1,5):
@@ -28,7 +29,7 @@ with tempfile.TemporaryDirectory() as temp:
         finally:
             release.set()
             reports.close()
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db:
         assert db.execute('SELECT count(*) FROM runs').fetchone()[0] == 3
         rows = db.execute('SELECT kind,payload FROM events ORDER BY id').fetchall()
         assert [(k,json.loads(v)['id']) for k,v in rows] == [('request',2),('request',3),('request',4),('reply',4)]

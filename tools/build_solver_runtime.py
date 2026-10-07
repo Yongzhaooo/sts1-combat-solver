@@ -4,6 +4,8 @@ import hashlib
 import json
 import subprocess
 import sys
+import os
+import sysconfig
 import importlib.machinery
 import pybind11
 
@@ -11,11 +13,18 @@ root = Path(__file__).resolve().parents[1]
 repo = root / 'candidates/sts-ironclad-agent'
 runtime = repo / 'runtime'
 build = repo / 'build/engine'
+platform_options = []
+if sys.platform == 'win32':
+    platform_options.extend(['-A', 'x64'])
+if sys.platform == 'darwin':
+    # Keep the core archive and the separately linked overlay on the same deployment target.
+    target = os.environ.setdefault('MACOSX_DEPLOYMENT_TARGET', sysconfig.get_config_var('MACOSX_DEPLOYMENT_TARGET') or '11.0')
+    platform_options.append('-DCMAKE_OSX_DEPLOYMENT_TARGET=' + target)
 subprocess.run(['cmake', '-S', str(repo / 'combat_engine'), '-B', str(build),
                 '-DCMAKE_BUILD_TYPE=Release', '-Dpybind11_DIR=' + pybind11.get_cmake_dir(),
                 '-DPython_EXECUTABLE=' + sys.executable,
                 '-DPYTHON_EXECUTABLE=' + sys.executable,
-                '-DSTS_RUNTIME_DIR=' + str(runtime)], check=True)
+                '-DSTS_RUNTIME_DIR=' + str(runtime), *platform_options], check=True)
 subprocess.run(['cmake', '--build', str(build), '--config', 'Release', '-j', '4'], check=True)
 subprocess.run(['ctest', '--test-dir', str(build), '-C', 'Release', '--output-on-failure'], check=True)
 modules = {}

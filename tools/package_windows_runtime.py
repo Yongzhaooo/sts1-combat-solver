@@ -26,8 +26,9 @@ def package(source, python_zip, vc_runtime, pybind_license, output):
     for name in ('STS1CombatSolver',):
         copy('overlay/build/' + name + '.jar', output / (name + '.jar'))
     with zipfile.ZipFile(output / 'STS1CombatSolver.jar') as jar:
-        if b'runtime=windows-bundled' not in jar.read('solver.properties'):
-            raise ValueError('Build the JAR with -BundledWindows first')
+        if not any(line in jar.read('solver.properties').splitlines()
+                   for line in (b'runtime=windows-bundled', b'runtime=bundled')):
+            raise ValueError('Build the JAR with --bundled first')
         metadata = json.loads(jar.read('ModTheSpire.json'))
         if metadata['dependencies'] != ['basemod']:
             raise ValueError('Expected the integrated single-mod build')
@@ -78,7 +79,7 @@ def package(source, python_zip, vc_runtime, pybind_license, output):
                       'pybind11 3.1.0 (licenses/pybind11.txt), and Microsoft VC142 app-local C++ runtime. '
                       'Microsoft components remain under Microsoft redistribution terms: '
                       'https://learn.microsoft.com/en-us/visualstudio/releases/2019/redistribution\n')
-    for name in ('PRIVACY.md', 'PRIVACY.zh-CN.md', 'WORKSHOP_DESCRIPTION.md', 'WORKSHOP_DESCRIPTION.zh-CN.md', 'WINDOWS_INSTALL.md'):
+    for name in ('PRIVACY.md', 'PRIVACY.zh-CN.md', 'WORKSHOP_DESCRIPTION.md', 'WORKSHOP_DESCRIPTION.zh-CN.md', 'WINDOWS_INSTALL.md', 'MACOS_INSTALL.md'):
         copy(name, output / name)
     files = {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
              for p in sorted(output.rglob('*')) if p.is_file()}

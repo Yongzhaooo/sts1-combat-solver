@@ -1,0 +1,77 @@
+name: Native runtime
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['overlay/**', 'tools/**', 'candidates/**', '.github/workflows/native-runtime.yml']
+  pull_request:
+    paths: ['overlay/**', 'tools/**', 'candidates/**', '.github/workflows/native-runtime.yml']
+permissions:
+  contents: read
+env:
+  PYTHONUTF8: '1'
+  PYTHONIOENCODING: utf-8
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        # CMake 3.31 supports VS 2022, not the VS 2026 image behind windows-latest.
+        os: [ubuntu-24.04, macos-14, windows-2022]
+        python: ['3.11', '3.14']
+    runs-on: ${{ matrix.os }}
+    env:
+      # setup-python can otherwise select NMake without a developer shell.
+      CMAKE_GENERATOR: ${{ matrix.os == 'windows-2022' && 'Visual Studio 17 2022' || 'Unix Makefiles' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: python -m pip install pybind11==3.1.0 cmake==3.31.10
+      - run: python tools/check_backend_launcher.py
+      - run: python overlay/check_async_reports.py
+      - run: python overlay/check_debug_export.py
+      - run: python tools/build_solver_runtime.py
+      - run: python tools/check_backend_protocol.py
+  macos-package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            arch: arm64
+          - os: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: python tools/fetch_macos_python.py --arch ${{ matrix.arch }} --output build/cpython
+      - run: |
+          build/cpython/python/bin/python3 -m venv .venv
+          .venv/bin/python -m pip install pybind11==3.1.0 cmake==3.31.10
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - run: python tools/check_backend_launcher.py
+      - run: python tools/build_solver_runtime.py
+      - run: python tools/package_macos_runtime.py --python-root build/cpython/python --output build/sts1-solver-macos-${{ matrix.arch }}.zip
+      - run: python tools/check_macos_bundle.py build/sts1-solver-macos-${{ matrix.arch }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sts1-solver-macos-${{ matrix.arch }}
+          path: build/sts1-solver-macos-${{ matrix.arch }}.zip
+          if-no-files-found: error

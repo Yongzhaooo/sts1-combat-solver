@@ -217,6 +217,8 @@ set_target_properties(overlay_search PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE
 else:
     subprocess.run(['c++','-std=c++17','-O3','-UNDEBUG','-DCOMBAT3_TARGET_POLICY=1',
     '-fPIC','-fvisibility=hidden','-shared','-pthread',
+    # Python supplies its C API at import time; Darwin's linker needs this explicitly.
+    *(['-undefined','dynamic_lookup'] if sys.platform == 'darwin' else []),
     # The patched reuse header in out/ must shadow the agent copy.
     '-I'+str(out),'-I'+str(engine/'include'),'-I'+str(repo/'combat_engine/combat4r/agent'),
     '-I'+str(repo/'combat_engine/third_party'),'-I'+pybind11.get_include(),
