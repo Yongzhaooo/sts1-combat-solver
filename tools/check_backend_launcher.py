@@ -1,5 +1,6 @@
 """Compile the real launcher with metadata-only ModTheSpire stubs; no game JAR needed."""
 from pathlib import Path
+import os
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,12 @@ with tempfile.TemporaryDirectory(prefix='solver-launcher-') as folder:
     subprocess.run(['javac', '--release', '8', '-encoding', 'UTF-8', '-d', str(temp),
                     str(temp / 'Loader.java'), str(temp / 'ModInfo.java'),
                     str(root / 'overlay/src/sts1solver/BackendRuntime.java'),
-                    str(root / 'overlay/test/BackendRuntimeCheck.java')], check=True)
+                    str(root / 'overlay/test/BackendRuntimeCheck.java'),
+                    str(root / 'overlay/test/BundledRuntimeCheck.java'),
+                    str(root / 'overlay/src/sts1solver/I18n.java'),
+                    str(root / 'overlay/test/LanguageCheck.java')], check=True)
     subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', str(temp),
                     'sts1solver.BackendRuntimeCheck', str(Path(sys.executable).absolute())], check=True)
+    subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', str(temp), 'sts1solver.BundledRuntimeCheck'], check=True)
+    subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', os.pathsep.join((str(temp), str(root / 'overlay/resources'))),
+                    'sts1solver.LanguageCheck'], check=True)

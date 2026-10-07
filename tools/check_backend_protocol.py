@@ -8,10 +8,13 @@ import sys
 import tempfile
 import threading
 import zipfile
+import argparse
 
 
 def main():
-    backend = Path(__file__).resolve().parents[1] / 'overlay/backend.py'
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
+    backend = parser.parse_args().root.resolve() / 'overlay/backend.py'
     with tempfile.TemporaryDirectory(prefix='solver 协议 check ') as folder:
         data = Path(folder)
         env = dict(os.environ, STS_SOLVER_DATA=folder, PYTHONUTF8='1', PYTHONIOENCODING='utf-8')

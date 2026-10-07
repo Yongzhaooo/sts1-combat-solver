@@ -21,6 +21,7 @@ def main():
     parser.add_argument('--modthespire', type=Path, help='Override ModTheSpire.jar location')
     parser.add_argument('--basemod', type=Path, help='Override BaseMod.jar location')
     parser.add_argument('--bundled-windows', action='store_true', help='Use the existing Windows release runtime')
+    parser.add_argument('--bundled', action='store_true', help='Use the portable Windows/macOS Workshop runtimes')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     here = root / 'overlay'
@@ -34,7 +35,7 @@ def main():
     for path in (game_jar, mts, base):
         if not path.is_file():
             parser.error('Missing JAR: ' + str(path))
-    if not args.bundled_windows:
+    if not (args.bundled_windows or args.bundled):
         subprocess.run([sys.executable, str(root / 'tools/check_solver_runtime.py')], check=True)
     out = here / 'build'
     out.mkdir(exist_ok=True)
@@ -56,9 +57,9 @@ def main():
         licenses.mkdir()
         shutil.copy2(root / 'references/CommunicationMod/LICENSE', licenses / 'CommunicationMod.txt')
         shutil.copy2(root / 'candidates/sts-ironclad-agent/LICENSE', licenses / 'sts-ironclad-agent.txt')
-        properties = {'runtime': 'windows-bundled' if args.bundled_windows else 'native',
+        properties = {'runtime': 'bundled' if args.bundled else 'windows-bundled' if args.bundled_windows else 'native',
                       'research_recording': 'false', 'recorder_build': datetime.now(timezone.utc).isoformat()}
-        if not args.bundled_windows:
+        if not (args.bundled_windows or args.bundled):
             # Do not resolve the venv interpreter symlink: that would lose its environment.
             properties.update(python=Path(sys.executable).absolute().as_posix(),
                               backend=(here / 'backend.py').as_posix())
@@ -77,7 +78,7 @@ def main():
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.LanguageCheck'], check=True)
         jar.replace(out / jar.name)
     print(out / 'STS1CombatSolver.jar')
-    if not args.bundled_windows:
+    if not (args.bundled_windows or args.bundled):
         print('Local native build: keep this checkout and Python environment at their current paths.')
 
 

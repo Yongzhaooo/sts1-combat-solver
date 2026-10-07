@@ -26,8 +26,9 @@ def package(source, python_zip, vc_runtime, pybind_license, output):
     for name in ('STS1CombatSolver',):
         copy('overlay/build/' + name + '.jar', output / (name + '.jar'))
     with zipfile.ZipFile(output / 'STS1CombatSolver.jar') as jar:
-        if b'runtime=windows-bundled' not in jar.read('solver.properties'):
-            raise ValueError('Build the JAR with -BundledWindows first')
+        if not any(line in jar.read('solver.properties').splitlines()
+                   for line in (b'runtime=windows-bundled', b'runtime=bundled')):
+            raise ValueError('Build the JAR with --bundled first')
         metadata = json.loads(jar.read('ModTheSpire.json'))
         if metadata['dependencies'] != ['basemod']:
             raise ValueError('Expected the integrated single-mod build')

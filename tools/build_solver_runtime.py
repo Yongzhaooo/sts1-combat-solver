@@ -14,6 +14,8 @@ repo = root / 'candidates/sts-ironclad-agent'
 runtime = repo / 'runtime'
 build = repo / 'build/engine'
 platform_options = []
+if sys.platform == 'win32':
+    platform_options.extend(['-A', 'x64'])
 if sys.platform == 'darwin':
     # Keep the core archive and the separately linked overlay on the same deployment target.
     target = os.environ.setdefault('MACOSX_DEPLOYMENT_TARGET', sysconfig.get_config_var('MACOSX_DEPLOYMENT_TARGET') or '11.0')

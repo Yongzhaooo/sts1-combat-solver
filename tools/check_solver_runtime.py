@@ -1,8 +1,11 @@
 """Check the exported backend's real imports and engine identity in a fresh process."""
 from pathlib import Path
 import sys
+import argparse
 
-root = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
+root = parser.parse_args().root.resolve()
 sys.path.insert(0, str(root / 'overlay'))
 from backend import Advisor
 
