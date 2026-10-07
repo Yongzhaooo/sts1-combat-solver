@@ -17,7 +17,7 @@ class SlowReports(Reports):
 
 with tempfile.TemporaryDirectory() as temp:
     path = Path(temp)/'reports.sqlite3'
-    with patch('diagnostics.Reports', SlowReports):
+    with patch('diagnostics.Reports', SlowReports), patch('diagnostics.time.time_ns', return_value=123):
         reports = AsyncReports(path)
         try:
             for seed in range(1,5):

@@ -2,6 +2,7 @@ name: Native runtime
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths: ['overlay/**', 'tools/**', 'candidates/**', '.github/workflows/native-runtime.yml']
   pull_request:
     paths: ['overlay/**', 'tools/**', 'candidates/**', '.github/workflows/native-runtime.yml']
