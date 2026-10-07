@@ -4,11 +4,15 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import zipfile
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('archive', type=Path)
 args = parser.parse_args()
+with zipfile.ZipFile(args.archive) as archive:
+    for name in ('LICENSE', 'LICENSE.cpython.txt', 'LICENSE.openssl-3.txt', 'LICENSE.libffi.txt', 'LICENSE.bzip2.txt'):
+        assert len(archive.read('licenses/python-build-standalone/' + name)) > 100, name
 with tempfile.TemporaryDirectory(prefix='工坊 clean install ') as folder:
     temp = Path(folder)
     for name, body in {

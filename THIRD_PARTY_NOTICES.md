@@ -6,7 +6,7 @@
 | Modified combat4r, bindings and import bridge | [sts-ironclad-agent](https://github.com/destire-mio/sts-ironclad-agent), `f8486daf6e404cf3a08c78b9c385db2a143559ea` | MIT; retain parent LICENSE |
 | CommunicationMod, solver package only | [CommunicationMod](https://github.com/ForgottenArbiter/CommunicationMod), `5e417eb189530986b9047a3c9426889fb261d146` | MIT; copyright 2019 ForgottenArbiter |
 | nlohmann/json header | [json](https://github.com/nlohmann/json), bundled header 3.10.2 | MIT; notice included in header |
-| macOS bundled Python and libraries | [python-build-standalone](https://github.com/astral-sh/python-build-standalone/releases/tag/20261003), CPython 3.14.8 install-only builds | Python and dependency licenses are preserved inside each runtime's `python/` tree |
+| macOS bundled Python and libraries | [python-build-standalone](https://github.com/astral-sh/python-build-standalone/releases/tag/20261003), CPython 3.14.8 install-only builds | Python/pip notices remain in `python/`; native dependency notices are included under `licenses/python-build-standalone/` |
 | Native binding headers | [pybind11](https://github.com/pybind/pybind11), 3.1.0 | BSD-3-Clause; binary bundles include `licenses/pybind11.txt` |
 
 The user supplies Slay the Spire, ModTheSpire and BaseMod. The source export does not redistribute the original game's JAR, fonts, assets or Java sources. SuperFastMode is optional and is obtained separately from its author. pybind11 is installed as a build dependency and is not bundled here.

@@ -45,6 +45,9 @@ def package(python_root, output):
         archive.write(dist.locate_file(license_path), 'licenses/pybind11.txt')
         header = (root / repo / 'combat_engine/third_party/nlohmann/json.hpp').read_text(encoding='utf-8')
         archive.writestr('licenses/nlohmann-json.txt', header.split('*/', 1)[0].removeprefix('/*'))
+        # install_only omits the native dependency notices from the full distribution.
+        for license_path in sorted((root / 'tools/python-licenses').iterdir()):
+            archive.write(license_path, 'licenses/python-build-standalone/' + license_path.name)
         archive.writestr('bundle.json', json.dumps({'platform': 'macos-' + platform.machine(),
             'python': platform.python_version(), 'source_commit': subprocess.check_output(
                 ['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()}))
