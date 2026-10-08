@@ -38,6 +38,7 @@ jobs:
       - run: python overlay/check_async_reports.py
       - run: python overlay/check_debug_export.py
       - run: python tools/build_solver_runtime.py
+      - run: python tools/check_headbutt.py
       - run: python tools/check_backend_protocol.py
   macos-package:
     strategy:

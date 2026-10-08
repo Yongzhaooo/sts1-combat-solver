@@ -71,11 +71,14 @@ def main():
         checks = staging / 'checks'
         subprocess.run(['javac', '--release', '8', '-proc:none', '-encoding', 'UTF-8', '-cp',
                         os.pathsep.join((str(classes), classpath)), '-d', str(checks),
-                        str(here / 'test/BackendRuntimeCheck.java'), str(here / 'test/LanguageCheck.java')], check=True)
+                        str(here / 'test/BackendRuntimeCheck.java'), str(here / 'test/LanguageCheck.java'),
+                        str(here / 'test/PanelSizeCheck.java'), str(here / 'test/StateKeyCheck.java')], check=True)
         check_cp = os.pathsep.join((str(checks), str(classes), classpath))
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
                         'sts1solver.BackendRuntimeCheck', str(Path(sys.executable).absolute())], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.LanguageCheck'], check=True)
+        subprocess.run(['java', '-cp', check_cp, 'sts1solver.PanelSizeCheck'], check=True)
+        subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.StateKeyCheck'], check=True)
         jar.replace(out / jar.name)
     print(out / 'STS1CombatSolver.jar')
     if not (args.bundled_windows or args.bundled):

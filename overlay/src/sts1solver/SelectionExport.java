@@ -11,16 +11,21 @@ import communicationmod.GameStateConverter;
 import java.lang.reflect.*;
 import java.util.*;
 
-/** Observed startup continuation for the existing native selection importer. */
+/** Observed selection continuation, including the card still resolving in a picker. */
 final class SelectionExport {
     private static final Set<String> INPUTS=new HashSet<>(Arrays.asList("amount","energyGain",
-        "target","source","powerToApply","this$0","cardToMake","randomSpot","damage","damageType","ID","owner"));
+        "target","source","powerToApply","this$0","cardToMake","randomSpot","damage","damageType","ID","owner",
+        "targetCard","exhaustCard","reboundCard","returnToHand"));
     static Map<String,Object> snapshot() {
         Map<String,Object> out=new HashMap<>();
         out.put("current_action",fields(AbstractDungeon.actionManager.currentAction));
         List<Object> queue=new ArrayList<>();
         for(AbstractGameAction action:AbstractDungeon.actionManager.actions)queue.add(fields(action));
         out.put("pending_actions",queue);
+        List<String> cards = new ArrayList<>();
+        for (com.megacrit.cardcrawl.cards.CardQueueItem item : AbstractDungeon.actionManager.cardQueue)
+            cards.add(item.card == null ? "end" : item.card.uuid.toString());
+        out.put("queued_cards",cards);
         return out;
     }
 
@@ -45,7 +50,12 @@ final class SelectionExport {
                     else if(value instanceof AbstractCard) {
                         Method convert=GameStateConverter.class.getDeclaredMethod("convertCardToJson",AbstractCard.class);
                         convert.setAccessible(true);
-                        out.put(field.getName(),convert.invoke(null,value));
+                        @SuppressWarnings("unchecked") Map<String,Object> card = (Map<String,Object>)convert.invoke(null,value);
+                        AbstractCard original = (AbstractCard)value;
+                        card.put("purge_on_use",original.purgeOnUse);
+                        card.put("dont_trigger_on_use",original.dontTriggerOnUseCard);
+                        card.put("return_to_hand",original.returnToHand);
+                        out.put(field.getName(),card);
                     }
                 }
         } catch(ReflectiveOperationException failure) {

@@ -1,4 +1,34 @@
-"""Reconstruct observed battle-start choices without inferring missing rule inputs."""
+"""Reconstruct observed choices without inferring missing continuation inputs."""
+
+
+def headbutt_selection(comparator, view):
+    game, live = view['game'], view['live_run']
+    screen, combat = game['screen_state'], game['combat_state']
+    if (screen.get('selected_cards') or screen.get('confirm_up') or screen.get('num_cards') != 1
+            or any(screen.get(k) for k in ('for_upgrade', 'for_transform', 'for_purge', 'any_number'))):
+        raise ValueError('Headbutt requires an untouched single-card discard picker')
+    options = [c['uuid'] for c in screen['cards']]
+    discard = [c['uuid'] for c in combat['discard_pile']]
+    if len(options) < 2 or len(set(options)) != len(options) or set(options) != set(discard):
+        raise ValueError('Headbutt picker differs from the original discard pile')
+    actions = queued_actions(view)
+    effects = [a for a in actions if a['class'] not in ('WaitAction', 'HandCheckAction')]
+    if len(effects) != 1 or effects[0].get('class_full') != 'com.megacrit.cardcrawl.actions.utility.UseCardAction':
+        raise ValueError('unsupported continuation after Headbutt selection')
+    finish = effects[0]
+    card = finish.get('targetCard', {})
+    if card.get('id') != 'Headbutt' or card.get('uuid') != combat.get('card_in_play', {}).get('uuid'):
+        raise ValueError('Headbutt selection needs the resolving card export; restart with the updated mod')
+    queued = live.get('queued_cards')
+    if queued not in ([], [card['uuid']]):
+        raise ValueError('unsupported queued card replay after Headbutt')
+    if card.get('return_to_hand') or finish.get('returnToHand') or finish.get('reboundCard'):
+        raise ValueError('unsupported redirected Headbutt continuation')
+    if any(c['uuid'] == card['uuid'] for pile in ('hand','draw_pile','discard_pile','exhaust_pile') for c in combat[pile]):
+        raise ValueError('resolving Headbutt already belongs to a pile')
+    return dict(task='HEADBUTT', queue=[dict(kind='finish_headbutt', upgrades=card['upgrades'],
+        cost=card['cost'], base_cost=card['base_cost'], exhaust=finish['exhaustCard'],
+        purge=card['purge_on_use'], trigger=not card['dont_trigger_on_use'])])
 
 
 def queued_actions(view):
@@ -61,10 +91,12 @@ def queued_power(comparator, view, action):
 def start_selection(comparator, view):
     g, r = view['game'], view['live_run']
     screen = g['screen_type']
+    current = r.get('current_action', {}).get('class')
+    if screen == 'GRID' and current == 'DiscardPileToTopOfDeckAction':
+        return headbutt_selection(comparator, view)
     if g['combat_state']['turn'] != 1:
         raise ValueError('only battle-start queues are supported')
     relics = {a['id'] for a in g['relics']}
-    current = r.get('current_action', {}).get('class')
     if screen == 'CARD_REWARD' and 'Toolbox' in relics:
         if current != 'ChooseOneColorless':
             raise ValueError('not an observed Toolbox selection: ' + str(current))

@@ -71,6 +71,9 @@ PYBIND11_MODULE(live_combat_search, m) {
             b.cardSelectInfo.discoveryFrameRng=false;
         } else if(task=="GAMBLING_CHIP") {
             b.cardSelectInfo.cardSelectTask=CardSelectTask::GAMBLE;
+        } else if(task=="HEADBUTT") {
+            b.cardSelectInfo.cardSelectTask=CardSelectTask::HEADBUTT;
+            b.cardSelectInfo.pickCount=1;
         } else throw std::invalid_argument("unsupported start selection");
         for(auto value:d["queue"].cast<py::list>()) {
             auto a=value.cast<py::dict>();auto kind=a["kind"].cast<std::string>();
@@ -89,6 +92,19 @@ PYBIND11_MODULE(live_combat_search, m) {
                 }
             }});
             else if(kind=="gamble")b.addToBot(Actions::GambleAction());
+            else if(kind=="finish_headbutt") {
+                // Damage and on-use effects already happened in Java. Resume only
+                // UseCardAction's after-use callbacks and destination movement.
+                CardInstance card(CardId::HEADBUTT,a["upgrades"].cast<int>()>0);
+                card.uniqueId=b.cards.nextUniqueCardId++;
+                card.cost=a["base_cost"].cast<int>();
+                card.costForTurn=a["cost"].cast<int>();
+                b.curCardQueueItem=CardQueueItem(card,0,0);
+                b.curCardQueueItem.exhaustOnUse=a["exhaust"].cast<bool>();
+                b.curCardQueueItem.purgeOnUse=a["purge"].cast<bool>();
+                b.curCardQueueItem.triggerOnUse=a["trigger"].cast<bool>();
+                b.addToBot(Actions::OnAfterCardUsed());
+            }
             else throw std::invalid_argument("unsupported pending queue action");
         }
     });

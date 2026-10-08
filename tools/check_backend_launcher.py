@@ -22,7 +22,10 @@ with tempfile.TemporaryDirectory(prefix='solver-launcher-') as folder:
                     str(root / 'overlay/test/BackendRuntimeCheck.java'),
                     str(root / 'overlay/test/BundledRuntimeCheck.java'),
                     str(root / 'overlay/src/sts1solver/I18n.java'),
-                    str(root / 'overlay/test/LanguageCheck.java')], check=True)
+                    str(root / 'overlay/test/LanguageCheck.java'),
+                    str(root / 'overlay/src/sts1solver/PanelSize.java'),
+                    str(root / 'overlay/test/PanelSizeCheck.java')], check=True)
+    subprocess.run(['java', '-cp', str(temp), 'sts1solver.PanelSizeCheck'], check=True)
     subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', str(temp),
                     'sts1solver.BackendRuntimeCheck', str(Path(sys.executable).absolute())], check=True)
     subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', str(temp), 'sts1solver.BundledRuntimeCheck'], check=True)

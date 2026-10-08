@@ -1,31 +1,31 @@
- / 补 | / gain 
+ / 补 | / gain
  / 金 -| / gold -
  [改绑] · F9 停止| [bind] · F9 stop
  [点击]| [click]
  [点击切换]| [toggle]
  · F9 停止| · F9 stop
- · 战后回 | · heal 
- · 最佳 HP | · best HP 
+ · 战后回 | · heal
+ · 最佳 HP | · best HP
  · 点击此处关闭| · click to close
  · 等待领取确认| · awaiting confirmation
  张| card(s)
  秒| s
- 秒 · 本阶段 | s · phase 
+ 秒 · 本阶段 | s · phase
  秒无进度 · F9 停止| s without progress · F9 stop
  药| potion(s)
 %.1f 万|%.1f ×10k
 0 / 空回车：不交药；无输入则等待|0 / Enter: keep potions; waits for input
 Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted potion-free win; search complete
-[STS1Solver] 诊断写入失败：|[STS1Solver] diagnostic write failed: 
-下一步  |Next: 
-下层走火堆计羽毛回血：|Next campfire Feather healing: 
+[STS1Solver] 诊断写入失败：|[STS1Solver] diagnostic write failed:
+下一步  |Next:
+下层走火堆计羽毛回血：|Next campfire Feather healing:
 不可用|Unavailable
 仅必经火堆|Only forced campfire
 仅查看建议，点击按钮后才出牌|Advice ready; click to execute
 仅试选 · 滚轮翻页 · 点击已选项撤回|Preview only · scroll · click a pick to undo
 停止|Stop
 关|Off
-决策记录失败：|Decision recording failed: 
+决策记录失败：|Decision recording failed:
 动作未产生可执行的完成状态，请手动检查。|Action did not finish; check the game manually.
 动作未完成，已停止；请手动操作或重新计算。|Action incomplete; stopped. Play manually or recalculate.
 动作未提交|Action not submitted
@@ -33,31 +33,31 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 变化|Transform
 变化预览 · 点击此处打开试选列表|Transform preview · click to try picks
 后台求解器未响应，请重新计算。详情见数据目录中的 backend.log。|Backend not responding. Recalculate; see backend.log in the data directory.
-后台连接中断：|Backend disconnected: 
+后台连接中断：|Backend disconnected:
 奖励牌 / 地图 / 商店始终由你操作|You choose rewards, map and shop actions
 小精灵×|Fairy ×
-局面发生未预期变化，已停止自动执行：|Unexpected state change; auto stopped: 
+局面发生未预期变化，已停止自动执行：|Unexpected state change; auto stopped:
 局面已变化 · 请重新计算|State changed · recalculate
 局面已变化，等待重新计算|State changed; waiting to recalculate
-已 |Elapsed 
+已 |Elapsed
 已停止 · 回车或选编号继续当前路线|Stopped · Enter / number to resume route
 已停止 · 回车继续当前路线|Stopped · Enter to resume route
 已停止 · 尚无可执行路线|Stopped · no complete route yet
 已停止 · 点击路线或输入编号后回车|Stopped · click route / number + Enter
 已停止 · 点击重新计算恢复|Stopped · recalculate to resume
 已停止 · 需要重新计算|Stopped · recalculate required
-已模拟 |Simulated 
-建议 · |Advice · 
+已模拟 |Simulated
+建议 · |Advice ·
 开|On
 开场选牌：规划并自动选择（不用药路线）|Opening selection: planning potion-free route
 当前路线未找到胜利|No win found on this route
-录音启动失败：|Recording failed to start: 
-快捷键保存失败：|Hotkey save failed: 
-快捷键配置读取失败：|Config load failed: 
+录音启动失败：|Recording failed to start:
+快捷键保存失败：|Hotkey save failed:
+快捷键配置读取失败：|Config load failed:
 快速|Fast
-总等待 |Waiting 
+总等待 |Waiting
 战士|Ironclad
-战斗引擎目前支持|Combat engine supports 
+战斗引擎目前支持|Combat engine supports
 战斗选牌：第 |Combat pick #
 执行一步|Step
 执行中 · 等待动画结算|Executing · waiting for animations
@@ -68,19 +68,19 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 拒绝局外动作|Out-of-combat action rejected
 拖动标题栏移动 · F8 收起 / 展开|Drag title to move · F8 fold / expand
 按 F1-F12 绑定；F6/F8/F9 保留；Esc 取消|Bind F1-F12; F6/F8/F9 reserved; Esc cancels
-损 |Loss 
+损 |Loss
 换药未出现空栏，停止领取|No empty slot after discard; pickup stopped
 换药未能提交弃药|Potion discard could not be submitted
 推荐行动顺序 · 点击执行整条路线|Suggested actions · click to play route
 搜索过程 · 已完成路线可点击执行|Search progress · click a completed route
-搜索预算：|Search budget: 
+搜索预算：|Search budget:
 星盘|Astrolabe
 是|Yes
 未胜|No win
-本场：回车 / |Enter / 
+本场：回车 / |Enter /
 标准|Standard
 核对执行结果…|Checking action result…
-模式保存失败：|Mode save failed: 
+模式保存失败：|Mode save failed:
 次 · 规划至 T| times · through T
 正在停止搜索 · 保留已找到路线|Stopping search · keeping completed routes
 正在执行本回合|Playing turn
@@ -94,17 +94,17 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 等待后台接收|Waiting for backend
 等待稳定局面|Waiting for stable state
 等待进入战斗|Waiting for combat
-等效战损 |Effective loss 
+等效战损 |Effective loss
 结束回合|End turn
 编号不可用 · 请修改数字后回车|Unavailable number · change it and press Enter
 缺少求解器路径配置，请重新安装。|Missing solver paths; reinstall.
-自动 · |Auto · 
+自动 · |Auto ·
 自动已关闭 · 保留建议|Auto off · advice retained
-自动开关保存失败：|Auto preference save failed: 
+自动开关保存失败：|Auto preference save failed:
 自动战斗|Auto combat
 自动执行已开启 · 仅本场战斗|Auto execution on · this fight only
-自动换药失败：|Auto potion swap failed: 
-自动换药：|Auto potion swap: 
+自动换药失败：|Auto potion swap failed:
+自动换药：|Auto potion swap:
 自动模式未找到获胜路线，请手动检查|Auto found no win; check manually
 自动用药＋跨场战斗已开启|Auto potions + continuous combat enabled
 自动用药＋跨场战斗：关 [点击开启]|Auto potions + continuous combat: Off [enable]
@@ -113,8 +113,8 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 药水奖励未能提交领取|Potion pickup could not be submitted
 药水尚未领取成功，已停止自动；请检查奖励|Potion pickup unconfirmed; auto stopped. Check rewards.
 药水已领取|Potion collected
-药水：|Potion: 
-试选 | preview 
+药水：|Potion:
+试选 | preview
 该路线尚无完整结果 · 请重新选择|Route incomplete · choose again
 详细原因已写入后台日志|Details are in the backend log
 请求 #|Request #
@@ -123,31 +123,31 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 路线已就绪 · 等待你的操作|Route ready · waiting for you
 路线已结束 · 可手动操作或重新计算|Route ended · play manually or recalculate
 跳过战斗选牌|Skip combat selection
-辉眼模式：|Foresight: 
+辉眼模式：|Foresight:
 输入 0～10 后回车：[|Enter 0–10, then Enter: [
 选牌与路线由你决定|You choose cards and map routes
 重新计算|Recalculate
 随机结果预测 · 滚轮翻页|RNG predictions · scroll
-预测胜利   战后 HP |Predicted win · final HP 
+预测胜利   战后 HP |Predicted win · final HP
 领取药水时库存发生变化，已停止自动|Inventory changed during pickup; auto stopped
 领取药水期间离开奖励界面，已停止自动|Left rewards during pickup; auto stopped
 ；预测仍可用|; foresight remains available
   第 |  #
- 列 | column 
+ 列 | column
 100 金币|100 gold
 250 金币|250 gold
-? 房间 → |? room → 
+? 房间 → |? room →
 三瓶药水|Three potions
 三选一牌|Choose one of three cards
 下一层可选房间 · 确定结果|Next-floor rooms · seeded outcomes
 事件|Event
-事件：|Event: 
+事件：|Event:
 事件：没有剩余事件|Event: no events left
 列表将重新生成|List will regenerate
 删除一张|Remove one card
 删除两张|Remove two cards
 升级一张|Upgrade one card
-取决于|Depends on 
+取决于|Depends on
 受到 30% 当前生命伤害|Lose 30% of current HP
 变化一张|Transform one card
 变化两张|Transform two cards
@@ -155,143 +155,143 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 失去 10% 最大生命|Lose 10% max HP
 失去全部金币|Lose all gold
 宝箱|Treasure
-张 → | cards → 
-挖掘 → |Dig → 
+张 → | cards →
+挖掘 → |Dig →
 换 Boss 遗物|Swap starter for Boss relic
 无色牌三选一|Choose one of three colorless cards
-普通战 → |Fight → 
-普通战：|Fight: 
+普通战 → |Fight →
+普通战：|Fight:
 最大生命+10%|Max HP +10%
 最大生命+20%|Max HP +20%
 涅奥的悲恸|Neow's Lament
 涅奥祝福 · 各选项的确定结果|Neow's blessings · seeded outcomes
-游戏字段已变化：|Game field changed: 
+游戏字段已变化：|Game field changed:
 火堆|Campfire
 稀有无色牌三选一|Choose one of three rare colorless cards
 稀有牌三选一|Choose one of three rare cards
 第|#
-精英 → |Elite → 
-精英：|Elite: 
+精英 → |Elite →
+精英：|Elite:
 获得诅咒（游戏用非种子随机，无法预测）|Gain a curse (unseeded RNG; unpredictable)
 还没有红钥匙！这是最后一个火堆，请选择「回忆」。|Ruby Key missing! Last campfire: choose Recall.
 还没有红钥匙！部分路线后面仅剩一个火堆，请预留「回忆」。|Ruby Key missing! Some routes have one campfire left: reserve Recall.
 随机普通遗物|Random common relic
 随机稀有牌|Random rare card
 随机稀有遗物|Random rare relic
-（代价：| (cost: 
+（代价：| (cost:
 （暂无预测）| (no prediction)
-  → 得 |  → gain 
-  另得遗物 |  extra relic 
+  → 得 |  → gain
+  另得遗物 |  extra relic
   当前页没有可预测的随机项|  No predictable RNG on this page
-  成功得 → |  Success → 
-  战后补发：|  After combat: 
-  技能 |  Skill 
-  攻击 |  Attack 
-  预测失败：|  Prediction failed: 
+  成功得 → |  Success →
+  战后补发：|  After combat:
+  技能 |  Skill
+  攻击 |  Attack
+  预测失败：|  Prediction failed:
  + 遗憾| + Regret
  · 暂未适配预测| · prediction unsupported
- · 能力 | · Power 
+ · 能力 | · Power
  · 选项的确定结果| · seeded option outcomes
- 删 | remove 
- 或 | or 
- 次：|: 
- 次：遇敌 |: fight 
+ 删 | remove
+ 或 | or
+ 次：|:
+ 次：遇敌 |: fight
  点伤害| damage
- 组：| group: 
+ 组：| group:
  血）| HP)
  血）→ 升级| HP) → upgrade
  金币| gold
- 金币 + | gold + 
+ 金币 + | gold +
  金币）| gold)
 主人赢：赢 250|Owner wins: gain 250
 主人赢：输 50|Owner wins: lose 50
-买 1/2/3 瓶 → 依次得到：|Buy 1/2/3 potions → in order: 
-交易 → |Trade → 
+买 1/2/3 瓶 → 依次得到：|Buy 1/2/3 potions → in order:
+交易 → |Trade →
 什么都没有|Nothing
-付 85 金币或偷窃 → |Pay 85 gold / steal → 
-任一交易 → |Any trade → 
-依次搜：|Search in order: 
+付 85 金币或偷窃 → |Pay 85 gold / steal →
+任一交易 → |Any trade →
+依次搜：|Search in order:
 全套 → 各删牌选择的随机升级（滚轮查看）|Full service → upgrades per removal (scroll)
 其余两项无随机（升级/金币或疑虑）|Other options have no RNG (upgrade / gold or Doubt)
 删牌后升级结果：展开面板查看|Upgrade after removal: expand panel
 删除一张牌（自选）|Remove a card of your choice
-升级 |Upgrade 
-取走 → |Take → 
-受到 |Take 
+升级 |Upgrade
+取走 → |Take →
+受到 |Take
 变化两张：点击「变化预览」打开试选|Transform two: click Transform preview
 变化结果（按所选卡牌）|Transforms (selected card order)
 回满生命|Heal to full
 失去的牌（已定）|Cards lost (fixed)
 成功|Success
-我是战士 → Boss：|I am War → Boss: 
+我是战士 → Boss：|I am War → Boss:
 战利品 +|Rewards +
 战后金币 +|Post-combat gold +
-战后：|After combat: 
-战斗奖励 → |Combat rewards → 
-打开棺材 → |Open coffin → 
-拔金翅（≥10伤牌）→ |Tear off (card damage ≥10) → 
-换 |Swap 
+战后：|After combat:
+战斗奖励 → |Combat rewards →
+打开棺材 → |Open coffin →
+拔金翅（≥10伤牌）→ |Tear off (card damage ≥10) →
+换 |Swap
 搜第 |Search #
 无|None
 无牌可升级|No cards to upgrade
-无色牌（第1/2/3次）：|Colorless cards (1st/2nd/3rd): 
-无色牌：|Colorless card: 
+无色牌（第1/2/3次）：|Colorless cards (1st/2nd/3rd):
+无色牌：|Colorless card:
 无诅咒|No curse
 杀手赢：赢 100|Murderer wins: gain 100
 杀手赢：输 50|Murderer wins: lose 50
-次成功：| success: 
+次成功：| success:
 求解器可试选两张，预览完整结果|Try two picks in the solver to preview results
 清理 → 变化两张，点击「变化预览」试选|Clean up → transform two; click Transform preview
 清理 → 自选删一张（无随机）|Clean up → remove a card (no RNG)
-游戏字段无法读取：|Cannot read game field: 
+游戏字段无法读取：|Cannot read game field:
 牌面布局（已定，3 行 × 4 列）|Fixed card layout (3 rows × 4 columns)
-留下 → 失去 |Stay → lose 
-盒子 → |Box → 
+留下 → 失去 |Stay → lose
+盒子 → |Box →
 空|Empty
 第 |#
 第1+2+3组，见面板|Groups 1+2+3; see panel
 第1+2组，见面板|Groups 1+2; see panel
-第1组：|Group 1: 
-结果：|Result: 
+第1组：|Group 1:
+结果：|Result:
 胜者：主人 → 押主人赢 250，押杀手输 50|Owner wins → bet owner: +250; murderer: -50
 胜者：杀手 → 押杀手赢 100，押主人输 50|Murderer wins → bet murderer: +100; owner: -50
-药水（第1/2/3次）：|Potions (1st/2nd/3rd): 
-获得诅咒 |Gain curse 
+药水（第1/2/3次）：|Potions (1st/2nd/3rd):
+获得诅咒 |Gain curse
 落空|Miss
 见面板：20 张牌|See panel: 20 cards
 记忆1得第1组，2得1-2组，3得1-3组|Memory 1: group 1; 2: groups 1–2; 3: groups 1–3
-读完全部 → |Read all → 
-读完得：|After reading: 
+读完全部 → |Read all →
+读完得：|After reading:
 调整 → 自选一张升级（无随机）|Adjust → choose an upgrade (no RNG)
-调整 → 随机升级 |Adjust → random upgrade 
-转轮结果 → |Wheel result → 
-进入光芒（失 |Enter light (lose 
-连续伸手：|Reach in repeatedly: 
+调整 → 随机升级 |Adjust → random upgrade
+转轮结果 → |Wheel result →
+进入光芒（失 |Enter light (lose
+连续伸手：|Reach in repeatedly:
 选牌时每张牌下方标出结果|Results appear below cards during selection
 遇敌|Fight
-遗物 |Relic 
-遗物：|Relic: 
+遗物 |Relic
+遗物：|Relic:
 金30|30 gold
 金币 +|Gold +
 金币 30|30 gold
-阅读 → 20 张：|Read → 20 cards: 
-面具：|Mask: 
-（共失 | (total loss 
+阅读 → 20 张：|Read → 20 cards:
+面具：|Mask:
+（共失 | (total loss
 （无随机）| (no RNG)
 （来自存档，无随机）| (from save; no RNG)
-换药：|Swap potion: 
+换药：|Swap potion:
 未知药水：请手动比较|Unknown potion: compare manually
 添水：无法领取药水，保留库存|Sozu: cannot collect potions; keep inventory
 药水：保留现有库存|Potions: keep current inventory
-领取 |Collect 
-（组合分 | (inventory score 
+领取 |Collect
+（组合分 | (inventory score
 （缺上限，保留抽牌＋变量）| (low scaling: keep draw + variable)
 （缺上限，减少重复抽牌）| (low scaling: reduce duplicate draw)
  [撤回]| [undo]
  [自动变化]| [auto transform]
-选 |Pick 
+选 |Pick
 F6 录音|F6 Record
-录音 |Recording 
+录音 |Recording
 录音失败 · 检查麦克风|Recording failed · check microphone
 录音已保存 · F6|Recording saved · F6
 录音已取消 · F6|Recording cancelled · F6
@@ -300,12 +300,25 @@ F6 录音|F6 Record
 秒 · F6|s · F6
 
 报告已导出 · F6|Report exported · F6
-导出失败：|Export failed: 
+导出失败：|Export failed:
 F6 导出错误报告|F6 Export bug report
-经验：|Experience: 
+记录战斗数据：|Record battle data:
 正在导出错误报告…|Exporting bug report…
-已录制经验 · Shift+F6 导出|Recording · Shift+F6 export
-经验记录已关闭|Experience recording off
-请先开启经验记录|Enable experience recording first
-经验已导出 · 请检查后分享|Experience exported · review before sharing
-经验记录已停止：|Recording stopped: 
+战斗数据记录已开启 · Shift+F6 导出|Recording battle data · Shift+F6 to export
+战斗数据记录已关闭|Battle data recording off
+请先开启战斗数据记录|Enable battle data recording first
+战斗数据已导出 · 请检查后分享|Battle data exported · review before sharing
+战斗数据记录已停止：|Battle data recording stopped:
+导出战斗数据 · Shift+F6|Export battle data · Shift+F6
+记录牌组、战斗状态与操作，仅保存到本机|Deck, combat states and actions · Saved locally
+
+战斗求解器|Combat Solver
+选择：|Choose:
+界面缩放保存失败：|Could not save panel size:
+预测胜利|Victory predicted
+战后 HP|Final HP
+等效战损|Effective loss
+战后恢复：|Recovery:
+自动战斗快捷键：|Auto battle key:
+语言：|Language:
+拖动标题栏移动 · 右上角调整大小|Drag title to move · Resize at top right

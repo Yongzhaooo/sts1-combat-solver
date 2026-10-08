@@ -127,10 +127,13 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private final String[] budgetNames = {"快速", "标准", "深入"};
     private String status = I18n.t("等待进入战斗"), error = "";
     private static final float PANEL_WIDTH = 880;
-    private static final float PANEL_HEIGHT = 386;
+    private static final float PANEL_HEIGHT = 612;
     private static final float ROUTE_LEFT = 368;
     private static final float ACTION_SPACING = (PANEL_WIDTH - 24) / 4;
     private float x = -1, y = -1, dx, dy;
+    private float uiScale = 1, fontScale;
+    private com.badlogic.gdx.graphics.g2d.NinePatch rounded;
+    private final Color border = new Color(.20f,.26f,.34f,1);
     private TransformPreview transformPreview;
     private int previewRngCounter;
     private Object previewSource;
@@ -185,12 +188,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         try {
             Properties defaults = new Properties();
             defaults.setProperty("language", "zh");
+            defaults.setProperty("uiScale", "1");
             defaults.setProperty("autoKey", Integer.toString(Input.Keys.F10));
             defaults.setProperty("brightEyeMode", "true");
             defaults.setProperty("autoPotionRewards", "true");
             defaults.setProperty("runAutoEnabled", "true");
             config = new SpireConfig("STS1CombatSolver", "config", defaults);
             I18n.setLanguage(config.getString("language"));
+            uiScale = PanelSize.preference(config.getString("uiScale"));
             status = I18n.t("等待进入战斗");
             backendPhase = I18n.t("等待后台接收");
             autoKey = config.getInt("autoKey");
@@ -484,18 +489,26 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         JsonObject c = game.getAsJsonObject("combat_state");
         if (c != null) {
             c.remove("frame_delta_seconds");
-            // Card hover recalculates displayed damage; retain base rule values,
-            // powers, target identities, costs and RNG instead of hover previews.
-            for (String pile : new String[]{"hand","draw_pile","discard_pile","exhaust_pile","limbo"})
-                if (c.has(pile)) for (JsonElement value : c.getAsJsonArray(pile)) {
-                    JsonObject card = value.getAsJsonObject();
-                    card.remove("damage"); card.remove("block"); card.remove("magic_number");
-                }
         }
+        // Pickers and pending UseCardAction export the same cards again. Hover
+        // previews must not invalidate a route through one of those copies.
+        stripCardPreviews(game);
         JsonObject key = new JsonObject();
         key.add("game", game);
         key.add("commands", state.get("available_commands"));
         return key;
+    }
+
+    private static void stripCardPreviews(JsonElement value) {
+        if (value.isJsonObject()) {
+            JsonObject object = value.getAsJsonObject();
+            if (object.has("uuid") && object.has("id") && object.has("cost")) {
+                object.remove("damage"); object.remove("block"); object.remove("magic_number");
+            }
+            for (Map.Entry<String,JsonElement> entry : object.entrySet()) stripCardPreviews(entry.getValue());
+        } else if (value.isJsonArray()) {
+            for (JsonElement item : value.getAsJsonArray()) stripCardPreviews(item);
+        }
     }
 
     private synchronized void startBackend() throws IOException {
@@ -660,22 +673,22 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         try {
             if (experience.enabled()) experience.stop();
             else experience.start(notesDirectory("experience"), DecisionContext.metadata());
-            debugMessage = experience.enabled()?I18n.t("已录制经验 · Shift+F6 导出"):I18n.t("经验记录已关闭");
+            debugMessage = experience.enabled()?I18n.t("战斗数据记录已开启 · Shift+F6 导出"):I18n.t("战斗数据记录已关闭");
         } catch (Exception failure) { experienceFailure(failure); }
     }
 
     private void exportExperience() {
         try {
             Path directory = experience.finish();
-            if (directory == null || experience.count() == 0) { debugMessage = I18n.t("请先开启经验记录"); return; }
-            debugMessage = I18n.t("经验已导出 · 请检查后分享");
+            if (directory == null || experience.count() == 0) { debugMessage = I18n.t("请先开启战斗数据记录"); return; }
+            debugMessage = I18n.t("战斗数据已导出 · 请检查后分享");
             showDirectory(directory);
         } catch (Exception failure) { experienceFailure(failure); }
     }
 
     private void experienceFailure(Exception failure) {
         try { experience.stop(); } catch (IOException ignored) { }
-        debugMessage = I18n.t("经验记录已停止：") + failure.getMessage();
+        debugMessage = I18n.t("战斗数据记录已停止：") + " " + failure.getMessage();
         System.err.println("[STS1Experience] " + failure);
     }
 
@@ -1003,11 +1016,19 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             Settings.WIDTH*.20f,Settings.HEIGHT*.90f,accent);
     }
 
-    private float scale() { return Settings.scale; }
+    private float scale() {
+        return PanelSize.fit(uiScale, Settings.scale, Settings.WIDTH, Settings.HEIGHT, PANEL_WIDTH, PANEL_HEIGHT);
+    }
+    private void changeScale(float value) {
+        uiScale = PanelSize.preference(Float.toString(value));
+        layout();
+        try { if (config != null) { config.setString("uiScale", Float.toString(uiScale)); config.save(); } }
+        catch (IOException failure) { error = I18n.t("界面缩放保存失败：") + failure.getMessage(); }
+    }
     private void layout() {
         float s = scale();
         if (x < 0) { x = 20*s; y = Settings.HEIGHT - 180*s; }
-        x = Math.max(0, Math.min(x, Settings.WIDTH - PANEL_WIDTH*s));
+        x = Math.max(0, Math.min(x, Settings.WIDTH - panelWidth()*s));
         y = Math.max((collapsed ? 48 : PANEL_HEIGHT)*s, Math.min(y, Settings.HEIGHT));
     }
     private boolean inside(float mx, float my, float rx, float ry, float w, float h) {
@@ -1085,16 +1106,19 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (over && click) {
             float lx=(mx-x)/s, ly=(y-my)/s;
             if (ly < 46) {
-                if (!collapsed && lx >= 688 && lx < PANEL_WIDTH-47) {
-                    toggleExperience();
-                } else if (!collapsed && lx >= ROUTE_LEFT && lx < 688) {
+                if (!collapsed && lx >= 672 && lx < 816) {
+                    changeScale(lx < 708 ? uiScale-.1f : lx >= 780 ? uiScale+.1f : 1);
+                } else if (!collapsed && lx >= 490 && lx < 658) {
                     Foresight.brightEyeMode = !Foresight.brightEyeMode;
                     scroll = 0;
                     try { if(config!=null) { config.setBool("brightEyeMode",Foresight.brightEyeMode); config.save(); } }
                     catch(IOException failure) { error=I18n.t("模式保存失败：")+failure.getMessage(); }
                 } else if (lx > panelWidth()-47) { collapsed=!collapsed; autoFolded=false; }
                 else { dragging=true; dx=mx-x; dy=my-y; }
-            } else if (!collapsed && previewCount > 0 && lx >= ROUTE_LEFT && ly >= 50 && ly < 79) {
+            } else if (!collapsed && ly >= 536 && ly <= 570) {
+                if (lx >= 16 && lx < ROUTE_LEFT-16) toggleExperience();
+                else if (lx >= ROUTE_LEFT && lx < PANEL_WIDTH-16) exportExperience();
+            } else if (!collapsed && previewCount > 0 && lx >= ROUTE_LEFT && ly >= 76 && ly < 104) {
                 if (transformPreview != null) transformPreview = null;
                 else {
                     boolean astrolabe = Foresight.astrolabeOffered();
@@ -1105,32 +1129,33 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                     previewSource = source;
                 }
                 scroll = 0;
-            } else if (!collapsed && transformPreview != null && lx >= ROUTE_LEFT && ly >= 82 && ly < 244) {
-                transformPreview.pick(scroll + (int)((ly-82)/27));
+            } else if (!collapsed && transformPreview != null && lx >= ROUTE_LEFT && ly >= 110 && ly < 326) {
+                transformPreview.pick(scroll + (int)((ly-110)/36));
                 scroll = 0;
-            } else if (!collapsed && ly >= 278 && ly <= 310) {
-                if (lx < 12+ACTION_SPACING) recalculate();
-                else if (lx < 12+2*ACTION_SPACING) { runAuto=auto=turnOnly=false; executeStep(); }
-                else if (lx < 12+3*ACTION_SPACING) {
+            } else if (!collapsed && lx >= 16 && lx < PANEL_WIDTH-16 && ly >= 394 && ly <= 436
+                    && (lx-16)%ACTION_SPACING < ACTION_SPACING-8) {
+                if (lx < 16+ACTION_SPACING) recalculate();
+                else if (lx < 16+2*ACTION_SPACING) { runAuto=auto=turnOnly=false; executeStep(); }
+                else if (lx < 16+3*ACTION_SPACING) {
                     toggleAuto();
                 } else stopAll();
-            } else if (!collapsed && ly >= 316 && ly <= 344) {
+            } else if (!collapsed && ly >= 448 && ly <= 482) {
                 if(lx>=ROUTE_LEFT)togglePotionRewards();else bindingKey=true;
-            } else if (!collapsed && lx<ROUTE_LEFT && ly>=350 && ly<=378) {
+            } else if (!collapsed && lx<ROUTE_LEFT && ly>=490 && ly<=524) {
                 toggleLanguage();
-            } else if (!collapsed && lx>=ROUTE_LEFT && ly>=350 && ly<=378) {
+            } else if (!collapsed && lx>=ROUTE_LEFT && ly>=490 && ly<=524) {
                 toggleRunAuto();
-            } else if (!collapsed && lx >= ROUTE_LEFT && ly>=240 && ly<260 && canCreditRest()) {
+            } else if (!collapsed && lx >= ROUTE_LEFT && ly>=356 && ly<378 && canCreditRest()) {
                 nextRest=!nextRest;recalculate();
-            } else if (!collapsed && lx >= ROUTE_LEFT && branchPicker && result!=null && ly>=82 && ly<222) {
-                int index=scroll+(int)((ly-82)/28);
+            } else if (!collapsed && lx >= ROUTE_LEFT && branchPicker && result!=null && ly>=110 && ly<310) {
+                int index=scroll+(int)((ly-110)/40);
                 JsonArray branches=result.getAsJsonArray("branches");
                 if(index<branches.size()) {
                     JsonObject branch=branches.get(index).getAsJsonObject();
                     if(branch.get("available").getAsBoolean())chooseBranch(branch.get("id").getAsString());
                 }
-            } else if (!collapsed && lx >= ROUTE_LEFT && busy && progressRows!=null && ly>=82 && ly<244) {
-                int index=(int)((ly-82)/27);
+            } else if (!collapsed && lx >= ROUTE_LEFT && busy && progressRows!=null && ly>=110 && ly<326) {
+                int index=(int)((ly-110)/36);
                 if(index<Math.min(progressRows.size(),6)) {
                     JsonObject row=progressRows.get(index).getAsJsonObject();
                     if(row.has("ready") && row.get("ready").getAsBoolean() && row.has("id")) {
@@ -1138,11 +1163,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                         cancel(true);
                     }
                 }
-            } else if (!collapsed && lx >= ROUTE_LEFT && result!=null && ly>=82 && ly<244) {
+            } else if (!collapsed && lx >= ROUTE_LEFT && result!=null && ly>=110 && ly<326) {
                 if (!auto && !turnOnly) toggleAuto();
-            } else if (!collapsed && lx >= 16 && lx < ROUTE_LEFT-16 && ly >= 198 && ly <= 272) {
-                if (ly <= 230) { budgetIndex=(budgetIndex+1)%3; recalculate(); }
-                else if (ly < 240) { /* Gap between buttons. */ }
+            } else if (!collapsed && lx >= 16 && lx < ROUTE_LEFT-16 && ly >= 270 && ly <= 352) {
+                if (ly <= 304) { budgetIndex=(budgetIndex+1)%3; recalculate(); }
+                else if (ly < 318) { /* Gap between buttons. */ }
                 else if (result != null && ready()) {
                     startingTurn=AbstractDungeon.actionManager.turn;
                     turnOnly=true; runAuto=auto=false;
@@ -1151,7 +1176,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }
         hovered = over || dragging;
         if (over || dragging) {
-            if (!collapsed) {
+            if (!collapsed && (mx-x)/s >= ROUTE_LEFT && (y-my)/s >= 110 && (y-my)/s < 326) {
                 if (InputHelper.scrolledDown) scroll++;
                 if (InputHelper.scrolledUp) scroll=Math.max(0,scroll-1);
             }
@@ -1173,31 +1198,58 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     private void box(SpriteBatch sb, float left, float top, float width, float height, Color color) {
-        sb.setColor(color);
-        sb.draw(ImageMaster.WHITE_SQUARE_IMG, x+left*scale(), y-(top+height)*scale(), width*scale(), height*scale());
+        if (rounded == null) {
+            com.badlogic.gdx.graphics.Pixmap pixmap = new com.badlogic.gdx.graphics.Pixmap(24,24,com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
+            pixmap.setColor(Color.WHITE);
+            pixmap.fillRectangle(6,0,12,24); pixmap.fillRectangle(0,6,24,12);
+            for (int cx : new int[]{6,17}) for (int cy : new int[]{6,17}) pixmap.fillCircle(cx,cy,6);
+            com.badlogic.gdx.graphics.Texture texture = new com.badlogic.gdx.graphics.Texture(pixmap);
+            texture.setFilter(com.badlogic.gdx.graphics.Texture.TextureFilter.Linear,com.badlogic.gdx.graphics.Texture.TextureFilter.Linear);
+            pixmap.dispose();
+            rounded = new com.badlogic.gdx.graphics.g2d.NinePatch(texture,8,8,8,8);
+        }
+        float s=scale();
+        sb.setColor(Color.WHITE);
+        rounded.setColor(color);
+        rounded.draw(sb,x+left*s,y-(top+height)*s,width*s,height*s);
+    }
+    private void line(SpriteBatch sb, float left, float top, float width) {
+        sb.setColor(border);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,x+left*scale(),y-top*scale(),width*scale(),scale());
+        sb.setColor(Color.WHITE);
     }
     private void initFont() {
         if (uiFont == null) {
-            // Use the game's bundled CJK font even when the game language is English.
             fontGenerator = new FreeTypeFontGenerator(Gdx.files.internal("font/zhs/NotoSansMonoCJKsc-Regular.otf"));
             FreeTypeFontGenerator.FreeTypeFontParameter parameter = new FreeTypeFontGenerator.FreeTypeFontParameter();
-            parameter.size = Math.max(12, Math.round(19*scale()));
+            parameter.size = Math.max(12, Math.round(19*Settings.scale));
+            fontScale = parameter.size / 19f;
             parameter.incremental = true;
+            parameter.minFilter = com.badlogic.gdx.graphics.Texture.TextureFilter.Linear;
+            parameter.magFilter = com.badlogic.gdx.graphics.Texture.TextureFilter.Linear;
             uiFont = fontGenerator.generateFont(parameter);
         }
     }
     BitmapFont font() { initFont(); return uiFont; }
     private void text(SpriteBatch sb, String text, float left, float top, Color color) {
-        text = I18n.t(text);
+        float right = left < ROUTE_LEFT && top >= 76 && top < 394 ? ROUTE_LEFT-24 : panelWidth()-24;
+        if (top >= 448 && top <= 570 && left < ROUTE_LEFT) right = ROUTE_LEFT-24;
+        if (top == 407) right = 16 + ((int)((left-24)/ACTION_SPACING)+1)*ACTION_SPACING-20;
+        label(sb,text,left,top,right-left,1,color);
+    }
+    private void label(SpriteBatch sb, String value, float left, float top, float width, float size, Color color) {
         initFont();
-        float right = top >= 50 && top < 244 && left < ROUTE_LEFT ? ROUTE_LEFT-16 : PANEL_WIDTH-14;
-        float available=(right-left)*scale();
-        measure.setText(uiFont,text);
-        while(text.length()>1 && measure.width>available) {
-            text=text.substring(0,text.length()-2)+"…";
+        float oldX=uiFont.getData().scaleX, oldY=uiFont.getData().scaleY;
+        try {
+            uiFont.getData().setScale(scale()/fontScale*size);
+            String text=I18n.t(value);
             measure.setText(uiFont,text);
-        }
-        FontHelper.renderFontLeftTopAligned(sb, uiFont, text, x+left*scale(), y-top*scale(), color);
+            while(text.length()>1 && measure.width>width*scale()) {
+                text=text.substring(0,text.length()-2)+"…";
+                measure.setText(uiFont,text);
+            }
+            FontHelper.renderFontLeftTopAligned(sb,uiFont,text,x+left*scale(),y-top*scale(),color);
+        } finally { uiFont.getData().setScale(oldX,oldY); }
     }
     private static String count(long n) { return n>=10000 ? String.format(I18n.t("%.1f 万"), n/10000.0) : Long.toString(n); }
     private String progressSummary() {
@@ -1229,7 +1281,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             }
             if (p[0].equals("potion")) return I18n.t("药水：")+AbstractDungeon.player.potions.get(Integer.parseInt(p[2])).name;
             if (p[0].equals("end")) return I18n.t("结束回合");
-            if (p[0].equals("choose")) return I18n.t("战斗选牌：第 ")+(Integer.parseInt(p[1])+1)+I18n.t(" 张");
+            if (p[0].equals("choose")) {
+                int index = Integer.parseInt(p[1]);
+                if (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.GRID)
+                    return I18n.t("选择：") + communicationmod.ChoiceScreenUtils.getGridScreenCards().get(index).name;
+                return I18n.t("战斗选牌：第 ")+(index+1)+I18n.t(" 张");
+            }
             if (p[0].equals("confirm")) return I18n.t("确认战斗选牌");
             if (p[0].equals("skip")) return I18n.t("跳过战斗选牌");
         } catch (RuntimeException ignored) { return I18n.t("局面已变化，等待重新计算"); }
@@ -1240,36 +1297,55 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         Foresight.renderRubyReminder(sb);
         renderPotionRewardAdvice(sb);
         layout();
-        box(sb,0,0,panelWidth(),collapsed?48:PANEL_HEIGHT,background);
-        box(sb,0,0,4,collapsed?48:PANEL_HEIGHT,accent);
-        text(sb,researchRecording?voiceNotes.status():debugMessage.isEmpty()?I18n.t("F6 导出错误报告"):debugMessage,18,12,Color.WHITE);
-        text(sb,collapsed?"＋":"－",panelWidth()-35,12,accent);
-        if (collapsed) { sb.setColor(Color.WHITE); cursorOnTop(sb); return; }
-        text(sb,I18n.t("辉眼模式：")+(Foresight.brightEyeMode?I18n.t("开"):I18n.t("关"))+I18n.t(" [点击切换]"),ROUTE_LEFT+8,12,accent);
-        text(sb,I18n.t("经验：") + I18n.t(experience.enabled()?"开":"关"),696,12,experience.enabled()?accent:muted);
+        box(sb,0,0,panelWidth(),collapsed?48:PANEL_HEIGHT,border);
+        box(sb,1,1,panelWidth()-2,(collapsed?48:PANEL_HEIGHT)-2,background);
+        label(sb,I18n.t("战斗求解器"),20,collapsed?7:14,collapsed?240:255,collapsed?.95f:1.25f,Color.WHITE);
+        label(sb,collapsed?"＋":"－",panelWidth()-36,14,26,1,accent);
+        if (collapsed) {
+            label(sb,error.isEmpty()?status:I18n.backend(error),20,29,240,.65f,error.isEmpty()?muted:danger);
+            sb.setColor(Color.WHITE); cursorOnTop(sb); return;
+        }
+        label(sb,researchRecording?voiceNotes.status():debugMessage.isEmpty()?I18n.t("F6 导出错误报告"):debugMessage,20,52,840,.8f,muted);
+        box(sb,490,10,168,32,surface);
+        label(sb,I18n.t("辉眼模式：")+I18n.t(Foresight.brightEyeMode?"开":"关"),502,18,144,.9f,accent);
+        box(sb,672,10,144,32,surface);
+        label(sb,"−",684,18,24,1,accent);
+        label(sb,Math.round(uiScale*100)+"%",714,18,62,.9f,Color.WHITE);
+        label(sb,"＋",787,18,24,1,accent);
+        line(sb,16,526,PANEL_WIDTH-32);
+        box(sb,16,536,ROUTE_LEFT-32,34,surface);
+        text(sb,I18n.t("记录战斗数据：") + " " + I18n.t(experience.enabled()?"开":"关"),24,545,experience.enabled()?accent:muted);
+        box(sb,ROUTE_LEFT,536,PANEL_WIDTH-ROUTE_LEFT-16,34,surface);
+        text(sb,I18n.t("导出战斗数据 · Shift+F6"),ROUTE_LEFT+8,545,experience.count()>0?accent:muted);
+        label(sb,I18n.t("记录牌组、战斗状态与操作，仅保存到本机"),24,584,832,.8f,muted);
         String revivalWarning = result == null ? "" : revivalWarning(result);
-        text(sb,revivalWarning.isEmpty()?shortText(status,30):revivalWarning,18,55,
+        text(sb,revivalWarning.isEmpty()?shortText(status,30):revivalWarning,18,80,
             revivalWarning.isEmpty() && error.isEmpty()?muted:danger);
-        box(sb,16,89,ROUTE_LEFT-32,98,surface);
+        box(sb,16,110,ROUTE_LEFT-32,146,surface);
         if (busy) {
             long seconds=(System.currentTimeMillis()-sentAt)/1000;
             long now = System.currentTimeMillis();
-            text(sb,shortText(I18n.backend(backendPhase),28),30,99,accent);
-            text(sb,I18n.t("总等待 ")+seconds+I18n.t(" 秒 · 本阶段 ")+((now-phaseAt)/1000)+I18n.t(" 秒"),30,126,muted);
+            text(sb,shortText(I18n.backend(backendPhase),28),30,127,accent);
+            text(sb,I18n.t("总等待 ")+seconds+I18n.t(" 秒 · 本阶段 ")+((now-phaseAt)/1000)+I18n.t(" 秒"),30,166,muted);
             text(sb,now-lastProgressAt>5000
                 ? I18n.t("已 ")+((now-lastProgressAt)/1000)+I18n.t(" 秒无进度 · F9 停止")
-                :progressRows==null?I18n.t("请求 #")+activeId+I18n.t(" · F9 停止"):progressSummary(),30,153,muted);
+                :progressRows==null?I18n.t("请求 #")+activeId+I18n.t(" · F9 停止"):progressSummary(),30,208,muted);
         } else if (result != null) {
             boolean won=result.get("won").getAsBoolean();
-            text(sb,won?I18n.t("预测胜利   战后 HP ")+result.get("hp").getAsInt():I18n.t("当前路线未找到胜利"),30,103,won?accent:danger);
-            String healing=I18n.t("等效战损 ")+result.get("loss").getAsInt()+I18n.t(" · 战后回 ")+result.get("recovery").getAsInt();
+            text(sb,won?I18n.t("预测胜利"):I18n.t("当前路线未找到胜利"),30,126,won?accent:danger);
+            label(sb,I18n.t("战后 HP"),30,160,144,.8f,muted);
+            label(sb,I18n.t("等效战损"),194,160,142,.8f,muted);
+            label(sb,result.get("hp").getAsString(),30,180,144,1.8f,Color.WHITE);
+            label(sb,result.get("loss").getAsString(),194,180,142,1.8f,accent);
+            line(sb,30,222,ROUTE_LEFT-76);
+            text(sb,I18n.t("下一步  ")+commandLabel(),30,234,Color.WHITE);
+            String healing=I18n.t("战后恢复：")+result.get("recovery").getAsInt();
             if(result.getAsJsonArray("recovery_notes").size()>0)
                 healing+=" · "+I18n.backend(result.getAsJsonArray("recovery_notes").get(0).getAsString());
-            text(sb,healing,30,134,muted);
-            text(sb,I18n.t("下一步  ")+shortText(commandLabel(),25),30,160,Color.WHITE);
+            label(sb,healing,24,363,ROUTE_LEFT-48,.8f,muted);
         } else {
-            text(sb,error.isEmpty()?I18n.t("由你构筑，由它求解战斗"):shortText(I18n.backend(error),27),30,105,error.isEmpty()?accent:danger);
-            text(sb,error.isEmpty()?I18n.t("仅查看建议，点击按钮后才出牌"):I18n.t("详细原因已写入后台日志"),30,143,muted);
+            text(sb,error.isEmpty()?I18n.t("由你构筑，由它求解战斗"):shortText(I18n.backend(error),27),30,137,error.isEmpty()?accent:danger);
+            text(sb,error.isEmpty()?I18n.t("仅查看建议，点击按钮后才出牌"):I18n.t("详细原因已写入后台日志"),30,188,muted);
         }
         List<String> foresight=transformPreview!=null?transformPreview.lines():combat()?Collections.<String>emptyList():Foresight.lines();
         String heading=transformPreview!=null?(transformPreview.upgrade?I18n.t("星盘"):I18n.t("变化"))+I18n.t("试选 ") + transformPreview.selected.size() + "/"+transformPreview.count+I18n.t(" · 点击此处关闭")
@@ -1279,14 +1355,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             :!foresight.isEmpty()?I18n.t("随机结果预测 · 滚轮翻页")
             :result!=null && result.has("manual_choice") && result.get("manual_choice").getAsBoolean()
                 ?I18n.t("抢劫怪路线 · 可手动或自动执行"):I18n.t("推荐行动顺序 · 点击执行整条路线");
-        text(sb,heading,ROUTE_LEFT+2,55,Color.WHITE);
+        text(sb,heading,ROUTE_LEFT+2,80,Color.WHITE);
         if (transformPreview != null) {
             scroll=Math.max(0,Math.min(scroll,Math.max(0,foresight.size()-6)));
             for (int i=scroll;i<Math.min(foresight.size(),scroll+6);i++) {
-                box(sb,ROUTE_LEFT,82+(i-scroll)*27,PANEL_WIDTH-ROUTE_LEFT-16,25,surface);
-                text(sb,foresight.get(i),ROUTE_LEFT+8,88+(i-scroll)*27,i<transformPreview.selected.size()?accent:muted);
+                box(sb,ROUTE_LEFT,110+(i-scroll)*36,PANEL_WIDTH-ROUTE_LEFT-16,32,surface);
+                text(sb,foresight.get(i),ROUTE_LEFT+8,118+(i-scroll)*36,i<transformPreview.selected.size()?accent:muted);
             }
-            text(sb,I18n.t("仅试选 · 滚轮翻页 · 点击已选项撤回"),ROUTE_LEFT+8,240,accent);
+            text(sb,I18n.t("仅试选 · 滚轮翻页 · 点击已选项撤回"),ROUTE_LEFT+8,338,accent);
         } else if (branchPicker && result!=null) {
             JsonArray branches=result.getAsJsonArray("branches");
             scroll=Math.max(0,Math.min(scroll,Math.max(0,branches.size()-5)));
@@ -1301,12 +1377,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                     summary+=I18n.t(" / 金 -")+branch.get("lost_gold").getAsInt();
                 if(available && branch.has("potion_gain") && branch.get("potion_gain").getAsInt()>0)
                     summary+=I18n.t(" / 补 ")+branch.get("potion_gain").getAsInt()+I18n.t(" 药");
-                box(sb,ROUTE_LEFT,82+(i-scroll)*28,PANEL_WIDTH-ROUTE_LEFT-16,26,surface);
-                text(sb,i+" "+summary+" · "+I18n.backend(branch.get("name").getAsString()),ROUTE_LEFT+8,86+(i-scroll)*28,
+                box(sb,ROUTE_LEFT,110+(i-scroll)*40,PANEL_WIDTH-ROUTE_LEFT-16,36,surface);
+                text(sb,i+" "+summary+" · "+I18n.backend(branch.get("name").getAsString()),ROUTE_LEFT+8,118+(i-scroll)*40,
                     !revival.isEmpty()?danger:available?accent:muted);
             }
             text(sb,result.has("manual_choice") && result.get("manual_choice").getAsBoolean()
-                ?I18n.t("空回车：选推荐路线；选后可开自动"):I18n.t("0 / 空回车：不交药；无输入则等待"),ROUTE_LEFT+8,222,muted);
+                ?I18n.t("空回车：选推荐路线；选后可开自动"):I18n.t("0 / 空回车：不交药；无输入则等待"),ROUTE_LEFT+8,320,muted);
         } else if (result != null) {
             JsonArray rows=result.getAsJsonArray("route");
             int visibleRows=runAuto?5:6;
@@ -1315,7 +1391,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 JsonObject row=rows.get(i).getAsJsonObject();
                 String label=row.get("text").getAsString();
                 if (row.has("label")) label=row.get("label").getAsString();
-                text(sb,"T"+row.get("turn").getAsInt()+"  "+shortText(I18n.backend(label),33),ROUTE_LEFT+8,88+(i-scroll)*27,i==0?accent:muted);
+                box(sb,ROUTE_LEFT,110+(i-scroll)*36,PANEL_WIDTH-ROUTE_LEFT-16,32,surface);
+                label(sb,String.format("%02d",i+1),ROUTE_LEFT+10,118+(i-scroll)*36,34,.85f,i==0?accent:muted);
+                label(sb,I18n.backend(label),ROUTE_LEFT+52,118+(i-scroll)*36,PANEL_WIDTH-ROUTE_LEFT-124,.95f,i==0?Color.WHITE:muted);
+                label(sb,"T"+row.get("turn").getAsInt(),PANEL_WIDTH-64,118+(i-scroll)*36,40,.8f,muted);
             }
         } else if (busy && progressRows != null) {
             for (int i=0;i<Math.min(progressRows.size(),6);i++) {
@@ -1323,42 +1402,42 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 int best=row.get("best_hp").getAsInt();
                 String line=(best>0?"HP "+best:I18n.t("未胜"))+" · T"+row.get("turn").getAsInt()+" · "
                     +count(row.get("simulations").getAsLong())+" · "+I18n.backend(row.get("name").getAsString());
-                text(sb,shortText(line,34),ROUTE_LEFT+8,88+i*27,row.has("ready") && row.get("ready").getAsBoolean()?accent:muted);
+                text(sb,shortText(line,34),ROUTE_LEFT+8,118+i*36,row.has("ready") && row.get("ready").getAsBoolean()?accent:muted);
             }
         } else if (!foresight.isEmpty()) {
             scroll=Math.max(0,Math.min(scroll,Math.max(0,foresight.size()-6)));
             for (int i=scroll;i<Math.min(foresight.size(),scroll+6);i++) {
                 String line=foresight.get(i);
-                text(sb,shortText(line,34),ROUTE_LEFT+8,88+(i-scroll)*27,line.startsWith(" ")?muted:accent);
+                text(sb,shortText(line,34),ROUTE_LEFT+8,118+(i-scroll)*36,line.startsWith(" ")?muted:accent);
             }
         } else {
-            text(sb,I18n.t("发牌和动画结算后自动生成建议"),ROUTE_LEFT+8,96,muted);
-            text(sb,I18n.t("奖励牌 / 地图 / 商店始终由你操作"),ROUTE_LEFT+8,132,muted);
-            text(sb,I18n.t("拖动标题栏移动 · F8 收起 / 展开"),ROUTE_LEFT+8,168,muted);
+            text(sb,I18n.t("发牌和动画结算后自动生成建议"),ROUTE_LEFT+8,136,muted);
+            text(sb,I18n.t("奖励牌 / 地图 / 商店始终由你操作"),ROUTE_LEFT+8,178,muted);
+            text(sb,I18n.t("拖动标题栏移动 · 右上角调整大小"),ROUTE_LEFT+8,220,muted);
         }
-        if(canCreditRest())text(sb,I18n.t("下层走火堆计羽毛回血：")+(nextRest?I18n.t("是"):I18n.t("仅必经火堆"))+I18n.t(" [点击]"),ROUTE_LEFT+8,240,accent);
-        box(sb,16,198,ROUTE_LEFT-32,32,surface);
-        box(sb,16,240,ROUTE_LEFT-32,32,surface);
-        text(sb,I18n.t("搜索预算：")+I18n.t(budgetNames[budgetIndex]),28,204,muted);
-        text(sb,turnOnly?I18n.t("正在执行本回合"):I18n.t("执行本回合"),28,246,result!=null?Color.WHITE:muted);
+        if(canCreditRest())text(sb,I18n.t("下层走火堆计羽毛回血：")+(nextRest?I18n.t("是"):I18n.t("仅必经火堆"))+I18n.t(" [点击]"),ROUTE_LEFT+8,358,accent);
+        box(sb,16,270,ROUTE_LEFT-32,34,surface);
+        box(sb,16,318,ROUTE_LEFT-32,34,surface);
+        text(sb,I18n.t("搜索预算：")+I18n.t(budgetNames[budgetIndex]),28,279,muted);
+        text(sb,turnOnly?I18n.t("正在执行本回合"):I18n.t("执行本回合"),28,327,result!=null?Color.WHITE:muted);
         String[] labels={I18n.t("重新计算"),I18n.t("执行一步"),auto?I18n.t("自动：开"):I18n.t("自动战斗"),I18n.t("停止")};
         for(int i=0;i<4;i++) {
-            box(sb,16+i*ACTION_SPACING,278,ACTION_SPACING-8,32,surface);
-            text(sb,labels[i],24+i*ACTION_SPACING,284,i==3?danger:(i==2&&auto?accent:Color.WHITE));
+            box(sb,16+i*ACTION_SPACING,394,ACTION_SPACING-8,42,i==0?accent:surface);
+            text(sb,labels[i],24+i*ACTION_SPACING,407,i==0?background:i==3?danger:(i==2&&auto?accent:Color.WHITE));
         }
-        box(sb,16,316,ROUTE_LEFT-24,28,surface);
+        box(sb,16,448,ROUTE_LEFT-24,34,surface);
         text(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F8/F9 保留；Esc 取消")
-            :I18n.t("本场：回车 / ")+Input.Keys.toString(autoKey)+I18n.t(" [改绑] · F9 停止"),24,321,accent);
-        box(sb,ROUTE_LEFT,316,PANEL_WIDTH-ROUTE_LEFT-16,28,surface);
-        text(sb,I18n.t("自动换药：")+(autoPotionRewards?I18n.t("开"):I18n.t("关"))+I18n.t(" [点击切换]"),ROUTE_LEFT+8,321,accent);
-        box(sb,16,350,ROUTE_LEFT-24,28,surface);
-        text(sb,"Language: " + ("en".equals(I18n.language()) ? "English" : "中文") + " [click]",24,355,accent);
-        box(sb,ROUTE_LEFT,350,PANEL_WIDTH-ROUTE_LEFT-16,28,surface);
-        text(sb,runAuto?I18n.t("自动用药＋跨场战斗：开 [点击停止]"):I18n.t("自动用药＋跨场战斗：关 [点击开启]"),ROUTE_LEFT+8,355,accent);
+            :I18n.t("自动战斗快捷键：")+Input.Keys.toString(autoKey),24,459,accent);
+        box(sb,ROUTE_LEFT,448,PANEL_WIDTH-ROUTE_LEFT-16,34,surface);
+        text(sb,I18n.t("自动换药：")+(autoPotionRewards?I18n.t("开"):I18n.t("关"))+I18n.t(" [点击切换]"),ROUTE_LEFT+8,459,accent);
+        box(sb,16,490,ROUTE_LEFT-24,34,surface);
+        text(sb,I18n.t("语言：") + ("en".equals(I18n.language()) ? "English" : "简体中文"),24,501,accent);
+        box(sb,ROUTE_LEFT,490,PANEL_WIDTH-ROUTE_LEFT-16,34,surface);
+        text(sb,runAuto?I18n.t("自动用药＋跨场战斗：开 [点击停止]"):I18n.t("自动用药＋跨场战斗：关 [点击开启]"),ROUTE_LEFT+8,501,accent);
         if(runAuto && result!=null && result.has("auto_recommendation")) {
             JsonObject advice=result.getAsJsonObject("auto_recommendation");
-            text(sb,shortText(I18n.backend(autoReason),34),ROUTE_LEFT+8,218,accent);
-            text(sb,shortText(I18n.backend(advice.getAsJsonObject("assessment").get("summary").getAsString()),34),ROUTE_LEFT+8,260,muted);
+            text(sb,shortText(I18n.backend(autoReason),34),ROUTE_LEFT+8,338,accent);
+            text(sb,shortText(I18n.backend(advice.getAsJsonObject("assessment").get("summary").getAsString()),34),ROUTE_LEFT+8,378,muted);
         }
         sb.setColor(Color.WHITE);
         cursorOnTop(sb);

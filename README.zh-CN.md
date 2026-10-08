@@ -23,7 +23,8 @@
 
 ## 安装
 
-- [订阅 Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)，或下载 [v0.3.0 运行包](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.3.0)。
+- [订阅 Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)，或下载 [v0.3.1 运行包](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.3.1)。
+- 面板右上角的 − / + 支持 60%–160% 缩放，点击百分比恢复默认。设置会保存，只调整求解器面板，不改变游戏分辨率。
 - 工坊包支持 Windows 10/11 x64 和 macOS 11+（Apple Silicon、Intel）。另行订阅 ModTheSpire、BaseMod，选择“使用模组启动”并勾选 BaseMod 与求解器即可，无需另装 Python、编译器、WSL 或克隆源码。详见 [Windows 安装说明](WINDOWS_INSTALL.md)及 [Mac 安装与发布验证](MACOS_INSTALL.md)。
 - Windows、macOS、Linux 的本地源码构建见下文。Linux／Steam Deck 暂无随工坊分发的运行时。
 

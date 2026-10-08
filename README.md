@@ -23,7 +23,8 @@ The panel supports English and Chinese. Optional seeded foresight previews event
 
 ## Install
 
-- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download a [v0.3.0 package](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.3.0).
+- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download a [v0.3.1 package](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.3.1).
+- Resize the panel with the top-right − / + buttons; click the percentage to reset. The 60–160% setting persists across launches and changes only the overlay.
 - The Workshop package supports Windows 10/11 x64 and macOS 11+ (Apple Silicon and Intel). Install ModTheSpire and BaseMod separately, choose Play with Mods, and enable BaseMod plus STS1 Combat Solver. No separate Python, compiler, WSL or source checkout is needed. See [Windows installation](WINDOWS_INSTALL.md) or [Mac installation and release checks](MACOS_INSTALL.md).
 - Windows, macOS and Linux source builds remain available below. Linux/Steam Deck have no bundled Workshop runtime yet.
 

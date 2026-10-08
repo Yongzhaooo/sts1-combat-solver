@@ -566,6 +566,10 @@ class Advisor:
                     else a.desc(replay))
             else:
                 row.update(kind='select', text='选牌：' + a.desc(replay))
+                if (a.action_type == s.sts.SearchActionType.SINGLE_CARD_SELECT
+                        and s.native.selection_info(replay)['task'] == 'HEADBUTT'):
+                    card = replay.discard_pile[int(a.select_idx)]
+                    row['label'] = '弃牌置顶：' + names.get(card.id.name, card.id.name)
             before_gold = int(replay.player.gold)
             before_max_hp = int(replay.player.max_hp)
             before_revives = self.native_search.revival_inventory(replay)
