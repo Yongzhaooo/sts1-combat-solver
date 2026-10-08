@@ -3096,10 +3096,8 @@ void BattleContext::chooseDiscoveryCard(CardId id) {
 
     for (int i = 0; i < discoveryAmount; ++i) {
         if (cards.cardsInHand + 1 <= CardManager::MAX_HAND_SIZE) {
-            if (player.hasStatus<PS::CORRUPTION>() && c.getType() == CardType::SKILL) {
-                c.setCostForTurn(-9);
-            }
             cards.createTempCardInHand(c);
+            onCardDrawOrDiscard(); // ShowCardAndAddToHandEffect, as in MakeTempCardInHand
 
         } else {
             cards.createTempCardInDiscard(c);

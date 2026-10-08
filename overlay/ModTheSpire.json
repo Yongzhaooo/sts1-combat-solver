@@ -3,7 +3,7 @@
   "name": "STS1 Combat Solver / 尖塔1战斗求解器",
   "author_list": ["CYZ"],
   "description": "可拖动战斗建议面板，支持执行一步、本回合和自动战斗。开局可选全自动爬塔（早期训练结果，质量有限）。当前支持战士。F8 收起，F9 停止。",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "sts_version": "12-18-2022",
   "mts_version": "3.30.0",
   "dependencies": ["basemod"]

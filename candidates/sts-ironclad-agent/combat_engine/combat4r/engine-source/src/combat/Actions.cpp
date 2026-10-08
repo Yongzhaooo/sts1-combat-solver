@@ -221,7 +221,11 @@ Action Actions::MakeTempCardInHand(CardInstance card, int amount) {
                 bc.cards.notifyAddToDiscardPile(c);
                 bc.cards.discardPile.push_back(c);
             } else {
-                bc.moveToHandHelper(c);
+                // ShowCardAndAddToHandEffect adds the card, then runs
+                // onCardDrawOrDiscard, so Corruption makes a generated skill
+                // permanently free before its setCostForTurn(-9).
+                bc.cards.moveToHand(c);
+                bc.onCardDrawOrDiscard();
             }
         }
     }};
