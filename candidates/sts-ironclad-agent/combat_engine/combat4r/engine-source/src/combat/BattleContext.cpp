@@ -2551,8 +2551,22 @@ void BattleContext::discardAtEndOfTurnHelper() {
         cards.notifyRemoveFromHand(cards.hand[i]);
         cards.moveToDiscardPile(cards.hand[i]);
         ++player.cardsDiscardedThisTurn;
+        cards.cardsInHand = i;
+        onCardDrawOrDiscard(); // CardGroup.moveToDiscardPile, after the card left the hand
     }
-    cards.cardsInHand = 0;
+}
+
+// Java AbstractPlayer.onCardDrawOrDiscard: with Corruption, every hand skill
+// whose turn cost is nonzero gets modifyCostForCombat(-9). Mid-turn this is a
+// no-op, but the end-of-turn reset restores Snecko-randomized costs, so the
+// next exhaust/discard/draw makes those skills permanently free.
+void BattleContext::onCardDrawOrDiscard() {
+    if (!player.hasStatus<PS::CORRUPTION>()) return;
+    for (int i = 0; i < cards.cardsInHand; ++i) {
+        auto &c = cards.hand[i];
+        if (c.getType() == CardType::SKILL && c.costForTurn != 0 && (c.costForTurn > 0 || c.cost >= 0))
+            c.cost = c.costForTurn = 0;
+    }
 }
 
 void BattleContext::playTopCardInDrawPile(int monsterTargetIdx, bool exhausts) {
@@ -2613,6 +2627,7 @@ void BattleContext::exhaustSpecificCardInHand(int idx, std::int16_t uniqueId) {
     for (int i = foundIdx; i < cards.cardsInHand; ++i) {
         cards.hand[i] = cards.hand[i+1];
     } // todo fixed the cached variables in cardmanager
+    onCardDrawOrDiscard(); // CardGroup.moveToExhaustPile
 }
 
 void BattleContext::restoreRetainedCards(int count) {

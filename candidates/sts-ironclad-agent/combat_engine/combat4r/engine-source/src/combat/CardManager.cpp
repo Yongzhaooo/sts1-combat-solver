@@ -440,6 +440,7 @@ void CardManager::draw(BattleContext &bc, int amount) {
         } else {
             moveToDiscardPile(c);
         }
+        bc.onCardDrawOrDiscard(); // AbstractPlayer.draw() after each DrawCardAction card
     }
 
 }

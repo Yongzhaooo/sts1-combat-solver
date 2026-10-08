@@ -9,6 +9,8 @@ import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.helpers.EventHelper;
 import com.megacrit.cardcrawl.map.MapRoomNode;
+import com.megacrit.cardcrawl.neow.NeowEvent;
+import com.megacrit.cardcrawl.neow.NeowReward;
 import com.megacrit.cardcrawl.potions.AbstractPotion;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
@@ -16,6 +18,7 @@ import com.megacrit.cardcrawl.shop.ShopScreen;
 import communicationmod.ChoiceScreenUtils;
 import communicationmod.GameStateConverter;
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 import java.io.InputStream;
 import java.util.Properties;
 
@@ -61,10 +64,51 @@ final class DecisionContext {
         out.addProperty("boss", AbstractDungeon.bossKey);
         out.addProperty("room", AbstractDungeon.getCurrRoom().getClass().getSimpleName());
         out.addProperty("room_phase", AbstractDungeon.getCurrRoom().phase.name());
+        com.megacrit.cardcrawl.rewards.chests.AbstractChest chest=null;
+        if(AbstractDungeon.getCurrRoom() instanceof com.megacrit.cardcrawl.rooms.TreasureRoom)
+            chest=((com.megacrit.cardcrawl.rooms.TreasureRoom)AbstractDungeon.getCurrRoom()).chest;
+        else if(AbstractDungeon.getCurrRoom() instanceof com.megacrit.cardcrawl.rooms.TreasureRoomBoss)
+            chest=((com.megacrit.cardcrawl.rooms.TreasureRoomBoss)AbstractDungeon.getCurrRoom()).chest;
+        if(chest!=null) {
+            String kind=chest.getClass().getSimpleName();
+            out.addProperty("chest_size",kind.contains("Small")?0:kind.contains("Medium")?1
+                :kind.contains("Large")?2:3);
+        }
         out.addProperty("screen_type", String.valueOf(ChoiceScreenUtils.getCurrentChoiceType()));
+        out.addProperty("grid_from_shop", AbstractDungeon.screen == AbstractDungeon.CurrentScreen.GRID
+            && AbstractDungeon.previousScreen == AbstractDungeon.CurrentScreen.SHOP);
         out.addProperty("is_screen_up", AbstractDungeon.isScreenUp);
         out.add("screen_state", JSON.toJsonTree(screen.invoke(null)));
         out.add("choices", JSON.toJsonTree(ChoiceScreenUtils.getCurrentChoiceList()));
+        if(AbstractDungeon.getCurrRoom().event!=null
+                && AbstractDungeon.getCurrRoom().event.getClass().getSimpleName().equals("ShiningLight")) {
+            JsonArray options=out.getAsJsonObject("screen_state").getAsJsonArray("options");
+            if(options!=null)for(com.google.gson.JsonElement item:options) {
+                String shown=item.getAsJsonObject().get("text").getAsString();
+                java.util.regex.Matcher number=java.util.regex.Pattern.compile(
+                    "(?i)(\\d+)\\D{0,20}(?:HP|生命)").matcher(shown);
+                if(number.find()) {out.addProperty("event_hp_loss",Integer.parseInt(number.group(1)));break;}
+            }
+        }
+        if (AbstractDungeon.getCurrRoom().event instanceof NeowEvent) {
+            Field field = NeowEvent.class.getDeclaredField("rewards");
+            field.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            java.util.ArrayList<NeowReward> rewards = (java.util.ArrayList<NeowReward>)
+                field.get(AbstractDungeon.getCurrRoom().event);
+            JsonArray options = new JsonArray();
+            if (rewards != null) for (NeowReward reward : rewards) {
+                JsonObject option = new JsonObject();
+                option.addProperty("bonus", reward.type.name());
+                option.addProperty("drawback", reward.drawback == null ? "NONE" : reward.drawback.name());
+                options.add(option);
+            }
+            out.add("neow_options", options);
+            // rewards outlive the pick; only screenNum 3 offers them, other stages are one button.
+            Field stage = NeowEvent.class.getDeclaredField("screenNum");
+            stage.setAccessible(true);
+            out.addProperty("neow_screen", stage.getInt(AbstractDungeon.getCurrRoom().event));
+        }
         out.addProperty("ruby", Settings.hasRubyKey);
         out.addProperty("emerald", Settings.hasEmeraldKey);
         out.addProperty("sapphire", Settings.hasSapphireKey);
@@ -97,6 +141,12 @@ final class DecisionContext {
             item.addProperty("slot", potion.slot); item.addProperty("id", potion.ID); slots.add(item);
         }
         out.add("potion_slots", slots);
+        JsonArray bottles = new JsonArray();
+        for (int i = 0; i < AbstractDungeon.player.masterDeck.group.size(); i++) {
+            AbstractCard card = AbstractDungeon.player.masterDeck.group.get(i);
+            if (card.inBottleFlame || card.inBottleLightning || card.inBottleTornado) bottles.add(i);
+        }
+        out.add("bottled_deck_indices", bottles);
         return out;
     }
 

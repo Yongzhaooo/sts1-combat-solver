@@ -12,19 +12,29 @@ For ideas, [hotwords123/StS2.RandomForeseer](https://github.com/hotwords123/StS2
 
 ## What it does
 
-A local combat advisor and optional executor for *Slay the Spire 1*. It searches Ironclad and colorless-card combat, compares potion lines, and checks executed actions against the game state. You choose cards, paths, shops, rest sites, and events. Search has a finite budget and does not guarantee an optimal line or perfect simulation. Mods that change combat rules may create unsupported states.
+A local combat advisor and optional executor for *Slay the Spire 1*. It searches Ironclad and colorless-card combat, compares potion lines, and checks executed actions against the game state. By default you choose cards, paths, shops, rest sites, and events; the optional full autopilot (below) hands those to a network. Search has a finite budget and does not guarantee an optimal line or perfect simulation. Mods that change combat rules may create unsupported states.
 
 The panel supports English and Chinese. Optional seeded foresight previews events, encounters, and transforms using hidden RNG information beyond ordinary visible play. The [potion score table](POTION_POLICY.zh-CN.md) explains reward swaps and combat use.
 
 ## Project goals and progress
 
 - **Four-character combat solver — underway:** The current release supports Ironclad and colorless cards. Silent, Defect, and Watcher need further simulator work.
-- **Reinforcement-learning (RL) agent — underway:** Policy research, training, and evaluation experiments are in progress. An RL agent is not included in this release.
+- **Reinforcement-learning (RL) agent — underway:** Policy research, training, and evaluation experiments are in progress. v0.4.0 ships an early training result that drives the autopilot below.
+
+## Full autopilot (early)
+
+> **This is an early training result and its play is not good yet.** On a small dataset it wins roughly 59%–81% of A20 runs. Known weaknesses: it upgrades too rarely, its deckbuilding lacks a plan, and it walks into early elites at full HP. Treat it as an experiment, not a reliable winner.
+
+- **Opt-in per run:** When an Ironclad run starts, the solver asks whether to enable it: full auto, step mode (each decision is shown and waits for confirmation), or manual. It is off by default; press `F9` or click Take over at any time.
+- **What it decides:** Neow, map path, card rewards, campfires, shops, events, chests and boss relics are scored by a small network, with candidates and scores shown on the panel. Combat uses the existing solver. The network runs inside Java and needs no extra install.
+- **Map route:** With the map open it draws the recommended next node and a full route to the boss, rolled out floor by floor assuming HP, gold and deck stay the same, and replanned every floor.
+- **Removal limits:** Removal and transforms only pick curses, Strikes, Defends and Bash.
+- **Deck changes:** While autopilot runs, cards it gains, upgrades or removes appear under the deck icon for one second.
 
 ## Install
 
-- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download a [v0.3.1 package](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.3.1).
-- Resize the panel with the top-right − / + buttons; click the percentage to reset. The 60–160% setting persists across launches and changes only the overlay.
+- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download a [v0.4.0 package](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.4.0).
+- Resize the panel with the − / + buttons on its Settings page; click the percentage to reset. The 60–160% setting persists across launches and changes only the overlay.
 - The Workshop package supports Windows 10/11 x64 and macOS 11+ (Apple Silicon and Intel). Install ModTheSpire and BaseMod separately, choose Play with Mods, and enable BaseMod plus STS1 Combat Solver. No separate Python, compiler, WSL or source checkout is needed. See [Windows installation](WINDOWS_INSTALL.md) or [Mac installation and release checks](MACOS_INSTALL.md).
 - Windows, macOS and Linux source builds remain available below. Linux/Steam Deck have no bundled Workshop runtime yet.
 
@@ -67,7 +77,7 @@ CI covers Python 3.11 and 3.14 on Windows, macOS and Linux, plus separately buil
 ## How to use
 
 - **Launch:** After Steam finishes downloading, choose **Play with Mods**. In ModTheSpire, enable BaseMod and STS1 Combat Solver, then start an Ironclad run. Remove old separate `CommunicationMod.jar` and `SteamStateExport.jar` files supplied with previous solver versions.
-- **Read the panel:** Click **Language** to switch the panel between English and Chinese. In combat, click **Recalculate** to search; compare the displayed routes and potion choices. Search has a finite budget, so a route is a recommendation rather than a proof of optimal play.
+- **Read the panel:** Switch the panel between English and Chinese on its **Settings** page. In combat, click **Recalculate** to search; compare the displayed routes and potion choices. Search has a finite budget, so a route is a recommendation rather than a proof of optimal play.
 - **Execute a route:** Click a completed, verified route to execute it, or use **Execute one step**, **Execute turn**, or **Auto combat** for the current result. `F10` / `Enter` toggles combat automation; `F9` or **Stop** halts search and execution; `F8` folds the panel.
-- **Choose automation scope:** **Auto potion rewards** handles post-combat potion pickup or swaps. **Auto potions + across-combat** handles potion use and later fights. These are separate panel switches. Card rewards, paths, shops, rest sites, and events remain your choices. See the [potion policy](POTION_POLICY.zh-CN.md).
+- **Choose automation scope:** **Auto potion swap** handles post-combat potion pickup or swaps. **Continuous auto** handles potion use and later fights. These are separate panel switches. Card rewards, paths, shops, rest sites, and events remain your choices unless the full autopilot is on. See the [potion policy](POTION_POLICY.zh-CN.md).
 - **Report a problem:** Press `F6` to export a local diagnostic archive. Experience recording starts off on every launch; if you enable it, `Shift+F6` finalizes its files. Review files before sharing them. Nothing uploads automatically, and the public build does not record audio; see [Privacy](PRIVACY.md).

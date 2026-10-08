@@ -7,6 +7,8 @@ Ironclad combat solver with step, turn and automatic execution.
 - Plans Hand of Greed and Feed kills for gold and permanent max HP.
 - Base search budgets per round: Fast 2,000 / Standard 8,000 / Deep 128,000. Standard can deepen when needed.
 
-Subscribe with ModTheSpire and BaseMod. Windows and both Mac architectures include their runtime. Enter/F10: auto; F9: stop; F8: collapse. Saved panel sizing: 60%–160%. Finite search does not guarantee optimal play; foresight reveals hidden RNG.
+**Full autopilot (early): this is an early training result and its play is not good yet. On a small dataset it wins roughly 59%–81% of A20 runs.** It upgrades too rarely, lacks a deckbuilding plan and walks into early elites at full HP. Opt in when a run starts (full auto, step-by-step or manual); F9 takes over at any time. A small network picks Neow, path, rewards, campfires, shops and events; combat uses the solver. Removal only targets curses, Strikes, Defends and Bash.
+
+Subscribe with ModTheSpire and BaseMod. Windows and both Mac architectures include their runtime. Enter/F10: auto; F9: stop; F8: collapse. Sizing, language and recording live on the panel's Settings page. Finite search does not guarantee optimal play; foresight reveals hidden RNG.
 
 [源码与下载 / Source & downloads](https://github.com/Yongzhaooo/sts1-combat-solver)
