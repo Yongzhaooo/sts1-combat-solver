@@ -35,10 +35,12 @@ jobs:
           java-version: '17'
       - run: python -m pip install pybind11==3.1.0 cmake==3.31.10
       - run: python tools/check_backend_launcher.py
+      - run: python tools/check_distill2_artifact.py
       - run: python overlay/check_async_reports.py
       - run: python overlay/check_debug_export.py
       - run: python tools/build_solver_runtime.py
       - run: python tools/check_headbutt.py
+      - run: python tools/check_corruption_snecko.py
       - run: python tools/check_backend_protocol.py
   macos-package:
     strategy:
@@ -68,6 +70,7 @@ jobs:
           .venv/bin/python -m pip install pybind11==3.1.0 cmake==3.31.10
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: python tools/check_backend_launcher.py
+      - run: python tools/check_distill2_artifact.py
       - run: python tools/build_solver_runtime.py
       - run: python tools/package_macos_runtime.py --python-root build/cpython/python --output build/sts1-solver-macos-${{ matrix.arch }}.zip
       - run: python tools/check_macos_bundle.py build/sts1-solver-macos-${{ matrix.arch }}.zip

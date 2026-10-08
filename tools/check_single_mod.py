@@ -13,7 +13,9 @@ with zipfile.ZipFile(Path(sys.argv[1])) as jar:
     for name in ('communicationmod/CommunicationMod.class',
                  'steamstateexport/CombatStatePatch.class',
                  'sts1solver/SolverMod.class', 'licenses/CommunicationMod.txt',
-                 'licenses/sts-ironclad-agent.txt'):
+                 'licenses/sts-ironclad-agent.txt',
+                 'sts1solver/distill2-schema.json',
+                 'sts1solver/distill2-weights.bin'):
         assert name in names, name
     entries = [name for name in names if name.endswith('.class') and
                b'Lcom/evacipated/cardcrawl/modthespire/lib/SpireInitializer;' in jar.read(name)]

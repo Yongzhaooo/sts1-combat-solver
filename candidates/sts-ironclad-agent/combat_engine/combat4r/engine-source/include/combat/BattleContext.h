@@ -174,6 +174,7 @@ namespace sts {
         void drawCards(int count);
         void discardAtEndOfTurn();
         void discardAtEndOfTurnHelper();
+        void onCardDrawOrDiscard();
 
         void playTopCardInDrawPile(int monsterTargetIdx, bool exhausts);
 
