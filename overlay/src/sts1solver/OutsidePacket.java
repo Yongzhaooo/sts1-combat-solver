@@ -119,86 +119,38 @@ final class OutsidePacket {
         return node < next.size() ? integer(next.get(node).getAsJsonObject(), "x") : -1;
     }
 
-    /** One planned map node; share is the student's softmax weight among that floor's options. */
+    /** One planned map node; share is 1 for a deterministic rule recommendation (not a confidence estimate). */
     static final class Step {
         final int x, y;
         final float share;
         Step(int x, int y, float share) { this.x = x; this.y = y; this.share = share; }
     }
 
-    /**
-     * Student-greedy route to the boss row: at each later floor the frozen student picks among
-     * the children as if it were standing there. HP, gold, deck and relics stay as they are now,
-     * so the route is re-planned after every floor. firstX forces the next node (-1: let it pick).
-     */
+    /** Both rendering and execution use the same whole-route preferences. */
     static List<Step> plannedRoute(Distill2 model, JsonObject state, JsonObject visible, int firstX) {
-        JsonObject game = state.getAsJsonObject("game_state");
-        if (game == null || !"IRONCLAD".equals(string(game, "class"))) return Collections.emptyList();
-        OutsidePacket map = new OutsidePacket(model, game, visible, new JsonArray());
-        int x = optionalInt(visible, "x", -1), y = optionalInt(visible, "y", -1);
-        if (y < -1 || y >= 14) return Collections.emptyList();
-        List<Step> path = new ArrayList<>();
-        List<String> taken = new ArrayList<>();
-        for (JsonElement item : array(visible, "path_taken")) taken.add(item.getAsString());
-        int floor = integer(game, "floor");
-        while (y < 14) {
-            List<Integer> next = new ArrayList<>();
-            if (y < 0) { for (int column = 0; column < 7; column++) if (map.hasChildren(column, 0)) next.add(column); }
-            else next.addAll(map.children(x, y));
-            if (next.isEmpty()) break;
-            OutsidePacket at = map.standingAt(x, y, next, floor, taken);
-            Distill2.Result result = at.score();
-            int pick = result.best;
-            if (path.isEmpty() && firstX >= 0) pick = Math.max(0, next.indexOf(firstX));
-            float top = Float.NEGATIVE_INFINITY, total = 0;
-            for (float score : result.scores) top = Math.max(top, score);
-            for (float score : result.scores) total += (float)Math.exp(score - top);
-            x = next.get(pick); y++; floor++;
-            path.add(new Step(x, y, (float)Math.exp(result.scores[pick] - top) / total));
-            String symbol = string(map.nodes.get(key(x, y)), "symbol");
-            taken.add(symbol);
+        JsonObject game=state.getAsJsonObject("game_state");
+        if(game==null || !"IRONCLAD".equals(string(game,"class")))return Collections.emptyList();
+        RoutePlanner.Plan plan=new RoutePlanner(game,visible).best(firstX);
+        return plan==null?Collections.emptyList():plan.path;
+    }
+
+    Distill2.Result policyScore() {
+        Distill2.Result student=score();
+        if(!string(visible,"screen_type").equals("MAP") || mapTargetX(student.best)<0)return student;
+        RoutePlanner planner=new RoutePlanner(game,visible);
+        RoutePlanner.Plan best=planner.best(-1);
+        if(best==null)return student; // Boss/no next nodes; normal maps always have a route.
+        float[] scores=new float[choices.size()];
+        Arrays.fill(scores,Float.NEGATIVE_INFINITY);
+        int pick=-1;
+        for(int i=0;i<choices.size();i++) {
+            RoutePlanner.Plan plan=planner.byStart.get(mapTargetX(i));
+            if(plan!=null) {
+                scores[i]=(float)(plan.score-10000*plan.missingKeys);
+                if(plan==best)pick=i;
+            }
         }
-        return path;
-    }
-
-    /** The MAP decision the game would show after finishing the room at (x, y). */
-    private OutsidePacket standingAt(int x, int y, List<Integer> next, int floor, List<String> taken) {
-        JsonObject game = copy(this.game), visible = copy(this.visible), screen = new JsonObject();
-        JsonArray nodes = new JsonArray();
-        for (int column : next) nodes.add(this.nodes.get(key(column, y+1)));
-        screen.add("next_nodes", nodes);
-        screen.addProperty("boss_available", false);
-        game.add("screen_state", screen);
-        game.addProperty("screen_type", "MAP");
-        game.addProperty("floor", floor);
-        if (y >= 0) game.addProperty("room_type", roomClass(string(this.nodes.get(key(x, y)), "symbol")));
-        visible.addProperty("screen_type", "MAP");
-        visible.addProperty("x", x); visible.addProperty("y", y);
-        JsonArray path = new JsonArray();
-        for (String symbol : taken) path.add(symbol);
-        visible.add("path_taken", path);
-        OutsidePacket packet = new OutsidePacket(model, game, visible, new JsonArray());
-        packet.observation();
-        packet.extra();
-        packet.mapChoices();
-        return packet;
-    }
-
-    private static String roomClass(String symbol) {
-        switch (symbol) {
-            case "M": return "MonsterRoom";
-            case "E": return "MonsterRoomElite";
-            case "R": return "RestRoom";
-            case "$": return "ShopRoom";
-            case "T": return "TreasureRoom";
-            default: return "EventRoom"; // "?" is unresolved until entered.
-        }
-    }
-
-    private static JsonObject copy(JsonObject source) {
-        JsonObject out = new JsonObject();
-        for (Map.Entry<String, JsonElement> entry : source.entrySet()) out.add(entry.getKey(), entry.getValue());
-        return out;
+        return pick<0?student:new Distill2.Result(scores,pick);
     }
 
     private void observation() {

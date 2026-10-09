@@ -41,6 +41,10 @@ public final class OutsidePacketCheck {
         if (packet.choices.size() != nodes.size() || packet.choices.size() < 2)
             throw new AssertionError("Map candidates drifted");
         Distill2.Result result = packet.score();
+        Distill2.Result policy = packet.policyScore();
+        List<OutsidePacket.Step> recommended=OutsidePacket.plannedRoute(Distill2.load(),state,visible,-1);
+        if(packet.mapTargetX(policy.best)!=recommended.get(0).x)
+            throw new AssertionError("Executed map choice differs from drawn plan");
         if (result.best < 0 || result.best >= packet.choices.size())
             throw new AssertionError("Invalid student selection");
         for (int i = 0; i < packet.choices.size(); i++)
@@ -67,7 +71,7 @@ public final class OutsidePacketCheck {
             }
             if(!linked)throw new AssertionError("Route used an absent edge");
         }
-        // Standing on the planned node, the student must continue along its own plan.
+        // Standing on the planned node, replan a legal suffix rather than lock the opening.
         OutsidePacket.Step second=route.get(0);
         visible.addProperty("x",second.x); visible.addProperty("y",second.y);
         int floor=game.get("floor").getAsInt();
@@ -75,11 +79,18 @@ public final class OutsidePacketCheck {
         for(JsonElement item:game.getAsJsonArray("map")) {
             JsonObject node=item.getAsJsonObject();
             if(node.get("x").getAsInt()==second.x && node.get("y").getAsInt()==second.y)
+            {
                 visible.getAsJsonArray("path_taken").add(node.get("symbol").getAsString());
+                screen.add("next_nodes",node.getAsJsonArray("children"));
+            }
         }
         List<OutsidePacket.Step> replanned=OutsidePacket.plannedRoute(Distill2.load(),state,visible,-1);
-        if(replanned.size()!=14 || replanned.get(0).x!=route.get(1).x)
-            throw new AssertionError("Unforced replanning drifted from the student's own route");
+        if(replanned.size()!=14 || replanned.get(0).y!=1)
+            throw new AssertionError("Replan must cover the remaining connected map");
+        boolean reachable=false;
+        for(JsonElement e:screen.getAsJsonArray("next_nodes"))
+            if(e.getAsJsonObject().get("x").getAsInt()==replanned.get(0).x)reachable=true;
+        if(!reachable)throw new AssertionError("Replan first node is unreachable");
         visible.addProperty("x",-1); visible.addProperty("y",-1);
         visible.add("path_taken",new JsonArray()); game.addProperty("floor",floor);
         JsonObject neow = new JsonObject();
@@ -91,6 +102,8 @@ public final class OutsidePacketCheck {
         talk.add("Talk");
         visible.add("choices", talk);
         OutsidePacket introduction = OutsidePacket.build(Distill2.load(), state, visible);
+        if(!java.util.Arrays.equals(introduction.score().scores,introduction.policyScore().scores))
+            throw new AssertionError("Non-map policy changed");
         if (introduction.choices.size() != 1 || !"choose 0".equals(introduction.choices.get(0).command))
             throw new AssertionError("Neow introduction must advance before the reward options");
         visible.addProperty("neow_screen", 0);
@@ -177,6 +190,6 @@ public final class OutsidePacketCheck {
         if (purge.choices.size() != 2 || !purge.choices.get(0).command.equals("choose 2")
                 || !purge.choices.get(1).command.equals("choose 3"))
             throw new AssertionError("Event removal must offer only starter cards and curses");
-        System.out.printf("PASS: map packet, student route to boss (%.0f ms) and Neow stages%n", planMs);
+        System.out.printf("PASS: map packet, reviewed rule route to boss (%.0f ms) and Neow stages%n", planMs);
     }
 }

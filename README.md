@@ -12,7 +12,7 @@ For ideas, [hotwords123/StS2.RandomForeseer](https://github.com/hotwords123/StS2
 
 ## What it does
 
-A local combat advisor and optional executor for *Slay the Spire 1*. It searches Ironclad and colorless-card combat, compares potion lines, and checks executed actions against the game state. By default you choose cards, paths, shops, rest sites, and events; the optional full autopilot (below) hands those to a network. Search has a finite budget and does not guarantee an optimal line or perfect simulation. Mods that change combat rules may create unsupported states.
+A local combat advisor and optional executor for *Slay the Spire 1*. It searches Ironclad and colorless-card combat, compares potion lines, and checks executed actions against the game state. By default you choose cards, paths, shops, rest sites, and events; the optional full autopilot (below) uses route rules and a network for other decisions. Search has a finite budget and does not guarantee an optimal line or perfect simulation. Mods that change combat rules may create unsupported states.
 
 The panel supports English and Chinese. Optional seeded foresight previews events, encounters, and transforms using hidden RNG information beyond ordinary visible play. The [potion score table](POTION_POLICY.zh-CN.md) explains reward swaps and combat use.
 
@@ -26,14 +26,14 @@ The panel supports English and Chinese. Optional seeded foresight previews event
 > **This is an early training result and its play is not good yet.** On a small dataset it wins roughly 59%–81% of A20 runs. Known weaknesses: it upgrades too rarely, its deckbuilding lacks a plan, and it walks into early elites at full HP. Treat it as an experiment, not a reliable winner.
 
 - **Opt-in per run:** When an Ironclad run starts, the solver asks whether to enable it: full auto, step mode (each decision is shown and waits for confirmation), or manual. It is off by default; press `F9` or click Take over at any time.
-- **What it decides:** Neow, map path, card rewards, campfires, shops, events, chests and boss relics are scored by a small network, with candidates and scores shown on the panel. Combat uses the existing solver. The network runs inside Java and needs no extra install.
-- **Map route:** With the map open it draws the recommended next node and a full route to the boss, rolled out floor by floor assuming HP, gold and deck stay the same, and replanned every floor.
+- **What it decides:** Neow, card rewards, campfires, shops, events, chests and boss relics are scored by a small network, with candidates and scores shown on the panel. Combat uses the existing solver. The network runs inside Java and needs no extra install.
+- **Map route:** Reviewed rules choose the next node and draw the same connected route to the boss. Act 1 favors preparation before elites, Act 2 favors events and useful shops, and Act 3 includes the burning elite when the green key is missing. Low HP reduces elite preference; each new state can change the route. No whole-act damage-budget veto suppresses a legal plan. This is a preference heuristic, not a survival prediction.
 - **Removal limits:** Removal and transforms only pick curses, Strikes, Defends and Bash.
 - **Deck changes:** While autopilot runs, cards it gains, upgrades or removes appear under the deck icon for one second.
 
 ## Install
 
-- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download a [v0.4.1 package](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.4.1).
+- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download a [v0.4.2 package](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.4.2).
 - Resize the panel with the − / + buttons on its Settings page; click the percentage to reset. The 60–160% setting persists across launches and changes only the overlay.
 - The Workshop package supports Windows 10/11 x64 and macOS 11+ (Apple Silicon and Intel). Install ModTheSpire and BaseMod separately, choose Play with Mods, and enable BaseMod plus STS1 Combat Solver. No separate Python, compiler, WSL or source checkout is needed. See [Windows installation](WINDOWS_INSTALL.md) or [Mac installation and release checks](MACOS_INSTALL.md).
 - Windows, macOS and Linux source builds remain available below. Linux/Steam Deck have no bundled Workshop runtime yet.

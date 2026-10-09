@@ -75,6 +75,7 @@ def main():
                         str(here / 'test/PanelSizeCheck.java'), str(here / 'test/StateKeyCheck.java'),
                         str(here / 'test/Distill2Check.java'),
                         str(here / 'test/OutsidePacketCheck.java'),
+                        str(here / 'test/RoutePlannerCheck.java'),
                         str(here / 'test/OutsidePacketParityCheck.java')], check=True)
         check_cp = os.pathsep.join((str(checks), str(classes), classpath))
         if not (args.bundled_windows or args.bundled):
@@ -87,6 +88,8 @@ def main():
                         'sts1solver.Distill2Check', str(here / 'test/distill2-reference.json')], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
                         'sts1solver.OutsidePacketCheck', str(here / 'test/live-root.json')], check=True)
+        subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
+                        'sts1solver.RoutePlannerCheck', str(here / 'test/route-preferences-reference.json')], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
                         'sts1solver.OutsidePacketParityCheck',
                         str(here / 'test/distill2-map-parity.json')], check=True)

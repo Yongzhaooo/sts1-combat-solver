@@ -126,6 +126,10 @@ final class DecisionContext {
             out.add("path_taken", JSON.toJsonTree(CardCrawlGame.metricData.path_taken));
             out.add("path_per_floor", JSON.toJsonTree(CardCrawlGame.metricData.path_per_floor));
         }
+        int routeUpgrades=0;
+        for(com.megacrit.cardcrawl.cards.AbstractCard card:AbstractDungeon.player.masterDeck.group)
+            if(card.canUpgrade())routeUpgrades++;
+        out.addProperty("route_upgrades",routeUpgrades);
         out.addProperty("purge_base_cost", ShopScreen.purgeCost);
         out.addProperty("purge_actual_cost", ShopScreen.actualPurgeCost);
         JsonArray relics = new JsonArray();

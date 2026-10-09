@@ -1,0 +1,123 @@
+{
+  "version": "preference-v4",
+  "revision": "86ad60ebb7b8",
+  "weights": {
+    "1:balanced": {
+      "elite": 4.0,
+      "fire": 2.0,
+      "event": 0.25,
+      "monster": -0.25,
+      "prepare": 1.0,
+      "pre_fire": 2.0,
+      "shop": 1.0,
+      "early_shop": 0.0,
+      "late_shop": 1.0,
+      "close_shops": -2.0,
+      "low_hp_elites": -6.0
+    },
+    "1:upgrade": {
+      "elite": 4.0,
+      "fire": 4.0,
+      "event": 0.25,
+      "monster": -0.25,
+      "prepare": 1.0,
+      "pre_fire": 2.0,
+      "shop": 1.0,
+      "early_shop": 0.0,
+      "late_shop": 1.0,
+      "close_shops": -2.0,
+      "low_hp_elites": -6.0
+    },
+    "1:removal": {
+      "elite": 4.0,
+      "fire": 0.5,
+      "event": 1.75,
+      "monster": -0.25,
+      "prepare": 1.0,
+      "pre_fire": 2.0,
+      "shop": 2.5,
+      "early_shop": 0.0,
+      "late_shop": 1.0,
+      "close_shops": -2.0,
+      "low_hp_elites": -6.0
+    },
+    "2:balanced": {
+      "elite": 1.380691,
+      "fire": 2.619309,
+      "event": 1.211382,
+      "monster": 0.538618,
+      "prepare": 0.5,
+      "pre_fire": 0.0,
+      "shop": 1.0,
+      "early_shop": 2.074187,
+      "late_shop": -0.074187,
+      "close_shops": -2.0,
+      "low_hp_elites": -6.0
+    },
+    "2:upgrade": {
+      "elite": 2.0,
+      "fire": 4.0,
+      "event": 2.25,
+      "monster": -0.5,
+      "prepare": 0.5,
+      "pre_fire": 0.0,
+      "shop": 1.0,
+      "early_shop": 2.0,
+      "late_shop": 0.0,
+      "close_shops": -2.0,
+      "low_hp_elites": -6.0
+    },
+    "2:removal": {
+      "elite": 2.0,
+      "fire": 0.5,
+      "event": 3.75,
+      "monster": -0.5,
+      "prepare": 0.5,
+      "pre_fire": 0.0,
+      "shop": 2.5,
+      "early_shop": 2.0,
+      "late_shop": 0.0,
+      "close_shops": -2.0,
+      "low_hp_elites": -6.0
+    },
+    "3:balanced": {
+      "elite": 3.0,
+      "fire": 2.0,
+      "event": 0.5,
+      "monster": -0.25,
+      "prepare": 0.0,
+      "pre_fire": 0.0,
+      "shop": 1.0,
+      "early_shop": 0.0,
+      "late_shop": 0.0,
+      "close_shops": -2.0,
+      "low_hp_elites": -6.0
+    },
+    "3:upgrade": {
+      "elite": 3.0,
+      "fire": 4.0,
+      "event": 0.5,
+      "monster": -0.25,
+      "prepare": 0.0,
+      "pre_fire": 0.0,
+      "shop": 1.0,
+      "early_shop": 0.0,
+      "late_shop": 0.0,
+      "close_shops": -2.0,
+      "low_hp_elites": -6.0
+    },
+    "3:removal": {
+      "elite": 3.0,
+      "fire": 0.5,
+      "event": 2.0,
+      "monster": -0.25,
+      "prepare": 0.0,
+      "pre_fire": 0.0,
+      "shop": 2.5,
+      "early_shop": 0.0,
+      "late_shop": 0.0,
+      "close_shops": -2.0,
+      "low_hp_elites": -6.0
+    }
+  }
+}

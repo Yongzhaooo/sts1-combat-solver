@@ -555,7 +555,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             }
             if(outsidePacket==null || !latest.sameDecision(outsidePacket)) {
                 outsidePacket=latest;
-                outsideScores=outsidePacket.score();
+                outsideScores=outsidePacket.policyScore();
                 outsideStatePacket=outsidePacket; outsideScoredAt=System.currentTimeMillis();
                 outsideConfirm=false; outsideChosen=outsideScores.best; outsideScroll=0;
             }
@@ -614,9 +614,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             .append(firstX).append('/').append(player.currentHealth).append('/').append(player.maxHealth)
             .append('/').append(player.gold).append('/').append(player.masterDeck.size()).append('/')
             .append(player.relics.size());
+        key.append('/').append(Settings.hasEmeraldKey).append('/').append(Settings.hasRubyKey);
+        for(AbstractCard card:player.masterDeck.group)key.append('/').append(card.cardID).append('+').append(card.timesUpgraded);
+        for(com.megacrit.cardcrawl.relics.AbstractRelic relic:player.relics)key.append('/').append(relic.relicId);
         for(com.megacrit.cardcrawl.potions.AbstractPotion potion:player.potions)key.append('/').append(potion.ID);
         if(key.toString().equals(routeKey))return;
-        // ponytail: plans on the game thread (~0.15 s cold, once per map state); move to a worker if the hitch shows.
+        // Recalculate only when public route inputs change; no simulated combat or future rewards.
         routeKey=key.toString();
         try {
             if(outsideModel==null)outsideModel=Distill2.load();
@@ -1720,13 +1723,13 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             com.megacrit.cardcrawl.map.MapRoomNode node=nodes.get(i);
             boolean next=i==from;
             float share=routePlan.get(i-from).share, size=(next?150:118)*s;
-            // Brighter rings mark floors where the student strongly prefers this node over its siblings.
+            // Rule routes have deterministic rings; brightness is not a survival probability.
             sb.setColor(next?1f:.38f,next?.8f:.83f,next?.25f:.72f,next?1f:.35f+.6f*share);
             sb.draw(ImageMaster.MAP_CIRCLE_5,node.hb.cX-size/2,node.hb.cY-size/2,size,size);
         }
         com.megacrit.cardcrawl.map.MapRoomNode first=nodes.get(from), last=nodes.get(nodes.size()-1);
-        mapCaption(sb,I18n.t("网络推荐下一步"),first.hb.cX+80*s,first.hb.cY+10*s,accent);
-        if(last!=first)mapCaption(sb,I18n.t("网络逐层推演 · 假设血量和牌组不变，每层重算"),
+        mapCaption(sb,I18n.t("规则推荐下一步"),first.hb.cX+80*s,first.hb.cY+10*s,accent);
+        if(last!=first)mapCaption(sb,I18n.t("开幕偏好规划 · 状态变化后可改道"),
             last.hb.cX+70*s,last.hb.cY+10*s,muted);
         sb.setColor(Color.WHITE);
     }
