@@ -13,7 +13,7 @@ $env:PYTHONUTF8='1'; $env:PYTHONIOENCODING='utf-8'
 
 工作流 `.github/workflows/mod-pair.yml` 仅手动触发主分支，使用 Windows x64 自托管 runner，额外标签 `sts1-mod-build`。既有公开多平台 CI 保持不变。两个源码不在同一公开仓库：State Notes 目前从 runner 本地检出构建，不自动访问 NAS、不自动切换其分支；manifest 记录两边 commit 与 dirty 状态。触发前更新 State Notes 到要测试的版本。
 
-启用前，在专用测试 runner 的服务环境设置 `STS1_GAME_DIR`（游戏目录）和 `STS1_STATE_MOD_DIR`（State Notes 模块目录），重启 runner 使环境生效。需要机器的图形环境时另跑游戏实测，本工作流不启动 GUI。此轮未注册 runner 或推送工作流，尚无 GitHub 云端运行记录。
+启用前，在专用测试 runner 的服务环境设置 `STS1_GAME_DIR`（游戏目录）和 `STS1_STATE_MOD_DIR`（State Notes 模块目录），重启 runner 使环境生效。需要机器的图形环境时另跑游戏实测，本工作流不启动 GUI。工作流已随 v0.4.3 推送到主分支，专用 runner 尚未注册，因此双 mod 工作流尚无云端运行记录；公开多平台 native CI 已运行通过。
 
 该 runner 只用于可信构建，不运行公开 PR、fork 或自由输入的分支。本工作流不支持 PR 触发；不要改成 `pull_request_target` 后检出贡献者代码。若需要开放 PR 联合验证，改用隔离的私有测试调度环境。
 
