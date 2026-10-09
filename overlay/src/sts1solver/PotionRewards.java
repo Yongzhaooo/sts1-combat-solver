@@ -21,6 +21,29 @@ final class PotionRewards {
             && !"COMBAT".equals(string(game,"room_phase"));
     }
     static int value(String id, JsonObject game) {
+        int base=baseValue(id,game);
+        // Bloom still disables resurrection/healing; never restore a zero score with a bonus.
+        return base<=0?base:base+lateBonus(id,game);
+    }
+    static int lateBonus(String id, JsonObject game) {
+        int act=game.has("act")?game.get("act").getAsInt():0;
+        int floor=game.has("floor")?game.get("floor").getAsInt():0;
+        if(!((act==3 && floor>=43) || (act==4 && floor<=55)))return 0;
+        // ponytail: fixed late-run inventory points; calibrate with encounter rollouts
+        // when future-battle import is available. This does not force potion use in combat.
+        switch(id) {
+            case "FairyPotion": case "GhostInAJar": return 20;
+            case "Swift Potion": case "Gambler's Brew": case "DistilledChaos": return 18;
+            case "PowerPotion": return 24;
+            case "LiquidMemories": case "Ancient Potion": return 16;
+            case "CultistPotion": return 18;
+            case "DuplicationPotion": return 12;
+            case "Weak Potion": case "HeartOfIron": return 14;
+            case "Energy Potion": return 8;
+            default: return 0;
+        }
+    }
+    private static int baseValue(String id, JsonObject game) {
         int hits=2;
         boolean burst=false;
         if(game.has("deck"))for(JsonElement item:game.getAsJsonArray("deck")) {

@@ -15,7 +15,7 @@ import threading
 import time
 import traceback
 from recovery import health, future_recovery
-from diagnostics import AsyncReports, export_debug
+from diagnostics import AsyncReports, export_debug, export_run, fault_signature
 from auto_policy import recommend
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -744,6 +744,11 @@ def serve(report_path=None):
     report_path = Path(report_path or data_dir/'combat-reports.sqlite3')
     reports = AsyncReports(report_path)
     error_log = data_dir/'backend.log'
+    run_log = [True]  # The panel switch; the per-seed record is on by default.
+
+    def note(*args):
+        if run_log[0]:
+            reports.run(*args)
 
     def stderr_since(offset):
         if not error_log.exists():
@@ -784,6 +789,14 @@ def serve(report_path=None):
         elif 'phase' in value:
             reports.record('phase', value, state)
         value = {k: v for k, v in value.items() if k != '_plan'}
+        if value.get('status') == 'error':
+            tail = '\n'.join((value.get('stderr') or '').strip().splitlines()[-30:])
+            note('fault', {'id': value.get('id'), 'message': value.get('message'), 'stderr': tail,
+                                  'exitcode': value.get('exitcode'), 'traceback': value.get('traceback'),
+                                  'sig': fault_signature(value.get('message'), tail), 'frame': state}, state)
+        elif value.get('status') not in ('progress',):
+            note('reply', {k: value[k] for k in ('id', 'status', 'command', 'hp', 'outcome', 'branch',
+                                                         'backend_seconds', 'interrupted') if k in value}, state)
         print(json.dumps(value, ensure_ascii=False), flush=True)
 
     def start():
@@ -816,9 +829,28 @@ def serve(report_path=None):
                         answer = {'status': 'debug_error', 'message': str(failure)}
                     print(json.dumps(answer, ensure_ascii=False), flush=True)
                     continue
+                if request.get('op') == 'run_log':
+                    run_log[0] = bool(request.get('enabled'))
+                    continue
+                if request.get('op') == 'export_run':
+                    try:
+                        reports.flush()
+                        seed = request.get('seed') or reports.runs_seed()
+                        target = export_run(report_path.parent/'runs', seed, request['directory'], request.get('metadata'))
+                        answer = {'status': 'debug_run_export', 'file': target.name, 'directory': str(target.parent)}
+                    except Exception as failure:
+                        answer = {'status': 'debug_error', 'message': str(failure)}
+                    print(json.dumps(answer, ensure_ascii=False), flush=True)
+                    continue
                 reports.record('request', request, request.get('state'))
                 if request.get('op') == 'diagnostic':
-                    continue  # UI event, no worker mutation or reply/active-ID change.
+                    keep = request.get('event') in ('error', 'state_changed')
+                    note('diag', {k: request[k] for k in ('event', 'message', 'floor')
+                                         if k in request}, request.get('state') if keep else None,
+                                request.get('seed'))
+                    continue
+                note('request', {k: request[k] for k in ('id', 'op', 'budget') if k in request},
+                            request.get('state'))  # UI event, no worker mutation or reply/active-ID change.
                 if request.get('op') == 'cancel':
                     if active and active[4] == 'solve':
                         interrupt.set()
@@ -845,7 +877,15 @@ def serve(report_path=None):
                 if request.get('progress'):
                     emit({'id': request['id'], 'status': 'progress', 'phase': '等待工作进程（启动或加载引擎）'}, request.get('state'))
                 log_offset = error_log.stat().st_size if error_log.exists() else 0
-                connection.send(request)
+                if not process.is_alive():
+                    stop()
+                    start()
+                try:
+                    connection.send(request)
+                except (BrokenPipeError, OSError):
+                    stop()
+                    start()
+                    connection.send(request)
                 active = (request['id'], received_at, request.get('state'), log_offset, request.get('op'), None)
             while active and connection.poll():
                 completed_active = active

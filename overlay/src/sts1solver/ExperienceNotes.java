@@ -62,10 +62,29 @@ final class ExperienceNotes {
         return value;
     }
 
+    // Idle frames still advance the render timer and the cosmetic MathUtils stream;
+    // ignore both when deduplicating so a paused decision is stored once.
+    static String signature(JsonElement state) {
+        String text = state.toString();
+        JsonElement copy = new JsonParser().parse(text);
+        JsonObject game = child(child(copy, "raw_state"), "game_state");
+        if (game == null) return text;
+        JsonObject combat = child(game, "combat_state");
+        if (combat != null) combat.remove("frame_delta_seconds");
+        JsonObject streams = child(child(game, "full_rng_state"), "streams");
+        if (streams != null) streams.remove("MathUtils.random");
+        return copy.toString();
+    }
+    private static JsonObject child(JsonElement value, String key) {
+        if (value == null || !value.isJsonObject()) return null;
+        JsonElement item = value.getAsJsonObject().get(key);
+        return item != null && item.isJsonObject() ? item.getAsJsonObject() : null;
+    }
+
     void record(String kind, JsonObject snapshot, String action, JsonObject plan) throws IOException {
         if (!enabled) return;
         JsonElement state = clean(snapshot);
-        String signature = state.toString();
+        String signature = signature(state);
         if (kind.equals("observation") && signature.equals(previous)) return;
         JsonObject event = new JsonObject();
         event.addProperty("sequence", sequence + 1);

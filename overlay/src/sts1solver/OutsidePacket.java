@@ -30,6 +30,10 @@ final class OutsidePacket {
     }
 
     final float[] observation = new float[6843], extra = new float[20];
+    /** Text that tells apart pages the network cannot: event pages and picks inside one grid. */
+    /** Why a hand-written rule overrode the network, or null. Shown next to the executed choice. */
+    String ruleNote;
+    private String page = "";
     final List<Choice> choices = new ArrayList<>();
     private final Distill2 model;
     private final JsonObject game, visible;
@@ -61,6 +65,7 @@ final class OutsidePacket {
         packet.observation();
         packet.extra();
         String screen = string(visible, "screen_type");
+        packet.page = packet.pageKey(screen);
         if (screen.equals("MAP")) packet.mapChoices();
         else if (screen.equals("CARD_REWARD")) packet.cardChoices();
         else if (screen.equals("EVENT") && optionalInt(visible, "neow_screen", -1) == 3
@@ -69,6 +74,8 @@ final class OutsidePacket {
         else if (screen.equals("EVENT") && (visible.has("neow_screen")
                 || string(object(game, "screen_state"), "event_id").equals("Neow Event")))
             packet.neowAdvance();
+        else if (screen.equals("EVENT") && packet.forcedEventPage())
+            packet.directChoice("choose 0", array(visible, "choices").get(0).getAsString());
         else if (screen.equals("EVENT")) packet.eventChoices();
         else if (screen.equals("BOSS_REWARD")) packet.bossChoices();
         else if (screen.equals("REST")) packet.restChoices();
@@ -79,7 +86,7 @@ final class OutsidePacket {
         else if (screen.equals("COMBAT_REWARD")) packet.combatRewardChoices();
         else if (screen.equals("CHEST")) packet.chestChoices();
         else if (screen.equals("COMPLETE")) packet.directChoice("confirm", "Proceed");
-        else if (screen.equals("GRID") && bool(object(game, "screen_state"), "confirm_up"))
+        else if (screen.equals("GRID") && (bool(object(game, "screen_state"), "confirm_up") || packet.gridFull()))
             packet.directChoice("confirm", "Confirm");
         else if (screen.equals("GRID")) packet.selectChoices();
         else throw new IllegalArgumentException("Student screen not mapped yet: " + screen);
@@ -98,7 +105,7 @@ final class OutsidePacket {
     }
 
     boolean sameDecision(OutsidePacket other) {
-        if (other == null || !Arrays.equals(observation, other.observation)
+        if (other == null || !page.equals(other.page) || !Arrays.equals(observation, other.observation)
                 || !Arrays.equals(extra, other.extra) || choices.size() != other.choices.size()) return false;
         for (int i = 0; i < choices.size(); i++) {
             Choice a = choices.get(i), b = other.choices.get(i);
@@ -136,6 +143,16 @@ final class OutsidePacket {
 
     Distill2.Result policyScore() {
         Distill2.Result student=score();
+        ruleNote=null;
+        String screenType=string(visible,"screen_type");
+        Distill2.Result rule=screenType.equals("EVENT") ? eventRule(student)
+            : screenType.equals("GRID") ? removalRule(student)
+            : screenType.equals("REST") ? restRule(student)
+            : screenType.equals("SHOP_SCREEN") ? shopRule(student)
+            : screenType.equals("BOSS_REWARD") ? bossRule(student)
+            : screenType.equals("COMBAT_REWARD") ? keyRule(student)
+            : screenType.equals("CHEST") ? chestRule(student) : null;
+        if(rule!=null)return rule;
         if(!string(visible,"screen_type").equals("MAP") || mapTargetX(student.best)<0)return student;
         RoutePlanner planner=new RoutePlanner(game,visible);
         RoutePlanner.Plan best=planner.best(-1);
@@ -151,6 +168,219 @@ final class OutsidePacket {
             }
         }
         return pick<0?student:new Distill2.Result(scores,pick);
+    }
+
+    /** Run-log context for an outside decision: event id and the buttons the rule saw. */
+    String detail() {
+        StringBuilder text=new StringBuilder(string(object(game,"screen_state"),"event_id")).append(" n=").append(choices.size()).append(" [");
+        for(int i=0;i<choices.size();i++)text.append(i==0?"":" / ").append(choices.get(i).label);
+        return text.append(']').toString();
+    }
+
+    private Distill2.Result ruled(Distill2.Result student,EventRules.Decision decision) {
+        int index=decision.index;
+        if(index<0 && decision.avoid.length>0) {
+            for(int i=0;i<choices.size();i++) {
+                boolean avoided=false;
+                for(int bad:decision.avoid)avoided|=bad==i;
+                if(!avoided && (index<0 || student.scores[i]>student.scores[index]))index=i;
+            }
+        }
+        String note=decision.note;
+        if(index<0 || index>=choices.size())return null;
+        if(decision.boost>0) {
+            float[] scores=student.scores.clone();
+            scores[index]+=decision.boost;
+            int best=0;
+            for(int i=1;i<scores.length;i++)if(scores[i]>scores[best])best=i;
+            if(best==index)ruleNote=note;
+            return new Distill2.Result(scores,best);
+        }
+        float[] scores=student.scores.clone();
+        float top=Float.NEGATIVE_INFINITY;
+        for(float value:scores)top=Math.max(top,value);
+        scores[index]=top+1;
+        ruleNote=note;
+        return new Distill2.Result(scores,index);
+    }
+
+    private Distill2.Result eventRule(Distill2.Result student) {
+        if(forcedEventPage())return null;
+        EventRules.Context c=new EventRules.Context();
+        c.event=string(object(game,"screen_state"),"event_id");
+        c.shown=array(visible,"choices").size(); // Potion actions are not event buttons.
+        c.hp=integer(game,"current_hp"); c.maxHp=integer(game,"max_hp"); c.gold=integer(game,"gold");
+        c.ascension=integer(game,"ascension_level");
+        for(JsonElement item:array(game,"deck")) {
+            JsonObject card=item.getAsJsonObject();
+            if(EventRules.removalTier(string(card,"id"),string(card,"type"))<=3)c.removable++;
+        }
+        for(JsonElement p:array(game,"potions"))if(emptyPotion(string(p.getAsJsonObject(),"id")))c.freePotionSlots++;
+        c.sozu=hasRelic("Sozu");
+        c.redMask=hasRelic("Red Mask");
+        c.artifactRelic=hasRelic("ClockworkSouvenir") || hasRelic("Clockwork Souvenir");
+        if(game.has("solver_next_rooms")) {
+            c.nextRoomsKnown=true;
+            for(JsonElement room:array(game,"solver_next_rooms"))c.nextHasRest|=room.getAsString().equals("R");
+        }
+        JsonArray neow=array(visible,"neow_options");
+        if(neow.size()>0) {
+            c.neowBonus=new String[neow.size()]; c.neowDrawback=new String[neow.size()];
+            for(int i=0;i<neow.size();i++) {
+                c.neowBonus[i]=string(neow.get(i).getAsJsonObject(),"bonus");
+                c.neowDrawback[i]=string(neow.get(i).getAsJsonObject(),"drawback");
+            }
+        }
+        EventRules.readLive(c);
+        EventRules.Decision decision=EventRules.decide(c);
+        return decision==null?null:ruled(student,decision);
+    }
+
+    private Distill2.Result restRule(Distill2.Result student) {
+        if(!game.has("solver_rest_left") || !game.has("solver_final_act"))return null;
+        boolean wantRuby=integer(game,"act")==3 && game.get("solver_final_act").getAsBoolean() && !bool(object(game,"keys"),"ruby");
+        String[] labels=new String[choices.size()];
+        for(int i=0;i<labels.length;i++)labels[i]=choices.get(i).label;
+        EventRules.Decision decision=EventRules.rest(labels,wantRuby,integer(game,"solver_rest_left"));
+        return decision==null?null:ruled(student,decision);
+    }
+
+    private String rewardRelicId(JsonObject reward) {return string(object(reward,"relic"),"id");}
+
+    /** Boss relic: highest hand-written score; skip only when every offer is worse than nothing. */
+    private Distill2.Result bossRule(Distill2.Result student) {
+        JsonArray relics=array(object(game,"screen_state"),"relics");
+        String[] ids=new String[choices.size()];
+        for(int i=0;i<ids.length;i++) {
+            Choice choice=choices.get(i);
+            int index=choice.command.startsWith("choose ")?Integer.parseInt(choice.command.substring(7)):-1;
+            ids[i]=index>=0 && index<relics.size()?string(relics.get(index).getAsJsonObject(),"id"):"";
+        }
+        int[] scores=new int[ids.length];
+        for(int i=0;i<ids.length;i++)scores[i]=RelicScore.bossScore(ids[i],array(game,"deck"));
+        int best=-1;
+        for(int i=0;i<ids.length;i++)
+            if(!ids[i].isEmpty() && (best<0 || scores[i]>scores[best]
+                    || (scores[i]==scores[best] && student.scores[i]>student.scores[best])))best=i;
+        if(best<0)return null;
+        if(scores[best]<RelicScore.SKIP_BELOW) {
+            for(int i=0;i<ids.length;i++)if(choices.get(i).command.equals("skip"))
+                return ruled(student,new EventRules.Decision(i,"遗物评分：全部不如不拿，跳过"));
+            return null;
+        }
+        return ruled(student,new EventRules.Decision(best,"遗物评分："+choices.get(best).label+" "+scores[best]));
+    }
+
+    /** Last mapped chest reachable from here: unknown event rooms are not a promised later chest. */
+    private boolean mustTakeSapphireKey() {
+        if(integer(game,"act")!=3 || !bool(game,"solver_final_act") || bool(object(game,"keys"),"sapphire"))return false;
+        int x=optionalInt(visible,"x",-1), y=optionalInt(visible,"y",-1);
+        JsonObject current=nodes.get(key(x,y));
+        if(current==null || !string(current,"symbol").equals("T"))return false;
+        for(int position:reachable(x,y)) {
+            JsonObject node=nodes.get(position);
+            if(node!=null && integer(node,"y")>y && string(node,"symbol").equals("T"))return false;
+        }
+        return true;
+    }
+
+    private Distill2.Result chestRule(Distill2.Result student) {
+        if(!mustTakeSapphireKey())return null;
+        for(int i=0;i<choices.size();i++)if(choices.get(i).command.equals("choose 0"))
+            return ruled(student,new EventRules.Decision(i,"第三幕最后宝箱：开箱取得蓝钥匙"));
+        return null;
+    }
+
+    /** Sapphire Key against the relic it replaces: take the key when it scores higher than that relic. */
+    private Distill2.Result keyRule(Distill2.Result student) {
+        if(!game.has("solver_final_act"))return null;
+        JsonArray rewards=array(object(game,"screen_state"),"rewards");
+        int key=-1,relic=-1;
+        String linked="";
+        for(int i=0;i<choices.size();i++) {
+            if(!choices.get(i).command.startsWith("choose "))continue;
+            int index=Integer.parseInt(choices.get(i).command.substring(7));
+            if(index<0 || index>=rewards.size())continue;
+            JsonObject reward=rewards.get(index).getAsJsonObject();
+            if(string(reward,"reward_type").equals("SAPPHIRE_KEY")) {
+                key=i; linked=string(object(reward,"link"),"id");
+            }
+        }
+        if(key<0)return null;
+        if(mustTakeSapphireKey())
+            return ruled(student,new EventRules.Decision(key,"第三幕最后宝箱：蓝钥匙最高优先级"));
+        for(int i=0;i<choices.size();i++) {
+            if(!choices.get(i).command.startsWith("choose "))continue;
+            int index=Integer.parseInt(choices.get(i).command.substring(7));
+            if(index>=0 && index<rewards.size() && string(rewards.get(index).getAsJsonObject(),"reward_type").equals("RELIC")
+                    && rewardRelicId(rewards.get(index).getAsJsonObject()).equals(linked))relic=i;
+        }
+        if(relic<0)return null;
+        boolean takeKey=game.get("solver_final_act").getAsBoolean() && RelicScore.SAPPHIRE_KEY>RelicScore.score(linked,array(game,"deck"));
+        String note="蓝钥匙评分 "+RelicScore.SAPPHIRE_KEY+(takeKey?" 高于 ":" 不高于 ")+choices.get(relic).label+" "+RelicScore.score(linked,array(game,"deck"));
+        return ruled(student,new EventRules.Decision(takeKey?key:relic,note));
+    }
+
+    /** Shop relics: each affordable relic gets (score - 5) * 0.6 added, so strong ones are bought first and weak ones are not. */
+    private Distill2.Result shopRule(Distill2.Result student) {
+        JsonArray relics=array(object(game,"screen_state"),"relics");
+        JsonArray potions=array(object(game,"screen_state"),"potions");
+        float[] scores=student.scores.clone();
+        boolean changed=false;
+        for(int i=0;i<choices.size();i++) {
+            long bits=choices.get(i).bits;
+            if((bits>>27)==3) {
+                int index=(int)(bits&((1L<<27)-1));
+                if(index>=0 && index<potions.size()) {
+                    String id=string(potions.get(index).getAsJsonObject(),"id");
+                    int bonus=PotionRewards.value(id,game)>0?PotionRewards.lateBonus(id,game):0;
+                    scores[i]+=bonus*0.1f;
+                    changed|=bonus>0;
+                }
+                continue;
+            }
+            if((bits>>27)!=4)continue;
+            int index=(int)(bits&((1L<<27)-1));
+            if(index<0 || index>=relics.size())continue;
+            scores[i]+=(RelicScore.score(string(relics.get(index).getAsJsonObject(),"id"),array(game,"deck"))-RelicScore.NEUTRAL)*0.6f;
+            changed=true;
+        }
+        if(!changed)return null;
+        int best=0;
+        for(int i=1;i<scores.length;i++)if(scores[i]>scores[best])best=i;
+        if(best!=student.best)ruleNote="遗物/后期药水评分改变了购买选择";
+        return new Distill2.Result(scores,best);
+    }
+
+    /** Removal and transform targets: curses first, then Strikes, then Bash and other attacks. */
+    private Distill2.Result removalRule(Distill2.Result student) {
+        JsonObject screen=object(game,"screen_state");
+        boolean offering="Bonfire".equals(string(game,"solver_event_class")); // the bonfire burns the card it is given
+        if(bool(screen,"confirm_up") || !(bool(screen,"for_purge") || bool(screen,"for_transform") || offering))return null;
+        JsonArray cards=array(screen,"cards");
+        if(offering && integer(game,"current_hp")*2<integer(game,"max_hp")) {
+            // Hurt: an uncommon card heals fully, so burn the one the network wants least (it is the most removable).
+            int pick=-1;
+            for(int i=0;i<choices.size();i++) {
+                if(!choices.get(i).command.startsWith("choose "))continue;
+                int index=Integer.parseInt(choices.get(i).command.substring(7));
+                if(index<0 || index>=cards.size() || !string(cards.get(index).getAsJsonObject(),"rarity").equals("UNCOMMON"))continue;
+                if(pick<0 || student.scores[i]>student.scores[pick])pick=i;
+            }
+            if(pick>=0)return ruled(student,new EventRules.Decision(pick,"篝火精灵：血量低于 50%，献祭最没用的蓝卡回满"));
+        }
+        int best=-1,bestTier=9;
+        for(int i=0;i<choices.size();i++) {
+            Choice choice=choices.get(i);
+            if(!choice.command.startsWith("choose "))continue;
+            int index=Integer.parseInt(choice.command.substring(7));
+            if(index<0 || index>=cards.size())continue;
+            JsonObject card=cards.get(index).getAsJsonObject();
+            int tier=EventRules.removalTier(string(card,"id"),string(card,"type"));
+            if(tier<bestTier || (tier==bestTier && best>=0 && student.scores[i]>student.scores[best])) { bestTier=tier; best=i; }
+        }
+        String[] names={"诅咒","打击","痛击","其他攻击牌"};
+        return bestTier<=3?ruled(student,new EventRules.Decision(best,"删牌顺序："+names[bestTier])):null;
     }
 
     private void observation() {
@@ -184,7 +414,7 @@ final class OutsidePacket {
         if (screen >= 0) o[55+screen] = 1;
         if (screen == 1 && (array(visible, "neow_options").size() > 0
                 || string(object(game, "screen_state"), "event_id").equals("Neow Event"))) o[75+5] = 1;
-        else if (screen == 1) {
+        else if (screen == 1 && !forcedEventPage()) {
             String event=string(object(game,"screen_state"),"event_id");
             o[75+model.id("events",event)] = 1;
             if(event.equals("Shining Light")) {
@@ -364,6 +594,24 @@ final class OutsidePacket {
         directChoice("choose 0", shown.get(0).getAsString());
     }
 
+    /**
+     * Follow-up pages with a single button (Colosseum, Bonfire Spirits, the Heart door, a result
+     * page) carry no decision: click through without asking the network, which has no ID for
+     * many of these events and cannot read their page-specific numbers.
+     */
+    private boolean forcedEventPage() {
+        return array(visible, "choices").size() == 1;
+    }
+
+    private String pageKey(String screen) {
+        JsonObject state = object(game, "screen_state");
+        if (screen.equals("EVENT") && !string(state, "event_id").equals("Neow Event") && !visible.has("neow_screen"))
+            return string(state, "event_id") + '|' + string(state, "body_text") + '|' + array(visible, "choices");
+        // Choosing the first of two cards leaves the same card list on screen.
+        if (screen.equals("GRID")) return array(state, "selected_cards").toString();
+        return "";
+    }
+
     private void eventChoices() {
         JsonArray shown=array(visible,"choices");
         int event=model.id("events",string(object(game,"screen_state"),"event_id"));
@@ -377,20 +625,8 @@ final class OutsidePacket {
     private void combatRewardChoices() {
         JsonArray rewards=array(object(game,"screen_state"),"rewards");
         int firstCard=-1, skipped=optionalInt(visible,"skipped_card_rewards",0);
-        for(int i=0;i<rewards.size();i++) {
-            JsonObject reward=rewards.get(i).getAsJsonObject();
-            String type=string(reward,"reward_type");
-            if(type.equals("GOLD") || type.equals("STOLEN_GOLD")) {
-                Choice choice=choice(i,"choose "+i,"Gold",2,5,i,0);
-                choice.descriptor[model.offset("OFF_AMOUNT")]=optionalInt(reward,"gold",0)/1000f;
-                return; // Taking gold is free and cannot exclude another reward.
-            }
-            if(type.equals("CARD") && firstCard<0 && skipped--<=0)firstCard=i;
-        }
-        if(firstCard>=0) {
-            choice(firstCard,"choose "+firstCard,"View card reward",2,3,firstCard,0);
-            return; // Original game reveals the cards only after this click.
-        }
+        // Relics can upgrade subsequently taken cards (the eggs), or alter potion slots.
+        // Keep linked Sapphire Key alternatives together for the existing key rule.
         for(int i=0;i<rewards.size();i++) {
             JsonObject reward=rewards.get(i).getAsJsonObject();
             String type=string(reward,"reward_type");
@@ -405,6 +641,27 @@ final class OutsidePacket {
                 if(type.equals("SAPPHIRE_KEY") && linked.has("id"))
                     choice.descriptor[model.offset("OFF_RELIC")+model.id("relics",string(linked,"id"))]=1;
             }
+        }
+        if(!choices.isEmpty())return;
+        for(int i=0;i<rewards.size();i++) {
+            JsonObject reward=rewards.get(i).getAsJsonObject();
+            String type=string(reward,"reward_type");
+            if(type.equals("GOLD") || type.equals("STOLEN_GOLD")) {
+                Choice choice=choice(i,"choose "+i,"Gold",2,5,i,0);
+                choice.descriptor[model.offset("OFF_AMOUNT")]=optionalInt(reward,"gold",0)/1000f;
+                return; // Taking gold is free and cannot exclude another reward.
+            }
+            if(type.equals("POTION") && hasEmptyPotion() && !hasRelic("Sozu")) {
+                JsonObject potion=object(reward,"potion");
+                Choice choice=choice(i,"choose "+i,string(potion,"name"),2,11,i,0);
+                choice.descriptor[model.offset("OFF_POTION")+model.id("potions",string(potion,"id"))]=1;
+                return; // A free slot makes the potion free; nothing else on the screen is excluded.
+            }
+            if(type.equals("CARD") && firstCard<0 && skipped--<=0)firstCard=i;
+        }
+        if(firstCard>=0) {
+            choice(firstCard,"choose "+firstCard,"View card reward",2,3,firstCard,0);
+            return; // Original game reveals the cards only after this click.
         }
         if(choices.isEmpty() && (hasCommand("proceed") || hasCommand("skip"))) {
             // The reward screen's own button is "proceed"; skipped cards and full-slot potions may remain.
@@ -516,6 +773,19 @@ final class OutsidePacket {
         leave.descriptor[model.offset("OFF_PASS")] = 1;
     }
 
+    /** Multi-card grids (Empty Cage, Bonfire-style picks) keep chosen cards listed; choosing one again would deselect it. */
+    private boolean gridFull() {
+        JsonObject screen = object(game, "screen_state");
+        int need = optionalInt(screen, "num_cards", 0), have = array(screen, "selected_cards").size();
+        return need > 1 && have >= need && hasCommand("confirm");
+    }
+
+    private boolean gridSelected(JsonObject screen, JsonObject card) {
+        for (JsonElement item : array(screen, "selected_cards"))
+            if (string(item.getAsJsonObject(), "uuid").equals(string(card, "uuid"))) return true;
+        return false;
+    }
+
     private void selectChoices() {
         JsonObject screen = object(game, "screen_state");
         JsonArray cards = array(screen, "cards");
@@ -528,12 +798,13 @@ final class OutsidePacket {
         if (restricted && !bool(visible, "grid_from_shop")) {
             boolean any = false;
             for (JsonElement item : cards)
-                any |= allowedRemoval(string(item.getAsJsonObject(), "id"), string(item.getAsJsonObject(), "type"));
+                any |= gridRemoval(string(item.getAsJsonObject(), "id"), string(item.getAsJsonObject(), "type"), bool(visible, "grid_from_shop"));
             restricted = any;
         }
         for (int i = 0; i < cards.size(); i++) {
             JsonObject card = cards.get(i).getAsJsonObject();
-            if (restricted && !allowedRemoval(string(card, "id"), string(card, "type"))) continue;
+            if (gridSelected(screen, card)) continue;
+            if (restricted && !gridRemoval(string(card, "id"), string(card, "type"), bool(visible, "grid_from_shop"))) continue;
             Choice choice = choice(i, "choose " + i, string(card, "name"), 4, 18, i, 0);
             choice.descriptor[model.offset("OFF_SELECTION_TYPE")+type] = 1;
             encodeCard(choice, card);
@@ -576,6 +847,10 @@ final class OutsidePacket {
             if (allowedRemoval(string(card, "id"), string(card, "type"))) return true;
         }
         return false;
+    }
+    /** Grid candidates: starter cards and curses, plus other attacks (last in the removal order) outside the shop. */
+    private static boolean gridRemoval(String id, String type, boolean shop) {
+        return allowedRemoval(id, type) || (!shop && type.equals("ATTACK"));
     }
     private static boolean allowedRemoval(String id, String type) {
         return type.equals("CURSE") || id.equals("Strike_R") || id.equals("STRIKE_RED")

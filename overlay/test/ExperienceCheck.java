@@ -50,6 +50,18 @@ public class ExperienceCheck {
             }
         }
         check(parts==5 && seen==5,"rotation preserves every event without truncation");
+        ExperienceNotes idle = new ExperienceNotes();
+        idle.start(root,new JsonObject());
+        for (int i=0;i<3;i++) {
+            JsonObject raw=new JsonParser().parse("{\"raw_state\":{\"game_state\":{\"combat_state\":{\"turn\":3},\"full_rng_state\":{\"streams\":{\"aiRng\":{\"counter\":"+(i/2)+"}}}}}}").getAsJsonObject();
+            JsonObject game=raw.getAsJsonObject("raw_state").getAsJsonObject("game_state");
+            game.getAsJsonObject("combat_state").addProperty("frame_delta_seconds",0.016+i);
+            JsonObject cosmetic=new JsonObject(); cosmetic.addProperty("counter",100+i);
+            game.getAsJsonObject("full_rng_state").getAsJsonObject("streams").add("MathUtils.random",cosmetic);
+            idle.record("observation",raw,null,null);
+        }
+        idle.stop();
+        check(idle.count()==2,"idle frame timer and MathUtils ignored; game RNG change still recorded");
         System.out.println("PASS: opt-in, lossless large-deck/seed/action capture, deduplication, privacy filtering and chunk rotation");
     }
 }

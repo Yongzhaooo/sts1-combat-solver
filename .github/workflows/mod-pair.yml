@@ -1,0 +1,49 @@
+name: Mod pair test build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mod-pair-build
+  cancel-in-progress: false
+jobs:
+  build-pair:
+    # Never run fork/PR code on a machine containing the private game/State Notes.
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, sts1-mod-build]
+    timeout-minutes: 30
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare stable local test environment
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          if ($LASTEXITCODE -ne 0) { throw 'venv failed' }
+          ./.venv/Scripts/python.exe -m pip install pybind11==3.1.0 cmake==3.31.10
+          if ($LASTEXITCODE -ne 0) { throw 'runtime dependencies failed' }
+      - name: Build and check both mods
+        shell: pwsh
+        run: |
+          if (!$env:STS1_GAME_DIR -or !$env:STS1_STATE_MOD_DIR) {
+            throw 'Runner requires STS1_GAME_DIR and STS1_STATE_MOD_DIR; see docs/mod-pair-ci.md'
+          }
+          ./.venv/Scripts/python.exe tools/build_mod_pair.py --game "$env:STS1_GAME_DIR" --state-mod "$env:STS1_STATE_MOD_DIR" --output "build/mod-pair-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --rebuild-runtime
+          if ($LASTEXITCODE -ne 0) { throw 'mod pair build failed' }
+      - name: Upload test package and check logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-pair-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/mod-pair-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: warn
+          retention-days: 14

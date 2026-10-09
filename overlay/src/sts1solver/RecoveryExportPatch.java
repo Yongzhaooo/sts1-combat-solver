@@ -18,6 +18,25 @@ public class RecoveryExportPatch {
         if(AbstractDungeon.getCurrMapNode()!=null && AbstractDungeon.map!=null)
             for(MapRoomNode node:ChoiceScreenUtils.getMapScreenNodeChoices())rooms.add(node.getRoomSymbol(true));
         __result.put("solver_next_rooms",rooms);
+        try {
+            // This act's path so far: fights seen (card rewards) and whether an elite is already behind us.
+            int seen=0; boolean elite=false;
+            for(int i=0;i<AbstractDungeon.pathX.size() && i<AbstractDungeon.pathY.size();i++) {
+                int y=AbstractDungeon.pathY.get(i);
+                if(y<0 || y>=AbstractDungeon.map.size())continue;
+                com.megacrit.cardcrawl.rooms.AbstractRoom room=AbstractDungeon.map.get(y).get(AbstractDungeon.pathX.get(i)).room;
+                if(room instanceof com.megacrit.cardcrawl.rooms.MonsterRoomElite)elite=true;
+                else if(room instanceof com.megacrit.cardcrawl.rooms.MonsterRoom && !(room instanceof com.megacrit.cardcrawl.rooms.MonsterRoomBoss))seen++;
+            }
+            HashMap<String,Object> prep=new HashMap<>();
+            prep.put("seen",seen); prep.put("elite",elite);
+            __result.put("solver_act_prep",prep);
+        } catch(RuntimeException ignored) { }
+        if(AbstractDungeon.getCurrRoom()!=null && AbstractDungeon.getCurrRoom().event!=null)
+            __result.put("solver_event_class",AbstractDungeon.getCurrRoom().event.getClass().getSimpleName());
+        __result.put("solver_final_act",com.megacrit.cardcrawl.core.Settings.isFinalActAvailable);
+        if(AbstractDungeon.getCurrRoom() instanceof com.megacrit.cardcrawl.rooms.RestRoom && AbstractDungeon.getCurrMapNode()!=null)
+            __result.put("solver_rest_left",Foresight.remainingCampfires(AbstractDungeon.map,AbstractDungeon.getCurrMapNode(),new IdentityHashMap<>()));
         HashMap<String,ArrayList<String>> pools=new HashMap<>();
         for(String type:new String[]{"ALL","ATTACK","SKILL","POWER","COLORLESS"})pools.put(type,new ArrayList<>());
         for(CardGroup group:new CardGroup[]{AbstractDungeon.srcCommonCardPool,AbstractDungeon.srcUncommonCardPool,AbstractDungeon.srcRareCardPool})
