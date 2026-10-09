@@ -1,5 +1,7 @@
 # 尖塔 1 创意工坊发布记录
 
+2026-10-08：已按用户授权将 `v0.4.1` 更新到原条目 `3814773843`。上传工作区为 `build/release-0.4.1/workshop-upload`，来源提交为 `c297a68310dc003e330e4379652074498fd22030`，与成功的 CI 构建 `37835474461` 代码一致。上传前通过 76 个文件的 SHA-256 校验、JAR 版本和 bundled 配置校验，以及 Windows、macOS arm64/x86_64 运行时检查。游戏自带 `mod-uploader.jar` 返回 `Successfully updated workshop item`，退出码 0；公开页面抓取不可用，未独立核实页面缓存刷新。此次包括早期全自动爬塔、紧凑 UI 和腐化生成牌费用修复；Mac 全自动游戏内验收仍未完成。
+
 2026-10-06：Windows x64 `v0.2.1` 已公开发布至 [Steam 创意工坊条目 3814773843](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)，源码与 Windows ZIP 见 [Yongzhaooo 的 GitHub Release](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.2.1)。上传配置位于 `public-release/potion-0.2.1-20261006/workshop-upload/config.json`，后续更新应复用条目 ID。公开页面已核对标题、用户指定封面和双语说明；Steam 订阅后的完整对局验收尚未完成。以下保留早期分发研究与发布步骤。
 
 本次研究对象是 Slay the Spire 1，Steam App ID 为 `646570`。尖塔 2 的上传器和打包格式不适用。

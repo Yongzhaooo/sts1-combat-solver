@@ -13,4 +13,4 @@ Subscribe with ModTheSpire and BaseMod. Windows and both Mac architectures inclu
 
 [源码与下载 / Source & downloads](https://github.com/Yongzhaooo/sts1-combat-solver)
 
-v0.4.2 replaces map selection with reviewed route rules, plans every connected map, replans after state changes and requires the burning elite when reachable and the green key is still missing in Act 3. Combat and other decisions are unchanged.
+v0.4.3 fixes Headbutt and Armaments selection, Empty Cage multi-selection and action timeouts while the map pauses combat. Combat auto and full AI auto have separate controls. Rewards collect relics before cards. Reviewed event rules and contextual relic scores improve outside-combat choices; the final known reachable Act 3 chest prioritizes a missing sapphire key. Survival, draw and power potions gain priority late in Act 3 through the Act 4 elite. Includes backend recovery and per-seed local diagnostics: recording is on by default and can be disabled; F6 exports one JSON to the desktop without uploading. Voluntary experience recording remains off by default. Offline regressions passed; complete runs and multi-mod combinations still need game testing.

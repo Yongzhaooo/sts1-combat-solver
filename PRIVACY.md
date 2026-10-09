@@ -6,7 +6,7 @@ The solver operates locally. It does not perform automated background uploads of
 
 ## Diagnostic bug reports
 
-Pressing `F6` exports data from a recent combat encounter to a local archive. The generated file may contain game and mod versions, run seeds, deck compositions, card identifiers, internal RNG states, performed actions, error logs, and contextual diagnostic state. It excludes raw save files, audio recordings, and the full SQLite database file, and strips recognizable account identifiers and local filesystem paths. Data filtering does not constitute guaranteed anonymity; inspect the plaintext JSON before sharing. Submitting a diagnostic bug report is solely intended for debugging and bug resolution; it does not grant authorization to utilize the data for AI model training.
+The solver keeps a continuous per-seed record on this PC (on by default; switch it off in the panel settings): one file per seed under `runs/` in the data directory, newest 20 seeds and at most 50 MB. Pressing `F6` writes the current seed's record as one json file on your desktop; nothing is sent anywhere. The exported file may contain game and mod versions, run seeds, deck compositions, card identifiers, internal RNG states, performed actions, error logs, and contextual diagnostic state. It excludes raw save files, audio recordings, and the full SQLite database file, and strips recognizable account identifiers and local filesystem paths. Data filtering does not constitute guaranteed anonymity; inspect the plaintext JSON before sharing. Submitting a diagnostic bug report is solely intended for debugging and bug resolution; it does not grant authorization to utilize the data for AI model training.
 
 ## Voluntary experience contributions
 

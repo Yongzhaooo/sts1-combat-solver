@@ -378,6 +378,35 @@ class ActionMapper:
     def refresh(self, battle, view: dict) -> None:
         combat = view["game"].get("combat_state", {})
         for pile in PILES:
+            if (pile == "hand" and self.uuids
+                    and view["game"].get("screen_type") == "HAND_SELECT"
+                    and battle.input_state == self.c.sts.InputState.CARD_SELECT):
+                # Armaments temporarily removes non-upgradeable cards from the
+                # original hand. The native selection retains the full hand;
+                # its ordinal positions cannot establish original identities.
+                simulated = {card.unique_id: card for card in battle.hand}
+                reserved = set(self.uuids.values())
+                updates = {}
+                for original in combat.get(pile, []):
+                    uuid = original["uuid"]
+                    if uuid in updates:
+                        raise CoverageGap("duplicate original hand selection identity")
+                    old = self.uuids.get(uuid)
+                    if old is not None:
+                        card = simulated.get(old)
+                        if card is None or self.c.original_card(original) != self.c.simulator_card(card):
+                            raise CoverageGap("known hand selection identity differs from its predicted card")
+                        updates[uuid] = old
+                    else:
+                        candidates = [card for unique, card in simulated.items()
+                                      if unique not in reserved
+                                      and self.c.original_card(original) == self.c.simulator_card(card)]
+                        if len(candidates) != 1:
+                            raise CoverageGap("new hand selection identity is absent or ambiguous")
+                        updates[uuid] = candidates[0].unique_id
+                        reserved.add(candidates[0].unique_id)
+                self.uuids.update(updates)
+                continue
             for original, simulated in zip(combat.get(pile, []), getattr(battle, pile)):
                 if self.c.original_card(original) == self.c.simulator_card(simulated):
                     old = self.uuids.get(original["uuid"])

@@ -106,7 +106,11 @@ final class RoutePlanner {
         int available=Math.max(0,fire-(wantRed?1:0));
         int fires=Math.max(canSmith?Math.min(available,upgrades):0,
             canRest&&number(game,"current_hp",0)<number(game,"max_hp",0)?Math.min(available,1):0);
-        if(row!=0||elite==0) {prepare=0;preFire=0;} else prepare=Math.min(prepare,act==1?3:2);
+        // Card sightings (fights) before the first elite count at every row, minus those already seen this act.
+        JsonObject history=object(game,"solver_act_prep");
+        int seen=row==0?0:number(history,"seen",game.has("solver_act_prep")?0:99);
+        if(elite==0||flag(history,"elite")) prepare=0; else prepare=Math.min(prepare,Math.max(0,(act==1?3:2)-seen));
+        if(row!=0||elite==0) preFire=0;
         return w("elite")*elite+w("fire")*fires+w("event")*event+w("monster")*monster
             +w("prepare")*prepare+w("pre_fire")*preFire+w("shop")*shop
             +w("early_shop")*early+w("late_shop")*late+w("close_shops")*close

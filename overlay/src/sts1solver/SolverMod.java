@@ -38,13 +38,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     public static SolverMod instance;
     private final Gson gson = new Gson();
     private final VoiceNotes voiceNotes = new VoiceNotes();
-    private final ExperienceNotes experience = new ExperienceNotes();
     private final ConcurrentLinkedQueue<JsonObject> debugReplies = new ConcurrentLinkedQueue<>();
     private boolean researchRecording;
     private String debugMessage = "";
-    private long nextExperienceObservation;
-    private AbstractPlayer experiencePlayer;
-    private int experienceRun;
+    private boolean runLog = true;
     private final DecisionNotes decisionNotes = new DecisionNotes();
     private String inventorySignature = "";
     private long noteRetryAfter;
@@ -134,7 +131,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private static final float ACTIONS_TOP = 262, TOGGLES_TOP = 306;
     private static final float PILOT_WIDTH = 440, PILOT_LIST_TOP = 72, PILOT_ROW = 30;
     private static final int PILOT_ROWS = 5;
-    private static final float ACTION_SPACING = (PANEL_WIDTH - 24) / 5;
+    private static final float ACTION_SPACING = (PANEL_WIDTH - 24) / 6;
     private boolean settingsOpen;
     private float x = -1, y = -1, dx, dy;
     private float uiScale = 1, fontScale;
@@ -163,6 +160,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private boolean outsidePilotRun, outsideFailed; // the compact pilot card replaces the panel outside combat.
     private int outsideChosen, outsideScroll;
     private long outsideScoredAt, outsideSubmittedAt, outsideWaitSince;
+    private int outsideRetries;
     private List<OutsidePacket.Step> routePlan = java.util.Collections.emptyList();
     private String routeKey = "";
     private int skippedCardFloor = -1, skippedCards;
@@ -209,6 +207,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
     public SolverMod() {
         BaseMod.subscribe(this);
+        EventRules.live = true; // hidden-information event rules read the running game
         try (InputStream stream = getClass().getResourceAsStream("/solver.properties")) {
             Properties build = new Properties();
             if (stream != null) build.load(stream);
@@ -222,6 +221,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("brightEyeMode", "true");
             defaults.setProperty("autoPotionRewards", "true");
             defaults.setProperty("runAutoEnabled", "true");
+            defaults.setProperty("runLog", "true");
             config = new SpireConfig("STS1CombatSolver", "config", defaults);
             I18n.setLanguage(config.getString("language"));
             uiScale = PanelSize.preference(config.getString("uiScale"));
@@ -231,11 +231,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             Foresight.brightEyeMode = config.getBool("brightEyeMode");
             autoPotionRewards = config.getBool("autoPotionRewards");
             runAutoEnabled = config.getBool("runAutoEnabled");
+            runLog = config.getBool("runLog");
             if (!validAutoKey(autoKey)) autoKey = Input.Keys.F10;
         } catch (IOException failure) { error = I18n.t("快捷键配置读取失败：") + failure.getMessage(); }
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             voiceNotes.shutdown();
-            try { experience.stop(); } catch (IOException failure) { System.err.println("[STS1Experience] " + failure); }
             try { if (writer != null) writer.close(); } catch (IOException ignored) { }
             // EOF lets the supervisor terminate and reap its native worker.
         }, "sts1-solver-shutdown"));
@@ -277,7 +277,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private float panelHeight() { return pilotCard() ? pilotHeight() : collapsed ? 48 : PANEL_HEIGHT; }
 
     private boolean validAutoKey(int key) {
-        return key >= Input.Keys.F1 && key <= Input.Keys.F12 && key != Input.Keys.F6 && key != Input.Keys.F8 && key != Input.Keys.F9;
+        return key >= Input.Keys.F1 && key <= Input.Keys.F12 && key != Input.Keys.F6 && key != Input.Keys.F7 && key != Input.Keys.F8 && key != Input.Keys.F9;
     }
 
     private void toggleAuto() {
@@ -341,8 +341,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         // AbstractMonster.updateDeathAnimation clears powers when isDead becomes
         // true. Action queues can already be idle before this final state change.
         for (AbstractMonster monster: AbstractDungeon.getMonsters().monsters)
-            if (pendingMonsterDeath(monster.isDying, monster.isDead, monster.halfDead)
-                    || (monster.isEscaping && !monster.escaped)) return false;
+            if (waitForMonsterExit(AbstractDungeon.screen, monster.isDying, monster.isDead,
+                    monster.halfDead, monster.isEscaping, monster.escaped)) return false;
         if (AbstractDungeon.screen != AbstractDungeon.CurrentScreen.NONE
                 && AbstractDungeon.screen != AbstractDungeon.CurrentScreen.CARD_REWARD
                 && AbstractDungeon.screen != AbstractDungeon.CurrentScreen.HAND_SELECT
@@ -365,6 +365,20 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 && !AbstractDungeon.player.endTurnQueued;
         }
         return true;
+    }
+    static boolean actionPausedByScreen(AbstractDungeon.CurrentScreen screen) {
+        return screen != AbstractDungeon.CurrentScreen.NONE
+            && screen != AbstractDungeon.CurrentScreen.HAND_SELECT
+            && screen != AbstractDungeon.CurrentScreen.GRID
+            && screen != AbstractDungeon.CurrentScreen.CARD_REWARD;
+    }
+    static boolean waitForMonsterExit(AbstractDungeon.CurrentScreen screen, boolean dying,
+                                      boolean dead, boolean halfDead, boolean escaping, boolean escaped) {
+        // AbstractDungeon skips room.update on these screens unless peeking.
+        // A killing Headbutt must choose a card before death animations can resume.
+        if (screen == AbstractDungeon.CurrentScreen.GRID
+                || screen == AbstractDungeon.CurrentScreen.CARD_REWARD) return false;
+        return pendingMonsterDeath(dying, dead, halfDead) || (escaping && !escaped);
     }
     static boolean pendingMonsterDeath(boolean dying, boolean dead, boolean halfDead) {
         return dying && !dead && !halfDead;
@@ -465,6 +479,20 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             && !(act==3 && ascension>=20 && remainingBosses>1);
     }
 
+    private void toggleCombatMode() {
+        if(outsideMode==0 && !runAuto && auto) { cancel(true); return; }
+        if(outsideMode!=0) {
+            chooseOutsideMode(0);
+            runAuto=false; // Switching from the pilot starts combat-only automation.
+        }
+        toggleRunAuto();
+    }
+
+    private void togglePilotMode() {
+        if(outsideMode==2)stopAll();
+        else chooseOutsideMode(2);
+    }
+
     private void toggleRunAuto() {
         if(runAuto){runAutoEnabled=false;saveAutomation();cancel(true);return;}
         if(!CommandExecutor.isInDungeon() || AbstractDungeon.player==null || !supported())return;
@@ -547,11 +575,16 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             outsideWaitSince=0;
             if(outsideAwaiting) {
                 if(latest.sameDecision(outsideStatePacket)) {
-                    if(System.currentTimeMillis()-outsideSubmittedAt>10000)
+                    long waited=System.currentTimeMillis()-outsideSubmittedAt;
+                    // A click on a button that is still fading in is ignored by the game: try again.
+                    if(outsideMode==2 && waited>3000 && outsideRetries<3) {
+                        outsideRetries++; outsideAwaiting=false; return;
+                    }
+                    if(waited>10000)
                         throw new IllegalStateException("局外动作未完成；请手动接管");
                     return;
                 }
-                outsideAwaiting=false;
+                outsideAwaiting=false; outsideRetries=0;
             }
             if(outsidePacket==null || !latest.sameDecision(outsidePacket)) {
                 outsidePacket=latest;
@@ -582,7 +615,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 String screenType=visible.get("screen_type").getAsString();
                 if(verb.equals("skip") && screenType.equals("CARD_REWARD"))skippedCards++;
                 if(verb.equals("leave") && screenType.equals("SHOP_SCREEN"))shopLeft=true;
-                outsideNotice=I18n.t("已执行：")+choice.label;
+                try { startBackend(); diagnostic("outside",screenType+" | "+choice.label+" | "+command
+                    +" | "+outsidePacket.detail()+(outsidePacket.ruleNote==null?" | 网络":" | 规则："+outsidePacket.ruleNote),null); }
+                catch(IOException ignored) { }
+                outsideNotice=I18n.t("已执行：")+choice.label
+                    +(outsidePacket.ruleNote==null?"":" · "+I18n.t(outsidePacket.ruleNote));
                 outsidePacket=null; outsideScores=null; outsideConfirm=false;
                 outsideAwaiting=true; outsideSubmittedAt=System.currentTimeMillis();
             }
@@ -759,6 +796,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }, "sts1-solver-reader");
         reader.setDaemon(true);
         reader.start();
+        if (!runLog) sendRunLogSetting();
     }
 
     private void send(String op, JsonObject state) throws IOException {
@@ -797,6 +835,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             record.addProperty("op","diagnostic");
             record.addProperty("id",activeId);
             record.addProperty("event",event);
+            if(AbstractDungeon.player!=null){record.addProperty("seed",Long.toString(Settings.seed));record.addProperty("floor",AbstractDungeon.floorNum);}
             record.addProperty("message",message);
             record.addProperty("auto",auto);
             record.addProperty("turn_only",turnOnly);
@@ -876,62 +915,54 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         catch (Exception failure) { System.err.println("[STS1Export] " + failure); }
     }
 
-    private void exportDebug() {
+    /** One json for the current seed, written to the desktop so the user can send it as is. */
+    private void exportRun() {
         try {
             startBackend();
             JsonObject request = new JsonObject();
-            request.addProperty("op", "export_debug");
+            request.addProperty("op", "export_run");
+            request.addProperty("directory", desktopDirectory().toString());
+            if (AbstractDungeon.player != null) request.addProperty("seed", Long.toString(Settings.seed));
             request.add("metadata", DecisionContext.metadata());
             writer.write(gson.toJson(request)); writer.newLine(); writer.flush();
-            debugMessage = I18n.t("正在导出错误报告…");
+            debugMessage = I18n.t("正在导出记录…");
         } catch (Exception failure) { debugMessage = I18n.t("导出失败：") + failure.getMessage(); }
     }
 
-    private void toggleExperience() {
+    /** F7: this act's map with the planned route, as a PNG on the desktop. */
+    private void exportMap() {
         try {
-            if (experience.enabled()) experience.stop();
-            else experience.start(notesDirectory("experience"), DecisionContext.metadata());
-            debugMessage = experience.enabled()?I18n.t("战斗数据记录已开启 · Shift+F6 导出"):I18n.t("战斗数据记录已关闭");
-        } catch (Exception failure) { experienceFailure(failure); }
+            if (!CommandExecutor.isInDungeon() || AbstractDungeon.player == null) { debugMessage = I18n.t("当前没有地图"); return; }
+            Path file = MapExport.write(desktopDirectory(), routePlan);
+            debugMessage = I18n.t("地图已导出到桌面：") + file.getFileName();
+            showDirectory(file.getParent());
+        } catch (Exception failure) { debugMessage = I18n.t("导出失败：") + failure.getMessage(); }
     }
 
-    private void exportExperience() {
+    private Path desktopDirectory() {
         try {
-            Path directory = experience.finish();
-            if (directory == null || experience.count() == 0) { debugMessage = I18n.t("请先开启战斗数据记录"); return; }
-            debugMessage = I18n.t("战斗数据已导出 · 请检查后分享");
-            showDirectory(directory);
-        } catch (Exception failure) { experienceFailure(failure); }
+            java.io.File home = javax.swing.filechooser.FileSystemView.getFileSystemView().getHomeDirectory();
+            if (home != null && home.isDirectory()) return home.toPath();
+        } catch (Throwable ignored) { }
+        return Paths.get(System.getProperty("user.home"), "Desktop");
     }
 
-    private void experienceFailure(Exception failure) {
-        try { experience.stop(); } catch (IOException ignored) { }
-        debugMessage = I18n.t("战斗数据记录已停止：") + " " + failure.getMessage();
-        System.err.println("[STS1Experience] " + failure);
+    private void toggleRunLog() {
+        runLog = !runLog;
+        try { if (config != null) { config.setBool("runLog", runLog); config.save(); } }
+        catch (IOException failure) { debugMessage = I18n.t("设置保存失败：") + failure.getMessage(); }
+        sendRunLogSetting();
+        debugMessage = I18n.t(runLog ? "持续记录已开启" : "持续记录已关闭");
     }
 
-    private void recordExperience(String kind, JsonObject state, String action, JsonObject plan) {
-        if (!experience.enabled()) return;
+    private void sendRunLogSetting() {
+        if (writer == null) return;
         try {
-            JsonObject snapshot = new JsonObject();
-            if (experiencePlayer != AbstractDungeon.player) { experiencePlayer=AbstractDungeon.player; experienceRun++; }
-            snapshot.addProperty("run_sequence", experienceRun);
-            snapshot.add("raw_state", state);
-            snapshot.add("decision_context", DecisionContext.visible());
-            snapshot.add("privileged_recovery", DecisionContext.recovery());
-            experience.record(kind, snapshot, action, plan);
-        } catch (Exception failure) { experienceFailure(failure); }
-    }
-
-    private void observeExperience() {
-        if (!experience.enabled() || !CommandExecutor.isInDungeon() || AbstractDungeon.player == null
-                || System.currentTimeMillis() < nextExperienceObservation) return;
-        nextExperienceObservation = System.currentTimeMillis() + 200;
-        try {
-            JsonObject state = capture();
-            if (state.has("ready_for_command") && state.get("ready_for_command").getAsBoolean())
-                recordExperience("observation", state, null, null);
-        } catch (Exception failure) { experienceFailure(failure); }
+            JsonObject request = new JsonObject();
+            request.addProperty("op", "run_log");
+            request.addProperty("enabled", runLog);
+            writer.write(gson.toJson(request)); writer.newLine(); writer.flush();
+        } catch (IOException failure) { System.err.println("[STS1Solver] " + failure); }
     }
 
     private void startVoiceNote() {
@@ -963,22 +994,46 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }
     }
 
+    /** A bug in the solver must never close the game: record the stack and keep the panel alive. */
+    private long lastGuardAt;
+
+    private void guard(String where, Throwable failure) {
+        long now = System.currentTimeMillis();
+        if (now - lastGuardAt < 5000) return;
+        lastGuardAt = now;
+        System.err.println("[STS1Solver] " + where + " failed: " + failure);
+        failure.printStackTrace();
+        try {
+            Path directory = notesDirectory("crash-reports");
+            Files.createDirectories(directory);
+            java.io.StringWriter text = new java.io.StringWriter();
+            failure.printStackTrace(new java.io.PrintWriter(text));
+            Files.write(directory.resolve("mod-error-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date()) + ".txt"),
+                (where + "\n" + text).getBytes(StandardCharsets.UTF_8));
+        } catch (Throwable ignored) { }
+        error = I18n.t("求解器内部错误，已记录：") + failure;
+    }
+
     @Override public void receivePostUpdate() {
+        try { update(); } catch (Throwable failure) { guard("update", failure); }
+    }
+
+    private void update() {
         layout();
         if (researchRecording) observeInventory();
-        observeExperience();
         JsonObject debugReply;
         while ((debugReply = debugReplies.poll()) != null) {
-            if (debugReply.get("status").getAsString().equals("debug_export")) {
-                debugMessage = I18n.t("报告已导出 · F6");
-                try { showDirectory(notesDirectory("bug-reports")); } catch (IOException failure) { debugMessage = failure.getMessage(); }
+            if (debugReply.get("status").getAsString().equals("debug_run_export")) {
+                debugMessage = I18n.t("已导出到桌面：") + debugReply.get("file").getAsString();
+                showDirectory(Paths.get(debugReply.get("directory").getAsString()));
             } else debugMessage = I18n.t("导出失败：") + debugReply.get("message").getAsString();
         }
         if (Gdx.input.isKeyJustPressed(Input.Keys.F6)) {
-            if (Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT) || Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT)) exportExperience();
-            else if (researchRecording) { if (voiceNotes.active()) voiceNotes.stop(); else startVoiceNote(); }
-            else exportDebug();
+            if (researchRecording && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT) && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT)) {
+                if (voiceNotes.active()) voiceNotes.stop(); else startVoiceNote();
+            } else exportRun();
         }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.F7)) exportMap();
         if (bindingKey) {
             for (int key = Input.Keys.F1; key <= Input.Keys.F12; key++) {
                 if (validAutoKey(key) && Gdx.input.isKeyJustPressed(key)) {
@@ -1096,6 +1151,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             fail(I18n.t("后台求解器未响应，请重新计算。详情见数据目录中的 backend.log。"));
             return;
         }
+        // Opening the map/settings/piles suspends game actions. Resume the wait
+        // after closing the screen instead of charging its open time as a timeout.
+        if(awaitingAction && actionPausedByScreen(AbstractDungeon.screen)) {
+            sentAt=now;
+            return;
+        }
         if(awaitingAction && now-sentAt>15000){fail(I18n.t("动作未产生可执行的完成状态，请手动检查。"));return;}
         if (!ready() || !decisionDirty) return;
         try {
@@ -1154,7 +1215,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             decisionDirty = true;
             // Direct game-thread call: no queued command can survive Stop or a screen change.
             if (!CommandExecutor.executeCommand(command)) throw new IllegalStateException(I18n.t("动作未提交"));
-            recordExperience("solver_action_submitted", state, command, result);
             GameStateListener.registerCommandExecution();
             result = null;
             awaitingAction = true;
@@ -1198,9 +1258,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                     fail(I18n.t("药水尚未领取成功，已停止自动；请检查奖励"));
                 return;
             }
+            JsonArray offers=game.getAsJsonObject("screen_state").getAsJsonArray("rewards");
+            // Let the pilot resolve relics/linked keys before automatic potion pickup.
+            if(outsideMode!=0 && offers!=null)for(JsonElement offer:offers) {
+                String type=PotionRewards.string(offer.getAsJsonObject(),"reward_type");
+                if(type.equals("RELIC") || type.equals("SAPPHIRE_KEY") || type.equals("EMERALD_KEY"))return;
+            }
             if(useFruitJuice())return;
             boolean hasPotion=false;
-            JsonArray offers=game.getAsJsonObject("screen_state").getAsJsonArray("rewards");
             if(offers!=null)for(JsonElement offer:offers)
                 hasPotion|="POTION".equals(PotionRewards.string(offer.getAsJsonObject(),"reward_type"));
             if(!hasPotion)return;
@@ -1353,7 +1418,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 if (setting==0 && off<0) toggleBrightEye();
                 else if (setting==0) changeScale(off<cw/3 ? uiScale-.1f : off>=cw*2/3 ? uiScale+.1f : 1);
                 else if (setting==1) { if (off<0) bindingKey=true; else toggleLanguage(); }
-                else if (off<0) toggleExperience(); else exportExperience();
+                else if (off<0) toggleRunLog(); else exportRun();
             } else if (body && previewCount > 0 && lx >= ROUTE_LEFT && ly >= 42 && ly < 72) {
                 if (transformPreview != null) transformPreview = null;
                 else {
@@ -1392,7 +1457,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 else if (action==1) { runAuto=auto=turnOnly=false; executeStep(); }
                 else if (action==2) {
                     if (result != null && ready()) { startingTurn=AbstractDungeon.actionManager.turn; turnOnly=true; runAuto=auto=false; }
-                } else if (action==3) toggleAuto();
+                } else if (action==3) toggleCombatMode();
+                else if (action==4) togglePilotMode();
                 else stopAll();
             } else if (!collapsed && lx >= 16 && lx < w-16 && ly >= TOGGLES_TOP && ly <= TOGGLES_TOP+28) {
                 float spacing=(w-24)/(canCreditRest()?4:3);
@@ -1400,7 +1466,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                     int toggle=(int)((lx-16)/spacing);
                     if (toggle==0) { budgetIndex=(budgetIndex+1)%3; recalculate(); }
                     else if (toggle==1) togglePotionRewards();
-                    else if (toggle==2) toggleRunAuto();
+                    else if (toggle==2) toggleCombatMode();
                     else { nextRest=!nextRest; recalculate(); }
                 }
             }
@@ -1530,6 +1596,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     @Override public void receivePostRender(SpriteBatch sb) {
+        try { renderPanel(sb); } catch (Throwable failure) { guard("render", failure); }
+    }
+
+    private void renderPanel(SpriteBatch sb) {
         Foresight.renderRubyReminder(sb);
         renderPotionRewardAdvice(sb);
         renderOutsideRoute(sb);
@@ -1554,11 +1624,13 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (settingsOpen) renderSettings(sb,w,note);
         else renderCombatBody(sb,w,note);
         String[] labels={I18n.t("重新计算"),I18n.t("执行一步"),turnOnly?I18n.t("正在执行本回合"):I18n.t("执行本回合"),
-            auto?I18n.t("自动：开"):I18n.t("自动战斗"),I18n.t("停止")};
-        for(int i=0;i<5;i++) {
+            I18n.t(outsideMode==0 && (runAuto || auto)?"战斗自动：开":"战斗自动"),
+            I18n.t(outsideMode==2?"AI全自动：开":"AI全自动"),I18n.t("停止")};
+        for(int i=0;i<labels.length;i++) {
             box(sb,16+i*ACTION_SPACING,ACTIONS_TOP,ACTION_SPACING-8,36,i==0?accent:surface);
-            label(sb,labels[i],26+i*ACTION_SPACING,ACTIONS_TOP+8,ACTION_SPACING-28,.9f,
-                i==0?background:i==4?danger:i==3&&auto?accent:i==2&&result==null?muted:Color.WHITE);
+            label(sb,labels[i],26+i*ACTION_SPACING,ACTIONS_TOP+8,ACTION_SPACING-28,.8f,
+                i==0?background:i==5?danger:i==4&&outsideMode==2?accent
+                :i==3&&outsideMode==0&&(runAuto||auto)?accent:i==2&&result==null?muted:Color.WHITE);
         }
         List<String> toggles=new ArrayList<>(Arrays.asList(
             I18n.t("搜索预算：")+I18n.t(budgetNames[budgetIndex]),
@@ -1584,11 +1656,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         label(sb,"＋",right+cw-30,86,24,1,accent);
         label(sb,I18n.t("自动战斗快捷键：")+Input.Keys.toString(autoKey),26,127,cw-20,.85f,accent);
         label(sb,I18n.t("语言：")+("en".equals(I18n.language())?"English":"简体中文"),right+10,127,cw-20,.85f,accent);
-        label(sb,I18n.t("记录战斗数据：")+" "+I18n.t(experience.enabled()?"开":"关"),26,167,cw-20,.85f,experience.enabled()?accent:muted);
-        label(sb,I18n.t("导出战斗数据 · Shift+F6"),right+10,167,cw-20,.85f,experience.count()>0?accent:muted);
-        label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F8/F9 保留；Esc 取消"):I18n.t("记录牌组、战斗状态与操作，仅保存到本机"),
+        label(sb,I18n.t("持续记录：")+" "+I18n.t(runLog?"开":"关"),26,167,cw-20,.85f,runLog?accent:muted);
+        label(sb,I18n.t("导出到桌面 · F6"),right+10,167,cw-20,.85f,accent);
+        label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F8/F9 保留；Esc 取消"):I18n.t("按种子记录牌组、战斗与选择，仅保存到本机"),
             16,204,w-32,.75f,bindingKey?accent:muted);
-        label(sb,note.isEmpty()?I18n.t("F6 导出错误报告"):note,16,NOTE_TOP,w-32,.75f,muted);
+        label(sb,note.isEmpty()?I18n.t("F6 导出记录到桌面，发这一个文件即可"):note,16,NOTE_TOP,w-32,.75f,muted);
     }
 
     private void renderCombatBody(SpriteBatch sb, float w, String note) {
@@ -1757,10 +1829,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private float pilotHeight() { return pilotButtonsTop()+38+14; }
     /** Buttons as {action, label}; actions: 2 auto, 1 step, 0 take over, 3 confirm, -1 start manual. */
     private String[][] pilotButtons() {
-        if(outsidePrompt) return new String[][]{{"2","全自动"},{"1","逐步确认"},{"-1","由我操作"}};
+        if(outsidePrompt) return new String[][]{{"2","AI全自动"},{"1","逐步确认"},{"-1","由我操作"}};
         if(outsideMode==2) return new String[][]{{"1","改为逐步"},{"0","接管"}};
-        if(outsideMode==1) return new String[][]{{"3","确认这一步"},{"2","全自动"},{"0","接管"}};
-        return new String[][]{{"2","继续全自动"},{"1","逐步"}};
+        if(outsideMode==1) return new String[][]{{"3","确认这一步"},{"2","AI全自动"},{"0","接管"}};
+        return new String[][]{{"2","继续AI全自动"},{"1","逐步"}};
     }
     private void pilotInput(float lx, float ly, boolean click, float mx, float my) {
         int rows=pilotListRows();
@@ -1800,7 +1872,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         box(sb,0,0,PILOT_WIDTH,height,border);
         box(sb,1,1,PILOT_WIDTH-2,height-2,background);
         label(sb,I18n.t("自动爬塔"),16,10,140,1.05f,Color.WHITE);
-        String chip=outsidePrompt?"新一局":outsideMode==2?"全自动中":outsideMode==1?"逐步确认"
+        String chip=outsidePrompt?"新一局":outsideMode==2?"AI全自动中":outsideMode==1?"逐步确认"
             :outsideFailed?"已暂停":"已接管";
         Color chipColor=outsideMode==2?accent:outsideFailed?danger:outsideMode==1?Color.WHITE:muted;
         box(sb,PILOT_WIDTH-170,9,120,24,surface);

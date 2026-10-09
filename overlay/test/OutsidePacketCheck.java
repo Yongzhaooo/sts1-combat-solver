@@ -140,6 +140,136 @@ public final class OutsidePacketCheck {
         game.addProperty("gold", game.get("gold").getAsInt()+1);
         if (introduction.sameDecision(OutsidePacket.build(Distill2.load(), state, visible)))
             throw new AssertionError("Changed decision input must reset the auto timer");
+        // Single-button follow-up pages (Colosseum, the Heart door) click through without the network,
+        // and a new page must not look like the unchanged decision that was just submitted.
+        JsonObject colosseum = new JsonObject();
+        colosseum.addProperty("event_id", "Colosseum");
+        colosseum.addProperty("body_text", "You wake up in an arena.");
+        game.add("screen_state", colosseum);
+        game.addProperty("room_type", "EventRoom");
+        JsonArray cont = new JsonArray();
+        cont.add("Continue");
+        visible.add("choices", cont);
+        OutsidePacket firstPage = OutsidePacket.build(Distill2.load(), state, visible);
+        if (firstPage.choices.size() != 1 || !"choose 0".equals(firstPage.choices.get(0).command))
+            throw new AssertionError("A single-button event page must be clicked through");
+        colosseum.addProperty("body_text", "Let the fight begin.");
+        if (firstPage.sameDecision(OutsidePacket.build(Distill2.load(), state, visible)))
+            throw new AssertionError("A new event page must not look like the submitted one");
+        colosseum.addProperty("event_id", "Spire Heart");
+        if (OutsidePacket.build(Distill2.load(), state, visible).choices.size() != 1)
+            throw new AssertionError("An event the network has no ID for must still advance");
+        JsonObject light = new JsonObject();
+        light.addProperty("event_id", "Shining Light");
+        game.add("screen_state", light);
+        if (OutsidePacket.build(Distill2.load(), state, visible).choices.size() != 1)
+            throw new AssertionError("Shining Light result page has no HP cost and must still advance");
+        JsonObject dealer = new JsonObject();
+        dealer.addProperty("event_id", "Drug Dealer");
+        game.add("screen_state", dealer);
+        JsonArray dealerButtons = new JsonArray();
+        dealerButtons.add("Try J.A.X."); dealerButtons.add("Transform"); dealerButtons.add("Mutagens");
+        visible.add("choices", dealerButtons);
+        OutsidePacket dealerPacket = OutsidePacket.build(Distill2.load(), state, visible);
+        if (dealerPacket.policyScore().best != 1)
+            throw new AssertionError("Drug Dealer must transform, never take J.A.X.");
+        JsonArray savedPotions = game.getAsJsonArray("potions");
+        JsonArray carried = new JsonArray();
+        for(String id : new String[]{"Strength Potion", "Dexterity Potion"}) {
+            JsonObject potion = new JsonObject();
+            potion.addProperty("id", id); potion.addProperty("name", id);
+            potion.addProperty("can_use", false); potion.addProperty("can_discard", true);
+            potion.addProperty("requires_target", false); carried.add(potion);
+        }
+        game.add("potions", carried);
+        // Event rules must count real buttons, excluding the two appended potion actions.
+        OutsidePacket withPotions = OutsidePacket.build(Distill2.load(), state, visible);
+        if(withPotions.choices.size()!=5 || withPotions.policyScore().best!=1 || withPotions.ruleNote==null)
+            throw new AssertionError("Drug Dealer rule bypassed while carrying potions");
+        JsonObject addict = new JsonObject(); addict.addProperty("event_id", "Addict");
+        game.add("screen_state", addict);
+        int savedGold = game.get("gold").getAsInt();
+        for(int gold : new int[]{84,85}) {
+            game.addProperty("gold", gold);
+            JsonArray buttons = new JsonArray();
+            if(gold>=85)buttons.add("Buy relic"); buttons.add("Steal (Shame)"); buttons.add("Leave");
+            visible.add("choices", buttons);
+            OutsidePacket noShame = OutsidePacket.build(Distill2.load(), state, visible);
+            int expected = gold>=85?0:1;
+            if(noShame.policyScore().best!=expected || noShame.ruleNote==null)
+                throw new AssertionError("Addict must never steal with potion actions present");
+        }
+        game.addProperty("gold", savedGold);
+        // Reproduce the reported Cube/Bark/Cage boss offer, with no self-damage.
+        JsonArray savedDeck = game.getAsJsonArray("deck");
+        JsonArray plainDeck = new JsonArray();
+        for(String id : new String[]{"Strike_R", "Defend_R"}) {
+            JsonObject card = new JsonParser().parse(savedDeck.get(0).toString()).getAsJsonObject();
+            card.addProperty("id", id); card.addProperty("type", id.equals("Strike_R")?"ATTACK":"SKILL");
+            plainDeck.add(card);
+        }
+        game.add("deck", plainDeck);
+        JsonObject bossScreen = new JsonObject(); JsonArray bossRelics = new JsonArray();
+        for(String id : new String[]{"Runic Cube", "SacredBark", "Empty Cage"}) {
+            JsonObject relic = new JsonObject(); relic.addProperty("id",id); relic.addProperty("name",id);
+            bossRelics.add(relic);
+        }
+        bossScreen.add("relics",bossRelics); game.add("screen_state",bossScreen);
+        visible.addProperty("screen_type","BOSS_REWARD");
+        OutsidePacket boss = OutsidePacket.build(Distill2.load(),state,visible);
+        if(boss.policyScore().best!=2)throw new AssertionError("Choose Cage over an unsupported Cube");
+        if(RelicScore.bossScore("Runic Cube",plainDeck)!=3 || RelicScore.bossScore("Empty Cage",plainDeck)!=8)
+            throw new AssertionError("Deck-aware Cube/Cage scores");
+        JsonObject blood = new JsonParser().parse(plainDeck.get(0).toString()).getAsJsonObject();
+        blood.addProperty("id","Bloodletting"); blood.addProperty("type","SKILL");
+        JsonArray cleanDeck = new JsonArray(); cleanDeck.add(blood);
+        if(RelicScore.bossScore("Runic Cube",cleanDeck)!=8 || RelicScore.bossScore("Empty Cage",cleanDeck)!=2)
+            throw new AssertionError("Existing self-damage earns Cube value; a clean deck lowers Cage value");
+        if(RelicScore.score("StrikeDummy",cleanDeck)!=0 || RelicScore.score("StrikeDummy",plainDeck)!=3)
+            throw new AssertionError("Strike Dummy must drop in value with zero/one strike");
+        JsonObject pommel = new JsonParser().parse(blood.toString()).getAsJsonObject();
+        pommel.addProperty("id","Pommel Strike"); cleanDeck.add(pommel);
+        if(RelicScore.score("StrikeDummy",cleanDeck)!=3)
+            throw new AssertionError("Pommel Strike still benefits from Strike Dummy");
+        JsonObject keyState = new JsonParser().parse(state.toString()).getAsJsonObject();
+        JsonObject keyVisible = new JsonParser().parse(visible.toString()).getAsJsonObject();
+        JsonObject keyGame = keyState.getAsJsonObject("game_state");
+        keyGame.addProperty("act",3); keyGame.addProperty("solver_final_act",true);
+        keyGame.addProperty("room_type","TreasureRoom");
+        JsonObject keys = new JsonObject(); keys.addProperty("sapphire",false); keyGame.add("keys",keys);
+        keyVisible.addProperty("x",0); keyVisible.addProperty("y",8);
+        JsonArray chestMap = new JsonArray();
+        JsonObject currentChest = new JsonObject(); currentChest.addProperty("x",0); currentChest.addProperty("y",8);
+        currentChest.addProperty("symbol","T"); currentChest.add("children",new JsonArray()); chestMap.add(currentChest);
+        keyGame.add("map",chestMap);
+        JsonObject keyScreen = new JsonObject(); JsonArray keyRewards = new JsonArray();
+        JsonObject powerful = new JsonObject(); powerful.addProperty("id","Pandora's Box"); powerful.addProperty("name","Pandora's Box");
+        JsonObject offered = new JsonObject(); offered.addProperty("reward_type","RELIC"); offered.add("relic",powerful); keyRewards.add(offered);
+        JsonObject blue = new JsonObject(); blue.addProperty("reward_type","SAPPHIRE_KEY"); blue.add("link",powerful); keyRewards.add(blue);
+        keyScreen.add("rewards",keyRewards); keyGame.add("screen_state",keyScreen);
+        keyVisible.addProperty("screen_type","COMBAT_REWARD");
+        OutsidePacket lastChest = OutsidePacket.build(Distill2.load(),keyState,keyVisible);
+        if(lastChest.policyScore().best!=1 || lastChest.ruleNote==null)
+            throw new AssertionError("Missing blue key at final Act 3 chest must beat even a 10-point relic and potion actions");
+        keys.addProperty("sapphire",true);
+        if(OutsidePacket.build(Distill2.load(),keyState,keyVisible).policyScore().best!=0)
+            throw new AssertionError("Already-owned blue key must not force the key");
+        keys.addProperty("sapphire",false); keyGame.addProperty("act",2);
+        if(OutsidePacket.build(Distill2.load(),keyState,keyVisible).policyScore().best!=0)
+            throw new AssertionError("Earlier-act chest keeps the value comparison");
+        keyGame.addProperty("act",3);
+        JsonObject laterChest = new JsonObject(); laterChest.addProperty("x",0); laterChest.addProperty("y",9);
+        laterChest.addProperty("symbol","T"); laterChest.add("children",new JsonArray()); chestMap.add(laterChest);
+        JsonObject edge = new JsonObject(); edge.addProperty("x",0); edge.addProperty("y",9); currentChest.getAsJsonArray("children").add(edge);
+        if(OutsidePacket.build(Distill2.load(),keyState,keyVisible).policyScore().best!=0)
+            throw new AssertionError("A reachable later chest keeps the value comparison");
+        currentChest.add("children",new JsonArray()); // Unreachable chest is not another opportunity.
+        keyVisible.addProperty("screen_type","CHEST"); keyVisible.addProperty("chest_size",0);
+        JsonArray open = new JsonArray(); open.add("Open"); open.add("Leave"); keyVisible.add("choices",open);
+        OutsidePacket unopened = OutsidePacket.build(Distill2.load(),keyState,keyVisible);
+        if(unopened.policyScore().best!=0 || unopened.ruleNote==null)
+            throw new AssertionError("Missing blue key forces opening the final chest");
+        game.add("deck",savedDeck); game.add("potions",savedPotions);
         JsonObject rewardScreen = new JsonObject();
         JsonArray rewardList = new JsonArray();
         rewardScreen.add("rewards", rewardList);
@@ -157,6 +287,28 @@ public final class OutsidePacketCheck {
         rewardList.add(cardReward);
         if (!"choose 0".equals(OutsidePacket.build(Distill2.load(), state, visible).choices.get(0).command))
             throw new AssertionError("An unseen card reward must be opened");
+        // The reward list may put cards/gold before an egg; equip the relic first.
+        for(String egg : new String[]{"Molten Egg 2", "Toxic Egg 2", "Frozen Egg 2"}) {
+            JsonObject goldReward = new JsonObject();
+            goldReward.addProperty("reward_type", "GOLD"); goldReward.addProperty("gold", 30);
+            rewardList.add(goldReward);
+            JsonObject relicReward = new JsonObject(), relic = new JsonObject();
+            relicReward.addProperty("reward_type", "RELIC");
+            relic.addProperty("id", egg); relic.addProperty("name", egg);
+            relicReward.add("relic", relic); rewardList.add(relicReward);
+            OutsidePacket eggs = OutsidePacket.build(Distill2.load(), state, visible);
+            if(eggs.choices.size()!=1 || !"choose 2".equals(eggs.choices.get(0).command))
+                throw new AssertionError("Equip " + egg + " before card/gold rewards");
+            JsonObject keyReward = new JsonObject();
+            keyReward.addProperty("reward_type", "SAPPHIRE_KEY"); keyReward.add("link", relic);
+            rewardList.add(keyReward);
+            OutsidePacket linked = OutsidePacket.build(Distill2.load(), state, visible);
+            if(linked.choices.size()!=2 || !"choose 3".equals(linked.choices.get(1).command))
+                throw new AssertionError("Relic priority must preserve the linked key alternative");
+            rewardList.remove(3); rewardList.remove(2); rewardList.remove(1);
+            if(!"choose 0".equals(OutsidePacket.build(Distill2.load(), state, visible).choices.get(0).command))
+                throw new AssertionError("Open card reward after equipping the relic");
+        }
         visible.addProperty("skipped_card_rewards", 1);
         if (!"proceed".equals(OutsidePacket.build(Distill2.load(), state, visible).choices.get(0).command))
             throw new AssertionError("A skipped card reward must not be reopened");

@@ -329,3 +329,27 @@ F6 导出错误报告|F6 Export bug report
 
 规则推荐下一步|Rule-recommended next node
 开幕偏好规划 · 状态变化后可改道|Opening preferences; replan when the state changes
+正在导出记录…|Exporting record…
+设置保存失败：|Failed to save setting: 
+持续记录已开启|Continuous recording on
+持续记录已关闭|Continuous recording off
+已导出到桌面：|Exported to desktop: 
+持续记录：|Run recording:
+导出到桌面 · F6|Export to desktop · F6
+按种子记录牌组、战斗与选择，仅保存到本机|Per-seed record of decks, fights and choices; stays on this PC
+F6 导出记录到桌面，发这一个文件即可|F6 exports the record to your desktop; send that one file
+求解器内部错误，已记录：|Solver internal error, logged: 
+涅奥：掉血删两张牌|Neow: lose HP, remove two cards
+涅奥：不拿诅咒|Neow: no curse
+当前没有地图|No map to export
+地图已导出到桌面：|Map saved to the desktop: 
+
+战斗自动|Auto combat
+战斗自动：开|Combat: on
+AI全自动|AI autopilot
+AI全自动：开|AI: on
+AI全自动中|AI running
+继续AI全自动|Resume AI
+
+第三幕最后宝箱：开箱取得蓝钥匙|Last Act 3 chest: open it for the Sapphire Key
+第三幕最后宝箱：蓝钥匙最高优先级|Last Act 3 chest: Sapphire Key takes priority
