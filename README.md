@@ -12,7 +12,7 @@ For ideas, [hotwords123/StS2.RandomForeseer](https://github.com/hotwords123/StS2
 
 ## What it does
 
-A local combat advisor and optional executor for *Slay the Spire 1*. It searches Ironclad and colorless-card combat, compares potion lines, and checks executed actions against the game state. By default you choose cards, paths, shops, rest sites, and events; the optional full autopilot (below) uses route rules and a network for other decisions. Search has a finite budget and does not guarantee an optimal line or perfect simulation. Mods that change combat rules may create unsupported states.
+A local combat advisor and optional executor for *Slay the Spire 1*. It searches Ironclad and colorless-card combat, compares potion lines, and checks executed actions against the game state. By default you choose cards, paths, shops, rest sites, and events; the optional full autopilot (below) uses route rules and a network for other decisions. Search has a finite budget and does not guarantee an optimal line or perfect simulation. Mods that change combat rules may create unsupported states (`SaveStateMod` alters discovery card generation and desynchronizes RNG state counters, and is not compatible).
 
 The panel supports English and Chinese. Optional seeded foresight previews events, encounters, and transforms using hidden RNG information beyond ordinary visible play. The [potion score table](POTION_POLICY.zh-CN.md) explains reward swaps and combat use.
 

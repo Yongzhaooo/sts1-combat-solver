@@ -21,7 +21,7 @@
 拒绝非战斗命令|Non-combat command rejected
 搜索修改了输入快照|Search modified the input snapshot
 搜索战斗路线|Searching combat routes
-搜索超时或引擎退出；请降低预算后重算。|Search timed out or engine exited; reduce budget and retry.
+搜索超时，请手动接管当前战斗并选择路线（或在设置中降低预算）。|Search timed out; take over combat and choose route (or reduce budget).
 敌人|Enemy 
 无效搜索预算|Invalid search budget
 无效的|Invalid 

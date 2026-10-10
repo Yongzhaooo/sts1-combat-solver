@@ -1660,7 +1660,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         label(sb,I18n.t("导出到桌面 · F6"),right+10,167,cw-20,.85f,accent);
         label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F8/F9 保留；Esc 取消"):I18n.t("按种子记录牌组、战斗与选择，仅保存到本机"),
             16,204,w-32,.75f,bindingKey?accent:muted);
-        label(sb,note.isEmpty()?I18n.t("F6 导出记录到桌面，发这一个文件即可"):note,16,NOTE_TOP,w-32,.75f,muted);
+        String defaultNote = Loader.isModLoaded("SaveStateMod")
+            ? I18n.t("检测到 SaveStateMod：该 Mod 会破坏选牌状态同步，建议禁用")
+            : I18n.t("F6 导出记录到桌面，发这一个文件即可");
+        label(sb,note.isEmpty()?defaultNote:note,16,NOTE_TOP,w-32,.75f,
+            note.isEmpty() && Loader.isModLoaded("SaveStateMod")?danger:muted);
     }
 
     private void renderCombatBody(SpriteBatch sb, float w, String note) {
@@ -1698,7 +1702,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             :busy&&progressRows!=null?I18n.t("搜索过程 · 已完成路线可点击执行")
             :!foresight.isEmpty()?I18n.t("随机结果预测 · 滚轮翻页")
             :result!=null && result.has("manual_choice") && result.get("manual_choice").getAsBoolean()
-                ?I18n.t("抢劫怪路线 · 可手动或自动执行"):I18n.t("推荐行动顺序 · 点击执行整条路线");
+                ?I18n.t("抢劫怪路线 · 可手动或自动执行")
+            :(runAuto || auto) && result!=null && result.has("branch") && !result.get("branch").getAsString().equals("no-potion")
+                ?I18n.t("自动战斗已采纳用药路线 · 点击或 F9 可接管")
+            :I18n.t("推荐行动顺序 · 点击执行整条路线");
         label(sb,heading,ROUTE_LEFT,48,w-ROUTE_LEFT-16,.85f,Color.WHITE);
         float rowWidth=w-ROUTE_LEFT-16, textWidth=rowWidth-16;
         String hint="";

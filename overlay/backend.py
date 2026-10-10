@@ -504,8 +504,9 @@ class Advisor:
                 action = s.pending_multi['action']
             else:
                 comparison = s._compare(view)
-                if comparison['differences']:
-                    raise ValueError('确认选牌后状态偏离预测：' + repr(comparison['differences'][:4]))
+                diffs = [d for d in comparison.get('differences', []) if not d.get('path', '').startswith('/rng/card_random')]
+                if diffs:
+                    raise ValueError('确认选牌后状态偏离预测：' + repr(diffs[:4]))
                 return
         if (int(action.bits) & 0xffffffff) != (s.actions[0] & 0xffffffff):
             raise ValueError('执行动作与路线不一致')
@@ -513,8 +514,9 @@ class Advisor:
         s.actions.popleft()
         s.pending_multi = None
         comparison = s._compare(view)
-        if comparison['differences']:
-            raise ValueError('实际状态偏离预测；已停止执行。' + repr(comparison['differences'][:2]))
+        diffs = [d for d in comparison.get('differences', []) if not d.get('path', '').startswith('/rng/card_random')]
+        if diffs:
+            raise ValueError('实际状态偏离预测；已停止执行。' + repr(diffs[:2]))
         if s.battle.input_state == s.sts.InputState.CARD_SELECT:
             # Toolbox can generate a card and immediately open Gambling Chip,
             # with no normal-play frame in which LiveSearch refreshes identities.
@@ -854,7 +856,7 @@ def serve(report_path=None):
                 if request.get('op') == 'cancel':
                     if active and active[4] == 'solve':
                         interrupt.set()
-                        active = (*active[:4], active[4], request['id'])
+                        active = (*active[:4], active[4], request['id'], active[6])
                     else:
                         # Executing or idle work has no partial search to retain.
                         if active:
@@ -886,7 +888,8 @@ def serve(report_path=None):
                     stop()
                     start()
                     connection.send(request)
-                active = (request['id'], received_at, request.get('state'), log_offset, request.get('op'), None)
+                timeout_limit = 600 if request.get('budget', 0) >= 128000 else 150
+                active = (request['id'], received_at, request.get('state'), log_offset, request.get('op'), None, timeout_limit)
             while active and connection.poll():
                 completed_active = active
                 active_state = active[2]
@@ -909,13 +912,13 @@ def serve(report_path=None):
                 if result.get('status') == 'error':
                     result['stderr'] = stderr_since(log_offset)
                 emit(result, active_state)
-            if active and (not process.is_alive() or time.monotonic() - active[1] > 90):
+            if active and (not process.is_alive() or time.monotonic() - active[1] > active[6]):
                 request_id = active[0]
                 active_state = active[2]
                 exitcode = process.exitcode
                 log_offset = active[3]
                 stop()
-                emit({'id': request_id, 'status': 'error', 'message': '搜索超时或引擎退出；请降低预算后重算。',
+                emit({'id': request_id, 'status': 'error', 'message': '搜索超时，请手动接管当前战斗并选择路线（或在设置中降低预算）。',
                       'exitcode': exitcode, 'stderr': stderr_since(log_offset)}, active_state)
     finally:
         stop()
