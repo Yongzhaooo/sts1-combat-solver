@@ -3975,8 +3975,9 @@ void GameContext::chooseSelectCardScreenOption(int idx) {
 
         case CardSelectScreenType::REMOVE: {
             if (info.selectCancelReturn == ScreenState::SHOP_ROOM) {
-                // The original ShopScreen consumes the selection on its next
-                // update, after any unclaimed rewards have been closed.
+                // In the original game (ShopScreen.update()), the player's card choice
+                // is immediately purged (loseGold + masterDeck.removeCard) regardless
+                // of whether unclaimed rewards (e.g. Cauldron) are pending.
                 const auto selected = info.haveSelectedCards;
                 const auto applyPurge = [selected](GameContext &next) {
                     const bool presentation=next.shopPresentation.active();
@@ -3988,12 +3989,8 @@ void GameContext::chooseSelectCardScreenOption(int idx) {
                 };
                 regainControl();
                 if (screenState == ScreenState::REWARDS) {
+                    applyPurge(*this);
                     if (shopPresentation.active()) shopPresentation.finishPurgeToRewards(mathUtilRng);
-                    const auto returnToShop = regainControlAction;
-                    regainControlAction = [applyPurge, returnToShop](GameContext &next) {
-                        applyPurge(next);
-                        returnToShop(next);
-                    };
                 } else {
                     if (shopPresentation.active()) shopPresentation.beforePurgeSettlement(mathUtilRng);
                     applyPurge(*this);

@@ -81,5 +81,25 @@ int main(){
  check(effects.curHp==66&&same(effects.mathUtilRng,expectedEffects.mathUtilRng),"real healing callback RNG lost");
  check(effects.shopPresentation.pendingHealLines.size()==expectedEffects.shopPresentation.pendingHealLines.size()&&effects.shopPresentation.pendingHealNumbers.size()==expectedEffects.shopPresentation.pendingHealNumbers.size(),"real healing presentation lost");
  check(!same(effects.mathUtilRng,rngBefore),"callback fixture did not advance RNG");
+ // Verify Cauldron + Shop Card Remove: purge takes effect immediately even when rewards are pending
+ {
+  auto sg=game({});
+  sg.curRoom=Room::SHOP;
+  sg.screenState=ScreenState::SHOP_ROOM;
+  sg.gold=300;
+  sg.info.shop.removeCost=75;
+  const int deckBefore=sg.deck.size();
+  sg.obtainRelic(RelicId::CAULDRON);
+  check(sg.screenState==ScreenState::REWARDS,"cauldron did not open rewards");
+  check(sg.info.rewardsContainer.getTotalCount()>0,"cauldron rewards empty");
+  sg.openCardSelectScreen(CardSelectScreenType::REMOVE,1,true);
+  sg.info.selectCancelReturn=ScreenState::SHOP_ROOM;
+  sg.regainControlAction=[](GameContext &next){next.screenState=ScreenState::SHOP_ROOM;};
+  sg.chooseSelectCardScreenOption(0);
+  check(sg.gold==225,"shop purge did not deduct gold immediately with pending rewards");
+  check(sg.deck.size()==deckBefore-1,"shop purge did not remove card immediately with pending rewards");
+  check(sg.shopRemoveCount==1,"shop purge did not increment remove count");
+  check(sg.screenState==ScreenState::REWARDS,"shop purge did not return to pending rewards screen");
+ }
  std::cout<<"{\"cases\":"<<cases.size()<<",\"checks\":"<<checks<<",\"counterexample_order_reversed\":true}\n";
 }
