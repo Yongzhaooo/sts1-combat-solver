@@ -11,6 +11,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
+import com.evacipated.cardcrawl.modthespire.Loader;
 import com.evacipated.cardcrawl.modthespire.lib.*;
 import com.google.gson.*;
 import com.megacrit.cardcrawl.cards.AbstractCard;
@@ -41,6 +42,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private final ConcurrentLinkedQueue<JsonObject> debugReplies = new ConcurrentLinkedQueue<>();
     private boolean researchRecording;
     private String debugMessage = "";
+    private boolean debugMessageError;
     private boolean runLog = true;
     private final DecisionNotes decisionNotes = new DecisionNotes();
     private String inventorySignature = "";
@@ -448,15 +450,18 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private JsonObject autoContext() {
         JsonObject out=new JsonObject();
-        out.addProperty("x",AbstractDungeon.getCurrMapNode().x);
-        out.addProperty("y",AbstractDungeon.getCurrMapNode().y);
-        out.addProperty("boss",AbstractDungeon.bossKey);
-        out.addProperty("room",AbstractDungeon.getCurrRoom().getClass().getSimpleName());
-        out.addProperty("boss_candidates_remaining",AbstractDungeon.bossList.size());
+        com.megacrit.cardcrawl.map.MapRoomNode currNode=AbstractDungeon.getCurrMapNode();
+        out.addProperty("x",currNode==null?0:currNode.x);
+        out.addProperty("y",currNode==null?-1:currNode.y);
+        out.addProperty("boss",AbstractDungeon.bossKey==null?"":AbstractDungeon.bossKey);
+        com.megacrit.cardcrawl.rooms.AbstractRoom room=AbstractDungeon.getCurrRoom();
+        out.addProperty("room",room==null?"":room.getClass().getSimpleName());
+        out.addProperty("boss_candidates_remaining",AbstractDungeon.bossList==null?0:AbstractDungeon.bossList.size());
         out.addProperty("boss_fast_finish",bossFastFinish(
-            AbstractDungeon.getCurrRoom() instanceof com.megacrit.cardcrawl.rooms.MonsterRoomBoss,
-            AbstractDungeon.actNum,AbstractDungeon.ascensionLevel,AbstractDungeon.bossList.size(),
-            AbstractDungeon.player.hasRelic("Mark of the Bloom")));
+            room instanceof com.megacrit.cardcrawl.rooms.MonsterRoomBoss,
+            AbstractDungeon.actNum,AbstractDungeon.ascensionLevel,
+            AbstractDungeon.bossList==null?0:AbstractDungeon.bossList.size(),
+            AbstractDungeon.player!=null && AbstractDungeon.player.hasRelic("Mark of the Bloom")));
         float chance=Math.max(0,Math.min(1,(40+AbstractRoom.blizzardPotionMod)/100f));
         if(AbstractDungeon.player.hasRelic("White Beast Statue"))chance=1;
         if(AbstractDungeon.player.hasRelic("Sozu") || AbstractDungeon.getCurrRoom() instanceof com.megacrit.cardcrawl.rooms.MonsterRoomBoss)chance=0;
@@ -561,7 +566,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             outsidePlayer=AbstractDungeon.player; outsidePrompt=true; outsideMode=0;
             outsidePacket=null; outsideStatePacket=null; outsideScores=null; outsideAwaiting=false;
             outsidePilotRun=false; outsideFailed=false;
-            outsideNotice=I18n.t("新一局：要开启自动爬塔吗？F9 随时接管");
+            outsideNotice=I18n.t("新一局：自己构筑请选【自动战斗】；也可随时点击【AI全自动】完全托管");
         }
         if(outsidePrompt) return;
         if(outsideMode==0 || combat() || AbstractDungeon.player.isDead || rewardPotionPending!=null) return;
@@ -641,13 +646,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     /** Re-plan the drawn route whenever the map is open and the run state or chosen next node moved. */
     private void updateRoute() {
         if(!CommandExecutor.isInDungeon() || !supported() || AbstractDungeon.map==null
-                || AbstractDungeon.screen!=AbstractDungeon.CurrentScreen.MAP
-                || AbstractDungeon.getCurrMapNode()==null)return;
+                || AbstractDungeon.screen!=AbstractDungeon.CurrentScreen.MAP)return;
         int firstX=outsidePacket==null?-1:outsidePacket.mapTargetX(outsideChosen);
         com.megacrit.cardcrawl.map.MapRoomNode at=AbstractDungeon.getCurrMapNode();
+        int atX=at==null?0:at.x, atY=at==null?-1:at.y;
         AbstractPlayer player=AbstractDungeon.player;
+        if(player==null)return;
         StringBuilder key=new StringBuilder().append(AbstractDungeon.actNum).append('/')
-            .append(AbstractDungeon.floorNum).append('/').append(at.x).append(',').append(at.y).append('/')
+            .append(AbstractDungeon.floorNum).append('/').append(atX).append(',').append(atY).append('/')
             .append(firstX).append('/').append(player.currentHealth).append('/').append(player.maxHealth)
             .append('/').append(player.gold).append('/').append(player.masterDeck.size()).append('/')
             .append(player.relics.size());
@@ -661,8 +667,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         try {
             if(outsideModel==null)outsideModel=Distill2.load();
             routePlan=OutsidePacket.plannedRoute(outsideModel,capture(),DecisionContext.visible(),firstX);
+            if(routePlan.isEmpty())routeKey=""; // Allow retry once map state or nodes become available
         } catch(Exception failure) {
             routePlan=java.util.Collections.emptyList();
+            routeKey=""; // Clear key so next frame retries
             System.err.println("[STS1AutoPilot] route: "+failure);
         }
     }
@@ -925,18 +933,30 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             if (AbstractDungeon.player != null) request.addProperty("seed", Long.toString(Settings.seed));
             request.add("metadata", DecisionContext.metadata());
             writer.write(gson.toJson(request)); writer.newLine(); writer.flush();
+            debugMessageError = false;
             debugMessage = I18n.t("正在导出记录…");
-        } catch (Exception failure) { debugMessage = I18n.t("导出失败：") + failure.getMessage(); }
+        } catch (Exception failure) {
+            debugMessageError = true;
+            debugMessage = I18n.t("导出失败：") + failure.getMessage();
+        }
     }
 
     /** F7: this act's map with the planned route, as a PNG on the desktop. */
     private void exportMap() {
         try {
-            if (!CommandExecutor.isInDungeon() || AbstractDungeon.player == null) { debugMessage = I18n.t("当前没有地图"); return; }
+            if (!CommandExecutor.isInDungeon() || AbstractDungeon.player == null) {
+                debugMessageError = false;
+                debugMessage = I18n.t("当前没有地图");
+                return;
+            }
             Path file = MapExport.write(desktopDirectory(), routePlan);
+            debugMessageError = false;
             debugMessage = I18n.t("地图已导出到桌面：") + file.getFileName();
             showDirectory(file.getParent());
-        } catch (Exception failure) { debugMessage = I18n.t("导出失败：") + failure.getMessage(); }
+        } catch (Exception failure) {
+            debugMessageError = true;
+            debugMessage = I18n.t("导出失败：") + failure.getMessage();
+        }
     }
 
     private Path desktopDirectory() {
@@ -1024,9 +1044,13 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         JsonObject debugReply;
         while ((debugReply = debugReplies.poll()) != null) {
             if (debugReply.get("status").getAsString().equals("debug_run_export")) {
+                debugMessageError = false;
                 debugMessage = I18n.t("已导出到桌面：") + debugReply.get("file").getAsString();
                 showDirectory(Paths.get(debugReply.get("directory").getAsString()));
-            } else debugMessage = I18n.t("导出失败：") + debugReply.get("message").getAsString();
+            } else {
+                debugMessageError = true;
+                debugMessage = I18n.t("导出失败：") + debugReply.get("message").getAsString();
+            }
         }
         if (Gdx.input.isKeyJustPressed(Input.Keys.F6)) {
             if (researchRecording && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT) && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT)) {
@@ -1660,7 +1684,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         label(sb,I18n.t("导出到桌面 · F6"),right+10,167,cw-20,.85f,accent);
         label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F8/F9 保留；Esc 取消"):I18n.t("按种子记录牌组、战斗与选择，仅保存到本机"),
             16,204,w-32,.75f,bindingKey?accent:muted);
-        label(sb,note.isEmpty()?I18n.t("F6 导出记录到桌面，发这一个文件即可"):note,16,NOTE_TOP,w-32,.75f,muted);
+        boolean incompatibleMod = Loader.isModLoaded("SaveStateMod") || Loader.isModLoaded("undothespire") || Loader.isModLoaded("undobutton");
+        String defaultNote = incompatibleMod
+            ? I18n.t("检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用")
+            : I18n.t("F6 导出记录到桌面，发这一个文件即可");
+        Color noteColor = note.isEmpty()
+            ? (incompatibleMod ? danger : muted)
+            : (debugMessageError ? danger : accent);
+        label(sb,note.isEmpty()?defaultNote:note,16,NOTE_TOP,w-32,.75f,noteColor);
     }
 
     private void renderCombatBody(SpriteBatch sb, float w, String note) {
@@ -1688,7 +1719,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 healing+=" · "+I18n.backend(result.getAsJsonArray("recovery_notes").get(0).getAsString());
             label(sb,healing,26,198,inner,.75f,muted);
         } else {
-            label(sb,error.isEmpty()?I18n.t("由你构筑，由它求解战斗"):I18n.backend(error),26,90,inner,.85f,error.isEmpty()?accent:danger);
+            label(sb,error.isEmpty()?I18n.t("自己构筑请开【战斗自动】；点击【AI全自动】随时完全托管"):I18n.backend(error),26,90,inner,.85f,error.isEmpty()?accent:danger);
             label(sb,error.isEmpty()?I18n.t("仅查看建议，点击按钮后才出牌"):I18n.t("详细原因已写入后台日志"),26,124,inner,.8f,muted);
         }
         List<String> foresight=transformPreview!=null?transformPreview.lines():combat()?Collections.<String>emptyList():Foresight.lines();
@@ -1698,7 +1729,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             :busy&&progressRows!=null?I18n.t("搜索过程 · 已完成路线可点击执行")
             :!foresight.isEmpty()?I18n.t("随机结果预测 · 滚轮翻页")
             :result!=null && result.has("manual_choice") && result.get("manual_choice").getAsBoolean()
-                ?I18n.t("抢劫怪路线 · 可手动或自动执行"):I18n.t("推荐行动顺序 · 点击执行整条路线");
+                ?I18n.t("抢劫怪路线 · 可手动或自动执行")
+            :(runAuto || auto) && result!=null && result.has("branch") && !result.get("branch").getAsString().equals("no-potion")
+                ?I18n.t("自动战斗已采纳用药路线 · 点击或 F9 可接管")
+            :I18n.t("推荐行动顺序 · 点击执行整条路线");
         label(sb,heading,ROUTE_LEFT,48,w-ROUTE_LEFT-16,.85f,Color.WHITE);
         float rowWidth=w-ROUTE_LEFT-16, textWidth=rowWidth-16;
         String hint="";
@@ -1766,7 +1800,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             hint=I18n.backend(autoReason)+" · "+I18n.backend(advice.getAsJsonObject("assessment").get("summary").getAsString());
             hintColor=accent;
         }
-        if(!note.isEmpty())label(sb,note,16,NOTE_TOP,ROUTE_LEFT-28,.75f,muted);
+        if(!note.isEmpty())label(sb,note,16,NOTE_TOP,ROUTE_LEFT-28,.75f,debugMessageError?danger:accent);
         if(!hint.isEmpty())label(sb,hint,ROUTE_LEFT,NOTE_TOP,w-ROUTE_LEFT-16,.75f,hintColor);
     }
     private void renderOutsideRoute(SpriteBatch sb) {
@@ -1827,9 +1861,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         return PILOT_LIST_TOP+rows*PILOT_ROW+(rows>0?8:0);
     }
     private float pilotHeight() { return pilotButtonsTop()+38+14; }
-    /** Buttons as {action, label}; actions: 2 auto, 1 step, 0 take over, 3 confirm, -1 start manual. */
+    /** Buttons as {action, label}; actions: 2 auto, 1 step, 0 take over, 3 confirm, -1 start manual, -2 auto combat only. */
     private String[][] pilotButtons() {
-        if(outsidePrompt) return new String[][]{{"2","AI全自动"},{"1","逐步确认"},{"-1","由我操作"}};
+        if(outsidePrompt) return new String[][]{{"-2","自动战斗（自己构筑）"},{"2","AI全自动"},{"-1","由我操作"}};
         if(outsideMode==2) return new String[][]{{"1","改为逐步"},{"0","接管"}};
         if(outsideMode==1) return new String[][]{{"3","确认这一步"},{"2","AI全自动"},{"0","接管"}};
         return new String[][]{{"2","继续AI全自动"},{"1","逐步"}};
@@ -1864,6 +1898,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             case 3: if(outsidePacket!=null)outsideConfirm=true; break;
             case 0: stopAll(); break;
             case -1: chooseOutsideMode(0); break;
+            case -2:
+                chooseOutsideMode(0);
+                if (!runAuto) toggleRunAuto();
+                break;
             default: chooseOutsideMode(Integer.parseInt(buttons[slot][0]));
         }
     }

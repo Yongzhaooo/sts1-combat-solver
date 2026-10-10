@@ -102,6 +102,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 自动已关闭 · 保留建议|Auto off · advice retained
 自动开关保存失败：|Auto preference save failed: 
 自动战斗|Auto combat
+自动战斗已采纳用药路线 · 点击或 F9 可接管|Auto combat adopted potion route · click or F9 to take over
 自动执行已开启 · 仅本场战斗|Auto execution on · this fight only
 自动换药失败：|Auto potion swap failed: 
 自动换药：|Auto potion swap: 
@@ -338,6 +339,7 @@ F6 导出错误报告|F6 Export bug report
 导出到桌面 · F6|Export to desktop · F6
 按种子记录牌组、战斗与选择，仅保存到本机|Per-seed record of decks, fights and choices; stays on this PC
 F6 导出记录到桌面，发这一个文件即可|F6 exports the record to your desktop; send that one file
+检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用|Incompatible mod detected (SaveStateMod / Undo): disrupts selection and combat sync; disabling recommended.
 求解器内部错误，已记录：|Solver internal error, logged: 
 涅奥：掉血删两张牌|Neow: lose HP, remove two cards
 涅奥：不拿诅咒|Neow: no curse
@@ -353,3 +355,6 @@ AI全自动中|AI running
 
 第三幕最后宝箱：开箱取得蓝钥匙|Last Act 3 chest: open it for the Sapphire Key
 第三幕最后宝箱：蓝钥匙最高优先级|Last Act 3 chest: Sapphire Key takes priority
+自动战斗（自己构筑）|Auto combat (build yourself)
+新一局：自己构筑请选【自动战斗】；也可随时点击【AI全自动】完全托管|New run: choose [Auto combat] for manual building; or click [AI autopilot] anytime
+自己构筑请开【战斗自动】；点击【AI全自动】随时完全托管|Turn on [Auto combat] for manual building; click [AI autopilot] anytime

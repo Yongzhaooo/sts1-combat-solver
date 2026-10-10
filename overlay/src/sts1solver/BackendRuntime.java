@@ -43,6 +43,8 @@ final class BackendRuntime {
             process.environment().remove("PYTHONHOME");
             process.environment().remove("PYTHONPATH");
             process.environment().put("STS_SOLVER_DATA", dataDirectory(properties).toString());
+            process.environment().put("PYTHONUTF8", "1");
+            process.environment().put("PYTHONIOENCODING", "utf-8");
             return process;
         }
         if ("wsl".equals(mode)) {
@@ -76,6 +78,8 @@ final class BackendRuntime {
         process.environment().remove("PYTHONHOME");
         process.environment().remove("PYTHONPATH");
         process.environment().put("STS_SOLVER_DATA", dataDirectory(properties).toString());
+        process.environment().put("PYTHONUTF8", "1");
+        process.environment().put("PYTHONIOENCODING", "utf-8");
         return process;
     }
 
