@@ -339,7 +339,7 @@ F6 导出错误报告|F6 Export bug report
 导出到桌面 · F6|Export to desktop · F6
 按种子记录牌组、战斗与选择，仅保存到本机|Per-seed record of decks, fights and choices; stays on this PC
 F6 导出记录到桌面，发这一个文件即可|F6 exports the record to your desktop; send that one file
-检测到 SaveStateMod：该 Mod 会破坏选牌状态同步，建议禁用|SaveStateMod detected: desynchronizes selection states; disabling recommended.
+检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用|Incompatible mod detected (SaveStateMod / Undo): disrupts selection and combat sync; disabling recommended.
 求解器内部错误，已记录：|Solver internal error, logged: 
 涅奥：掉血删两张牌|Neow: lose HP, remove two cards
 涅奥：不拿诅咒|Neow: no curse

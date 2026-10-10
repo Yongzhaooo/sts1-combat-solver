@@ -1660,11 +1660,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         label(sb,I18n.t("导出到桌面 · F6"),right+10,167,cw-20,.85f,accent);
         label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F8/F9 保留；Esc 取消"):I18n.t("按种子记录牌组、战斗与选择，仅保存到本机"),
             16,204,w-32,.75f,bindingKey?accent:muted);
-        String defaultNote = Loader.isModLoaded("SaveStateMod")
-            ? I18n.t("检测到 SaveStateMod：该 Mod 会破坏选牌状态同步，建议禁用")
+        boolean incompatibleMod = Loader.isModLoaded("SaveStateMod") || Loader.isModLoaded("undothespire") || Loader.isModLoaded("undobutton");
+        String defaultNote = incompatibleMod
+            ? I18n.t("检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用")
             : I18n.t("F6 导出记录到桌面，发这一个文件即可");
         label(sb,note.isEmpty()?defaultNote:note,16,NOTE_TOP,w-32,.75f,
-            note.isEmpty() && Loader.isModLoaded("SaveStateMod")?danger:muted);
+            note.isEmpty() && incompatibleMod?danger:muted);
     }
 
     private void renderCombatBody(SpriteBatch sb, float w, String note) {
