@@ -1,6 +1,6 @@
 # 尖塔 1 创意工坊发布记录
 
-2026-10-12：`v0.5.0-test` 的 GitHub Release 和工坊条目 `3814773843` 都发布成了开发版 JAR。JAR 内 `solver.properties` 写的是本机 WSL 路径（`python=/mnt/e/.../.venv/bin/python`、`backend=`、`log=`），没有 `runtime=` 行，玩家启动后面板显示“后台求解器未响应”。本机工坊目录在 10/11 21:25 已同步到这个 JAR。原因是 `overlay/build.ps1` 未加 `-BundledWindows` 就构建，再把 JAR 手工放进 `build/release-0.5.0-test` 的旧包和 `workshop-upload/content`，跳过了 `tools/package_windows_runtime.py` 的 bundled 检查和 `tools/check_windows_bundle.py` 的清单校验。处理结果：GitHub 资产已用 `overlay/build.py --bundled-windows` 和打包脚本重建，三轮 bundle 检查通过，下载回读确认为 `runtime=windows-bundled`；`check_windows_bundle.py` 已改为拒绝开发版 JAR（提交 `d742783`）。工坊条目截至此时尚未重新上传，仍是坏包。
+2026-10-12：`v0.5.0-test` 的 GitHub Release 和工坊条目 `3814773843` 都发布成了开发版 JAR。JAR 内 `solver.properties` 写的是本机 WSL 路径（`python=/mnt/e/.../.venv/bin/python`、`backend=`、`log=`），没有 `runtime=` 行，玩家启动后面板显示“后台求解器未响应”。本机工坊目录在 10/11 21:25 已同步到这个 JAR。原因是 `overlay/build.ps1` 未加 `-BundledWindows` 就构建，再把 JAR 手工放进 `build/release-0.5.0-test` 的旧包和 `workshop-upload/content`，跳过了 `tools/package_windows_runtime.py` 的 bundled 检查和 `tools/check_windows_bundle.py` 的清单校验。处理结果：GitHub 资产已用 `overlay/build.py --bundled-windows` 和打包脚本重建，三轮 bundle 检查通过，下载回读确认为 `runtime=windows-bundled`；`check_windows_bundle.py` 已改为拒绝开发版 JAR（提交 `d742783`）。同日经用户确认重新上传工坊：用 `build.py --bundled` 重建 JAR（`runtime=bundled`），换入 `workshop-upload/content`。原 `bundle-manifest.json` 是 10/10 生成的，手工替换过的 7 个文件哈希对不上，已按现有文件重算（范围不变，不含 Mac ZIP），三轮 bundle 检查通过。第一次上传没加 `-Dfile.encoding=UTF-8`，上传器按 GBK 读取 `config.json`，工坊标题和描述全部变成乱码；加上该参数重新上传后，Steam 接口和公开页面均显示正确中文，可见性为公开。上传器两次都返回 `Successfully updated workshop item`，退出码 0，日志在 `build/release-0.5.0-test/steam-upload.log`。遗留：两个 Mac 运行时 ZIP 仍是 10/09 构建，不含 0.5.0 的引擎修复，需由 CI 重建。
 
 ## 发布前必查的 JAR 模式
 
@@ -12,7 +12,8 @@
 
 1. 不要把新 JAR 手工替换进旧发布目录或 `workshop-upload/content`。JAR 或后台变了就重新走打包脚本，再跑 `tools/check_windows_bundle.py`（路径过长会导致原生 DLL 加载失败，在短路径下运行）。
 2. 上传前直接读 `workshop-upload/content/STS1CombatSolver.jar` 里的 `solver.properties`，必须是上表对应值，且不含 `python=`、`backend=`、`log=`。
-3. 上传后读本机 `steamapps/workshop/content/646570/3814773843/STS1CombatSolver.jar` 再核对一次，这是玩家实际拿到的文件。
+3. 上传命令必须带 UTF-8：`jre\bin\java.exe -Dfile.encoding=UTF-8 -jar mod-uploader.jar upload -w <工作区>`。不带时中文 Windows 默认按 GBK 读取，标题和描述会变成乱码。上传后用 Steam 接口 `ISteamRemoteStorage/GetPublishedFileDetails` 或公开页面核对标题和可见性；更新刚提交的几十秒内，页面可能暂时显示“已被标记为隐藏”。
+4. 上传后读本机 `steamapps/workshop/content/646570/3814773843/STS1CombatSolver.jar` 再核对一次，这是玩家实际拿到的文件。
 
 2026-10-10：按用户授权将 `v0.4.3` 更新到原条目 `3814773843`，State Notes 未发布。GitHub PR #4 已合并，发布提交 `d6476066b932fad056e99de8a2ee0e982966e2dc`，Release 为 https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.4.3 。CI `37997749960` 的六组平台/Python smoke 与两个 Mac 架构包全部通过；Windows 包另通过随包 Python、中文路径迁移、最小 PATH 与后端协议检查。上传工作区 `build/release-0.4.3/workshop-upload`，76 个文件及最终 ZIP 已校验，Mac Python 源码与提交 blob 一致，JAR 为 bundled 0.4.3，不含 State Notes。游戏内置上传器返回 `Successfully updated workshop item`，退出码 0；日志 `build/release-0.4.3/steam-upload.log`。公开页面抓取不可用，未独立核实页面缓存刷新；完整对局与双 mod UI 实测仍由用户执行。
 

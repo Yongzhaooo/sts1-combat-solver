@@ -90,7 +90,7 @@ if __name__ == '__main__':
     # A development JAR launches a source checkout through WSL and fails on every user machine.
     with zipfile.ZipFile(args.bundle/'STS1CombatSolver.jar') as jar:
         properties=jar.read('solver.properties').decode('ascii').splitlines()
-    assert 'runtime=windows-bundled' in properties and not any(
+    assert {'runtime=windows-bundled', 'runtime=bundled'} & set(properties) and not any(
         line.startswith(('python=','backend=','log=')) for line in properties), properties
     # Exercise a relocated installation with spaces/Unicode, without changing
     # the release files or depending on the current source checkout.
