@@ -600,6 +600,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             if((outsideMode==2 && System.currentTimeMillis()-outsideScoredAt>=600)
                     || (outsideMode==1 && outsideConfirm)) {
                 OutsidePacket.Choice choice=outsidePacket.choices.get(outsideChosen);
+                if(choice.label!=null && (choice.label.contains("Prismatic") || choice.label.contains("棱镜") || choice.label.contains("PrismaticShard")))
+                    throw new IllegalStateException("检测到棱镜（Prismatic Shard），策略禁止自动获取，请手动确认！");
                 String command=choice.command, verb=command.split(" ")[0];
                 if(!CommandExecutor.isCommandAvailable(verb))
                     throw new IllegalStateException("局外命令已不可用："+command);
