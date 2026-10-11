@@ -1,5 +1,19 @@
 # 尖塔 1 创意工坊发布记录
 
+2026-10-12：`v0.5.0-test` 的 GitHub Release 和工坊条目 `3814773843` 都发布成了开发版 JAR。JAR 内 `solver.properties` 写的是本机 WSL 路径（`python=/mnt/e/.../.venv/bin/python`、`backend=`、`log=`），没有 `runtime=` 行，玩家启动后面板显示“后台求解器未响应”。本机工坊目录在 10/11 21:25 已同步到这个 JAR。原因是 `overlay/build.ps1` 未加 `-BundledWindows` 就构建，再把 JAR 手工放进 `build/release-0.5.0-test` 的旧包和 `workshop-upload/content`，跳过了 `tools/package_windows_runtime.py` 的 bundled 检查和 `tools/check_windows_bundle.py` 的清单校验。处理结果：GitHub 资产已用 `overlay/build.py --bundled-windows` 和打包脚本重建，三轮 bundle 检查通过，下载回读确认为 `runtime=windows-bundled`；`check_windows_bundle.py` 已改为拒绝开发版 JAR（提交 `d742783`）。工坊条目截至此时尚未重新上传，仍是坏包。
+
+## 发布前必查的 JAR 模式
+
+| 发布物 | 构建命令 | `solver.properties` 应为 |
+| --- | --- | --- |
+| 工坊（Windows＋Mac） | `overlay/build.py --bundled --game ...` | `runtime=bundled` |
+| GitHub Windows ZIP | `overlay/build.py --bundled-windows --game ...` 后跑 `tools/package_windows_runtime.py` | `runtime=windows-bundled` |
+| 本机开发 | `overlay/build.ps1` 不带参数 | 含 `python=`/`backend=`/`log=`，**不得发布** |
+
+1. 不要把新 JAR 手工替换进旧发布目录或 `workshop-upload/content`。JAR 或后台变了就重新走打包脚本，再跑 `tools/check_windows_bundle.py`（路径过长会导致原生 DLL 加载失败，在短路径下运行）。
+2. 上传前直接读 `workshop-upload/content/STS1CombatSolver.jar` 里的 `solver.properties`，必须是上表对应值，且不含 `python=`、`backend=`、`log=`。
+3. 上传后读本机 `steamapps/workshop/content/646570/3814773843/STS1CombatSolver.jar` 再核对一次，这是玩家实际拿到的文件。
+
 2026-10-10：按用户授权将 `v0.4.3` 更新到原条目 `3814773843`，State Notes 未发布。GitHub PR #4 已合并，发布提交 `d6476066b932fad056e99de8a2ee0e982966e2dc`，Release 为 https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.4.3 。CI `37997749960` 的六组平台/Python smoke 与两个 Mac 架构包全部通过；Windows 包另通过随包 Python、中文路径迁移、最小 PATH 与后端协议检查。上传工作区 `build/release-0.4.3/workshop-upload`，76 个文件及最终 ZIP 已校验，Mac Python 源码与提交 blob 一致，JAR 为 bundled 0.4.3，不含 State Notes。游戏内置上传器返回 `Successfully updated workshop item`，退出码 0；日志 `build/release-0.4.3/steam-upload.log`。公开页面抓取不可用，未独立核实页面缓存刷新；完整对局与双 mod UI 实测仍由用户执行。
 
 2026-10-08：已按用户授权将 `v0.4.1` 更新到原条目 `3814773843`。上传工作区为 `build/release-0.4.1/workshop-upload`，来源提交为 `c297a68310dc003e330e4379652074498fd22030`，与成功的 CI 构建 `37835474461` 代码一致。上传前通过 76 个文件的 SHA-256 校验、JAR 版本和 bundled 配置校验，以及 Windows、macOS arm64/x86_64 运行时检查。游戏自带 `mod-uploader.jar` 返回 `Successfully updated workshop item`，退出码 0；公开页面抓取不可用，未独立核实页面缓存刷新。此次包括早期全自动爬塔、紧凑 UI 和腐化生成牌费用修复；Mac 全自动游戏内验收仍未完成。
