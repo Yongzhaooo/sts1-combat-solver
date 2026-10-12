@@ -2,6 +2,8 @@
 
 [简体中文](README.zh-CN.md)
 
+QQ community group: **232459269**. Share your experience and report issues.
+
 ## Thanks and sources
 
 Thanks to [gamerpuppy/sts_lightspeed](https://github.com/gamerpuppy/sts_lightspeed) for the C++ combat simulator and search foundation, [destire-mio/sts-ironclad-agent](https://github.com/destire-mio/sts-ironclad-agent) for its modified `combat4r` and Python bindings, and [ForgottenArbiter/CommunicationMod](https://github.com/ForgottenArbiter/CommunicationMod) for the game communication bridge. Their pinned versions and licenses are listed in [Third-party notices](THIRD_PARTY_NOTICES.md).

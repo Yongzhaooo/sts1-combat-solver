@@ -1,5 +1,7 @@
 # STS1 Combat Solver — Ironclad
 
+QQ community group: **232459269**. Share your experience and report issues.
+
 Ironclad combat solver with step, turn and automatic execution.
 
 - Independent automatic potion use and post-combat potion replacement.

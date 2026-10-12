@@ -2,6 +2,8 @@
 
 [English](README.md)
 
+QQ 交流群：**232459269**。欢迎交流使用经验、反馈问题。
+
 ## 致谢与来源
 
 感谢 [gamerpuppy/sts_lightspeed](https://github.com/gamerpuppy/sts_lightspeed) 提供 C++ 战斗模拟与搜索基础、[destire-mio/sts-ironclad-agent](https://github.com/destire-mio/sts-ironclad-agent) 提供改写的 `combat4r` 和 Python 绑定，以及 [ForgottenArbiter/CommunicationMod](https://github.com/ForgottenArbiter/CommunicationMod) 提供游戏通信桥。锁定版本和许可证见[第三方声明](THIRD_PARTY_NOTICES.md)。
