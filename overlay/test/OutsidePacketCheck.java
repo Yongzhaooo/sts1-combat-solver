@@ -241,6 +241,49 @@ public final class OutsidePacketCheck {
         visible.addProperty("screen_type","BOSS_REWARD");
         OutsidePacket boss = OutsidePacket.build(Distill2.load(),state,visible);
         if(boss.policyScore().best!=2)throw new AssertionError("Choose Cage over an unsupported Cube");
+        // Every offer below SKIP_BELOW (M1 seed 6074962807151633384, floor 17): skip in the game, best relic where skip loops.
+        JsonArray weakRelics = new JsonArray();
+        for(String id : new String[]{"Ectoplasm", "Busted Crown", "Sozu"}) {
+            JsonObject relic = new JsonObject(); relic.addProperty("id",id); relic.addProperty("name",id);
+            weakRelics.add(relic);
+        }
+        bossScreen.add("relics",weakRelics);
+        JsonArray savedCommands = state.getAsJsonArray("available_commands");
+        JsonArray bossCommands = new JsonArray(); bossCommands.add("choose"); bossCommands.add("skip");
+        state.add("available_commands", bossCommands);
+        OutsidePacket weak = OutsidePacket.build(Distill2.load(),state,visible);
+        Distill2.Result weakStudent = weak.score(), weakSkip = weak.policyScore();
+        if(!weak.choices.get(weakSkip.best).command.equals("skip"))throw new AssertionError("All-weak boss offer skips in the game");
+        OutsidePacket.bossSkipLeadsOn = false;
+        try {
+            OutsidePacket noExit = OutsidePacket.build(Distill2.load(),state,visible);
+            int pick = noExit.policyScore().best, studentBest = -1;
+            for(int i=0;i<3;i++)if(studentBest<0 || weakStudent.scores[i]>weakStudent.scores[studentBest])studentBest=i;
+            if(pick!=studentBest || noExit.ruleNote==null)
+                throw new AssertionError("Without a skip exit take the best-scoring relic (tie broken by the network)");
+            bossScreen.add("relics",bossRelics);
+            if(OutsidePacket.build(Distill2.load(),state,visible).policyScore().best!=2)
+                throw new AssertionError("A boss offer worth taking is unchanged without a skip exit");
+        } finally {
+            OutsidePacket.bossSkipLeadsOn = true;
+            bossScreen.add("relics",bossRelics);
+            if(savedCommands==null)state.remove("available_commands"); else state.add("available_commands",savedCommands);
+        }
+        // Back at an opened boss chest (after a skip): leave rather than reopen; a closed one is the network's call.
+        JsonObject chestState = new JsonParser().parse(state.toString()).getAsJsonObject();
+        JsonObject chestVisible = new JsonParser().parse(visible.toString()).getAsJsonObject();
+        JsonObject bossChest = new JsonObject(); bossChest.addProperty("chest_type","BossChest"); bossChest.addProperty("chest_open",true);
+        chestState.getAsJsonObject("game_state").add("screen_state",bossChest);
+        chestVisible.addProperty("screen_type","CHEST"); chestVisible.addProperty("chest_size",3);
+        JsonArray chestButtons = new JsonArray(); chestButtons.add("Open"); chestButtons.add("Leave"); chestVisible.add("choices",chestButtons);
+        OutsidePacket reopened = OutsidePacket.build(Distill2.load(),chestState,chestVisible);
+        if(!reopened.choices.get(reopened.policyScore().best).command.equals("confirm") || reopened.ruleNote==null)
+            throw new AssertionError("An opened boss chest is left, never reopened");
+        bossChest.addProperty("chest_open",false);
+        OutsidePacket closed = OutsidePacket.build(Distill2.load(),chestState,chestVisible);
+        if(closed.policyScore().best!=closed.score().best)throw new AssertionError("A closed boss chest is the network's call");
+        if(RelicScore.score("Unceasing Top")!=4 || RelicScore.score("Akabeko")!=6)
+            throw new AssertionError("Unceasing Top keeps 4 (one entry); Akabeko is listed at 6");
         if(RelicScore.bossScore("Runic Cube",plainDeck)!=3 || RelicScore.bossScore("Empty Cage",plainDeck)!=8)
             throw new AssertionError("Deck-aware Cube/Cage scores");
         JsonObject blood = new JsonParser().parse(plainDeck.get(0).toString()).getAsJsonObject();
@@ -279,7 +322,15 @@ public final class OutsidePacketCheck {
             throw new AssertionError("Already-owned blue key must not force the key");
         keys.addProperty("sapphire",false); keyGame.addProperty("act",2);
         if(OutsidePacket.build(Distill2.load(),keyState,keyVisible).policyScore().best!=0)
-            throw new AssertionError("Earlier-act chest keeps the value comparison");
+            throw new AssertionError("Earlier-act chest takes the relic");
+        powerful.addProperty("id","Potion Belt"); powerful.addProperty("name","Potion Belt");
+        for(int act : new int[]{1, 2}) {
+            keyGame.addProperty("act",act);
+            OutsidePacket early = OutsidePacket.build(Distill2.load(),keyState,keyVisible);
+            if(early.policyScore().best!=0 || early.ruleNote==null)
+                throw new AssertionError("Act "+act+" takes even a 3-point relic over the blue key");
+        }
+        powerful.addProperty("id","Pandora's Box"); powerful.addProperty("name","Pandora's Box");
         keyGame.addProperty("act",3);
         JsonObject laterChest = new JsonObject(); laterChest.addProperty("x",0); laterChest.addProperty("y",9);
         laterChest.addProperty("symbol","T"); laterChest.add("children",new JsonArray()); chestMap.add(laterChest);

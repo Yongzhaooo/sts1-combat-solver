@@ -31,6 +31,9 @@ public final class EventRulesCheck {
         EventRules.Context skull = c("Knowing Skull", 4, 90, 98, 120);
         skull.skullGoldCost = 8;
         check(index(skull) == 3, "skull stops after two gold picks");
+        check(index(c("Knowing Skull", 4, 74, 98, 120)) == 3, "skull: 70% threshold applies to HP after paying");
+        skull.skullGoldCost = 7; skull.hp = 76;
+        check(index(skull) == 1, "skull: second gold at its shown cost 7");
         check(index(c("Knowing Skull", 1, 90, 98, 120)) == -99, "skull intro page is not ruled");
 
         check(index(c("Colosseum", 2, 50, 100, 0)) == 1 && index(c("Colosseum", 2, 49, 100, 0)) == 0, "colosseum 50%");
@@ -101,13 +104,13 @@ public final class EventRulesCheck {
         check(index(dealer) == 2, "dealer takes Mutagenic Strength with Artifact");
         check(index(c("Drug Dealer", 2, 70, 80, 0)) == 1, "dealer without transform: mutagen, not J.A.X.");
 
-        // Removal order: curse, Strike, Bash, other attack; the rest is not ruled.
+        // Removal order: removable curse, Strike, Bash, Defend, other attack; the rest is not ruled.
         check(EventRules.removalTier("Injury", "CURSE") == 0, "curse first");
         check(EventRules.removalTier("AscendersBane", "CURSE") == 9, "unremovable curse");
         check(EventRules.removalTier("Strike_R", "ATTACK") == 1, "strike");
         check(EventRules.removalTier("Bash", "ATTACK") == 2, "bash");
-        check(EventRules.removalTier("Hemokinesis", "ATTACK") == 3, "other attack");
-        check(EventRules.removalTier("Defend_R", "SKILL") == 9, "defend is not preferred");
+        check(EventRules.removalTier("Defend_R", "SKILL") == 3, "defend after starters and curses, before other cards");
+        check(EventRules.removalTier("Hemokinesis", "ATTACK") == 4, "other attack");
         check(index(c("Living Wall", 3, 70, 80, 0)) == 0, "wall forgets");
         EventRules.Context wall = c("Living Wall", 3, 70, 80, 0);
         wall.removable = 0;
@@ -220,6 +223,16 @@ public final class EventRulesCheck {
             check(result.best == row[2], "skull via the packet at hp " + row[0] + ": " + result.best);
             check(packet.ruleNote != null, "rule note is kept for the panel");
         }
+        // The gold button's shown cost (public) drives the rule: 8 HP after two takes stops it even when healthy.
+        for (int[] row : new int[][]{{7, 1}, {8, 3}}) {
+            JsonArray options = new JsonArray();
+            for (String text : new String[]{"[A Pick Me Up?] Get a Potion. Lose 6 HP.",
+                    "[Riches?] Gain 90 Gold. Lose " + row[0] + " HP.", "[Success?] Get a Colorless Card. Lose 6 HP.", "[How do I leave?] Lose 6 HP."}) {
+                JsonObject option = new JsonObject(); option.addProperty("text", text); options.add(option);
+            }
+            OutsidePacket shown = event(model, fixture, "Knowing Skull", 94, 98, 4, options);
+            check(shown.policyScore().best == row[1], "skull reads the gold button cost " + row[0]);
+        }
         OutsidePacket ghosts = event(model, fixture, "Ghosts", 70, 80, 2);
         check(ghosts.policyScore().best == 1 && ghosts.ruleNote.startsWith(EventRules.MANUAL), "ghosts via the packet");
         OutsidePacket bloom = event(model, fixture, "MindBloom", 70, 80, 3);
@@ -227,30 +240,44 @@ public final class EventRulesCheck {
         OutsidePacket unruled = event(model, fixture, "The Joust", 70, 80, 3);
         check(unruled.policyScore().best == unruled.score().best && unruled.ruleNote == null, "unruled event uses the network");
 
-        // Removal grid: curse before Strike before Bash before other attacks, whatever the network prefers.
+        // Removal grid: curse before Strike before Bash before Defend before other non-rare attacks, whatever the network prefers.
         String[][][] sets = {
             {{"Defend_R", "SKILL"}, {"Bash", "ATTACK"}, {"Strike_R", "ATTACK"}, {"Injury", "CURSE"}},
             {{"Defend_R", "SKILL"}, {"Hemokinesis", "ATTACK"}, {"Bash", "ATTACK"}, {"Strike_R", "ATTACK"}},
             {{"Defend_R", "SKILL"}, {"Hemokinesis", "ATTACK"}, {"Bash", "ATTACK"}},
             {{"Defend_R", "SKILL"}, {"Hemokinesis", "ATTACK"}}};
-        int[] expected = {3, 3, 2, 1};
+        int[] expected = {3, 3, 2, 0};
         for (int set = 0; set < sets.length; set++) {
             OutsidePacket grid = grid(model, fixture, sets[set]);
             Distill2.Result result = grid.policyScore();
             check(result.best == expected[set], "removal order set " + set + ": " + result.best);
         }
         OutsidePacket defendsOnly = grid(model, fixture, new String[][]{{"Defend_R", "SKILL"}, {"Defend_R", "SKILL"}});
-        check(defendsOnly.policyScore().best == defendsOnly.score().best && defendsOnly.ruleNote == null,
-            "only Defends left: the network decides");
+        check(defendsOnly.policyScore().best == defendsOnly.score().best && defendsOnly.ruleNote != null,
+            "only Defends left: a Defend is removed by rule (the network picks which)");
+        // Bonfire Spirits: no hand order; the network scores every legal card, so a key card is never forced out by a rule.
+        String[][] bonfireCards = {{"Strike_R", "ATTACK", "BASIC"}, {"Demon Form", "POWER", "RARE"}, {"Corruption", "POWER", "RARE"},
+            {"Shrug It Off", "SKILL", "COMMON"}, {"Flame Barrier", "SKILL", "UNCOMMON"}};
+        for (int hp : new int[]{30, 70}) {
+            OutsidePacket fire = grid(model, fixture, bonfireCards, "Bonfire", hp, 80);
+            Distill2.Result ruled = fire.policyScore();
+            check(fire.choices.size() == bonfireCards.length, "bonfire lists every legal card at hp " + hp);
+            check(ruled.best == fire.score().best && fire.ruleNote == null, "bonfire offering is the network's at hp " + hp);
+        }
     }
 
     static OutsidePacket event(Distill2 model, JsonObject fixture, String id, int hp, int maxHp, int options) {
+        return event(model, fixture, id, hp, maxHp, options, null);
+    }
+
+    static OutsidePacket event(Distill2 model, JsonObject fixture, String id, int hp, int maxHp, int options, JsonArray buttons) {
         JsonObject state = copy(fixture.getAsJsonObject("state")), visible = copy(fixture.getAsJsonObject("visible"));
         JsonObject game = state.getAsJsonObject("game_state");
         game.addProperty("current_hp", hp); game.addProperty("max_hp", maxHp); game.addProperty("gold", 100);
         game.addProperty("screen_type", "EVENT");
         JsonObject screen = new JsonObject();
         screen.addProperty("event_id", id);
+        if (buttons != null) screen.add("options", buttons);
         game.add("screen_state", screen);
         JsonArray choices = new JsonArray();
         for (int i = 0; i < options; i++) choices.add("option " + i);
@@ -261,8 +288,16 @@ public final class EventRulesCheck {
     }
 
     static OutsidePacket grid(Distill2 model, JsonObject fixture, String[][] cards) {
+        return grid(model, fixture, cards, null, 0, 0);
+    }
+
+    static OutsidePacket grid(Distill2 model, JsonObject fixture, String[][] cards, String eventClass, int hp, int maxHp) {
         JsonObject state = copy(fixture.getAsJsonObject("state")), visible = copy(fixture.getAsJsonObject("visible"));
         JsonObject game = state.getAsJsonObject("game_state");
+        if (eventClass != null) {
+            game.addProperty("solver_event_class", eventClass);
+            game.addProperty("current_hp", hp); game.addProperty("max_hp", maxHp);
+        }
         game.addProperty("screen_type", "GRID");
         JsonObject screen = new JsonObject();
         screen.addProperty("for_purge", true);
@@ -271,6 +306,7 @@ public final class EventRulesCheck {
         for (String[] card : cards) {
             JsonObject item = new JsonObject();
             item.addProperty("id", card[0]); item.addProperty("name", card[0]); item.addProperty("type", card[1]);
+            if (card.length > 2) item.addProperty("rarity", card[2]);
             item.addProperty("cost", 1); item.addProperty("upgrades", 0); item.addProperty("exhausts", false);
             list.add(item);
         }

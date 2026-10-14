@@ -20,7 +20,7 @@ final class EventRules {
     static final class Context {
         String event = "";
         int shown, hp, maxHp, gold, ascension;
-        /** Cards the removal order can reach: removable curses, Strikes, Bash, other attacks, then Defends. */
+        /** Cards the removal order can reach: removable curses, Strikes, Bash, Defends, then other attacks. */
         int removable;
         int freePotionSlots;
         /** Neow's four offers (bonus / drawback names), when the blessing page is up. */
@@ -30,6 +30,7 @@ final class EventRules {
         boolean redMask;
         /** Rooms offered on the next map step; the Cleric may heal only when none of them is a rest site. */
         boolean nextRoomsKnown, nextHasRest;
+        /** HP the gold button costs: shown on the button (6, +1 per gold taken in this event). */
         int skullGoldCost = 6;
         /** Hidden information, read from the live event: total HP lost until Scrap Ooze gives its relic. */
         int oozeLoss = UNKNOWN;
@@ -49,17 +50,22 @@ final class EventRules {
         Decision(int index, String note, int... avoid) { this.index = index; this.note = note; this.avoid = avoid; }
     }
 
-    /** Lower is removed first: curse, Strike, Bash, other attacks. Everything else (Defend...) is 9. */
+    /** Highest tier the removal order reaches; 9 is never removed by rule. */
+    static final int LAST_REMOVAL_TIER = 4;
+
+    /** Lower is removed first: removable curse, Strike, Bash, Defend, other attacks. Everything else is 9. */
     static int removalTier(String id, String type) {
         if (type.equals("CURSE")) return unremovable(id) ? 9 : 0;
         if (id.equals("Strike_R") || id.equals("STRIKE_RED")) return 1;
         if (id.equals("Bash") || id.equals("BASH")) return 2;
-        if (type.equals("ATTACK")) return 3;
+        if (id.equals("Defend_R") || id.equals("DEFEND_RED")) return 3;
+        if (type.equals("ATTACK")) return 4;
         return 9;
     }
 
     static boolean unremovable(String id) {
-        return id.equals("AscendersBane") || id.equals("CurseOfTheBell") || id.equals("Necronomicurse");
+        return id.equals("AscendersBane") || id.equals("CurseOfTheBell") || id.equals("Necronomicurse")
+            || id.equals("ASCENDERS_BANE") || id.equals("CURSE_OF_THE_BELL") || id.equals("NECRONOMICURSE"); // simulator ids
     }
 
     private static Decision pick(int index, String note) { return new Decision(index, note); }
@@ -94,7 +100,8 @@ final class EventRules {
             case "Knowing Skull":
                 if (n != 4) return null;
                 // potion 0, gold 1 (90), card 2, leave 3; every option and leaving cost HP.
-                return healthy(c, .7) && c.skullGoldCost <= 7 ? pick(1, "全知头骨：血量充足，拿金币") : pick(3, "全知头骨：离开");
+                return c.hp - c.skullGoldCost >= .7 * c.maxHp && c.skullGoldCost <= 7
+                    ? pick(1, "全知头骨：付 " + c.skullGoldCost + " 血后仍充足，拿金币") : pick(3, "全知头骨：离开");
             case "Colosseum":
                 if (n != 2) return null; // the single-button pages are clicked through elsewhere
                 return healthy(c, .5) ? pick(1, "竞技场：血量不低于 50%，再战") : pick(0, "竞技场：血量不足，离开");
