@@ -14,6 +14,14 @@ final class EventRules {
     /** Set by the mod at start-up. Offline checks leave it off so no game class is touched. */
     static boolean live;
 
+    /**
+     * The only events whose live reads may run (docs/outside-rules.md, SL-visible pre-reads): each read replays the current
+     * room's own draws on an RNG copy, from the latest save point and without crossing the next one. Rewards handed out after
+     * an event fight, map rooms ahead and results that reroll on load are not SL-visible and must never be added here.
+     */
+    static final java.util.Set<String> SL_PREREAD = java.util.Collections.unmodifiableSet(new java.util.HashSet<String>(
+        java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust")));
+
     static final int UNKNOWN = -1, SAFE_SEARCH = 0, ELITE_SEARCH = 1;
     static final String MANUAL = "人工规则";
 
@@ -38,6 +46,8 @@ final class EventRules {
         int adventurerNext = UNKNOWN, adventurerEnemy = UNKNOWN;
         /** Hidden information: Face Trader's trade gives a good face (1) or not (0); the Joust owner wins (1) or loses (0). */
         int goodFace = UNKNOWN, ownerWins = UNKNOWN;
+        /** What readLive pre-read on this decision (event and values), for the decision note; null when nothing was read. */
+        String preread;
     }
 
     static final class Decision {
@@ -273,18 +283,21 @@ final class EventRules {
     // ---- live reads (game thread only; every failure leaves the field unknown) ----------------
 
     static void readLive(Context c) {
-        if (!live) return;
+        if (!live || !SL_PREREAD.contains(c.event)) return;
         try {
             AbstractEvent event = AbstractDungeon.getCurrRoom().event;
             if (event == null) return;
             switch (c.event) {
-                case "Knowing Skull": c.skullGoldCost = intField(event, "goldCost"); break;
-                case "Scrap Ooze": c.oozeLoss = oozeLoss(event); break;
-                case "Dead Adventurer": adventurer(event, c); break;
-                case "FaceTrader": c.goodFace = goodFace(); break;
-                case "The Joust": c.ownerWins = AbstractDungeon.miscRng.copy().randomBoolean(0.3f) ? 1 : 0; break;
+                case "Knowing Skull": c.skullGoldCost = intField(event, "goldCost"); c.preread = "goldCost=" + c.skullGoldCost; break;
+                case "Scrap Ooze": c.oozeLoss = oozeLoss(event); c.preread = "oozeLoss=" + c.oozeLoss; break;
+                case "Dead Adventurer": adventurer(event, c);
+                    c.preread = "next=" + (c.adventurerNext == SAFE_SEARCH ? "safe" : "elite") + " enemy=" + c.adventurerEnemy; break;
+                case "FaceTrader": c.goodFace = goodFace(); c.preread = "goodFace=" + c.goodFace; break;
+                case "The Joust": c.ownerWins = AbstractDungeon.miscRng.copy().randomBoolean(0.3f) ? 1 : 0;
+                    c.preread = "ownerWins=" + c.ownerWins; break;
                 default: break;
             }
+            if (c.preread != null) c.preread = c.event + ": " + c.preread;
         } catch (Throwable ignored) {
             // Stay UNKNOWN: the caller falls back to the network.
         }

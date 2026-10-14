@@ -37,6 +37,8 @@ final class OutsidePacket {
     /** Text that tells apart pages the network cannot: event pages and picks inside one grid. */
     /** Why a hand-written rule overrode the network, or null. Shown next to the executed choice. */
     String ruleNote;
+    /** SL-visible pre-read the event rule used (EventRules.readLive), or null. Every pre-read is recorded with the decision. */
+    String prereadNote;
     private String page = "";
     final List<Choice> choices = new ArrayList<>();
     private final Distill2 model;
@@ -146,7 +148,7 @@ final class OutsidePacket {
     }
 
     Distill2.Result policyScore() {
-        ruleNote=null;
+        ruleNote=null; prereadNote=null;
         return potionRule(ruleScore());
     }
 
@@ -275,6 +277,7 @@ final class OutsidePacket {
             }
         }
         EventRules.readLive(c);
+        prereadNote=c.preread;
         EventRules.Decision decision=EventRules.decide(c);
         return decision==null?null:ruled(student,decision);
     }
