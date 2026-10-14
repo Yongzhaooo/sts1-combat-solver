@@ -38,7 +38,8 @@ import java.util.*;
  */
 public final class Foresight {
     private static String signature = "";
-    static boolean brightEyeMode = true;
+    /** Beyond-SL display hints (map rooms ahead, event-fight rewards). Display only, off by default; no policy reads them. */
+    static boolean brightEyeMode = false;
     private static List<String> cached = Collections.emptyList();
     private static String failure = "";
     private static String digNote;

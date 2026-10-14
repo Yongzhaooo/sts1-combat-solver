@@ -220,7 +220,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("language", "zh");
             defaults.setProperty("uiScale", "1");
             defaults.setProperty("autoKey", Integer.toString(Input.Keys.F10));
-            defaults.setProperty("brightEyeMode", "true");
+            defaults.setProperty("brightEyeMode", "false"); // beyond-SL display hints are opt-in; no policy reads them
             defaults.setProperty("autoPotionRewards", "true");
             defaults.setProperty("runAutoEnabled", "true");
             defaults.setProperty("runLog", "true");
@@ -623,7 +623,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 if(verb.equals("skip") && screenType.equals("CARD_REWARD"))skippedCards++;
                 if(verb.equals("leave") && screenType.equals("SHOP_SCREEN"))shopLeft=true;
                 try { startBackend(); diagnostic("outside",screenType+" | "+choice.label+" | "+command
-                    +" | "+outsidePacket.detail()+(outsidePacket.ruleNote==null?" | 网络":" | 规则："+outsidePacket.ruleNote),null); }
+                    +" | "+outsidePacket.detail()+(outsidePacket.ruleNote==null?" | 网络":" | 规则："+outsidePacket.ruleNote)
+                    +(outsidePacket.prereadNote==null?"":" | 预读："+outsidePacket.prereadNote),null); }
                 catch(IOException ignored) { }
                 outsideNotice=I18n.t("已执行：")+choice.label
                     +(outsidePacket.ruleNote==null?"":" · "+I18n.t(outsidePacket.ruleNote));
