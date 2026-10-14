@@ -15,6 +15,10 @@ import java.util.Set;
 
 /** Public original-game state mapped to the frozen student's first decision types. */
 final class OutsidePacket {
+    /** The game leaves a skipped boss chest by its proceed button. When a host found no such exit after a skip (an older
+     * headless truth build offers only the chest again), it sets this false and the boss rule takes its best-scoring relic. */
+    static boolean bossSkipLeadsOn = true;
+
     static final class Choice {
         final long bits;
         final String command, label;
@@ -142,8 +146,12 @@ final class OutsidePacket {
     }
 
     Distill2.Result policyScore() {
-        Distill2.Result student=score();
         ruleNote=null;
+        return potionRule(ruleScore());
+    }
+
+    private Distill2.Result ruleScore() {
+        Distill2.Result student=score();
         String screenType=string(visible,"screen_type");
         Distill2.Result rule=screenType.equals("EVENT") ? eventRule(student)
             : screenType.equals("GRID") ? removalRule(student)
@@ -168,6 +176,40 @@ final class OutsidePacket {
             }
         }
         return pick<0?student:new Distill2.Result(scores,pick);
+    }
+
+    /** Out of combat no potion is used or discarded, except Fruit Juice at once and Entropic Brew with another slot free.
+     * Only Fruit Juice, Blood Potion and Entropic Brew are usable out of combat; Blood Potion is kept for combat. */
+    Distill2.Result potionRule(Distill2.Result result) {
+        JsonArray potions=array(game,"potions");
+        int forced=-1,brew=-1;
+        for(int i=0;i<choices.size();i++) {
+            long bits=choices.get(i).bits;
+            if((bits>>27)!=23)continue;
+            int slot=(int)(bits&((1L<<27)-1));
+            String id=slot<potions.size()?string(potions.get(slot).getAsJsonObject(),"id"):"";
+            if(id.equals("Fruit Juice") && forced<0)forced=i;
+            if(id.equals("EntropicBrew") && brew<0 && hasEmptyPotion())brew=i;
+        }
+        if(forced<0)forced=brew;
+        if(forced>=0) {
+            float[] scores=result.scores.clone();
+            float top=Float.NEGATIVE_INFINITY;
+            for(float value:scores)top=Math.max(top,value);
+            scores[forced]=top+1;
+            ruleNote="鎴樻枟澶栬嵂姘达細"+choices.get(forced).label;
+            return new Distill2.Result(scores,forced);
+        }
+        if(result.best<0 || result.best>=choices.size() || !choices.get(result.best).command.startsWith("potion "))return result;
+        float[] scores=result.scores.clone();
+        int best=-1;
+        for(int i=0;i<choices.size();i++) {
+            if(choices.get(i).command.startsWith("potion "))scores[i]=Float.NEGATIVE_INFINITY;
+            else if(best<0 || scores[i]>scores[best])best=i;
+        }
+        if(best<0)return result;
+        ruleNote="鎴樻枟澶栦笉鐢ㄨ嵂涔熶笉寮冭嵂";
+        return new Distill2.Result(scores,best);
     }
 
     /** Run-log context for an outside decision: event id and the buttons the rule saw. */
@@ -211,9 +253,10 @@ final class OutsidePacket {
         c.shown=array(visible,"choices").size(); // Potion actions are not event buttons.
         c.hp=integer(game,"current_hp"); c.maxHp=integer(game,"max_hp"); c.gold=integer(game,"gold");
         c.ascension=integer(game,"ascension_level");
+        if(c.event.equals("Knowing Skull"))c.skullGoldCost=skullGoldCost(c.skullGoldCost);
         for(JsonElement item:array(game,"deck")) {
             JsonObject card=item.getAsJsonObject();
-            if(EventRules.removalTier(string(card,"id"),string(card,"type"))<=3)c.removable++;
+            if(EventRules.removalTier(string(card,"id"),string(card,"type"))<=EventRules.LAST_REMOVAL_TIER)c.removable++;
         }
         for(JsonElement p:array(game,"potions"))if(emptyPotion(string(p.getAsJsonObject(),"id")))c.freePotionSlots++;
         c.sozu=hasRelic("Sozu");
@@ -264,6 +307,8 @@ final class OutsidePacket {
                     || (scores[i]==scores[best] && student.scores[i]>student.scores[best])))best=i;
         if(best<0)return null;
         if(scores[best]<RelicScore.SKIP_BELOW) {
+            if(!bossSkipLeadsOn)
+                return ruled(student,new EventRules.Decision(best,"遗物评分：跳过回不到路上，取最高分 "+choices.get(best).label+" "+scores[best]));
             for(int i=0;i<ids.length;i++)if(choices.get(i).command.equals("skip"))
                 return ruled(student,new EventRules.Decision(i,"遗物评分：全部不如不拿，跳过"));
             return null;
@@ -285,13 +330,21 @@ final class OutsidePacket {
     }
 
     private Distill2.Result chestRule(Distill2.Result student) {
+        JsonObject screen=object(game,"screen_state");
+        if(string(screen,"chest_type").equals("BossChest") && bool(screen,"chest_open")) {
+            // Back at the boss chest after a skip: leave; reopening it only shows the same relics again.
+            for(int i=0;i<choices.size();i++)if(choices.get(i).command.equals("confirm"))
+                return ruled(student,new EventRules.Decision(i,"Boss 宝箱已跳过：离开，不再打开"));
+            return null;
+        }
         if(!mustTakeSapphireKey())return null;
         for(int i=0;i<choices.size();i++)if(choices.get(i).command.equals("choose 0"))
             return ruled(student,new EventRules.Decision(i,"第三幕最后宝箱：开箱取得蓝钥匙"));
         return null;
     }
 
-    /** Sapphire Key against the relic it replaces: take the key when it scores higher than that relic. */
+    /** Sapphire Key against the relic it replaces: acts 1-2 always take the relic (later chests still offer the key);
+     * in act 3 take the key when it scores higher than that relic. */
     private Distill2.Result keyRule(Distill2.Result student) {
         if(!game.has("solver_final_act"))return null;
         JsonArray rewards=array(object(game,"screen_state"),"rewards");
@@ -316,6 +369,7 @@ final class OutsidePacket {
                     && rewardRelicId(rewards.get(index).getAsJsonObject()).equals(linked))relic=i;
         }
         if(relic<0)return null;
+        if(integer(game,"act")<3)return ruled(student,new EventRules.Decision(relic,"第一、二幕：拿遗物，不拿蓝钥匙"));
         boolean takeKey=game.get("solver_final_act").getAsBoolean() && RelicScore.SAPPHIRE_KEY>RelicScore.score(linked,array(game,"deck"));
         String note="蓝钥匙评分 "+RelicScore.SAPPHIRE_KEY+(takeKey?" 高于 ":" 不高于 ")+choices.get(relic).label+" "+RelicScore.score(linked,array(game,"deck"));
         return ruled(student,new EventRules.Decision(takeKey?key:relic,note));
@@ -352,23 +406,12 @@ final class OutsidePacket {
         return new Distill2.Result(scores,best);
     }
 
-    /** Removal and transform targets: curses first, then Strikes, then Bash and other attacks. */
+    /** Removal and transform targets: removable curses, Strikes, Bash, Defends, then other attacks.
+     * The Bonfire Spirits offering is the network's choice over the whole legal grid: no hand order breaks a key card. */
     private Distill2.Result removalRule(Distill2.Result student) {
         JsonObject screen=object(game,"screen_state");
-        boolean offering="Bonfire".equals(string(game,"solver_event_class")); // the bonfire burns the card it is given
-        if(bool(screen,"confirm_up") || !(bool(screen,"for_purge") || bool(screen,"for_transform") || offering))return null;
+        if(bonfireOffering() || bool(screen,"confirm_up") || !(bool(screen,"for_purge") || bool(screen,"for_transform")))return null;
         JsonArray cards=array(screen,"cards");
-        if(offering && integer(game,"current_hp")*2<integer(game,"max_hp")) {
-            // Hurt: an uncommon card heals fully, so burn the one the network wants least (it is the most removable).
-            int pick=-1;
-            for(int i=0;i<choices.size();i++) {
-                if(!choices.get(i).command.startsWith("choose "))continue;
-                int index=Integer.parseInt(choices.get(i).command.substring(7));
-                if(index<0 || index>=cards.size() || !string(cards.get(index).getAsJsonObject(),"rarity").equals("UNCOMMON"))continue;
-                if(pick<0 || student.scores[i]>student.scores[pick])pick=i;
-            }
-            if(pick>=0)return ruled(student,new EventRules.Decision(pick,"篝火精灵：血量低于 50%，献祭最没用的蓝卡回满"));
-        }
         int best=-1,bestTier=9;
         for(int i=0;i<choices.size();i++) {
             Choice choice=choices.get(i);
@@ -379,8 +422,8 @@ final class OutsidePacket {
             int tier=EventRules.removalTier(string(card,"id"),string(card,"type"));
             if(tier<bestTier || (tier==bestTier && best>=0 && student.scores[i]>student.scores[best])) { bestTier=tier; best=i; }
         }
-        String[] names={"诅咒","打击","痛击","其他攻击牌"};
-        return bestTier<=3?ruled(student,new EventRules.Decision(best,"删牌顺序："+names[bestTier])):null;
+        String[] names={"诅咒","打击","痛击","防御","其他攻击牌"};
+        return bestTier<=EventRules.LAST_REMOVAL_TIER?ruled(student,new EventRules.Decision(best,"删牌顺序："+names[bestTier])):null;
     }
 
     private void observation() {
@@ -794,7 +837,7 @@ final class OutsidePacket {
         // The student ranks removal/transform targets mostly by grid position, so a rare card listed
         // first would be lost. Every removal or transform is limited to curses and starter cards;
         // events fall back to the full grid when none is left (the shop never offers that case).
-        boolean restricted = type == 4 || type == 1;
+        boolean restricted = (type == 4 || type == 1) && !bonfireOffering();
         if (restricted && !bool(visible, "grid_from_shop")) {
             boolean any = false;
             for (JsonElement item : cards)
@@ -853,9 +896,22 @@ final class OutsidePacket {
         return allowedRemoval(id, type) || (!shop && type.equals("ATTACK"));
     }
     private static boolean allowedRemoval(String id, String type) {
-        return type.equals("CURSE") || id.equals("Strike_R") || id.equals("STRIKE_RED")
+        return (type.equals("CURSE") && !EventRules.unremovable(id)) || id.equals("Strike_R") || id.equals("STRIKE_RED")
             || id.equals("Defend_R") || id.equals("DEFEND_RED") || id.equals("Bash")
             || id.equals("BASH");
+    }
+    /** The Bonfire Spirits grid burns the card it is given; the game lists only legal offerings. */
+    private boolean bonfireOffering() {
+        return "Bonfire".equals(string(game, "solver_event_class"));
+    }
+    /** Knowing Skull: the gold button (the second) shows its public HP cost as the last number on it. */
+    private int skullGoldCost(int fallback) {
+        JsonArray options = array(object(game, "screen_state"), "options");
+        if (options.size() < 2) return fallback;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("([0-9]+)").matcher(string(options.get(1).getAsJsonObject(), "text"));
+        int cost = -1;
+        while (m.find()) cost = Integer.parseInt(m.group(1));
+        return cost > 0 ? cost : fallback;
     }
     private boolean hasRelic(String id) {
         for (JsonElement item : array(game, "relics"))

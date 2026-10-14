@@ -40,11 +40,11 @@ final class RelicScore {
             "Charon's Ashes", "Shuriken", "Brimstone", "FossilizedHelix", "Thread and Needle");
         put(7, "Vajra", "Anchor", "Lantern", "Centennial Puzzle", "Bronze Scales", "Red Skull", "Paper Frog", "Pantograph",
             "Singing Bowl", "Question Card", "Molten Egg 2", "Self Forming Clay", "Prayer Wheel", "Incense Burner", "CaptainsWheel",
-            "StrikeDummy", "Bag of Marbles", "Ancient Tea Set", "Unceasing Top");
+            "StrikeDummy", "Bag of Marbles", "Ancient Tea Set");
         put(6, "Strawberry", "Pear", "Nunchaku", "Oddly Smooth Stone", "Matryoshka", "White Beast Statue", "Eternal Feather",
             "Magic Flower", "Bottled Tornado", "Bottled Flame", "Bottled Lightning", "Mercury Hourglass", "HornCleat",
             "Gremlin Horn", "Dream Catcher", "Regal Pillow", "Shovel", "Old Coin", "Ice Cream", "StoneCalendar", "OrangePellets",
-            "ClockworkSouvenir", "Bird Faced Urn", "Lee's Waffle", "Toy Ornithopter");
+            "ClockworkSouvenir", "Bird Faced Urn", "Lee's Waffle", "Toy Ornithopter", "Akabeko");
         put(5, "Blood Vial", "Bag of Preparation", "Happy Flower", "Whetstone", "War Paint", "Letter Opener", "InkBottle",
             "Orrery", "Membership Card", "Cauldron", "PreservedInsect", "Boot", "Du-Vu Doll", "Mummified Hand",
             "Frozen Egg 2", "Toxic Egg 2", "Ornamental Fan", "Sundial", "Champion Belt");

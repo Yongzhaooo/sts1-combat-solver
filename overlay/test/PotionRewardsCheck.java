@@ -13,10 +13,14 @@ public final class PotionRewardsCheck {
         JsonObject p=new JsonObject();p.addProperty("id",id);p.addProperty("name",id);
         p.addProperty("can_discard",true);return p;
     }
+    static boolean hasPurge(OutsidePacket packet) {
+        for(OutsidePacket.Choice c:packet.choices)if((c.bits>>27)==5)return true;
+        return false;
+    }
     public static void main(String[] args) throws Exception {
         JsonObject game=new JsonObject();game.addProperty("act",3);game.addProperty("floor",42);
         JsonArray deck=new JsonArray();deck.add(bottle("Demon Form"));game.add("deck",deck);
-        String[] priority={"FairyPotion","Swift Potion","Gambler's Brew","DistilledChaos","PowerPotion",
+        String[] priority={"FairyPotion","Swift Potion","GamblersBrew","DistilledChaos","PowerPotion",
             "LiquidMemories","CultistPotion","DuplicationPotion","GhostInAJar"};
         int[] early=new int[priority.length];
         for(int i=0;i<priority.length;i++)early[i]=PotionRewards.value(priority[i],game);
@@ -25,6 +29,8 @@ public final class PotionRewardsCheck {
         check(PotionRewards.value("FairyPotion",game)>PotionRewards.value("Fruit Juice",game),"resurrection priority");
         check(PotionRewards.value("Fire Potion",game)==14,"damage potion unchanged");
         check(PotionRewards.value("UnknownPotion",game)==-1,"unknown remains manual");
+        check(PotionRewards.value("GamblersBrew",game)==52,"Gambler's Brew under its game id");
+        check(PotionRewards.value("BlessingOfTheForge",game)==9,"Blessing of the Forge: low value, no late bonus");
         game.addProperty("act",2);game.addProperty("floor",50);
         for(int i=0;i<priority.length;i++)check(PotionRewards.value(priority[i],game)==early[i],"Act 2 unchanged");
         game.addProperty("act",4);game.addProperty("floor",54);
@@ -76,6 +82,38 @@ public final class PotionRewardsCheck {
             }
             check(seen==3,"all three affordable shop potions tested");
         }
-        System.out.println("PASS: late potion values, phase boundaries, replacement advice, unknown/Sozu/Bloom");
+        // Shop purge button: only a removable curse or starter card makes it worth listing (Ascender's Bane is not removable).
+        JsonObject base=fixture.getAsJsonObject("state");
+        JsonArray onlyBane=new JsonArray();
+        for(String[] spec:new String[][]{{"AscendersBane","CURSE"},{"ASCENDERS_BANE","CURSE"},{"Shrug It Off","SKILL"}}) {
+            JsonObject card=new JsonParser().parse(shopGame.getAsJsonArray("deck").get(0).toString()).getAsJsonObject();
+            card.addProperty("id",spec[0]);card.addProperty("type",spec[1]);onlyBane.add(card);
+        }
+        shopGame.add("deck",onlyBane);
+        check(!hasPurge(OutsidePacket.build(Distill2.load(),base,fixture.getAsJsonObject("visible"))),"no purge button for unremovable curses only");
+        JsonObject injury=new JsonParser().parse(onlyBane.get(0).toString()).getAsJsonObject();
+        injury.addProperty("id","Injury");onlyBane.add(injury);
+        check(hasPurge(OutsidePacket.build(Distill2.load(),base,fixture.getAsJsonObject("visible"))),"a removable curse lists the purge button");
+        // Out of combat: never use or discard a potion, except Fruit Juice at once and Entropic Brew with another free slot.
+        String[][][] bottles={{{"Fruit Juice"},{"Potion Slot"}},{{"BloodPotion"},{"Potion Slot"}},
+            {{"EntropicBrew"},{"Potion Slot"}},{{"EntropicBrew"},{"Fire Potion"}}};
+        String[] wanted={"potion use 0",null,"potion use 0",null};
+        for(int k=0;k<bottles.length;k++) {
+            JsonArray slots=new JsonArray();
+            for(String[] b:bottles[k]) {
+                JsonObject p=bottle(b[0]);p.addProperty("can_use",!b[0].equals("Potion Slot"));p.addProperty("requires_target",false);
+                p.addProperty("can_discard",!b[0].equals("Potion Slot"));slots.add(p);
+            }
+            shopGame.add("potions",slots);
+            OutsidePacket packet=OutsidePacket.build(Distill2.load(),base,fixture.getAsJsonObject("visible"));
+            String command=packet.choices.get(packet.policyScore().best).command;
+            check(wanted[k]==null?!command.startsWith("potion "):command.equals(wanted[k]),"out-of-combat potion case "+k+": "+command);
+            if(wanted[k]==null)for(int i=0;i<packet.choices.size();i++)if(packet.choices.get(i).command.startsWith("potion ")) {
+                float[] s=packet.score().scores.clone(); s[i]=1e9f; // the network's favourite potion action never survives
+                Distill2.Result masked=packet.potionRule(new Distill2.Result(s,i));
+                check(!packet.choices.get(masked.best).command.startsWith("potion ") && packet.ruleNote!=null,"potion action masked in case "+k);
+            }
+        }
+        System.out.println("PASS: late potion values, phase boundaries, replacement advice, unknown/Sozu/Bloom, purge button, out-of-combat potions");
     }
 }
