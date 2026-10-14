@@ -13,6 +13,10 @@ final class RoutePlanner {
     private static final JsonObject RULES = loadRules();
     final Map<Integer, Plan> byStart = new LinkedHashMap<>();
     private final Map<Integer, JsonObject> nodes = new HashMap<>();
+    /** Columns of the current node's own edges in the next row; any other offered start costs a Wing Boots charge. */
+    private final Set<Integer> edges = new HashSet<>();
+    /** A flight start must beat the best edge child by more than this, so a charge is never spent on a tie. */
+    static final double FLIGHT_MARGIN = 0.5;
     private final JsonObject game, visible, weights;
     private final Set<String> relics = new HashSet<>();
     private final int act, row, flame, upgrades;
@@ -70,6 +74,8 @@ final class RoutePlanner {
             for(int x=0;x<7;x++)if(nodes.containsKey(key(x,0))&&array(nodes.get(key(x,0)),"children").size()>0)starts.add(x);
         } else for(JsonElement e:array(nodes.get(key(number(visible,"x",-1),row-1)),"children"))
             starts.add(number(e.getAsJsonObject(),"x",-1));
+        if(row>0)for(JsonElement e:array(nodes.get(key(number(visible,"x",-1),row-1)),"children"))
+            if(number(e.getAsJsonObject(),"y",-1)==row)edges.add(number(e.getAsJsonObject(),"x",-1));
         for(int x:starts)walk(x,row,new ArrayList<OutsidePacket.Step>(),x);
     }
 
@@ -79,7 +85,8 @@ final class RoutePlanner {
         if(y==14) {
             boolean green=false,red=false;
             for(OutsidePacket.Step p:path) {green|=key(p.x,p.y)==flame; red|=room(p).equals("R");}
-            Plan plan=new Plan(path,score(path),(wantGreen&&!green?1:0)+(wantRed&&!red?1:0));
+            double flight=!edges.isEmpty()&&!edges.contains(start)?FLIGHT_MARGIN:0; // no edge child at all: fly freely
+            Plan plan=new Plan(path,score(path)-flight,(wantGreen&&!green?1:0)+(wantRed&&!red?1:0));
             if(plan.beats(byStart.get(start)))byStart.put(start,plan);
         } else for(JsonElement e:array(n,"children")) {
             JsonObject child=e.getAsJsonObject();

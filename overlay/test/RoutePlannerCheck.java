@@ -46,8 +46,9 @@ public final class RoutePlannerCheck {
         }
         keyChecks(fixtures.get(0).getAsJsonObject());
         goldChecks();
+        wingChecks();
         actStartCheck(first);
-        System.out.printf("PASS: %d golden openings, final-act keys, expected gold, burning-elite lean, all legal starts, low-HP suffix replans, act-3 start, unchanged input (%.0f ms)%n",checks,(System.nanoTime()-start)/1e6);
+        System.out.printf("PASS: %d golden openings, final-act keys, expected gold, burning-elite lean, Wing Boots ties, all legal starts, low-HP suffix replans, act-3 start, unchanged input (%.0f ms)%n",checks,(System.nanoTime()-start)/1e6);
     }
 
     static JsonObject copy(JsonObject o) {return new JsonParser().parse(o.toString()).getAsJsonObject();}
@@ -105,6 +106,38 @@ public final class RoutePlannerCheck {
         if(!(shop60>shop59))throw new AssertionError("60 gold + 15 from the first fight affords the row-1 shop");
         if(line(rooms,0)!=none)throw new AssertionError("Two unaffordable shops add nothing, not even a close-shops penalty");
     }
+    /** M1 seed 5534104192084612327 step 471 (act 2, at the x=4 elite of row 13, Wing Boots): rest sites at x=1, 5, 6 all
+     * scored 2.62 and the leftmost flight (x=1) spent a charge. The edge child x=5 must win any tie; a flight start wins
+     * only by more than FLIGHT_MARGIN; with no edge child, flight is free. */
+    static void wingChecks() {
+        String[] row14={"R","R","R"};
+        if(wing(row14,new int[]{1,5,6})!=5)throw new AssertionError("Tie: take the edge child, keep the Wing Boots charge");
+        if(wing(new String[]{"R","M","R"},new int[]{1,5,6})==5)throw new AssertionError("A flight start more than 0.5 better wins");
+        if(wing(row14,new int[]{1,6})<0)throw new AssertionError("No edge child offered: flight is allowed as before");
+    }
+    static int wing(String[] symbols,int[] offered) {
+        int[] xs={1,5,6};
+        JsonObject g=new JsonObject(), v=new JsonObject(), screen=new JsonObject();
+        g.addProperty("act",2); g.addProperty("screen_type","MAP"); g.addProperty("current_hp",97); g.addProperty("max_hp",99);
+        g.addProperty("gold",252); g.add("deck",new JsonArray());
+        JsonObject keys=new JsonObject(); keys.addProperty("emerald",true); g.add("keys",keys);
+        JsonArray relics=new JsonArray(); JsonObject boots=new JsonObject(); boots.addProperty("id","WingedGreaves"); relics.add(boots);
+        g.add("relics",relics);
+        JsonArray map=new JsonArray(), next=new JsonArray();
+        JsonObject current=new JsonObject(); current.addProperty("x",4); current.addProperty("y",13); current.addProperty("symbol","E");
+        JsonArray edge=new JsonArray(); JsonObject child=new JsonObject(); child.addProperty("x",5); child.addProperty("y",14); edge.add(child);
+        current.add("children",edge); map.add(current);
+        for(int i=0;i<3;i++) {
+            JsonObject n=new JsonObject(); n.addProperty("x",xs[i]); n.addProperty("y",14); n.addProperty("symbol",symbols[i]);
+            n.add("children",new JsonArray()); map.add(n);
+        }
+        for(int x:offered){JsonObject n=new JsonObject(); n.addProperty("x",x); n.addProperty("y",14); next.add(n);}
+        screen.add("next_nodes",next); g.add("screen_state",screen); g.add("map",map);
+        v.addProperty("x",4); v.addProperty("y",13); v.addProperty("route_upgrades",3); v.addProperty("purge_base_cost",75);
+        RoutePlanner.Plan p=new RoutePlanner(g,v).best(-1);
+        return p==null?-1:p.path.get(0).x;
+    }
+
     static double line(String[] rooms,int gold) {
         JsonObject g=new JsonObject(), v=new JsonObject();
         g.addProperty("act",1); g.addProperty("screen_type","NONE"); g.addProperty("current_hp",70); g.addProperty("max_hp",70);
