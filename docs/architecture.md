@@ -30,7 +30,7 @@ Keep Java game integration and the native search worker separate (proposed). Thi
 
 Reuse the existing runtime builder, packaging checks and CI matrix. Source synchronization, portable package validation and Workshop publication are separate steps; a Git push does not install or publish a release.
 
-Four-character work stays in this repository rather than a new one. The characters share the simulator core, the import bridge, the Mod capture, packaging and CI; a second repository would fork all of them and drift. Native rule fixes found by the maintainer's research base are ported here as they are accepted, so contributors start from the current rules.
+Four-character work stays in this repository rather than a new one, and `main` is the integration branch for outside pull requests. The characters share the simulator core, the import bridge, the Mod capture, packaging and CI; a second repository would fork all of them and drift. Native rule fixes found by the maintainer's research base are ported here as they are accepted, so contributors start from the current rules.
 
 Truth stays private, and calibration replaces sharing it. Contributors build their own truth engine from their own copy of the game and calibrate it against published cases; the alternative, giving contributors the maintainer's decompiled engine, would redistribute game code. Calibration cases start from a seed rather than a mid-combat save, so a contributor's engine needs only "start a run, take an action, report the observation", not the maintainer's save import. The contributor's calibrated engine then produces native fixtures for new mechanics, and the maintainer's recheck catches any calibration gap the published cases did not cover.
 
@@ -48,5 +48,4 @@ Irreversible points: the snapshot schema version change in M0 (old diagnostic ex
 
 - The acceptance set and release order for Silent, Defect and Watcher; they block a four-character release claim.
 - Whether the new characters get full autopilot; it blocks outside-combat work for them.
-- The integration branch for outside pull requests (`main` proposed); it blocks the first outside PR.
 - Linux and Steam Deck portable-runtime delivery remains undecided; source-build support does not establish a bundled release.

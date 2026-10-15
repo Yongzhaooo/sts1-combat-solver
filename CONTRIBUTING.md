@@ -21,7 +21,7 @@ The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher
 
 ## 分支和 PR
 
-- fork 本仓库，从集成分支 `main` 开分支（提议；在维护者确认前以 issue 里的说明为准），分支名写职业和小步，例如 `silent/m1a-starter-cards`。
+- fork 本仓库，从集成分支 `main` 开分支，PR 也提到 `main`，分支名写职业和小步，例如 `silent/m1a-starter-cards`。
 - 一个 PR 只做一个职业的一个小步（见范围文档第 3 节），不顺手重构共享代码，也不夹带无关修复。
 - PR 说明写清：实现了哪些牌、遗物、能力；每项依据的 Java 类名和方法名（只写名字，不贴代码）；覆盖清单的变化；新增了哪些夹具和测试。
 

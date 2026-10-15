@@ -48,4 +48,3 @@ Players of *Slay the Spire 1* install one local Mod and get bounded combat plann
 - Order after Silent: Watcher or Defect first. Blocks the order of the second and third character milestones.
 - Whether the new characters get full autopilot, and with what evaluation. Blocks outside-combat rule and model work for them.
 - Size and composition of each character's acceptance set. Blocks turning on that character's support switch.
-- Integration branch for outside pull requests: `main` (proposed) or the current fix branch. Blocks the first outside PR.

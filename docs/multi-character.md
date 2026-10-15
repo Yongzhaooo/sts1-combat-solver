@@ -180,7 +180,7 @@ M2 与 M3 的先后取决于协作者兴趣；若只能选一个，观者规模�
 ## 5. 协作方式
 
 **分支与 PR。**
-- 代码和 CI 要求见 [CONTRIBUTING](../CONTRIBUTING.md)。PR 目标分支提议为 `main`；远端的默认引用目前指向 `fix/search-timeout-handling`，维护者确认前以 issue 说明为准。
+- 代码和 CI 要求见 [CONTRIBUTING](../CONTRIBUTING.md)。PR 目标分支为 `main`。
 - 协作者 fork，从确认的基线开一个按职业和里程碑命名的分支，一个 PR 对应一个小步（如"静默猎手 M1a"），附上覆盖清单的变化和新增的检查。
 - 一个现存的问题要先确认：本分支的 `native-runtime.yml` 仍然运行 `overlay/check_async_reports.py` 与 `overlay/check_debug_export.py`，但这两个脚本在提交 5d9e3a3 里已被删除（`origin/main` 上还在）。外部 PR 触发的 CI 可能因此失败，需要维护者在第一个 PR 之前修正。
 - 不要用 `pull_request_target`，`docs/mod-pair-ci.md` 已说明原因。
@@ -210,4 +210,4 @@ M2 与 M3 的先后取决于协作者兴趣；若只能选一个，观者规模�
 - 各职业缺牌数是按"三个 switch 的 `case` 与牌池的差集"得到的静态结果，没有编译或运行验证；非铁甲牌的 `Cards.h` 数值未核对。
 - Java 卡牌 ID 与枚举名的不一致清单需要对照实际游戏导出确认，本文只给出已知的几例。
 - 搜索对新职业的预算和启发式是否够用，需要有可玩的实现后才能评估。
-- PR 目标分支、验收集的组成与发布顺序，需要维护者决定（见 [产品 spec](product.md) 的待决问题）。
+- 验收集的组成与发布顺序，需要维护者决定（见 [产品 spec](product.md) 的待决问题）。
