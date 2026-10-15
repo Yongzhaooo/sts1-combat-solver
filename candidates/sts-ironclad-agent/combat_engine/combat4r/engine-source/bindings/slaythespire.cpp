@@ -80,7 +80,7 @@ namespace {
             case PlayerStatus::STRENGTH: player.strength = amount; break;
             default: {
                 const int idx = static_cast<int>(status);
-                if (idx <= 0 || idx >= static_cast<int>(PlayerStatus::THE_BOMB) + 1) {
+                if (idx <= 0 || idx >= static_cast<int>(PlayerStatus::STATUS_COUNT)) {
                     throw std::invalid_argument("invalid player status id");
                 }
                 if (idx < 64) player.statusBits0 |= 1ULL << idx;
@@ -1489,7 +1489,7 @@ PYBIND11_MODULE(slaythespire, m) {
 
     // a useful subset of player statuses for has_status / get_status
     auto playerStatuses = pybind11::enum_<PlayerStatus>(m, "PlayerStatus");
-    for (int i = 0; i <= static_cast<int>(PlayerStatus::THE_BOMB); ++i)
+    for (int i = 0; i < static_cast<int>(PlayerStatus::STATUS_COUNT); ++i)
         playerStatuses.value(playerStatusEnumStrings[i], static_cast<PlayerStatus>(i));
     auto monsterStatuses = pybind11::enum_<MonsterStatus>(m, "MonsterStatus");
     for (int i = 0; i <= static_cast<int>(MonsterStatus::INVALID); ++i)

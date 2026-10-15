@@ -61,7 +61,9 @@ namespace sts {
 
         std::uint32_t justAppliedBits = 0;
         std::uint64_t statusBits0 = 0;
-        std::uint32_t statusBits1 = 0;
+        std::uint64_t statusBits1 = 0; // statuses 64..127
+        static_assert(static_cast<int>(PlayerStatus::STATUS_COUNT) <= 8 * (sizeof(statusBits0) + sizeof(statusBits1)),
+                      "more PlayerStatus values than status bits; widen statusBits1");
         PlayerStatusAmounts statusMap;
 
         // Native powers use priority order, with acquisition order for ties.
