@@ -25,7 +25,7 @@ SimHelpers::SimHelpers() {
         monsterIdStringMap.insert({stringKey, id});
     }
 
-    for (int i = static_cast<int>(PS::INVALID); i <= static_cast<int>(PS::THE_BOMB); ++i) {
+    for (int i = static_cast<int>(PS::INVALID); i < static_cast<int>(PS::STATUS_COUNT); ++i) {
         const auto stringKey = playerStatusEnumStrings[i];
         const auto id = static_cast<PlayerStatus>(i);
         playerStatusStringMap.insert({stringKey, id});

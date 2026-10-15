@@ -3,6 +3,7 @@
 //
 
 #include "combat/BattleContext.h"
+#include "combat/CharacterCards.h"
 #include "game/GameContext.h"
 #include "game/Game.h"
 #include <sstream>
@@ -1250,6 +1251,7 @@ void BattleContext::useAttackCard() {
 
 
         default:
+            if (useCharacterCard(*this)) break;
 #ifdef sts_asserts
             std::cerr << "attempted to use unimplemented card: " << c.getName() << std::endl;
             throw std::runtime_error("attempted to use unimplemented card: " + std::string(c.getName()));
@@ -1563,6 +1565,7 @@ void BattleContext::useSkillCard() {
             break;
 
         default:
+            if (useCharacterCard(*this)) break;
 #ifdef sts_asserts
             std::cerr << "attempted to use unimplemented card: " << c.getName() << std::endl;
             throw std::runtime_error("attempted to use unimplemented card: " + std::string(c.getName()));
@@ -1664,6 +1667,7 @@ void BattleContext::usePowerCard() {
             break;
 
         default:
+            if (useCharacterCard(*this)) break;
 #ifdef sts_asserts
             std::cerr << "attempted to use unimplemented card: " << c.getName() << std::endl;
             throw std::runtime_error("attempted to use unimplemented card: " + std::string(c.getName()));

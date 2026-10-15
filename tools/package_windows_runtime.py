@@ -32,7 +32,7 @@ def package(source, python_zip, vc_runtime, pybind_license, output):
         metadata = json.loads(jar.read('ModTheSpire.json'))
         if metadata['dependencies'] != ['basemod']:
             raise ValueError('Expected the integrated single-mod build')
-    for name in ('backend.py', 'auto_policy.py', 'recovery.py', 'diagnostics.py'):
+    for name in ('backend.py', 'auto_policy.py', 'recovery.py', 'diagnostics.py', 'coverage_manifest.json'):
         copy('overlay/' + name)
     repo = Path('candidates/sts-ironclad-agent')
     for name in ('live_search.py', 'selection_import.py', 'rng_contract.py', 'steam_mcts.py'):

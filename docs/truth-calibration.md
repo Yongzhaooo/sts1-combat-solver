@@ -41,7 +41,7 @@
 
 - `game_jar_sha256` 固定游戏版本，协作者用同一版本的游戏才有可比性。
 - `actions` 是从开局起的完整动作序列。`play` 同时给手牌位置和牌的 Java ID，位置对不上就是失败，不去猜是哪张。
-- `checkpoints` 指定第几个动作之后比较。战斗内每个动作后都设检查点；战斗外只在进出战斗、奖励和商店这类会消耗随机数的地方设。
+- `checkpoints` 指定第几个动作之后比较：`after` 是已执行的动作数，0 表示 `new` 返回的观测，必须递增且不超过动作数。战斗内每个动作后都设检查点；战斗外只在进出战斗、奖励和商店这类会消耗随机数的地方设。
 - `observation` 字段（M0 定稿）：
   - 阶段、楼层、回合数；
   - 玩家：血量、最大血量、格挡、能量、金币、能力（ID 和层数）、姿态、真言、宝珠（ID、被动值、激发值）、宝珠栏数、Focus；
@@ -50,7 +50,17 @@
   - 遗物（ID 和计数器）、药水；
   - 各随机数流的计数：ai、card_random、misc、monster_hp、potion、shuffle 等。
 
-原生夹具使用同一份 `observation` 格式：一个战斗开始的观测加后续动作和检查点。M0 让模拟器的导入器直接读这个格式，所以协作者不需要实现 Mod 的导出。
+模拟器快照（`BattleContext.from_snapshot` 的输入）在 M0 增加了下面的可选字段，缺省都按“没有”处理，旧快照照常导入：
+
+- `character`：游戏的职业名 `IRONCLAD`、`THE_SILENT`、`DEFECT`、`WATCHER`，缺省为 `IRONCLAD`；其他值会被拒绝。
+- `player.stance`：`NEUTRAL`、`CALM`、`WRATH` 或 `DIVINITY`。
+- `player.mantra`：非负整数；快照的 `powers` 里也有 Mantra 时两者必须相等。
+- `player.orb_slots`：整数。`player.orbs`：宝珠列表。模拟器还没有宝珠状态，非空列表会被拒绝，而不是被忽略。
+- 牌堆里的牌可带 `retain`（布尔，单次保留位）。
+
+Focus 仍写在 `powers` 里。Mod 目前不导出这些字段，生产端现在只写 `character`；宝珠和姿态的单项格式（ID、被动值、激发值）等 M2、M3 导出时再定。
+
+原生夹具使用同一份 `observation` 格式：一个战斗开始的观测加后续动作和检查点。M0 只让快照导入器接受可选的职业字段（见上）；让导入器直接读 `observation` 格式是后续步骤，尚未排期，届时协作者就不需要实现 Mod 的导出。
 
 ## 适配器协议
 
@@ -67,6 +77,8 @@
 ```
 
 适配器的输出要严格按 `observation` 的字段，不多给也不少给：比较是对称的，多出来的字段也算差异。
+
+`python tools/truth_calibration/self_test.py` 用一个合成的假适配器和一个合成用例（`tools/truth_calibration/selftest/`，不含任何游戏观测）检查运行器本身，包括故意制造的多字段、缺字段、值或类型不符、列表顺序和适配器退出。
 
 ## 校准流程
 

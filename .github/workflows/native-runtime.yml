@@ -35,11 +35,15 @@ jobs:
           java-version: '17'
       - run: python -m pip install pybind11==3.1.0 cmake==3.31.10
       - run: python tools/check_backend_launcher.py
+      - run: python tools/check_character_registry.py
+      - run: python tools/coverage_manifest.py --check
+      - run: python tools/truth_calibration/self_test.py
       - run: python tools/check_distill2_artifact.py
       - run: python overlay/check_async_reports.py
       - run: python overlay/check_debug_export.py
       - run: python overlay/check_run_log.py
       - run: python tools/build_solver_runtime.py
+      - run: python tools/check_snapshot_import.py
       - run: python tools/check_headbutt.py
       - run: python tools/check_armaments_identity.py
       - run: python tools/check_corruption_snecko.py

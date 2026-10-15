@@ -31,7 +31,7 @@ The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher
 2. **仓库里不能有游戏代码。** 不贴反编译源码片段，不提交游戏 JAR、资源、字体、本地化文本。夹具只含状态数字和 ID。
 3. **按职业放代码。** 新牌放进本职业的分发函数或文件；共享表只改自己职业的行，不重排枚举；新的玩家能力只追加在维护者预留的位置。
 4. **没实现就保持未实现。** 不写近似实现，不让未完成的牌默认空操作。做不完的牌留在覆盖清单的"缺失"里，由求解前拒绝兜底。
-5. **每个新实现都有覆盖。** 至少一个原生夹具覆盖它，覆盖清单里从缺失变为已实现；机制复杂的（宝珠、姿态、预见、弃牌选择）另加 CTest 单元测试，模板见 `candidates/sts-ironclad-agent/combat_engine/tests/pen_nib_test.cpp`。
+5. **每个新实现都有覆盖。** 至少一个原生夹具覆盖它，覆盖清单里从缺失变为已实现；机制复杂的（宝珠、姿态、预见、弃牌选择）另加 CTest 单元测试，模板见 `candidates/sts-ironclad-agent/combat_engine/tests/pen_nib_test.cpp`。若你实现的牌正好是 `tests/character_dispatch_test.cpp` 或 `tools/check_backend_protocol.py` 里当作“未实现”示例的牌，换成同职业同类型的另一张未实现牌，并在 PR 里说明。
 6. **不改铁甲战士的行为。** 铁甲现有夹具和检查的结果不能变。确实发现铁甲侧的错误，单独开 PR，附 Java 依据。
 7. **不放宽比较。** 不给严格比较器（`sim_patch/parity/core.py`）、随机数计数或终局校验加容差，不跳过字段。
 8. **职业开关不动。** `backend.py`、`SolverMod`、`OutsidePacket` 里的支持开关只由维护者在该职业验收集通过后打开。
@@ -46,6 +46,8 @@ The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher
   ```bash
   python tools/build_solver_runtime.py          # 构建原生引擎并运行 CTest
   python tools/check_backend_protocol.py        # 以及与你改动相关的其他 tools/check_*.py
+  python tools/coverage_manifest.py             # 实现或删除牌、遗物后重新生成覆盖清单，连同改动一起提交
+  python tools/coverage_manifest.py --check     # 清单是否最新，已支持的职业有没有缺口
   python tools/truth_calibration/run.py --adapter "<你的适配器>" fixtures/calibration   # M0 之后
   ```
 
