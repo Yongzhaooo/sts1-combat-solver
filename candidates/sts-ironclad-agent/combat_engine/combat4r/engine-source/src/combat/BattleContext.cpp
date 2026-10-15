@@ -1216,7 +1216,7 @@ void BattleContext::useAttackCard() {
         default:
 #ifdef sts_asserts
             std::cerr << "attempted to use unimplemented card: " << c.getName() << std::endl;
-            assert(false);
+            throw std::runtime_error("attempted to use unimplemented card: " + std::string(c.getName()));
 #endif
             break;
     }
@@ -1521,10 +1521,15 @@ void BattleContext::useSkillCard() {
             addToBot( Actions::WarcryAction() );
             break;
 
+        case CardId::VAULT:
+            skipMonsterTurn = true;
+            callEndTurnEarlySequence();
+            break;
+
         default:
 #ifdef sts_asserts
             std::cerr << "attempted to use unimplemented card: " << c.getName() << std::endl;
-            assert(false);
+            throw std::runtime_error("attempted to use unimplemented card: " + std::string(c.getName()));
 #endif
             break;
     }
@@ -1625,7 +1630,7 @@ void BattleContext::usePowerCard() {
         default:
 #ifdef sts_asserts
             std::cerr << "attempted to use unimplemented card: " << c.getName() << std::endl;
-            assert(false);
+            throw std::runtime_error("attempted to use unimplemented card: " + std::string(c.getName()));
 #endif
             break;
     }

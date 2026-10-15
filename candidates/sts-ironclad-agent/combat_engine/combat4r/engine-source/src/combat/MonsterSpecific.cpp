@@ -1739,24 +1739,14 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             } else {
                 bc.player.debuff<PS::STRENGTH>(-1);
             }
-            if (lastMoveBefore(MonsterMoveId::SPIRE_SHIELD_SMASH) || lastMoveBefore(MonsterMoveId::INVALID)) {
-                setMove(MonsterMoveId::SPIRE_SHIELD_FORTIFY);
-            } else {
-                setMove(MonsterMoveId::SPIRE_SHIELD_SMASH);
-            }
-            bc.noOpRollMove();
+            bc.addToBot( Actions::RollMove(idx) );
             break;
 
 
         case MMID::SPIRE_SHIELD_FORTIFY: // 2
             addBlock(30);
             bc.monsters.arr[1].addBlock(30);
-            if (lastMoveBefore(MonsterMoveId::SPIRE_SHIELD_SMASH) || lastMoveBefore(MonsterMoveId::INVALID)) {
-                setMove(MonsterMoveId::SPIRE_SHIELD_BASH);
-            } else {
-                setMove(MonsterMoveId::SPIRE_SHIELD_SMASH);
-            }
-            bc.noOpRollMove();
+            bc.addToBot( Actions::RollMove(idx) );
             break;
 
 
@@ -1775,23 +1765,13 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             } else {
                 bc.addToBot( Actions::MakeTempCardInDiscard(CardId::BURN, 2) );
             }
-            if (lastMoveBefore(MonsterMoveId::SPIRE_SPEAR_SKEWER)) {
-                setMove(MonsterMoveId::SPIRE_SPEAR_PIERCER);
-            } else {
-                setMove(MonsterMoveId::SPIRE_SPEAR_SKEWER);
-            }
-            bc.noOpRollMove();
+            bc.addToBot( Actions::RollMove(idx) );
             break;
 
         case MMID::SPIRE_SPEAR_PIERCER: // 2
             buff<MS::STRENGTH>(2);
             bc.monsters.arr[0].buff<MS::STRENGTH>(2);
-            if (lastMoveBefore(MonsterMoveId::SPIRE_SPEAR_SKEWER)) {
-                setMove(MonsterMoveId::SPIRE_SPEAR_BURN_STRIKE);
-            } else {
-                setMove(MonsterMoveId::SPIRE_SPEAR_SKEWER);
-            }
-            bc.noOpRollMove();
+            bc.addToBot( Actions::RollMove(idx) );
             break;
 
         case MMID::SPIRE_SPEAR_SKEWER: // 3
@@ -3288,24 +3268,44 @@ MMID Monster::getMoveForRoll(BattleContext &bc, int &monsterData, const int roll
         }
 
         case MonsterId::SPIRE_SHIELD: {
-            // 1 bash
-            // 2 fortify
-            // 3 smash
-            if (bc.aiRng.randomBoolean()) {
-                return MonsterMoveId::SPIRE_SHIELD_FORTIFY;
+            // moveCount % 3:
+            // case 0: aiRng.randomBoolean() ? DEFEND (2) : ATTACK_DEBUFF (1)
+            // case 1: lastMove(1) ? DEFEND (2) : ATTACK_DEBUFF (1)
+            // default: ATTACK_DEFEND (3)
+            if (moveHistory[0] == MMID::INVALID) {
+                if (bc.aiRng.randomBoolean()) {
+                    return MonsterMoveId::SPIRE_SHIELD_FORTIFY;
+                } else {
+                    return MonsterMoveId::SPIRE_SHIELD_BASH;
+                }
+            } else if (lastMoveBefore(MMID::SPIRE_SHIELD_SMASH) || lastMoveBefore(MMID::INVALID)) {
+                if (lastMove(MMID::SPIRE_SHIELD_BASH)) {
+                    return MonsterMoveId::SPIRE_SHIELD_FORTIFY;
+                } else {
+                    return MonsterMoveId::SPIRE_SHIELD_BASH;
+                }
             } else {
-                return MonsterMoveId::SPIRE_SHIELD_BASH;
+                return MonsterMoveId::SPIRE_SHIELD_SMASH;
             }
         }
 
         case MonsterId::SPIRE_SPEAR: {
-            if (firstTurn()) {
+            // moveCount % 3:
+            // case 0: lastMove(1) ? BUFF (2) : ATTACK_DEBUFF (1)
+            // case 1: ATTACK (3) [skewer]
+            // default: aiRng.randomBoolean() ? BUFF (2) : ATTACK_DEBUFF (1)
+            if (moveHistory[0] == MMID::INVALID) {
                 return MonsterMoveId::SPIRE_SPEAR_BURN_STRIKE;
-            }
-            if (bc.aiRng.randomBoolean()) {
-                return MonsterMoveId::SPIRE_SPEAR_PIERCER;
+            } else if (lastMove(MMID::SPIRE_SPEAR_BURN_STRIKE)) {
+                return MonsterMoveId::SPIRE_SPEAR_SKEWER;
+            } else if (lastMove(MMID::SPIRE_SPEAR_SKEWER)) {
+                if (lastMoveBefore(MMID::SPIRE_SPEAR_BURN_STRIKE)) {
+                    return MonsterMoveId::SPIRE_SPEAR_PIERCER;
+                } else {
+                    return MonsterMoveId::SPIRE_SPEAR_BURN_STRIKE;
+                }
             } else {
-                return MonsterMoveId::SPIRE_SPEAR_BURN_STRIKE;
+                return MonsterMoveId::SPIRE_SPEAR_SKEWER;
             }
         }
 

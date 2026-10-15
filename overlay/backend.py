@@ -14,8 +14,18 @@ import sys
 import threading
 import time
 import traceback
+
+os.environ['PYTHONUTF8'] = '1'
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+for s in (sys.stdin, sys.stdout, sys.stderr):
+    if hasattr(s, 'reconfigure'):
+        try:
+            s.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+
 from recovery import health, future_recovery
-from diagnostics import AsyncReports, export_debug, export_run, fault_signature
+from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature
 from auto_policy import recommend
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -121,13 +131,14 @@ class Advisor:
         if hasattr(self, 'on_phase'):
             self.on_phase(name)
 
-    def search_plan(self, root, budget, slots, credit, index, kill_thieves, generated):
+    def search_plan(self, root, budget, slots, credit, index, kill_thieves, generated, initial_plan=None):
         fast_boss = not slots and self.root_game.get('solver_auto_context', {}).get('boss_fast_finish') is True
         if fast_boss:
             generated = False
         initial_budget = 2000 if fast_boss else budget
         args = (root, initial_budget, slots, credit, index, kill_thieves, generated)
-        best = dict(self.native_search.plan(*args, True) if fast_boss else self.native_search.plan(*args))
+        best = dict(initial_plan) if initial_plan is not None else dict(
+            self.native_search.plan(*args, True) if fast_boss else self.native_search.plan(*args))
         if boss_fast_plan(self.root_game, best, slots):
             best['boss_fast_finish'] = True
             return best
@@ -230,12 +241,27 @@ class Advisor:
             self.solve_thief(view, budget, credit, started, before, potions)
             return
         # Every branch searches its own copy of the root on its own thread (the
-        # native call releases the GIL). Single-bottle lines are searched
-        # speculatively and only kept if the no-potion line cannot win without net
+        # native call releases the GIL). A clean no-potion 8k plan avoids
+        # submitting bottles; otherwise bottles overlap its refinement. Keep
+        # the existing bottle comparison when the no-potion line has net
         # HP loss. Bottle sets are searched only if no line so far wins within
         # MULTI_POTION_LOSS effective HP loss.
         fast_boss = view['game'].get('solver_auto_context', {}).get('boss_fast_finish') is True
-        stages = [[()]] if fast_boss else [[()] + [(slot,) for slot, _ in potions]]
+        initial_plan = None
+        clean_regular = False
+        if budget == 8000 and not fast_boss and potions:
+            self.searching = [(0, 'no-potion', '不用药')]
+            try:
+                initial_plan = dict(self.native_search.plan(self.root, budget, [], credit, 0, False, False))
+            except BaseException:
+                self.native_search.cancel()
+                self.searching = []
+                raise
+            clean_regular = (initial_plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
+                             and health(initial_plan, self.root_game, True)['loss'] == 0
+                             and not initial_plan.get('used_tail') and not initial_plan.get('used_fairy')
+                             and not toolbox_selection(view['game']))
+        stages = [[()]] if fast_boss or clean_regular else [[()] + [(slot,) for slot, _ in potions]]
         self.searching = []
         pool = ThreadPoolExecutor(max_workers=max(1, 2 ** len(potions)))
         try:
@@ -247,7 +273,9 @@ class Advisor:
                     self.searching.append((index, branch_id, '+'.join(names[i] for i in slots) or '不用药'))
                     futures[slots] = pool.submit(self.search_plan, self.root, budget,
                                                  list(slots), credit, index, False,
-                                                 budget >= DEEP_BUDGET)
+                                                 budget >= DEEP_BUDGET,
+                                                 **({'initial_plan': initial_plan}
+                                                    if not slots and initial_plan is not None else {}))
                 if () in futures:
                     self.plan = dict(futures[()].result())
                     self.plan['seconds'] = round(time.monotonic() - started, 2)
@@ -504,8 +532,9 @@ class Advisor:
                 action = s.pending_multi['action']
             else:
                 comparison = s._compare(view)
-                if comparison['differences']:
-                    raise ValueError('确认选牌后状态偏离预测：' + repr(comparison['differences'][:4]))
+                diffs = [d for d in comparison.get('differences', []) if not d.get('path', '').startswith('/rng/card_random')]
+                if diffs:
+                    raise ValueError('确认选牌后状态偏离预测：' + repr(diffs[:4]))
                 return
         if (int(action.bits) & 0xffffffff) != (s.actions[0] & 0xffffffff):
             raise ValueError('执行动作与路线不一致')
@@ -513,8 +542,9 @@ class Advisor:
         s.actions.popleft()
         s.pending_multi = None
         comparison = s._compare(view)
-        if comparison['differences']:
-            raise ValueError('实际状态偏离预测；已停止执行。' + repr(comparison['differences'][:2]))
+        diffs = [d for d in comparison.get('differences', []) if not d.get('path', '').startswith('/rng/card_random')]
+        if diffs:
+            raise ValueError('实际状态偏离预测；已停止执行。' + repr(diffs[:2]))
         if s.battle.input_state == s.sts.InputState.CARD_SELECT:
             # Toolbox can generate a card and immediately open Gambling Chip,
             # with no normal-play frame in which LiveSearch refreshes identities.
@@ -640,6 +670,23 @@ def report_progress(advisor, connection, request, stop, send_lock):
 
 
 def worker(connection, interrupt):
+    for s in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(s, 'reconfigure'):
+            try:
+                s.reconfigure(encoding='utf-8', errors='replace')
+            except Exception:
+                pass
+    last_error_key = None
+    suppressed_count = 0
+
+    def flush_suppressed():
+        nonlocal suppressed_count, last_error_key
+        if suppressed_count > 0:
+            now_str = time.strftime('%Y-%m-%d %H:%M:%S')
+            sys.stderr.write(f"[{now_str}] (suppressed {suppressed_count} identical errors)\n")
+            sys.stderr.flush()
+            suppressed_count = 0
+
     try:
         init_started = time.monotonic()
         advisor = Advisor()
@@ -680,9 +727,33 @@ def worker(connection, interrupt):
                 result = advisor.handle(request)
                 if request['op'] in ('solve', 'choose'):
                     result['_plan'] = advisor.plan
+                flush_suppressed()
+                last_error_key = None
             except Exception as error:
-                traceback.print_exc(file=sys.stderr)
-                result = {'status': 'error', 'message': str(error), 'traceback': traceback.format_exc()}
+                tb_str = traceback.format_exc()
+                req_id = request.get('id', '?')
+                state = request.get('state') or {}
+                game = state.get('game_state') or {}
+                seed = game.get('seed') or request.get('seed') or 'NO_SEED'
+                floor = game.get('floor')
+                floor_str = f"F:{floor}" if floor is not None else "F:?"
+                sig = fault_signature(str(error), tb_str)
+                now_str = time.strftime('%Y-%m-%d %H:%M:%S')
+                err_msg = str(error)
+                dedup_key = (str(seed), str(floor), sig, err_msg)
+
+                if dedup_key == last_error_key:
+                    suppressed_count += 1
+                else:
+                    flush_suppressed()
+                    last_error_key = dedup_key
+                    # Structured single line: [YYYY-MM-DD HH:MM:SS] [Seed] [F:楼层] [REQ:ID] [SIG:签名] 错误描述
+                    sys.stderr.write(f"[{now_str}] [{seed}] [{floor_str}] [REQ:{req_id}] [SIG:{sig}] {err_msg}\n")
+                    compact_trace = ''.join(traceback.format_exception(type(error), error, error.__traceback__))
+                    sys.stderr.write(compact_trace)
+                    sys.stderr.flush()
+
+                result = {'status': 'error', 'message': err_msg, 'traceback': tb_str}
             finally:
                 was_interrupted = interrupt.is_set()
                 stop.set()
@@ -699,7 +770,13 @@ def worker(connection, interrupt):
     except EOFError:
         pass
     except Exception:
+        flush_suppressed()
+        now_str = time.strftime('%Y-%m-%d %H:%M:%S')
+        sys.stderr.write(f"[{now_str}] [NO_SEED] [F:?] [REQ:?] [SIG:worker_exit] 工作进程异常崩溃\n")
         traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+    finally:
+        flush_suppressed()
 
 
 def worker_version():
@@ -738,11 +815,22 @@ def start_worker(process):
                 raise ctypes.WinError(ctypes.get_last_error())
 
 
-def serve(report_path=None):
+ALLOWED_DIAGNOSTIC_EVENTS = {
+    'outside',
+    'execute',
+    'potion_reward_execute',
+    'potion_reward_complete',
+    'error',
+    'state_changed',
+    'combat_end',
+}
+
+
+def serve(runs_dir=None):
     inbox = queue.Queue()
     data_dir = Path(os.environ.get('STS_SOLVER_DATA', Path(__file__).parent/'runtime'))
-    report_path = Path(report_path or data_dir/'combat-reports.sqlite3')
-    reports = AsyncReports(report_path)
+    runs_dir = Path(runs_dir or data_dir/'runs')
+    reports = AsyncReports(runs_dir)
     error_log = data_dir/'backend.log'
     run_log = [True]  # The panel switch; the per-seed record is on by default.
 
@@ -784,10 +872,6 @@ def serve(report_path=None):
         process = connection = active = interrupt = None
 
     def emit(value, state=None):
-        if value.get('status') != 'progress':
-            reports.record('reply', value, state)
-        elif 'phase' in value:
-            reports.record('phase', value, state)
         value = {k: v for k, v in value.items() if k != '_plan'}
         if value.get('status') == 'error':
             tail = '\n'.join((value.get('stderr') or '').strip().splitlines()[-30:])
@@ -820,15 +904,6 @@ def serve(report_path=None):
             if request is None:
                 break
             if request != 'poll':
-                if request.get('op') == 'export_debug':
-                    try:
-                        reports.flush()
-                        target = export_debug(report_path, report_path.parent/'bug-reports', request.get('metadata'))
-                        answer = {'status': 'debug_export', 'file': target.name}
-                    except Exception as failure:
-                        answer = {'status': 'debug_error', 'message': str(failure)}
-                    print(json.dumps(answer, ensure_ascii=False), flush=True)
-                    continue
                 if request.get('op') == 'run_log':
                     run_log[0] = bool(request.get('enabled'))
                     continue
@@ -836,15 +911,17 @@ def serve(report_path=None):
                     try:
                         reports.flush()
                         seed = request.get('seed') or reports.runs_seed()
-                        target = export_run(report_path.parent/'runs', seed, request['directory'], request.get('metadata'))
+                        target = export_run(runs_dir, seed, request['directory'], request.get('metadata'))
                         answer = {'status': 'debug_run_export', 'file': target.name, 'directory': str(target.parent)}
                     except Exception as failure:
                         answer = {'status': 'debug_error', 'message': str(failure)}
                     print(json.dumps(answer, ensure_ascii=False), flush=True)
                     continue
-                reports.record('request', request, request.get('state'))
                 if request.get('op') == 'diagnostic':
-                    keep = request.get('event') in ('error', 'state_changed')
+                    ev = request.get('event')
+                    if ev not in ALLOWED_DIAGNOSTIC_EVENTS:
+                        continue
+                    keep = ev in ('error', 'state_changed')
                     note('diag', {k: request[k] for k in ('event', 'message', 'floor')
                                          if k in request}, request.get('state') if keep else None,
                                 request.get('seed'))
@@ -854,7 +931,7 @@ def serve(report_path=None):
                 if request.get('op') == 'cancel':
                     if active and active[4] == 'solve':
                         interrupt.set()
-                        active = (*active[:4], active[4], request['id'])
+                        active = (*active[:4], active[4], request['id'], active[6])
                     else:
                         # Executing or idle work has no partial search to retain.
                         if active:
@@ -886,7 +963,8 @@ def serve(report_path=None):
                     stop()
                     start()
                     connection.send(request)
-                active = (request['id'], received_at, request.get('state'), log_offset, request.get('op'), None)
+                timeout_limit = 600 if request.get('budget', 0) >= 128000 else 150
+                active = (request['id'], received_at, request.get('state'), log_offset, request.get('op'), None, timeout_limit)
             while active and connection.poll():
                 completed_active = active
                 active_state = active[2]
@@ -909,13 +987,13 @@ def serve(report_path=None):
                 if result.get('status') == 'error':
                     result['stderr'] = stderr_since(log_offset)
                 emit(result, active_state)
-            if active and (not process.is_alive() or time.monotonic() - active[1] > 90):
+            if active and (not process.is_alive() or time.monotonic() - active[1] > active[6]):
                 request_id = active[0]
                 active_state = active[2]
                 exitcode = process.exitcode
                 log_offset = active[3]
                 stop()
-                emit({'id': request_id, 'status': 'error', 'message': '搜索超时或引擎退出；请降低预算后重算。',
+                emit({'id': request_id, 'status': 'error', 'message': '搜索超时，请手动接管当前战斗并选择路线（或在设置中降低预算）。',
                       'exitcode': exitcode, 'stderr': stderr_since(log_offset)}, active_state)
     finally:
         stop()

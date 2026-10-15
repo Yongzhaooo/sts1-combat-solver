@@ -14,11 +14,13 @@ For ideas, [hotwords123/StS2.RandomForeseer](https://github.com/hotwords123/StS2
 
 ## What it does
 
-A local combat advisor and optional executor for *Slay the Spire 1*. It searches Ironclad and colorless-card combat, compares potion lines, and checks executed actions against the game state. By default you choose cards, paths, shops, rest sites, and events; the optional full autopilot (below) uses route rules and a network for other decisions. Search has a finite budget and does not guarantee an optimal line or perfect simulation. Mods that change combat rules may create unsupported states.
+A local combat advisor and optional executor for *Slay the Spire 1*. It searches Ironclad and colorless-card combat, compares potion lines, and checks executed actions against the game state. By default you choose cards, paths, shops, rest sites, and events; the optional full autopilot (below) uses route rules and a network for other decisions. Search has a finite budget and does not guarantee an optimal line or perfect simulation. Mods that change combat rules may create unsupported states (`SaveStateMod` and `Undo` / `undothespire` alter native discovery card generation, rewrite action queues, or desynchronize RNG state counters, and are not compatible).
 
 The panel supports English and Chinese. Optional seeded foresight previews events, encounters, and transforms using hidden RNG information beyond ordinary visible play. The [potion score table](POTION_POLICY.zh-CN.md) explains reward swaps and combat use.
 
 ## Project goals and progress
+
+The product contract is described here; component boundaries and the proposed delivery route are in [Architecture](docs/architecture.md).
 
 - **Four-character combat solver — underway:** The current release supports Ironclad and colorless cards. Silent, Defect, and Watcher need further simulator work.
 - **Reinforcement-learning (RL) agent — underway:** Policy research, training, and evaluation experiments are in progress. v0.4 ships an early training result that drives the autopilot below.
