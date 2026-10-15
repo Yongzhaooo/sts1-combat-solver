@@ -37,6 +37,7 @@ jobs:
       - run: python tools/check_backend_launcher.py
       - run: python tools/check_character_registry.py
       - run: python tools/coverage_manifest.py --check
+      - run: python tools/truth_calibration/self_test.py
       - run: python tools/check_distill2_artifact.py
       - run: python overlay/check_async_reports.py
       - run: python overlay/check_debug_export.py
