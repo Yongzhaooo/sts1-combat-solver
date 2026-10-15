@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['overlay/**', 'tools/**', 'candidates/**', '.github/workflows/native-runtime.yml']
+    paths: ['overlay/**', 'tools/**', 'candidates/**', 'fixtures/**', '.github/workflows/native-runtime.yml']
   pull_request:
-    paths: ['overlay/**', 'tools/**', 'candidates/**', '.github/workflows/native-runtime.yml']
+    paths: ['overlay/**', 'tools/**', 'candidates/**', 'fixtures/**', '.github/workflows/native-runtime.yml']
 permissions:
   contents: read
 env:
@@ -38,6 +38,7 @@ jobs:
       - run: python tools/check_character_registry.py
       - run: python tools/coverage_manifest.py --check
       - run: python tools/truth_calibration/self_test.py
+      - run: python tools/truth_calibration/run.py --check fixtures/calibration
       - run: python tools/check_distill2_artifact.py
       - run: python overlay/check_async_reports.py
       - run: python overlay/check_debug_export.py

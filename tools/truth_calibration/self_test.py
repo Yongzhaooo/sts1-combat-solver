@@ -14,9 +14,39 @@ SELFTEST = HERE / 'selftest'
 CASE = json.loads((SELFTEST / 'synthetic-0001.json').read_text(encoding='utf-8'))
 
 
-def command(*extra):
-    argv = [sys.executable, str(SELFTEST / 'fake_adapter.py'), *extra]
+def line(argv):
     return subprocess.list2cmdline(argv) if sys.platform == 'win32' else shlex.join(argv)
+
+
+def command(*extra):
+    return line([sys.executable, str(SELFTEST / 'fake_adapter.py'), *extra])
+
+
+def check_headless_adapter():
+    """Reference adapter and projection against the SYNTHETIC CLI in selftest/fake_cli.py."""
+    from headless_projection import MissingField, project
+    try:
+        project({'phase': 'MAP', 'floor': 0, 'player': {'powers': []}})
+        raise AssertionError('a state without the engine extension must be rejected')
+    except MissingField as error:
+        assert 'calibration' in str(error), error
+    cli = line([sys.executable, str(SELFTEST / 'fake_cli.py'), '{saves}'])
+    adapter = run.Adapter(line([sys.executable, str(HERE / 'headless_adapter.py'), '--cli', cli]), 20)
+    try:
+        reply = adapter.request({'op': 'new', 'seed': '1', 'character': 'IRONCLAD', 'ascension': 0})
+        assert reply['ok'] and run.shape_problems(reply['observation']) == [], reply
+        play = {'kind': 'play', 'hand': 0, 'card': 'SYN_B', 'target': 0}
+        reply = adapter.request({'op': 'act', 'action': play})
+        assert not reply['ok'] and 'does not hold SYN_B' in reply['error'], reply
+        reply = adapter.request({'op': 'act', 'action': {'kind': 'map', 'x': 0, 'y': 0}})
+        assert not reply['ok'] and 'does not offer' in reply['error'], reply
+        reply = adapter.request({'op': 'act', 'action': dict(play, hand=1)})
+        observation = reply['observation']
+        assert [c['id'] for c in observation['piles']['discard']] == ['SYN_B'], reply
+        assert observation['rng']['card_random'] == 1 and observation['player']['focus'] == 0, observation
+        assert observation['player']['orbs'] == [{'id': None, 'passive': 0, 'evoke': 0}], observation
+    finally:
+        adapter.close()
 
 
 def result(case, *extra):
@@ -57,7 +87,9 @@ def main():
         done = subprocess.run([sys.executable, str(HERE / 'run.py'), '--adapter', command(*extra), str(SELFTEST)],
                               capture_output=True, text=True, encoding='utf-8')
         assert done.returncode == code, (extra, done.stdout, done.stderr)
-    print('PASS: calibration runner accepts the synthetic case and reports every injected fault')
+    check_headless_adapter()
+    print('PASS: calibration runner accepts the synthetic case and reports every injected fault; '
+          'the reference adapter drives the synthetic CLI')
 
 
 if __name__ == '__main__':
