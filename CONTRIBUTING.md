@@ -1,8 +1,8 @@
 # 参与开发 / Contributing
 
-欢迎一起开发。目前最需要的是把战斗求解从铁甲战士扩到静默猎手、故障机器人和观者。联系邮箱：{{CONTACT_EMAIL}}。
+维护者主线是战士求解器和强化学习；静默猎手、故障机器人和观者的战斗求解器欢迎协作开发。联系邮箱：yongzhao.derek@gmail.com。
 
-Contributions are welcome, especially Silent, Defect and Watcher combat support. Contact: {{CONTACT_EMAIL}}. The requirements below apply to every pull request.
+The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher combat solvers are open for collaboration. Contact: yongzhao.derek@gmail.com. The requirements below apply to every pull request.
 
 ## 先读
 

@@ -6,7 +6,7 @@ This spec states the destination for the four-character version. The released co
 
 ## Purpose
 
-Players of *Slay the Spire 1* install one local Mod and get bounded combat planning, with optional execution, for Ironclad, Silent, Defect and Watcher. Outside contributors can add a character without access to the game's source code or the maintainer's private truth engine.
+Players of *Slay the Spire 1* install one local Mod and get bounded combat planning, with optional execution, for Ironclad, Silent, Defect and Watcher. The maintainer develops the Ironclad solver and the RL agent; Silent, Defect and Watcher are developed with outside collaborators, who can add a character without access to the game's source code or the maintainer's private truth engine.
 
 ## Expectations
 
