@@ -7,7 +7,7 @@ import sys
 
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root / 'overlay'))
-from backend import Advisor, view_from_state, start_selection
+from backend import Advisor, view_from_state, start_selection, FRAME_RNG
 from sim_patch.parity.adapter import ActionMapper
 
 states = [json.loads((root / 'overlay/test' / ('headbutt-' + name + '.json')).read_text(encoding='utf-8'))
@@ -48,6 +48,18 @@ pick.execute(battle)
 comparison = s.comparator.compare_battle(after, battle)
 assert not comparison['differences'], comparison['differences']
 
+# Discovery's frame-dependent cardRandomRng drift is tolerated during execution;
+# it must not silently empty the remaining route (Sentries + Skill Potion report).
+s.actions.popleft()
+drifted = copy.deepcopy(after)
+drifted['rng']['cardRandomRng']['counter'] += 15
+paths = [d['path'] for d in s.comparator.compare_battle(drifted, battle)['differences']]
+assert paths and all(path.startswith(FRAME_RNG) for path in paths), paths
+s._compare(drifted, FRAME_RNG)
+assert len(s.actions) == 1, 'tolerated RNG drift dropped the route'
+s._compare(drifted)
+assert not s.actions, 'untolerated drift must still drop the route'
+
 # Search itself must accept this root, produce a real choice, then validate the
 # chosen result against a game capture when that is the captured choice.
 advisor.solve(picker, 2000)
@@ -76,4 +88,4 @@ for change in ('missing_card', 'extra_queue', 'selected', 'wrong_uuid', 'queued_
         pass
     else:
         raise AssertionError('unsafe selection accepted: ' + change)
-print('PASS: Headbutt play/select replay, fresh picker search, continuation parity, duplicate UUIDs and invalid queues')
+print('PASS: Headbutt play/select replay, fresh picker search, continuation parity, tolerated card RNG drift, duplicate UUIDs and invalid queues')

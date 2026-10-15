@@ -2,6 +2,7 @@ package sts1solver;
 
 import com.evacipated.cardcrawl.modthespire.lib.*;
 import com.evacipated.cardcrawl.modthespire.Loader;
+import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.map.MapRoomNode;
 import communicationmod.GameStateConverter;
@@ -31,6 +32,25 @@ public class RecoveryExportPatch {
             HashMap<String,Object> prep=new HashMap<>();
             prep.put("seen",seen); prep.put("elite",elite);
             __result.put("solver_act_prep",prep);
+        } catch(RuntimeException ignored) { }
+        try {
+            // Incense Burner rule: the latest elite drawn from the elite list (not event fights)
+            // and whether another elite is still reachable in this act.
+            String lastElite=null;
+            if(AbstractDungeon.getCurrRoom() instanceof com.megacrit.cardcrawl.rooms.MonsterRoomElite)
+                lastElite=AbstractDungeon.lastCombatMetricKey;
+            else {
+                List<String> path=CardCrawlGame.metricData.path_per_floor;
+                List<HashMap> fights=CardCrawlGame.metricData.damage_taken;
+                for(int i=fights.size()-1;i>=0 && lastElite==null;i--) {
+                    int floor=((Number)fights.get(i).get("floor")).intValue();
+                    if(floor>=1 && floor<=path.size() && "E".equals(path.get(floor-1)))
+                        lastElite=String.valueOf(fights.get(i).get("enemies"));
+                }
+            }
+            __result.put("solver_last_elite",lastElite);
+            if(AbstractDungeon.getCurrMapNode()!=null)
+                __result.put("solver_elite_ahead",Foresight.eliteAhead(AbstractDungeon.map,AbstractDungeon.getCurrMapNode(),new IdentityHashMap<>()));
         } catch(RuntimeException ignored) { }
         if(AbstractDungeon.getCurrRoom()!=null && AbstractDungeon.getCurrRoom().event!=null)
             __result.put("solver_event_class",AbstractDungeon.getCurrRoom().event.getClass().getSimpleName());

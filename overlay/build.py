@@ -77,7 +77,8 @@ def main():
                         str(here / 'test/OutsidePacketCheck.java'),
                         str(here / 'test/RoutePlannerCheck.java'),
                         str(here / 'test/OutsidePacketParityCheck.java'),
-                        str(here / 'test/EventRulesCheck.java')], check=True)
+                        str(here / 'test/EventRulesCheck.java'),
+                        str(here / 'test/RngModsCheck.java')], check=True)
         subprocess.run(['javac', '--release', '8', '-proc:none', '-encoding', 'UTF-8', '-cp',
                         os.pathsep.join((str(classes), classpath)), '-d', str(checks),
                         str(here / 'test/PotionRewardsCheck.java')], check=True)
@@ -89,6 +90,7 @@ def main():
                             'sts1solver.BackendRuntimeCheck', str(Path(sys.executable).absolute())], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.LanguageCheck'], check=True)
         subprocess.run(['java', '-cp', check_cp, 'sts1solver.PanelSizeCheck'], check=True)
+        subprocess.run(['java', '-cp', check_cp, 'sts1solver.RngModsCheck'], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.StateKeyCheck'], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
                         'sts1solver.Distill2Check', str(here / 'test/distill2-reference.json')], check=True)

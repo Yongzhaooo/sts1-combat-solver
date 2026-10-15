@@ -42,3 +42,22 @@ def health(plan, game, won):
                 raw_loss=max(0, int(game['current_hp']) - raw),
                 recovery=post-raw, recovery_notes=notes, lost_gold=lost_gold,
                 used_tail=bool(plan.get('used_tail')), used_fairy=int(plan.get('used_fairy', 0)))
+
+
+def incense_targets(game):
+    """Incense Burner counters worth ending this fight with (user rule, 2026-10-15).
+
+    Counter c gives Intangible on turn 6-c of the next fight (5 = turn 1, 0 = turn 6).
+    The game never rolls the same elite twice in a row (populateMonsterList), so an
+    elite is possible next exactly when it was not the last elite of the act.
+    """
+    if any(m['id'] == 'CorruptHeart' for m in game['combat_state']['monsters']):
+        return []
+    act, boss, last = game.get('act', 1), game.get('act_boss'), game.get('solver_last_elite')
+    if game.get('room_type') == 'MonsterRoomBoss' or act >= 3:
+        return [4]  # next act, act 3 elites, Shield/Spear into the Heart
+    if act == 1:
+        return [3] if boss == 'Slime Boss' or last != 'Gremlin Nob' else [3, 4]
+    if boss == 'Automaton' and not game.get('solver_elite_ahead', True):
+        return [0]
+    return [5] if last != 'Slavers' else [4]

@@ -15,6 +15,7 @@ TEST = Path(__file__).parent / 'test'
 def main():
     state = json.loads((TEST / 'headbutt-before.json').read_text(encoding='utf-8'))
     state['game_state']['seed'] = 777
+    state['game_state']['relics'].append({'id': 'Sundial', 'counter': 2})
 
     assert fault_signature('attempted to use unimplemented card: Outmaneuver',
                            'Assertion failed: false, BattleContext.cpp:1545') == 'unimplemented_card-Outmaneuver'
@@ -43,6 +44,8 @@ def main():
         assert 'summary' in rows[1] and 'state' not in rows[1], 'combat_open uses summary instead of raw state'
         assert rows[1]['summary']['deck'] and 'keys' in rows[1]['summary'], 'summary has deck and keys'
         assert rows[2]['snap']['hand'], 'request keeps a small snapshot for divergence checks'
+        assert rows[2]['snap']['counters'] == {'Sundial': 2}, 'snapshot keeps cross-fight relic counters'
+        assert rows[1]['summary']['relic_counters'] == {'Sundial': 2} and 'last_elite' in rows[1]['summary']
         assert 'snap' not in rows[3], 'reply must not duplicate snapshot from request'
 
         out = export_run(runs, '777', Path(tmp) / 'Desktop', {'mod_version': '0.4.2', 'username': 'private'})

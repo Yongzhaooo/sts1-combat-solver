@@ -165,12 +165,13 @@ class LiveSearch:
         self.pending_multi = None
         return self._compare(view)
 
-    def _compare(self, view):
+    def _compare(self, view, tolerated=()):
+        """tolerated: path prefixes the caller accepts; only other differences drop the plan."""
         if self.confirmation(view):
             return {'differences': [], 'observed_match': False,
                     'gaps': [{'kind': 'original_selection_confirmation_pending'}]}
         comparison = self.comparator.compare_battle(view, self.battle)
-        if comparison["differences"]:
+        if any(not d.get("path", "").startswith(tolerated) for d in comparison["differences"]):
             self.actions.clear()
         elif view["game"].get("screen_type") == "NONE" and self.battle.input_state == self.sts.InputState.PLAYER_NORMAL:
             try:
