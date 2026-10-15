@@ -11,6 +11,7 @@ public final class RoutePlannerCheck {
         try(Reader r=new InputStreamReader(new FileInputStream(args[0]),StandardCharsets.UTF_8)) {
             fixtures=new JsonParser().parse(r).getAsJsonArray();
         }
+        JsonObject first=new JsonParser().parse(fixtures.get(0).toString()).getAsJsonObject(); // an act opening; the loop below moves it to row 1
         long start=System.nanoTime();
         int checks=0;
         for(JsonElement item:fixtures) {
@@ -42,6 +43,23 @@ public final class RoutePlannerCheck {
             if(suffix==null||suffix.path.size()!=14||suffix.path.get(0).y!=1)throw new AssertionError("Low HP suppressed plan");
             checks++;
         }
-        System.out.printf("PASS: %d Python/Java openings, all legal starts, low-HP suffix replans, unchanged input (%.0f ms)%n",checks,(System.nanoTime()-start)/1e6);
+        actStartCheck(first);
+        System.out.printf("PASS: %d Python/Java openings, all legal starts, low-HP suffix replans, act-3 start, unchanged input (%.0f ms)%n",checks,(System.nanoTime()-start)/1e6);
+    }
+
+    /** Act 3 opens on act 2's boss node (-1,15) (TheBeyond keeps currMapNode); its row-0 choices plan as from y=-1. */
+    static void actStartCheck(JsonObject fixture) {
+        JsonObject g=fixture.getAsJsonObject("game"), v=fixture.getAsJsonObject("visible");
+        g.addProperty("act",3);
+        RoutePlanner.Plan opening=new RoutePlanner(g,v).best(-1);
+        v.addProperty("x",-1); v.addProperty("y",15);
+        RoutePlanner.Plan start=new RoutePlanner(g,v).best(-1);
+        if(start==null||start.path.size()!=15||start.path.get(0).x!=opening.path.get(0).x
+                ||start.score!=opening.score||start.missingKeys!=opening.missingKeys)
+            throw new AssertionError("Act-3 start plans its row-0 choices, keys included");
+        g.getAsJsonObject("screen_state").add("next_nodes",new JsonArray());
+        g.getAsJsonObject("screen_state").addProperty("boss_available",true);
+        v.addProperty("x",3); v.addProperty("y",14);
+        if(new RoutePlanner(g,v).best(-1)!=null)throw new AssertionError("A boss choice has no route");
     }
 }

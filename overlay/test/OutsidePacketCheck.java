@@ -7,10 +7,20 @@ import com.google.gson.JsonParser;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 /** Exercise the public-state map adapter with a recorded original-game map and deck. */
 public final class OutsidePacketCheck {
+    static boolean sameEncoding(OutsidePacket a, OutsidePacket b) {
+        boolean same = Arrays.equals(a.observation, b.observation) && Arrays.equals(a.extra, b.extra)
+            && a.choices.size() == b.choices.size();
+        for (int i = 0; same && i < a.choices.size(); i++)
+            same = Arrays.equals(a.choices.get(i).descriptor, b.choices.get(i).descriptor)
+                && Arrays.equals(a.choices.get(i).route, b.choices.get(i).route);
+        return same;
+    }
+
     public static void main(String[] args) throws Exception {
         JsonObject state;
         try (InputStreamReader reader = new InputStreamReader(
@@ -40,6 +50,13 @@ public final class OutsidePacketCheck {
         OutsidePacket packet = OutsidePacket.build(Distill2.load(), state, visible);
         if (packet.choices.size() != nodes.size() || packet.choices.size() < 2)
             throw new AssertionError("Map candidates drifted");
+        // The game opens acts 1-2 at (0,-1) and act 3 on act 2's boss node (-1,15); the student learned acts opening at (-1,-1).
+        for (int[] at : new int[][]{{0, -1}, {-1, 15}}) {
+            visible.addProperty("x", at[0]); visible.addProperty("y", at[1]);
+            if (!sameEncoding(packet, OutsidePacket.build(Distill2.load(), state, visible)))
+                throw new AssertionError("Act start at (" + at[0] + "," + at[1] + ") must encode as (-1,-1)");
+        }
+        visible.addProperty("x", -1); visible.addProperty("y", -1);
         Distill2.Result result = packet.score();
         Distill2.Result policy = packet.policyScore();
         List<OutsidePacket.Step> recommended=OutsidePacket.plannedRoute(Distill2.load(),state,visible,-1);
@@ -120,6 +137,12 @@ public final class OutsidePacketCheck {
         visible.addProperty("neow_screen", 3);
         if (OutsidePacket.build(Distill2.load(), state, visible).choices.size() != 4)
             throw new AssertionError("Neow blessing stage must offer all four rewards");
+        game.addProperty("floor", 0); // Neow: the game stands at (0,-1), the student learned it at (-1,-1)
+        OutsidePacket blessing = OutsidePacket.build(Distill2.load(), state, visible);
+        visible.addProperty("x", 0);
+        if (!sameEncoding(blessing, OutsidePacket.build(Distill2.load(), state, visible)))
+            throw new AssertionError("Neow at (0,-1) must encode as (-1,-1)");
+        visible.addProperty("x", -1); game.addProperty("floor", floor);
         JsonArray leave = new JsonArray();
         leave.add("Leave");
         visible.add("choices", leave);
