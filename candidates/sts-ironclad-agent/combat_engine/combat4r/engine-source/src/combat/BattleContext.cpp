@@ -1125,7 +1125,10 @@ void BattleContext::useAttackCard() {
         }
 
         case CardId::MIND_BLAST: {
-            const auto damage = calculateCardDamage(c, t, static_cast<int>(cards.drawPile.size()));
+            // Java MindBlast sets baseDamage only in applyPowers; a card played from the draw top keeps the size seen
+            // by PlayTopCardAction, before draws from the play that queued it (Havoc exhaust -> Dark Embrace).
+            const auto damage = calculateCardDamage(c, t, item.playTopDrawSize >= 0 ? item.playTopDrawSize
+                                                                                    : static_cast<int>(cards.drawPile.size()));
             addToBot( Actions::AttackEnemy(t, damage) );
             break;
         }
@@ -2625,6 +2628,7 @@ void BattleContext::playTopCardInDrawPile(int monsterTargetIdx, bool exhausts) {
     }
 
     CardQueueItem item(cards.popFromDrawPile(), monsterTargetIdx, player.energy);
+    item.playTopDrawSize = static_cast<int>(cards.drawPile.size()); // Java PlayTopCardAction: card.applyPowers() here
     item.exhaustOnUse = exhausts;
     item.autoplay = true;
     item.freeToPlay = true; // todo remove the autoplay boolean? added this instead
