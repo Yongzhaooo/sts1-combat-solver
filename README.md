@@ -18,6 +18,8 @@ The panel supports English and Chinese. Optional seeded foresight previews event
 
 ## Project goals and progress
 
+The product contract is described here; component boundaries and the proposed delivery route are in [Architecture](docs/architecture.md).
+
 - **Four-character combat solver — underway:** The current release supports Ironclad and colorless cards. Silent, Defect, and Watcher need further simulator work.
 - **Reinforcement-learning (RL) agent — underway:** Policy research, training, and evaluation experiments are in progress. v0.4 ships an early training result that drives the autopilot below.
 
