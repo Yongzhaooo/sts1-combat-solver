@@ -65,6 +65,23 @@ def start_selection(comparator, view):
     stats_only = {'relicstats.actions.PreCardDrawAction',
                   'relicstats.actions.CardDrawFollowupAction'}
     actions = [a for a in queued_actions(view) if a.get('class_full') not in stats_only]
+    filtered = []
+    for action in actions:
+        if action.get('class_full') == 'com.megacrit.cardcrawl.actions.common.SetDontTriggerAction':
+            card = action.get('card', {})
+            matches = [c for c in view['game']['combat_state']['hand']
+                       if card.get('uuid') and c.get('uuid') == card['uuid']]
+            # Doubt.triggerWhenDrawn queues a false reset. Only discard an
+            # observed same-value write on its uniquely identified current card.
+            if (view['game']['combat_state']['turn'] != 1
+                    or action.get('trigger') is not False or card.get('id') != 'Doubt'
+                    or card.get('dont_trigger_on_use') is not False or len(matches) != 1
+                    or matches[0].get('id') != 'Doubt'
+                    or matches[0].get('dont_trigger_on_use') is not False):
+                raise ValueError('SetDontTriggerAction is not an observed same-value Doubt reset')
+            continue
+        filtered.append(action)
+    actions = filtered
     for action in actions:
         # Undo the Spire replaces RedSkull$1 with this equivalent named callback.
         # Match its full identity; unrelated mod actions must still be rejected.

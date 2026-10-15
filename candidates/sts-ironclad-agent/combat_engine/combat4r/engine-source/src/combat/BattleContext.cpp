@@ -6,6 +6,7 @@
 #include "game/GameContext.h"
 #include "game/Game.h"
 #include <sstream>
+#include <algorithm>
 
 using namespace sts;
 
@@ -845,13 +846,45 @@ void BattleContext::playCardQueueItem(CardQueueItem playItem) {
         item.target = monsters.getRandomMonsterIdx(cardRandomRng);
     }
 
+    // Java SpotWeakness targets SELF_AND_ENEMY. GameActionManager fades only an ENEMY card whose queued monster is
+    // null or dead/escaped; this one is still used with that monster (or none) and SpotWeaknessAction then does nothing.
+    const bool selfAndEnemy = c.getId() == CardId::SPOT_WEAKNESS;
+    const bool untargeted = selfAndEnemy && !(item.target >= 0 && item.target < monsters.monsterCount
+            && monsters.arr[item.target].isTargetable());
+
+    // Java GameActionManager: canUse rejects only an isDying target. A queued card aimed at a
+    // half-dead or escaping monster, or at none (a random target with only a reviving Awakened One
+    // left: getRandomMonster returns null), still counts as played (onPlayCard, cardsPlayedThisTurn),
+    // then leaves limbo without UseCardAction: no effect, no pile move and no exhaust hooks.
+    if (item.triggerOnUse && c.requiresTarget() && !selfAndEnemy && item.target < monsters.monsterCount
+            && (item.target < 0 || monsters.arr[item.target].isHalfDead() || monsters.arr[item.target].isEscaping())
+            && !monsters.areMonstersBasicallyDead() && !turnHasEnded && isCardPlayAllowed()) {
+        // Java cardPlayable treats a half-dead/escaping target as alive. The rest of AbstractCard.canUse is checked on
+        // another targetable monster, or, with none left (Awakened One reviving alone), directly: energy, Entangled, Clash.
+        const int other = monsters.getFirstTargetable();
+        const bool playable = other >= 0 ? c.canUse(*this, other, item.autoplay)
+                : (item.autoplay || player.energy >= c.costForTurn || c.isFreeToPlay(*this))
+                  && !(c.getType() == CardType::ATTACK && player.hasStatus<PS::ENTANGLED>())
+                  && (c.getId() != CardId::CLASH || std::all_of(cards.hand.begin(), cards.hand.begin() + cards.cardsInHand,
+                          [](const CardInstance &h) { return h.getType() == CardType::ATTACK; }));
+        if (playable) {
+            ++player.cardsPlayedThisTurn;
+            return;
+        }
+    }
+
 //    bool canPlayCard = false; // not really sure what this is used for
     // A duplicated/autoplay card still passes the original canUse checks.
     // purgeOnUse controls its destination, not permission to bypass Choker,
     // Normality, Entangled, or card-specific play restrictions.
+    // AbstractCard.canUse for an untargeted Spot Weakness: cardPlayable (no isDying target, not basically dead)
+    // and hasEnoughEnergy. Native isDying is curHp <= 0, which also covers a half-dead monster; Java does not.
     const bool canUseCard = item.triggerOnUse && !turnHasEnded && isCardPlayAllowed()
-            && c.canUse(*this, item.target, item.autoplay)
-            && (!c.requiresTarget() || monsters.arr[item.target].isTargetable());
+            && (untargeted ? !monsters.areMonstersBasicallyDead() && !(item.target >= 0 && item.target < monsters.monsterCount
+                                 && monsters.arr[item.target].isDying() && !monsters.arr[item.target].isHalfDead())
+                             && (item.autoplay || player.energy >= c.costForTurn || c.isFreeToPlay(*this))
+                           : c.canUse(*this, item.target, item.autoplay)
+                             && (!c.requiresTarget() || monsters.arr[item.target].isTargetable()));
     if (canUseCard) { // not sure if this is correct,
 //        canPlayCard = true; // what is this for......
 
@@ -859,11 +892,11 @@ void BattleContext::playCardQueueItem(CardQueueItem playItem) {
             c.freeToPlayOnce = true;
         }
 
-        if (c.requiresTarget() && !item.autoplay && !item.purgeOnUse) {
+        if (c.requiresTarget() && !untargeted && !item.autoplay && !item.purgeOnUse) {
             player.lastTargetedMonster = item.target;
         }
 
-        if (!c.requiresTarget() || monsters.arr[item.target].isTargetable()) { // this is redundant right???? -> no i think echo form abilities can queue a card with invalid target
+        if (!c.requiresTarget() || untargeted || monsters.arr[item.target].isTargetable()) { // this is redundant right???? -> no i think echo form abilities can queue a card with invalid target
             useCard();
         }
 
@@ -2019,11 +2052,8 @@ void BattleContext::onAfterUseCard() {
             cards.shuffleIntoDrawPile(cardRandomRng, c);
 
         } else {
-            // The game calls OnCardDrawOrDiscard here which only does two things:
-            // 1. sets the damage on all shivs in hand if you have accuracy power,
-            // 2. sets the cost of all skills in hand to -9 if you have corruption
-            // we will handle these tasks elsewhere
             cards.moveToDiscardPile(c);
+            onCardDrawOrDiscard(); // Java CardGroup.moveToDiscardPile, after moving the used card
         }
     }
     // TODO these must be done in the cards method itself
@@ -2248,14 +2278,24 @@ void BattleContext::obtainPotion(Potion p) {
 //    assert(false); // unreachable
 }
 
+bool BattleContext::potionHasBark(int idx) const {
+    return player.hasRelic<R::SACRED_BARK>() != static_cast<bool>((potionBarkFlip >> idx) & 1u);
+}
+
 void BattleContext::discardPotion(int idx) {
     potions[idx] = Potion::EMPTY_POTION_SLOT;
+    potionBarkFlip &= static_cast<std::uint8_t>(~(1u << idx));
     --potionCount;
 }
 
 void BattleContext::drinkPotion(int idx, int target) {
-    const bool hasBark = player.hasRelic<R::SACRED_BARK>();
+    const bool hasBark = potionHasBark(idx);
     const Potion p = potions[idx];
+    // PotionPopUp turns the player toward a targeted potion's monster while
+    // Surrounded, exactly like a targeted card; Back Attack follows the facing.
+    if (potionRequiresTarget(p) && player.hasStatus<PS::SURROUNDED>()) {
+        player.lastTargetedMonster = target;
+    }
     discardPotion(idx);
 
     // todo - dont need to add to bot because always will have nothing in actionQueue?
@@ -2632,7 +2672,6 @@ void BattleContext::exhaustSpecificCardInHand(int idx, std::int16_t uniqueId) {
     for (int i = foundIdx; i < cards.cardsInHand; ++i) {
         cards.hand[i] = cards.hand[i+1];
     } // todo fixed the cached variables in cardmanager
-    onCardDrawOrDiscard(); // CardGroup.moveToExhaustPile
 }
 
 void BattleContext::restoreRetainedCards(int count) {
@@ -2763,18 +2802,16 @@ int BattleContext::calculateCardDamage(const CardInstance &card, int targetIdx, 
 
     // ****** Player Powers AtDamageGive ******
 
-    damage += static_cast<float>(player.getStatus<PS::STRENGTH>());
-
-    if (player.hasStatus<PS::VIGOR>()) {
-        damage += static_cast<float>(player.getStatus<PS::VIGOR>());
-    }
-
-    if (player.hasStatus<PS::DOUBLE_DAMAGE>()) {
-        damage *= 2;
-    }
-
-    if (player.hasStatus<PS::PEN_NIB>()) {
-        damage *= 2;
+    // Java calculateCardDamage runs atDamageGive in player.powers order; RedSkull.addPower appends Strength
+    // without Collections.sort, so it can follow Pen Nib / Double Damage (priority 6).
+    for (const auto &power : player.powerOrder) {
+        switch (power.status) {
+            case PS::STRENGTH: damage += static_cast<float>(player.getStatus<PS::STRENGTH>()); break;
+            case PS::VIGOR: damage += static_cast<float>(player.getStatus<PS::VIGOR>()); break;
+            case PS::DOUBLE_DAMAGE:
+            case PS::PEN_NIB: damage *= 2; break;
+            default: break;
+        }
     }
 
     if (player.hasStatus<PS::WEAK>()) {
@@ -2926,6 +2963,7 @@ void BattleContext::triggerAndMoveToExhaustPile(CardInstance c) {
     }
 
     cards.moveToExhaustPile(c);
+    onCardDrawOrDiscard(); // Java CardGroup.moveToExhaustPile, for every exhaust (also a used card under Corruption)
 }
 
 void BattleContext::mummifiedHandOnUsePower() {

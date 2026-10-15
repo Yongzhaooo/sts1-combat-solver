@@ -245,6 +245,7 @@ namespace {
         bc.player.cardsDiscardedThisTurn = snapshot.contains("cards_discarded_this_turn") ? py::cast<int>(snapshot["cards_discarded_this_turn"]) : 0;
         bc.player.timesDamagedThisCombat = snapshot.contains("times_damaged") ? py::cast<int>(snapshot["times_damaged"]) : 0;
         if (player.contains("powers")) {
+            std::vector<Player::PowerRef> snapshotOrder;
             for (const auto item : py::cast<py::list>(player["powers"])) {
                 const auto power = py::cast<py::dict>(item);
                 const auto status = static_cast<PlayerStatus>(py::cast<int>(power["id"]));
@@ -255,12 +256,23 @@ namespace {
                     if (!power.contains("bomb_turns")) throw std::invalid_argument("Bomb snapshot requires remaining turns");
                     const int turns = py::cast<int>(power["bomb_turns"]);
                     if (turns <= 0) throw std::invalid_argument("Bomb snapshot requires positive remaining turns");
+                    snapshotOrder.push_back({status, bc.player.nextBombId});
                     bc.player.addBomb(amount, turns);
                 } else {
+                    snapshotOrder.push_back({status, -1});
                     setPlayerStatus(bc.player, status, amount,
                         power.contains("just_applied") && py::cast<bool>(power["just_applied"]));
                 }
             }
+            // Keep the snapshot's Java list order: RedSkull.addPower can leave player.powers unsorted.
+            std::vector<Player::PowerRef> ordered;
+            for (const auto &ref : snapshotOrder) {
+                const auto found = std::find_if(bc.player.powerOrder.begin(), bc.player.powerOrder.end(),
+                        [&](const Player::PowerRef &p) { return p.status == ref.status && p.bombId == ref.bombId; });
+                if (found != bc.player.powerOrder.end()) ordered.push_back(*found);
+            }
+            if (ordered.size() != bc.player.powerOrder.size()) throw std::logic_error("snapshot power order mismatch");
+            bc.player.powerOrder = ordered;
         }
 
         bc.cards = CardManager();
@@ -1610,6 +1622,7 @@ PYBIND11_MODULE(slaythespire, m) {
 
     pybind11::class_<BattleContext>(m, "BattleContext")
         .def(pybind11::init<>())
+        .def_readwrite("potion_bark_flip", &BattleContext::potionBarkFlip)
         .def("init", pybind11::overload_cast<const GameContext&>(&BattleContext::init),
              "initialize the battle from a GameContext that is in the BATTLE screen state")
         .def("init_encounter",
