@@ -182,7 +182,6 @@ M2 与 M3 的先后取决于协作者兴趣；若只能选一个，观者规模�
 **分支与 PR。**
 - 代码和 CI 要求见 [CONTRIBUTING](../CONTRIBUTING.md)。PR 目标分支为 `main`。
 - 协作者 fork，从确认的基线开一个按职业和里程碑命名的分支，一个 PR 对应一个小步（如"静默猎手 M1a"），附上覆盖清单的变化和新增的检查。
-- 一个现存的问题要先确认：本分支的 `native-runtime.yml` 仍然运行 `overlay/check_async_reports.py` 与 `overlay/check_debug_export.py`，但这两个脚本在提交 5d9e3a3 里已被删除（`origin/main` 上还在）。外部 PR 触发的 CI 可能因此失败，需要维护者在第一个 PR 之前修正。
 - 不要用 `pull_request_target`，`docs/mod-pair-ci.md` 已说明原因。
 
 **所有权划分。** 冲突集中在几处共享文件，建议按下表分工，共享文件的改动尽量小，并由 M0 先落地结构。

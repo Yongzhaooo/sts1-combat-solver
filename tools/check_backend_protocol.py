@@ -7,7 +7,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import zipfile
 import argparse
 import time
 
@@ -62,10 +61,11 @@ def main():
                     reply = replies.get(timeout=30)
                 assert reply.get('status') == 'ready' and reply.get('interrupted') and reply.get('command'), reply
                 assert time.monotonic() - started < 10, 'active cancellation timed out'
-                reply = send({'op': 'export_debug', 'metadata': {'test': 'native-protocol'}})
-                assert reply.get('status') == 'debug_export', reply
-                with zipfile.ZipFile(data / 'bug-reports' / reply['file']) as archive:
-                    assert json.loads(archive.read('debug.json'))['events']
+                reply = send({'op': 'export_run', 'directory': str(data / 'export'),
+                              'metadata': {'test': 'native-protocol'}})
+                assert reply.get('status') == 'debug_run_export', reply
+                document = json.loads((Path(reply['directory']) / reply['file']).read_text(encoding='utf-8'))
+                assert document['format'] == 'sts1-run-v1' and document['events'], reply
                 process.stdin.close()
                 assert process.wait(timeout=15) == 0
                 reader.join(timeout=5)
