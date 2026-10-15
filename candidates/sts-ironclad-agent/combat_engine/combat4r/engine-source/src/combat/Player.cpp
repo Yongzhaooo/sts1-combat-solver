@@ -35,9 +35,10 @@ void Player::updatePowerOrder(PlayerStatus status, bool present, int bombId) {
     if (!present) {
         if (found != powerOrder.end()) powerOrder.erase(found);
     } else if (found == powerOrder.end()) {
-        const auto position = std::upper_bound(powerOrder.begin(), powerOrder.end(), powerPriority(status),
-                [](int priority, const PowerRef &power) { return priority < powerPriority(power.status); });
-        powerOrder.insert(position, {status, bombId});
+        // ApplyPowerAction: powers.add then Collections.sort (stable), which also re-sorts an unsorted imported list.
+        powerOrder.push_back({status, bombId});
+        std::stable_sort(powerOrder.begin(), powerOrder.end(),
+                [](const PowerRef &a, const PowerRef &b) { return powerPriority(a.status) < powerPriority(b.status); });
     }
 }
 
@@ -396,10 +397,11 @@ void Player::wouldDie(BattleContext &bc) {
     if  (!hasRelic<RelicId::MARK_OF_THE_BLOOM>()) {
         for (int i = 0; i < bc.potionCapacity; i++) {
             if (bc.potions[i] == Potion::FAIRY_POTION) {
+                const bool bark = bc.potionHasBark(i);
                 bc.discardPotion(i);
                 const int healAmount = std::max(
                         1,
-                        static_cast<int>(static_cast<float>(maxHp) * (hasRelic<R::SACRED_BARK>() ? 0.6f : 0.3f))
+                        static_cast<int>(static_cast<float>(maxHp) * (bark ? 0.6f : 0.3f))
                 );
                 heal(bc, healAmount);
                 return;

@@ -1122,10 +1122,11 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
 
         case MMID::SNECKO_TAIL_WHIP: // 3
             attackPlayerHelper(bc, asc2 ? 10 : 8);
-            bc.addToBot( Actions::DebuffPlayer<PS::VULNERABLE>(2, true) );
+            // Java queues Weak (A17+) before Vulnerable; one Artifact blocks only the first.
             if (asc17) {
                 bc.addToBot( Actions::DebuffPlayer<PS::WEAK>(2, true) );
             }
+            bc.addToBot( Actions::DebuffPlayer<PS::VULNERABLE>(2, true) );
             bc.addToBot( Actions::RollMove(idx) );
             break;
 
@@ -1134,27 +1135,31 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
         case MMID::SPHERIC_GUARDIAN_ACTIVATE: // 2
             addBlock(asc17 ? 35 : 25);
             setMove(MMID::SPHERIC_GUARDIAN_ATTACK_DEBUFF);
-            bc.noOpRollMove();
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
 
         case MMID::SPHERIC_GUARDIAN_ATTACK_DEBUFF: // 4
             attackPlayerHelper(bc, asc2 ? 11 : 10);
             bc.addToBot( Actions::DebuffPlayer<PS::FRAIL>(5, true) );
             setMove(MMID::SPHERIC_GUARDIAN_SLAM);
-            bc.noOpRollMove();
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
 
         case MMID::SPHERIC_GUARDIAN_HARDEN: // 3
             bc.addToBot( Actions::MonsterGainBlock(idx, 15) );
             attackPlayerHelper(bc, asc2 ? 11 : 10);
             setMove(MMID::SPHERIC_GUARDIAN_SLAM);
-            bc.noOpRollMove();
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
 
         case MMID::SPHERIC_GUARDIAN_SLAM: // 1
             attackPlayerHelper(bc, asc2 ? 11 : 10, 2);
             setMove(MMID::SPHERIC_GUARDIAN_HARDEN);
-            bc.noOpRollMove();
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
 
         // ************ SPIKE SLIME M ************
@@ -1211,7 +1216,8 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             } else {
                 bc.addToBot( Actions::MakeTempCardInDiscard({CardId::WOUND}) );
             }
-            bc.noOpRollMove();
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
 
         // ************ THE CHAMP ************
@@ -1340,8 +1346,9 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             break;
 
         case MMID::THE_GUARDIAN_VENT_STEAM:
-            bc.addToBot( Actions::DebuffPlayer<PS::VULNERABLE>(2, true) );
+            // Java useVentSteam queues Weak before Vulnerable; Artifact consumes the first.
             bc.addToBot( Actions::DebuffPlayer<PS::WEAK>(2, true) );
+            bc.addToBot( Actions::DebuffPlayer<PS::VULNERABLE>(2, true) );
             setMove(MMID::THE_GUARDIAN_WHIRLWIND);
             break;
 
@@ -1372,7 +1379,8 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             } else {
                 setMove(MonsterMoveId::EXPLODER_SLAM);
             }
-            bc.noOpRollMove();
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
 
         case MMID::REPULSOR_BASH: // 2
@@ -1408,7 +1416,8 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             const auto t = (bc.getMonsterTurnNumber() + 1) / 2;
             attackPlayerHelper(bc, 5, t);
             setMove(MMID::THE_MAW_DROOL);
-            bc.noOpRollMove();
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
         }
 
@@ -1548,7 +1557,8 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             const auto t = std::min(bc.getMonsterTurnNumber()-(asc18 ? 4 : 5), 6) * 5;
             const auto damage = (asc3 ? 40 : 30) + t;
             attackPlayerHelper(bc, damage); // todo this can be done immediately
-            bc.noOpRollMove();
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
         }
 
@@ -1596,13 +1606,15 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             attackPlayerHelper(bc, 9);
             bc.addToBot( Actions::MakeTempCardInDiscard(CardId::WOUND) );
             setMove(MMID::DAGGER_EXPLODE);
-            bc.noOpRollMove();
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
 
         case MMID::DAGGER_EXPLODE:
             attackPlayerHelper(bc, 25);
             bc.addToBot( Actions::SuicideAction(idx, true) );
-            bc.noOpRollMove();
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
 
         case MMID::TIME_EATER_HASTE:
@@ -1739,14 +1751,25 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             } else {
                 bc.player.debuff<PS::STRENGTH>(-1);
             }
-            bc.addToBot( Actions::RollMove(idx) );
+            if (lastMoveBefore(MonsterMoveId::SPIRE_SHIELD_SMASH) || lastMoveBefore(MonsterMoveId::INVALID)) {
+                setMove(MonsterMoveId::SPIRE_SHIELD_FORTIFY);
+            } else {
+                setMove(MonsterMoveId::SPIRE_SHIELD_SMASH);
+            }
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
 
 
         case MMID::SPIRE_SHIELD_FORTIFY: // 2
             addBlock(30);
             bc.monsters.arr[1].addBlock(30);
-            bc.addToBot( Actions::RollMove(idx) );
+            if (lastMoveBefore(MonsterMoveId::SPIRE_SHIELD_SMASH) || lastMoveBefore(MonsterMoveId::INVALID)) {
+                setMove(MonsterMoveId::SPIRE_SHIELD_BASH);
+            } else {
+                setMove(MonsterMoveId::SPIRE_SHIELD_SMASH);
+            }
+            bc.noOpRollMove();
             break;
 
 
@@ -1765,13 +1788,24 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             } else {
                 bc.addToBot( Actions::MakeTempCardInDiscard(CardId::BURN, 2) );
             }
-            bc.addToBot( Actions::RollMove(idx) );
+            if (lastMoveBefore(MonsterMoveId::SPIRE_SPEAR_SKEWER)) {
+                setMove(MonsterMoveId::SPIRE_SPEAR_PIERCER);
+            } else {
+                setMove(MonsterMoveId::SPIRE_SPEAR_SKEWER);
+            }
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
 
         case MMID::SPIRE_SPEAR_PIERCER: // 2
             buff<MS::STRENGTH>(2);
             bc.monsters.arr[0].buff<MS::STRENGTH>(2);
-            bc.addToBot( Actions::RollMove(idx) );
+            if (lastMoveBefore(MonsterMoveId::SPIRE_SPEAR_SKEWER)) {
+                setMove(MonsterMoveId::SPIRE_SPEAR_BURN_STRIKE);
+            } else {
+                setMove(MonsterMoveId::SPIRE_SPEAR_SKEWER);
+            }
+            bc.noOpRollMove();
             break;
 
         case MMID::SPIRE_SPEAR_SKEWER: // 3
@@ -1786,7 +1820,8 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             } else {
                 setMove(MonsterMoveId::CORRUPT_HEART_ECHO);
             }
-            bc.noOpRollMove();
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
 
         case MMID::CORRUPT_HEART_BUFF: { // 4
@@ -1834,7 +1869,8 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             } else {
                 setMove(MonsterMoveId::CORRUPT_HEART_BLOOD_SHOTS);
             }
-            bc.noOpRollMove();
+            // Java queues RollMoveAction after damage; lethal damage cancels it.
+            bc.addToBot(Actions::NoOpRollMove());
             break;
 
 
@@ -3268,44 +3304,24 @@ MMID Monster::getMoveForRoll(BattleContext &bc, int &monsterData, const int roll
         }
 
         case MonsterId::SPIRE_SHIELD: {
-            // moveCount % 3:
-            // case 0: aiRng.randomBoolean() ? DEFEND (2) : ATTACK_DEBUFF (1)
-            // case 1: lastMove(1) ? DEFEND (2) : ATTACK_DEBUFF (1)
-            // default: ATTACK_DEFEND (3)
-            if (moveHistory[0] == MMID::INVALID) {
-                if (bc.aiRng.randomBoolean()) {
-                    return MonsterMoveId::SPIRE_SHIELD_FORTIFY;
-                } else {
-                    return MonsterMoveId::SPIRE_SHIELD_BASH;
-                }
-            } else if (lastMoveBefore(MMID::SPIRE_SHIELD_SMASH) || lastMoveBefore(MMID::INVALID)) {
-                if (lastMove(MMID::SPIRE_SHIELD_BASH)) {
-                    return MonsterMoveId::SPIRE_SHIELD_FORTIFY;
-                } else {
-                    return MonsterMoveId::SPIRE_SHIELD_BASH;
-                }
+            // 1 bash
+            // 2 fortify
+            // 3 smash
+            if (bc.aiRng.randomBoolean()) {
+                return MonsterMoveId::SPIRE_SHIELD_FORTIFY;
             } else {
-                return MonsterMoveId::SPIRE_SHIELD_SMASH;
+                return MonsterMoveId::SPIRE_SHIELD_BASH;
             }
         }
 
         case MonsterId::SPIRE_SPEAR: {
-            // moveCount % 3:
-            // case 0: lastMove(1) ? BUFF (2) : ATTACK_DEBUFF (1)
-            // case 1: ATTACK (3) [skewer]
-            // default: aiRng.randomBoolean() ? BUFF (2) : ATTACK_DEBUFF (1)
-            if (moveHistory[0] == MMID::INVALID) {
+            if (firstTurn()) {
                 return MonsterMoveId::SPIRE_SPEAR_BURN_STRIKE;
-            } else if (lastMove(MMID::SPIRE_SPEAR_BURN_STRIKE)) {
-                return MonsterMoveId::SPIRE_SPEAR_SKEWER;
-            } else if (lastMove(MMID::SPIRE_SPEAR_SKEWER)) {
-                if (lastMoveBefore(MMID::SPIRE_SPEAR_BURN_STRIKE)) {
-                    return MonsterMoveId::SPIRE_SPEAR_PIERCER;
-                } else {
-                    return MonsterMoveId::SPIRE_SPEAR_BURN_STRIKE;
-                }
+            }
+            if (bc.aiRng.randomBoolean()) {
+                return MonsterMoveId::SPIRE_SPEAR_PIERCER;
             } else {
-                return MonsterMoveId::SPIRE_SPEAR_SKEWER;
+                return MonsterMoveId::SPIRE_SPEAR_BURN_STRIKE;
             }
         }
 
@@ -3518,7 +3534,9 @@ void Monster::returnStasisCard(BattleContext &bc) {
             next.cards.notifyAddToDiscardPile(card);
             next.cards.discardPile.push_back(card);
         } else {
-            next.moveToHandHelper(card);
+            // ShowCardAndAddToHandEffect notifies before applying Corruption.
+            next.cards.moveToHand(card);
+            next.onCardDrawOrDiscard();
         }
     }});
     stasisCard = {CardId::INVALID};

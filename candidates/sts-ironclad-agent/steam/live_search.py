@@ -101,7 +101,7 @@ class LiveSearch:
                     if index >= len(options) or self.comparator.bridge.card_snapshot(options[index])["id"] != expected:
                         raise ValueError("generated selection candidate differs from the predicted card")
                     return action, f"choose {index}"
-                uuid = self._selection_uuid(info["source_pile"], index)
+                uuid = self._selection_uuid(info["source_pile"], index, options)
                 return action, f"choose {self._option_index(options, uuid)}"
             if action.action_type != self.sts.SearchActionType.MULTI_CARD_SELECT:
                 raise ValueError("unsupported native selection action")
@@ -113,7 +113,7 @@ class LiveSearch:
                 if info["task"] in ("GAMBLE", "EXHAUST_MANY"):
                     indices.sort(reverse=True)
                 self.pending_multi = {"action": action, "remaining": deque(
-                    self._selection_uuid(info["source_pile"], index) for index in indices)}
+                    self._selection_uuid(info["source_pile"], index, options) for index in indices)}
             if self.pending_multi["remaining"]:
                 uuid = self.pending_multi["remaining"].popleft()
                 return None, f"choose {self._option_index(options, uuid)}"
@@ -124,9 +124,14 @@ class LiveSearch:
         command = self.comparator.bridge.action_command(action, self.battle, snapshot).lower()
         return action, command
 
-    def _selection_uuid(self, pile, index):
+    def _selection_uuid(self, pile, index, options):
         unique_id = getattr(self.battle, pile)[index].unique_id
-        candidates = [uuid for uuid, mapped in self.mapper.uuids.items() if mapped == unique_id]
+        # Native IDs may be reused after a purged copy disappears. Restrict the
+        # inverse lookup to the current observed picker, retaining strict unique
+        # identity matching rather than choosing by card name or position.
+        current = {card["uuid"] for card in options}
+        candidates = [uuid for uuid, mapped in self.mapper.uuids.items()
+                      if mapped == unique_id and uuid in current]
         if len(candidates) != 1:
             raise ValueError("selection card has no unique original identity")
         return candidates[0]

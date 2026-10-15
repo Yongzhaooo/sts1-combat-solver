@@ -233,7 +233,8 @@ PYBIND11_MODULE(overlay_search, m) {
             result=combat_search::playoutReusing(predicted,simulations,4.0,false,false,true,true,true);
         }
         live.done=1;
-        auto hp=predicted.outcome==Outcome::PLAYER_VICTORY
+        // Smoke Bomb still invokes AbstractRoom.endBattle and victory healing.
+        auto hp=(predicted.outcome==Outcome::PLAYER_VICTORY || predicted.outcome==Outcome::PLAYER_ESCAPE)
             ? predicted.victoryHpRelics.project(predicted.player.curHp,predicted.player.maxHp)
             : VictoryHp{predicted.player.curHp,predicted.player.maxHp};
         py::dict out;

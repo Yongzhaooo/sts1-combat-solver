@@ -437,8 +437,11 @@ Action Actions::RandomizeHandCost() {
             auto &c = bc.cards.hand[i];
             if (c.cost >= 0) {
                 int newCost = bc.cardRandomRng.random(3);
-                c.cost = newCost;
-                c.costForTurn = newCost;
+                // Java preserves a temporary turn override when the roll equals printed cost.
+                if (c.cost != newCost) {
+                    c.cost = newCost;
+                    c.costForTurn = newCost;
+                }
             }
         }
     }};
@@ -1183,9 +1186,9 @@ Action Actions::ReaperAction(DamageMatrix damageMatrix) {
             bc.addToBot( Actions::HealPlayer(healAmount) );
         }
 
-        //if (AbstractDungeon.getCurrRoom().monsters.areMonstersBasicallyDead()) {
-        //                AbstractDungeon.actionManager.clearPostCombatActions();
-        //            }
+        // VampireDamageAllEnemiesAction clears post-combat actions after a
+        // kill; HealPlayer is retained like Java HealAction.
+        bc.checkCombat();
     }};
 }
 
@@ -1265,7 +1268,8 @@ Action Actions::SwordBoomerangAction(int baseDamage) { // pretty hacky until I c
 
 Action Actions::SpotWeaknessAction(int target, int strength) {
     return {[=](BattleContext &bc) {
-        if (bc.monsters.arr[target].isAttacking()) {
+        // Java SpotWeaknessAction: a null target (or one without an attack intent) gives nothing.
+        if (target >= 0 && target < bc.monsters.monsterCount && bc.monsters.arr[target].isAttacking()) {
             bc.player.buff<PS::STRENGTH>(strength);
         }
     }};

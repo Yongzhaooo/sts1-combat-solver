@@ -90,6 +90,9 @@ namespace sts {
         int potionCount = 0;
         int potionCapacity = 3;
         std::array<Potion, 5> potions;
+        // Java potency is per potion instance: SacredBark.onEquip doubles held potions, nothing undoes it.
+        // Bit i set: slot i's Sacred Bark doubling differs from the current relic (imported from truth).
+        std::uint8_t potionBarkFlip = 0;
 
         int turn = 0;
         Player player;
@@ -169,6 +172,7 @@ namespace sts {
 
         void obtainPotion(Potion p);
         void discardPotion(int idx);
+        [[nodiscard]] bool potionHasBark(int idx) const;
         void drinkPotion(int idx, int target=0);
 
         void drawCards(int count);
