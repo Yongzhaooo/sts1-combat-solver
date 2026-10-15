@@ -42,6 +42,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private final ConcurrentLinkedQueue<JsonObject> debugReplies = new ConcurrentLinkedQueue<>();
     private boolean researchRecording;
     private String debugMessage = "";
+    private volatile String rngWarning = "";
+    // SuperFastMode multiplies Gdx delta; the solver no longer depends on frame time.
+    // x10 is the speed long runs were played at (the author's own setting).
+    static final float SUPER_FAST_TESTED = 10f;
     private boolean debugMessageError;
     private boolean runLog = true;
     private final DecisionNotes decisionNotes = new DecisionNotes();
@@ -246,6 +250,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     @Override public void receivePostInitialize() {
         initFont();
         Thread warmup = new Thread(() -> {
+            List<String> rngMods = RngMods.loaded();
+            if (!rngMods.isEmpty()) {
+                rngWarning = I18n.t("这些 Mod 会影响随机数（RNG），求解器计算可能不准确，建议关闭：") + String.join(" / ", rngMods);
+                System.err.println("[STS1Solver] RNG-affecting mods: " + rngMods);
+                if (debugMessage.isEmpty()) { debugMessage = rngWarning; debugMessageError = true; }
+            }
+            String fast = superFastNote();
+            if (superFastSpeed() > SUPER_FAST_TESTED && debugMessage.isEmpty()) { debugMessage = fast; debugMessageError = true; }
             try { startBackend(); } catch (IOException failure) { System.err.println("[STS1Solver] " + failure); }
         }, "sts1-solver-warmup");
         warmup.setDaemon(true);
@@ -1687,13 +1699,33 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F8/F9 保留；Esc 取消"):I18n.t("按种子记录牌组、战斗与选择，仅保存到本机"),
             16,204,w-32,.75f,bindingKey?accent:muted);
         boolean incompatibleMod = Loader.isModLoaded("SaveStateMod") || Loader.isModLoaded("undothespire") || Loader.isModLoaded("undobutton");
+        String fast = superFastNote();
+        boolean warn = incompatibleMod || !rngWarning.isEmpty() || superFastSpeed() > SUPER_FAST_TESTED;
         String defaultNote = incompatibleMod
             ? I18n.t("检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用")
-            : I18n.t("F6 导出记录到桌面，发这一个文件即可");
+            : !rngWarning.isEmpty() ? rngWarning : !fast.isEmpty() ? fast : I18n.t("F6 导出记录到桌面，发这一个文件即可");
         Color noteColor = note.isEmpty()
-            ? (incompatibleMod ? danger : muted)
+            ? (warn ? danger : muted)
             : (debugMessageError ? danger : accent);
         label(sb,note.isEmpty()?defaultNote:note,16,NOTE_TOP,w-32,.75f,noteColor);
+    }
+
+    /** 1 when SuperFastMode is absent or its multiplier is off. */
+    static float superFastSpeed() {
+        if (!Loader.isModLoaded("superfastmode")) return 1f;
+        try {
+            Class<?> mod = Class.forName("skrelpoid.superfastmode.SuperFastMode");
+            return mod.getField("isDeltaMultiplied").getBoolean(null) ? mod.getField("deltaMultiplier").getFloat(null) : 1f;
+        } catch (ReflectiveOperationException | LinkageError failure) { return 1f; }
+    }
+
+    static String superFastNote() {
+        if (!Loader.isModLoaded("superfastmode")) return "";
+        float speed = superFastSpeed();
+        String shown = speed == Math.rint(speed) ? String.valueOf((int) speed) : String.valueOf(speed);
+        return speed > SUPER_FAST_TESTED
+            ? I18n.t("SuperFastMode 速度 ×") + shown + I18n.t(" 超出已测试的 ×10，如自动执行异常请调低")
+            : I18n.t("已兼容 SuperFastMode（当前 ×") + shown + I18n.t("，建议不超过 ×10）");
     }
 
     private void renderCombatBody(SpriteBatch sb, float w, String note) {

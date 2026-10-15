@@ -71,17 +71,12 @@ battle=battle.replace(intangible,intangible.replace('std::max','std::min'),1)
 battle=battle.replace('using namespace sts;', 'using namespace sts;\nextern bool overlayDiscoveryReroll();',1)
 begin=battle.index('    if (cardSelectInfo.discoveryFrameRng) {',battle.index('void BattleContext::chooseDiscoveryCard'))
 end=battle.index('    CardInstance c = createGeneratedCard(id);',begin)
-battle=battle[:begin]+'''    // Match original game 1/60 frame-advance behavior for DiscoveryAction
-    if (cardSelectInfo.discoveryFrameRng && overlayDiscoveryReroll()) {
-        if (!(actionFrameDelta >= 0.000125f && actionFrameDelta <= 1.0f))
-            throw std::invalid_argument("Discovery replay requires a finite frame interval in [0.000125, 1] seconds");
-        // In the original game (DiscoveryAction.java), update() unconditionally generates
-        // card choices on line 1 before checking duration == Settings.ACTION_DUR_FAST.
-        // At fixed headless 60 FPS (dt = 1/60s), duration decreases from 0.25 - 1/60 down to < 0,
-        // resulting in exactly 15 post-selection choice generations.
-        for (float duration = 0.25f - actionFrameDelta; duration >= 0.0f; duration -= actionFrameDelta)
-            generateDiscoveryCards(cardRandomRng, player.cc, cardSelectInfo.discoveryType);
-    }
+battle=battle[:begin]+'''    // DiscoveryAction.update() generates choices every frame until its 0.25 s run out. In the
+    // live game SelectionTimingPatch spends that time while the picker is open and
+    // DiscoveryRetrieved ends the action on retrieval, so exactly one post-pick generation
+    // happens at any frame time, including SuperFastMode's multiplied delta.
+    if (cardSelectInfo.discoveryFrameRng && overlayDiscoveryReroll())
+        generateDiscoveryCards(cardRandomRng, player.cc, cardSelectInfo.discoveryType);
 '''+battle[end:]
 patched_battle=out/'BattleContext.cpp'
 marker='        case CardId::DARK_SHACKLES:'

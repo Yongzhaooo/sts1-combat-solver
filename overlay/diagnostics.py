@@ -122,6 +122,12 @@ def safe_name(text, limit=40):
     return re.sub(r'[^A-Za-z0-9_.-]+', '-', str(text)).strip('-')[:limit] or 'x'
 
 
+def relic_counters(game):
+    """Cross-fight counters (Sundial, Pen Nib, Incense Burner...); -1 means the relic has none."""
+    return {r['id']: r['counter'] for r in game.get('relics', [])
+            if r.get('id') and isinstance(r.get('counter'), int) and r['counter'] >= 0}
+
+
 def battle_snapshot(state):
     """Few fields per step so a replay can notice the first divergence cheaply."""
     game = (state or {}).get('game_state', {})
@@ -129,10 +135,14 @@ def battle_snapshot(state):
     if not combat:
         return None
     player = combat.get('player', {})
-    return {'turn': combat.get('turn'), 'hp': game.get('current_hp'), 'energy': player.get('energy'),
+    snap = {'turn': combat.get('turn'), 'hp': game.get('current_hp'), 'energy': player.get('energy'),
             'block': player.get('block'),
             'monsters': [[m.get('id'), m.get('current_hp'), m.get('is_gone')] for m in combat.get('monsters', [])],
             'hand': [c.get('id') for c in combat.get('hand', [])]}
+    counters = relic_counters(game)
+    if counters:
+        snap['counters'] = counters
+    return snap
 
 
 def combat_open_summary(state):
@@ -151,6 +161,13 @@ def combat_open_summary(state):
         'sapphire': bool(game.get('has_sapphire_key')),
     }
     return {
+        'act': game.get('act'),
+        'boss': game.get('act_boss'),
+        'room': game.get('room_type'),
+        'last_elite': game.get('solver_last_elite'),
+        'elite_ahead': game.get('solver_elite_ahead'),
+        'fast_boss': (game.get('solver_auto_context') or {}).get('boss_fast_finish'),
+        'relic_counters': relic_counters(game),
         'hp': game.get('current_hp'),
         'max_hp': game.get('max_hp'),
         'monsters': monsters,

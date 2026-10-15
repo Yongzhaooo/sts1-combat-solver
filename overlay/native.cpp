@@ -21,6 +21,7 @@ thread_local int initialTurn=0;
 thread_local Random originalPotionRng;
 // Set under the GIL before any search starts; searches only read them.
 bool discoveryReroll=true;
+unsigned incenseTargets=0;  // bit c: ending the fight with Incense Burner counter c is worth one Intangible
 std::map<std::string,std::vector<CardId>> actualPools;
 // Live counters per branch index, read by the progress reporter while plans run.
 struct Progress { std::atomic<long long> simulations{0}; std::atomic<int> rounds{0}, turn{0}, bestHp{-1}, done{0}; };
@@ -79,12 +80,14 @@ static int fairyCount(const BattleContext &bc) {
     for(int i=0;i<bc.potionCapacity;++i) count+=bc.potions[i]==Potion::FAIRY_POTION;
     return count;
 }
+static bool relicsHeld(const BattleContext &bc);
 bool overlayAcceptTerminal(const BattleContext &bc, const std::vector<search::Action> &actions) {
     if(bc.outcome!=Outcome::PLAYER_VICTORY || bc.player.curHp<=0)return false;
     if(heartFight)return fastReady=true;
     if(!fastBoss || bc.turn-initialTurn>20 || 2*std::max(0,initialHp-bc.player.curHp)>initialMaxHp
             || fairyCount(bc)<initialFairies
-            || (initialTail && !bc.player.hasRelic<RelicId::LIZARD_TAIL>()))return false;
+            || (initialTail && !bc.player.hasRelic<RelicId::LIZARD_TAIL>())
+            || !relicsHeld(bc))return false;  // a fast finish still holds Sundial/Nunchaku/... counters
     for(const auto &action:actions)if((action.bits>>29)==1)return false;
     return fastReady=true;
 }
@@ -114,29 +117,22 @@ static int goldWealth(const BattleContext &bc) {
 // Progress toward a cross-fight trigger is inventory: n/period of the trigger's value.
 // Firing a trigger on the last turn resets progress and is usually wasted, so the
 // search learns to hold Nunchaku/Pen Nib and to time Happy Flower/Incense Burner.
-static double carriedRelicValue(const BattleContext &bc) {
+// best=true: the value with every counter held one step short of firing (the most a fight can carry).
+static double carriedRelicValue(const BattleContext &bc, bool best=false) {
     const auto &p=bc.player;
-    auto part=[](int counter, int period) { return std::max(0, counter) / static_cast<double>(period); };
+    auto part=[best](int counter, int period) { return (best ? period-1 : std::max(0, counter)) / static_cast<double>(period); };
     double value=0;
     if(p.hasRelic<RelicId::NUNCHAKU>()) value+=ENERGY_HP*part(p.nunchakuCounter,10);
     if(p.hasRelic<RelicId::HAPPY_FLOWER>()) value+=ENERGY_HP*part(p.happyFlowerCounter,3);
     if(p.hasRelic<RelicId::SUNDIAL>()) value+=2*ENERGY_HP*part(p.sundialCounter,3);
-    if(p.hasRelic<RelicId::INCENSE_BURNER>()) {
-        bool beforeHeart=false, heart=false;
-        for(int i=0;i<bc.monsters.monsterCount;++i) {
-            auto id=bc.monsters.arr[i].id;
-            beforeHeart |= id==MonsterId::SPIRE_SHIELD || id==MonsterId::SPIRE_SPEAR;
-            heart |= id==MonsterId::CORRUPT_HEART;
-        }
-        // Shield/Spear leads directly to Heart: 4 covers turn 2, 3 covers
-        // turn 3; 5 fires on Heart's opening debuff turn. Do not reward that.
-        if(beforeHeart) value+=INTANGIBLE_HP*(p.incenseBurnerCounter==3 || p.incenseBurnerCounter==4);
-        else if(!heart) value+=INTANGIBLE_HP*part(p.incenseBurnerCounter,6);
-    }
+    // Targets come from recovery.incense_targets (user rule); none means the counter is worthless.
+    if(p.hasRelic<RelicId::INCENSE_BURNER>() && p.incenseBurnerCounter>=0)
+        value+=INTANGIBLE_HP*(best ? incenseTargets!=0 : incenseTargets>>p.incenseBurnerCounter & 1u);
     if(p.hasRelic<RelicId::PEN_NIB>()) value+=PEN_NIB_HP*part(p.penNibCounter,10);
     if(p.hasRelic<RelicId::INK_BOTTLE>()) value+=DRAW_HP*part(p.inkBottleCounter,10);
     return value;
 }
+static bool relicsHeld(const BattleContext &bc) { return carriedRelicValue(bc)+1e-9>=carriedRelicValue(bc,true); }
 // A permanent curse costs about this much HP over the rest of the run (user estimate).
 constexpr double CURSE_HP=30.0, OMAMORI_CHARGE_HP=15.0;
 // Writhing Mass's Implant marks miscInfo; exitBattle then adds Parasite to the deck,
@@ -183,8 +179,16 @@ PYBIND11_MODULE(overlay_search, m) {
         return std::make_pair(bc.player.hasRelic<RelicId::LIZARD_TAIL>() ? 1 : 0, fairyCount(bc));
     });
     m.def("revival_value", &revivalValue);
-    m.def("carried_relic_value", &carriedRelicValue);
+    m.def("carried_relic_value", [](const BattleContext &bc) { return carriedRelicValue(bc); });
     m.def("set_discovery_reroll", [](bool value) { discoveryReroll=value; });
+    m.def("set_incense_targets", [](const std::vector<int> &counters) {
+        unsigned mask=0;
+        for(int counter:counters) {
+            if(counter<0 || counter>5)throw std::invalid_argument("incense counter outside 0-5");
+            mask|=1u<<counter;
+        }
+        incenseTargets=mask;
+    });
     m.def("set_card_pools", [](const std::map<std::string,std::vector<CardId>> &pools) {
         for(auto &entry:pools)if(entry.second.size()<3)
             throw std::invalid_argument("card pool has fewer than three candidates");
@@ -246,6 +250,7 @@ PYBIND11_MODULE(overlay_search, m) {
         out["post_hp"]=hp.curHp;
         out["max_hp"]=hp.maxHp;
         out["used_tail"]=root.player.hasRelic<RelicId::LIZARD_TAIL>() && !predicted.player.hasRelic<RelicId::LIZARD_TAIL>();
+        out["relics_held"]=relicsHeld(predicted);
         out["used_fairy"]=std::max(0,fairyCount(root)-fairyCount(predicted));
         out["gained_gold"]=predicted.outcome==Outcome::PLAYER_VICTORY ? std::max(0,goldWealth(predicted)-initialGoldWealth) : 0;
         out["outcome"]=static_cast<int>(predicted.outcome);

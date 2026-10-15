@@ -28,3 +28,16 @@ for bits in plan['actions']:
     advisor.native_search.execute(battle, int(bits) & 0xffffffff)
 assert battle.outcome == sts.Outcome.PLAYER_VICTORY and battle.player.cur_hp == plan['hp']
 print('PASS: native combat search and winning-action replay')
+
+# A fast boss finish must still hold cross-fight counters: seed 99 used to end
+# the fight with Sundial at 1 (user report: Act 1 boss left Sundial unheld).
+game = sts.GameContext(sts.CharacterClass.IRONCLAD, 99, 0)
+game.obtain_relic(sts.RelicId.SUNDIAL)
+battle = sts.BattleContext()
+battle.init_encounter(game, sts.MonsterEncounter.CULTIST)
+advisor.native_search.resume()
+plan = advisor.native_search.plan(battle, 2000, [], 0, 0, False, False, True)
+for bits in plan['actions']:
+    advisor.native_search.execute(battle, int(bits) & 0xffffffff)
+assert plan['fast_ready'] and plan['relics_held'] and battle.snapshot_counters['sundial'] == 2, plan
+print('PASS: fast finish holds Sundial')

@@ -92,6 +92,20 @@ public final class Foresight {
         return count;
     }
 
+    static boolean eliteAhead(List<? extends List<MapRoomNode>> map, MapRoomNode node,
+                              Map<MapRoomNode,Boolean> memo) {
+        Boolean known = memo.get(node);
+        if (known != null) return known;
+        boolean found = false;
+        for (com.megacrit.cardcrawl.map.MapEdge edge : node.getEdges())
+            if (edge.dstY >= 0 && edge.dstY < map.size()) {
+                MapRoomNode next = map.get(edge.dstY).get(edge.dstX);
+                found |= next.room instanceof com.megacrit.cardcrawl.rooms.MonsterRoomElite || eliteAhead(map, next, memo);
+            }
+        memo.put(node, found);
+        return found;
+    }
+
     static boolean remindRuby(int act, boolean enabled, boolean owned, boolean atRest, int remaining) {
         return act == 3 && enabled && !owned && atRest && remaining <= 1;
     }
