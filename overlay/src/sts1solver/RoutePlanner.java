@@ -37,7 +37,11 @@ final class RoutePlanner {
 
     RoutePlanner(JsonObject game, JsonObject visible) {
         this.game=game; this.visible=visible;
-        act=number(game,"act",1); row=number(visible,"y",-1)+1;
+        act=number(game,"act",1);
+        JsonObject screen=object(game,"screen_state");
+        JsonArray offered=text(game,"screen_type").equals("MAP")?array(screen,"next_nodes"):new JsonArray();
+        // The offered nodes give the row: act 3 opens on act 2's boss node (-1,15), since TheBeyond keeps currMapNode.
+        row=offered.size()>0?number(offered.get(0).getAsJsonObject(),"y",-1):number(visible,"y",-1)+1;
         weights=RULES.getAsJsonObject("weights").getAsJsonObject(act+":balanced");
         for(JsonElement e:array(game,"map")) {
             JsonObject n=e.getAsJsonObject(); nodes.put(key(number(n,"x",-1),number(n,"y",-1)),n);
@@ -63,7 +67,6 @@ final class RoutePlanner {
         flame=burning.size()==0?-1:key(number(burning.get(0).getAsJsonObject(),"x",-1),number(burning.get(0).getAsJsonObject(),"y",-1));
         if(weights==null || row<0 || row>14)return;
         List<Integer> starts=new ArrayList<>();
-        JsonObject screen=object(game,"screen_state");
         if(flag(screen,"boss_available"))return;
         if(text(game,"screen_type").equals("MAP") && screen.has("next_nodes")) {
             for(JsonElement e:array(screen,"next_nodes")) starts.add(number(e.getAsJsonObject(),"x",-1));

@@ -435,7 +435,8 @@ final class OutsidePacket {
         JsonArray deck = array(game, "deck"), relics = array(game, "relics"), potions = array(game, "potions");
         int potionCount = 0;
         for (JsonElement p : potions) if (!emptyPotion(string(p.getAsJsonObject(), "id"))) potionCount++;
-        int x = optionalInt(visible, "x", -1), y = optionalInt(visible, "y", -1);
+        boolean opening = actStart();
+        int x = opening ? -1 : optionalInt(visible, "x", -1), y = opening ? -1 : optionalInt(visible, "y", -1);
         float[] o = observation;
         o[0] = hp / 200f; o[1] = maxHp / 200f; o[2] = gold / 1800f;
         o[3] = integer(game, "floor") / 60f; o[4] = act / 4f;
@@ -527,7 +528,7 @@ final class OutsidePacket {
         float[] v = extra;
         v[0] = (float)hp / Math.max(1, maxHp); v[1] = (maxHp-hp)/100f;
         v[2] = deck.size()/40f; v[3] = integer(game, "gold")/300f;
-        v[4] = optionalInt(visible, "y", -1)/15f;
+        v[4] = (actStart() ? -1 : optionalInt(visible, "y", -1))/15f;
         v[5] = integer(game, "act")/4f;
         v[6] = optionalInt(object(game,"screen_state"),"num_cards",0)/5f;
         v[7] = potionCount/5f; v[8] = potions.size()/5f;
@@ -563,6 +564,13 @@ final class OutsidePacket {
         if (offset != 3980) throw new IllegalStateException("Map observation width drift");
     }
 
+    /** The training simulator opens every act at (-1,-1); the game opens acts 1-2 at (0,-1) and act 3 on act 2's boss node (-1,15). */
+    private boolean actStart() {
+        JsonArray next = array(object(game, "screen_state"), "next_nodes");
+        return string(visible, "screen_type").equals("MAP") && next.size() > 0
+            && optionalInt(next.get(0).getAsJsonObject(), "y", -1) == 0;
+    }
+
     private void mapChoices() {
         JsonObject screen = object(game, "screen_state");
         if (bool(screen, "boss_available")) {
@@ -571,7 +579,7 @@ final class OutsidePacket {
             route(choice, 0, 15);
             return;
         }
-        int targetY = optionalInt(visible, "y", -1)+1;
+        int targetY = actStart() ? 0 : optionalInt(visible, "y", -1)+1;
         JsonArray next = array(screen, "next_nodes");
         for (int i = 0; i < next.size(); i++) {
             JsonObject node = next.get(i).getAsJsonObject();

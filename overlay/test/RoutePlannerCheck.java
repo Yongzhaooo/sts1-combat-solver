@@ -12,6 +12,7 @@ public final class RoutePlannerCheck {
         try(Reader r=new InputStreamReader(new FileInputStream(args[0]),StandardCharsets.UTF_8)) {
             fixtures=new JsonParser().parse(r).getAsJsonArray();
         }
+        JsonObject first=copy(fixtures.get(0).getAsJsonObject()); // an act opening; the loop below moves it to row 1
         long start=System.nanoTime();
         int checks=0;
         for(JsonElement item:fixtures) {
@@ -44,9 +45,10 @@ public final class RoutePlannerCheck {
             checks++;
         }
         keyChecks(fixtures.get(0).getAsJsonObject());
+        actStartChecks(first);
         goldChecks();
         wingChecks();
-        System.out.printf("PASS: %d golden openings, final-act keys, expected gold, burning-elite lean, Wing Boots ties, all legal starts, low-HP suffix replans, unchanged input (%.0f ms)%n",checks,(System.nanoTime()-start)/1e6);
+        System.out.printf("PASS: %d golden openings, final-act keys, act-3 start, expected gold, burning-elite lean, Wing Boots ties, all legal starts, low-HP suffix replans, unchanged input (%.0f ms)%n",checks,(System.nanoTime()-start)/1e6);
     }
 
     static JsonObject copy(JsonObject o) {return new JsonParser().parse(o.toString()).getAsJsonObject();}
@@ -96,6 +98,22 @@ public final class RoutePlannerCheck {
         if(found==0)throw new AssertionError("Fixture 0 must have an elite the act-2 bonus pulls the route to");
     }
     static final double RULES_ELITE_ACT2=1.380691;
+
+    /** Act 3 opens on act 2's boss node (-1,15) (TheBeyond keeps currMapNode); its row-0 choices plan as from y=-1. */
+    static void actStartChecks(JsonObject fixture) {
+        JsonObject g=copy(fixture.getAsJsonObject("game")), v=copy(fixture.getAsJsonObject("visible"));
+        g.addProperty("act",3); g.addProperty("solver_final_act",true);
+        RoutePlanner.Plan opening=new RoutePlanner(g,v).best(-1);
+        v.addProperty("x",-1); v.addProperty("y",15);
+        RoutePlanner.Plan start=new RoutePlanner(g,v).best(-1);
+        if(start==null||start.path.size()!=15||start.path.get(0).x!=opening.path.get(0).x
+                ||start.score!=opening.score||start.missingKeys!=opening.missingKeys)
+            throw new AssertionError("Act-3 start plans its row-0 choices, keys included");
+        g.getAsJsonObject("screen_state").add("next_nodes",new JsonArray());
+        g.getAsJsonObject("screen_state").addProperty("boss_available",true);
+        v.addProperty("x",3); v.addProperty("y",14);
+        if(new RoutePlanner(g,v).best(-1)!=null)throw new AssertionError("A boss choice has no route");
+    }
 
     /** One-column map: shops see the gold of the fights before them; unaffordable shops are neither shops nor "too close". */
     static void goldChecks() {
