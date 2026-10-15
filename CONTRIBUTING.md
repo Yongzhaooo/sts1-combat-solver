@@ -46,6 +46,8 @@ The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher
   ```bash
   python tools/build_solver_runtime.py          # 构建原生引擎并运行 CTest
   python tools/check_backend_protocol.py        # 以及与你改动相关的其他 tools/check_*.py
+  python tools/coverage_manifest.py             # 实现或删除牌、遗物后重新生成覆盖清单，连同改动一起提交
+  python tools/coverage_manifest.py --check     # 清单是否最新，已支持的职业有没有缺口
   python tools/truth_calibration/run.py --adapter "<你的适配器>" fixtures/calibration   # M0 之后
   ```
 

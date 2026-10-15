@@ -54,6 +54,14 @@ def main():
                 divergent['game_state']['combat_state']['player']['current_hp'] -= 7
                 reply = send({'id': 4, 'op': 'advance', 'state': divergent, 'budget': 2000})
                 assert reply.get('id') == 4 and reply.get('status') == 'error', reply
+                # A card or class relic the coverage manifest lists as missing is refused before search.
+                for field, item in (('hand', 'Neutralize'), ('relics', 'Tingsha')):
+                    gapped = json.loads(json.dumps(state))
+                    target = gapped['game_state']['combat_state']['hand'] if field == 'hand' else gapped['game_state']['relics']
+                    target[0]['id'] = item
+                    reply = send({'id': 'gap-' + item, 'op': 'solve', 'state': gapped, 'budget': 2000})
+                    assert reply.get('status') == 'error' and reply.get('limitation') == [item], reply
+                    assert '尚未实现' in reply['message'] and item in reply['message'], reply
                 process.stdin.write(json.dumps({'id': 5, 'op': 'solve', 'state': state, 'budget': 128000}) + '\n')
                 started = time.monotonic()
                 reply = send({'id': 6, 'op': 'cancel'})
@@ -77,7 +85,7 @@ def main():
                 process.stdout.close()
                 if not process.stdin.closed:
                     process.stdin.close()
-        print('PASS: native worker, real solve, divergent-state refusal, idle/active cancel, debug export, EOF')
+        print('PASS: native worker, real solve, divergent-state refusal, unimplemented-item refusal, idle/active cancel, debug export, EOF')
 
 
 if __name__ == '__main__':
