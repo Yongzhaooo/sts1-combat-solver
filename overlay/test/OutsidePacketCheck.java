@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 /** Exercise the public-state map adapter with a recorded original-game map and deck. */
@@ -40,6 +41,17 @@ public final class OutsidePacketCheck {
         OutsidePacket packet = OutsidePacket.build(Distill2.load(), state, visible);
         if (packet.choices.size() != nodes.size() || packet.choices.size() < 2)
             throw new AssertionError("Map candidates drifted");
+        // The game opens acts 1-2 at (0,-1) and act 3 on act 2's boss node (-1,15); the student learned acts opening at (-1,-1).
+        for (int[] at : new int[][]{{0, -1}, {-1, 15}}) {
+            visible.addProperty("x", at[0]); visible.addProperty("y", at[1]);
+            OutsidePacket opening = OutsidePacket.build(Distill2.load(), state, visible);
+            boolean same = Arrays.equals(opening.observation, packet.observation) && Arrays.equals(opening.extra, packet.extra);
+            for (int i = 0; i < packet.choices.size(); i++)
+                same &= Arrays.equals(opening.choices.get(i).descriptor, packet.choices.get(i).descriptor)
+                    && Arrays.equals(opening.choices.get(i).route, packet.choices.get(i).route);
+            if (!same) throw new AssertionError("Act start at (" + at[0] + "," + at[1] + ") must encode as (-1,-1)");
+        }
+        visible.addProperty("x", -1); visible.addProperty("y", -1);
         Distill2.Result result = packet.score();
         Distill2.Result policy = packet.policyScore();
         List<OutsidePacket.Step> recommended=OutsidePacket.plannedRoute(Distill2.load(),state,visible,-1);
