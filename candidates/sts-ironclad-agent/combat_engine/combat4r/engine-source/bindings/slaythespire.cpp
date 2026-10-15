@@ -58,6 +58,17 @@ namespace {
         throw std::invalid_argument("unknown enum name: " + name);
     }
 
+    // Snapshots that predate the character field are Ironclad. Names are the game's PlayerClass names.
+    CharacterClass snapshotCharacter(const py::dict &snapshot) {
+        if (!snapshot.contains("character")) return CharacterClass::IRONCLAD;
+        const auto name = py::cast<std::string>(snapshot["character"]);
+        if (name == "IRONCLAD") return CharacterClass::IRONCLAD;
+        if (name == "THE_SILENT") return CharacterClass::SILENT;
+        if (name == "DEFECT") return CharacterClass::DEFECT;
+        if (name == "WATCHER") return CharacterClass::WATCHER;
+        throw std::invalid_argument("unknown snapshot character: " + name);
+    }
+
     CardInstance snapshotCard(const py::dict &src, int uniqueId) {
         const auto id = static_cast<CardId>(py::cast<int>(src["id"]));
         if (id == CardId::INVALID) throw std::invalid_argument("snapshot card id is INVALID");
@@ -69,6 +80,7 @@ namespace {
         if (src.contains("cost")) card.costForTurn = static_cast<std::int8_t>(py::cast<int>(src["cost"]));
         if (src.contains("base_cost")) card.cost = py::cast<int>(src["base_cost"]);
         if (src.contains("free_to_play_once")) card.freeToPlayOnce = py::cast<bool>(src["free_to_play_once"]);
+        if (src.contains("retain")) card.retain = py::cast<bool>(src["retain"]);
         return card;
     }
 
@@ -225,7 +237,7 @@ namespace {
 
         bc.player = Player();
         const auto player = py::cast<py::dict>(snapshot["player"]);
-        bc.player.cc = CharacterClass::IRONCLAD;
+        bc.player.cc = snapshotCharacter(snapshot);
         bc.player.curHp = py::cast<int>(player["current_hp"]);
         bc.player.maxHp = py::cast<int>(player["max_hp"]);
         // Legacy snapshots lack these flags; current exporters preserve history.
@@ -273,6 +285,29 @@ namespace {
             }
             if (ordered.size() != bc.player.powerOrder.size()) throw std::logic_error("snapshot power order mismatch");
             bc.player.powerOrder = ordered;
+        }
+        // Optional character state. Absent means none: neutral stance, no orb slots, no mantra.
+        if (player.contains("stance")) {
+            const auto stance = py::cast<std::string>(player["stance"]);
+            if (stance == "NEUTRAL") bc.player.stance = Stance::NEUTRAL;
+            else if (stance == "CALM") bc.player.stance = Stance::CALM;
+            else if (stance == "WRATH") bc.player.stance = Stance::WRATH;
+            else if (stance == "DIVINITY") bc.player.stance = Stance::DIVINITY;
+            else throw std::invalid_argument("unknown snapshot stance: " + stance);
+        }
+        if (player.contains("orb_slots")) bc.player.orbSlots = static_cast<std::int8_t>(py::cast<int>(player["orb_slots"]));
+        // The simulator has no orb state yet, so a snapshot with orbs must not import as if it had none.
+        if (player.contains("orbs") && py::len(player["orbs"]) != 0)
+            throw std::invalid_argument("snapshot orbs are not supported by the simulator yet");
+        if (player.contains("mantra")) {
+            const int mantra = py::cast<int>(player["mantra"]);
+            if (mantra < 0) throw std::invalid_argument("snapshot mantra is negative");
+            if (bc.player.hasStatus<PS::MANTRA>()) {
+                if (bc.player.getStatus<PS::MANTRA>() != mantra)
+                    throw std::invalid_argument("snapshot mantra disagrees with its Mantra power");
+            } else if (mantra > 0) {
+                setPlayerStatus(bc.player, PS::MANTRA, mantra, false);
+            }
         }
 
         bc.cards = CardManager();
@@ -1505,6 +1540,7 @@ PYBIND11_MODULE(slaythespire, m) {
         .def_readonly("unique_id", &CardInstance::uniqueId)
         .def_readonly("base_cost", &CardInstance::cost)
         .def_readonly("free_to_play_once", &CardInstance::freeToPlayOnce)
+        .def_readonly("retain", &CardInstance::retain)
         .def_readonly("cost", &CardInstance::cost)
         .def_readonly("cost_for_turn", &CardInstance::costForTurn)
         .def_property_readonly("requires_target", &CardInstance::requiresTarget)
@@ -1530,6 +1566,14 @@ PYBIND11_MODULE(slaythespire, m) {
         .def_readonly("card_draw_per_turn", &Player::cardDrawPerTurn)
         .def_readonly("panache_counter", &Player::panacheCounter)
         .def_readonly("combust_hp_loss", &Player::combustHpLoss)
+        .def_property_readonly("character", [](const Player &p) {
+            return std::string(characterClassEnumNames[static_cast<int>(p.cc)]);
+        })
+        .def_property_readonly("stance", [](const Player &p) {
+            static const char *const names[] = {"NEUTRAL", "CALM", "WRATH", "DIVINITY"};
+            return std::string(names[static_cast<int>(p.stance)]);
+        })
+        .def_readonly("orb_slots", &Player::orbSlots)
         .def_property_readonly("bombs", [](const Player &p) {
             // Legacy aggregate view; instances remain the authoritative state.
             std::vector<int> totals(3, 0);

@@ -550,6 +550,9 @@ def build_snapshot(game_state, counters=None):
                          if (power.get("id") or power.get("name")) == "Berserk")
     counters = counters or {}
     snapshot = {
+        # Optional: the importer reads Ironclad when absent. Orbs, stance, mantra and retain are
+        # likewise optional and are only added once the Mod exports them.
+        **({"character": game_state["class"]} if game_state.get("class") else {}),
         "seed": int(game_state.get("seed") or 0),
         "floor": int(game_state.get("floor") or 0),
         "ascension": int(game_state.get("ascension_level") or 0),
