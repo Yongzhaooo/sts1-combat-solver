@@ -564,11 +564,12 @@ final class OutsidePacket {
         if (offset != 3980) throw new IllegalStateException("Map observation width drift");
     }
 
-    /** The training simulator opens every act at (-1,-1); the game opens acts 1-2 at (0,-1) and act 3 on act 2's boss node (-1,15). */
+    /** The training simulator opens every act at (-1,-1), Neow included; the game opens acts 1-2 (and Neow) at (0,-1)
+     * and act 3 on act 2's boss node (-1,15). */
     private boolean actStart() {
         JsonArray next = array(object(game, "screen_state"), "next_nodes");
-        return string(visible, "screen_type").equals("MAP") && next.size() > 0
-            && optionalInt(next.get(0).getAsJsonObject(), "y", -1) == 0;
+        return integer(game, "floor") == 0 || (string(visible, "screen_type").equals("MAP") && next.size() > 0
+            && optionalInt(next.get(0).getAsJsonObject(), "y", -1) == 0);
     }
 
     private void mapChoices() {
