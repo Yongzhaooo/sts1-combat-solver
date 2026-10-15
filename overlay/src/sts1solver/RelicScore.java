@@ -49,13 +49,15 @@ final class RelicScore {
             "Orrery", "Membership Card", "Cauldron", "PreservedInsect", "Boot", "Du-Vu Doll", "Mummified Hand",
             "Frozen Egg 2", "Toxic Egg 2", "Ornamental Fan", "Sundial", "Champion Belt");
         put(4, "Omamori", "Juzu Bracelet", "MawBank", "Smiling Mask", "The Courier", "Chemical X", "Toolbox", "DollysMirror",
-            "PrismaticShard", "Kunai", "Pocketwatch", "Blue Candle", "Unceasing Top", "Art of War");
+            "Kunai", "Pocketwatch", "Blue Candle", "Unceasing Top", "Art of War");
         put(3, "Potion Belt", "WingedGreaves", "MealTicket", "CeramicFish", "Darkstone Periapt", "Medical Kit", "Frozen Eye",
             "HandDrill", "Strange Spoon", "Sling", "TheAbacus", "Tiny Chest");
         put(2, "TwistedFunnel", "Spirit Poop", "Symbiotic Virus", "TeardropLocket");
+        put(-100, "PrismaticShard");
     }
 
     static int score(String id) {
+        if ("PrismaticShard".equals(id)) return -100;
         Integer value = SCORES.get(id);
         return value == null ? NEUTRAL : value;
     }

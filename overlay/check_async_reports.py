@@ -1,36 +1,36 @@
-"""A blocked retention write cannot block solve enqueue; close drains in order."""
+"""A stalled run-log write cannot block solve enqueue; close drains in order."""
 import json
-import sqlite3
+import sys
 import tempfile
 import threading
 from pathlib import Path
 from unittest.mock import patch
-from contextlib import closing
-from diagnostics import Reports, AsyncReports
+
+sys.path.insert(0, str(Path(__file__).parent))
+from diagnostics import RunLog, AsyncReports
 
 entered, release = threading.Event(), threading.Event()
-class SlowReports(Reports):
+class SlowRunLog(RunLog):
     def record(self, *args):
         entered.set()
         assert release.wait(5), 'test failed to release storage'
         super().record(*args)
 
 with tempfile.TemporaryDirectory() as temp:
-    path = Path(temp)/'reports.sqlite3'
-    with patch('diagnostics.Reports', SlowReports), patch('diagnostics.time.time_ns', return_value=123):
-        reports = AsyncReports(path)
+    runs = Path(temp)/'runs'
+    with patch('diagnostics.RunLog', SlowRunLog):
+        reports = AsyncReports(runs)
         try:
-            for seed in range(1,5):
-                state = {'game_state': {'seed':seed, 'floor':1}}
-                reports.record('request', {'op':'solve','id':seed}, state)
+            state = {'game_state': {'seed': 42, 'floor': 1}}
+            for i in range(1, 5):
+                reports.run('request', {'op': 'solve', 'id': i}, state)
             assert entered.wait(2)
-            reports.record('reply', {'id':4, 'status':'ready'})
+            reports.run('reply', {'id': 4, 'status': 'ready'}, state)
             assert not release.is_set(), 'writes did not remain stalled'
         finally:
             release.set()
             reports.close()
-    with closing(sqlite3.connect(path)) as db:
-        assert db.execute('SELECT count(*) FROM runs').fetchone()[0] == 3
-        rows = db.execute('SELECT kind,payload FROM events ORDER BY id').fetchall()
-        assert [(k,json.loads(v)['id']) for k,v in rows] == [('request',2),('request',3),('request',4),('reply',4)]
-print('PASS: stalled storage does not block enqueue; ordered drain and three-run retention')
+    rows = [json.loads(line) for line in (runs/'42.jsonl').read_text(encoding='utf-8').splitlines()]
+    assert [(r['k'], r['id']) for r in rows if 'id' in r] == [
+        ('request', 1), ('request', 2), ('request', 3), ('request', 4), ('reply', 4)], rows
+print('PASS: stalled run log does not block enqueue; ordered drain')

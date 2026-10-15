@@ -38,6 +38,7 @@ def check(bundle, state_file):
         def send(value):
             process.stdin.write(json.dumps(value)+'\n'); process.stdin.flush()
         try:
+            send({'op':'run_log','enabled':True})
             send({'id':1,'op':'solve','budget':2000,'state':state})
             result = replies.get(timeout=20)
             assert result.get('status') == 'ready' and result.get('command'), result
@@ -63,11 +64,11 @@ def check(bundle, state_file):
             send({'id':5,'op':'advance','budget':2000,'state':divergent})
             result = replies.get(timeout=20)
             assert result.get('id') == 5 and result.get('status') == 'error', result
-            send({'op':'export_debug','metadata':{'test':'bundled-windows'}})
+            send({'op':'export_run','directory':str(Path(outside)/'export'),'metadata':{'test':'bundled-windows'}})
             exported = replies.get(timeout=20)
-            assert exported['status'] == 'debug_export', exported
-            with zipfile.ZipFile(Path(outside)/'bug-reports'/exported['file']) as archive:
-                assert json.loads(archive.read('debug.json'))['events']
+            assert exported['status'] == 'debug_run_export', exported
+            document = json.loads((Path(exported['directory'])/exported['file']).read_text(encoding='utf-8'))
+            assert document['format'] == 'sts1-run-v1' and document['events'], exported
             process.stdin.close()
             assert process.wait(timeout=15) == 0
             print('PASS: cold start, worker reload, cancellation, divergent-state refusal, debug export and clean exit')
@@ -86,6 +87,11 @@ if __name__ == '__main__':
     manifest=json.loads((args.bundle/'bundle-manifest.json').read_text(encoding='utf-8'))
     for name,digest in manifest['files'].items():
         assert hashlib.sha256((args.bundle/name).read_bytes()).hexdigest()==digest, name
+    # A development JAR launches a source checkout through WSL and fails on every user machine.
+    with zipfile.ZipFile(args.bundle/'STS1CombatSolver.jar') as jar:
+        properties=jar.read('solver.properties').decode('ascii').splitlines()
+    assert {'runtime=windows-bundled', 'runtime=bundled'} & set(properties) and not any(
+        line.startswith(('python=','backend=','log=')) for line in properties), properties
     # Exercise a relocated installation with spaces/Unicode, without changing
     # the release files or depending on the current source checkout.
     with tempfile.TemporaryDirectory(prefix='工坊 clean install ',dir=args.bundle.resolve().parent) as folder:

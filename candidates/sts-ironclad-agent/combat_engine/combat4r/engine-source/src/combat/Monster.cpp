@@ -300,21 +300,6 @@ void Monster::die(BattleContext &bc) {
 //            bc.cleanCardQueue(); // todo should this really return like this?
         bc.outcome = Outcome::PLAYER_VICTORY;
         return;
-    } else if (hasStatus<MS::MINION_LEADER>()) {
-        // Java appends minion EscapeActions behind the card's queued effects.
-        // A killing Headbutt must finish its picker before the fight ends.
-        bc.addToBot(Action{[](BattleContext &next) {
-            for (int i=0;i<next.monsters.monsterCount;++i) {
-                auto &minion=next.monsters.arr[i];
-                if (minion.isAlive() && minion.hasStatus<MS::MINION>()) {
-                    minion.isEscapingB=true;
-                    --next.monsters.monstersAlive;
-                }
-            }
-            next.outcome=Outcome::PLAYER_VICTORY;
-            next.checkCombat();
-        }, false});
-        return;
     }
 
     if (hasStatus<MS::SPORE_CLOUD>()) {
@@ -349,6 +334,38 @@ void Monster::die(BattleContext &bc) {
     if (bc.player.hasRelic<RelicId::THE_SPECIMEN>()) {
         bc.addToBot( Actions::SetState(InputState::SELECT_ENEMY_THE_SPECIMEN_APPLY_POISON) );
     }
+    if (id == MonsterId::REPTOMANCER || id == MonsterId::THE_COLLECTOR || id == MonsterId::BRONZE_AUTOMATON) {
+        // Reptomancer, TheCollector and BronzeAutomaton.die queue SuicideAction at the TOP, before card exhaust.
+        // Gremlin Leader instead queues escapes at the bottom. Mixing them
+        // incorrectly triggers Dead Branch on the killing exhaust card.
+        bc.addToTop(Action{[](BattleContext &next) {
+            for (int i=next.monsters.monsterCount-1;i>=0;--i) {
+                auto &minion=next.monsters.arr[i];
+                if (minion.isAlive() && minion.hasStatus<MS::MINION>()) {
+                    minion.curHp=0;
+                    minion.die(next);
+                }
+            }
+            // SuicideAction calls die, not DamageAction: it does not clear queued card effects.
+        }, false});
+    } else if (hasStatus<MS::MINION_LEADER>()) {
+        // Java appends minion EscapeActions behind the card's queued effects.
+        // A killing Headbutt must finish its picker before the fight ends.
+        bc.addToBot(Action{[](BattleContext &next) {
+            for (int i=0;i<next.monsters.monsterCount;++i) {
+                auto &minion=next.monsters.arr[i];
+                if (minion.isAlive() && minion.hasStatus<MS::MINION>()) {
+                    minion.isEscapingB=true;
+                    --next.monsters.monstersAlive;
+                }
+            }
+            // EscapeAction only starts the escape (AbstractMonster.escape); it
+            // never clears the queue. Effects queued behind it still run, e.g.
+            // a Dark Embrace draw from the killing card's exhaust that shuffles.
+            next.outcome=Outcome::PLAYER_VICTORY;
+        }, false});
+    }
+
     if (id == MonsterId::SPIRE_SHIELD || id == MonsterId::SPIRE_SPEAR) {
         for (int i=0;i<bc.monsters.monsterCount;++i)
             if (bc.monsters.arr[i].isAlive()) bc.player.lastTargetedMonster=i;
@@ -401,12 +418,15 @@ void Monster::attackedUnblockedHelper(BattleContext &bc, int damage) { // todo, 
         }
 
     } else if (hasStatus<MS::MALLEABLE>() || hasStatus<MS::REACTIVE>()) {
-        if (hasStatus<MS::MALLEABLE>()) {
+        // MalleablePower and ReactivePower.onAttacked require
+        // damageAmount < currentHealth: a killing hit queues nothing.
+        const bool survives = damage < curHp;
+        if (survives && hasStatus<MS::MALLEABLE>()) {
             const auto malleable = getStatus<MS::MALLEABLE>();
             bc.addToBot( Actions::MonsterGainBlock(this->idx, malleable) );
             setStatus<MS::MALLEABLE>(malleable+1);
         }
-        if (hasStatus<MS::REACTIVE>()) {
+        if (survives && hasStatus<MS::REACTIVE>()) {
             if (getStatus<MS::REACTIVE>() == 0) {
                 setStatus<MS::REACTIVE>(1);
                 bc.addToBot( Actions::ReactiveRollMove() );

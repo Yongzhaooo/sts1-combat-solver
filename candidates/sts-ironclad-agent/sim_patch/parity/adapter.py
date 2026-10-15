@@ -94,6 +94,7 @@ class Comparator:
         for name, (value, _) in self.health_flags(view).items():
             snapshot["player"][name] = value
         battle = self.sts.BattleContext.from_snapshot(snapshot, int(snapshot["seed"]))
+        battle.potion_bark_flip = self.potion_bark_flip(game)
         combat = game["combat_state"]
         counters = ("cards_drawn", "energy_wasted")
         if require_search_state or any(key in combat for key in counters):
@@ -105,6 +106,13 @@ class Comparator:
                 "relics": [int(relic["id"]) for relic in snapshot["relics"]],
             })
         return battle
+
+    @staticmethod
+    def potion_bark_flip(game: dict) -> int:
+        """Slots whose observed Java potency doubling differs from the current Sacred Bark relic."""
+        bark = any(r["id"] == "SacredBark" for r in game.get("relics", []))
+        return sum(1 << i for i, p in enumerate(game.get("potions", []))
+                   if "sacred_bark_doubled" in p and p["sacred_bark_doubled"] != bark)
 
     @staticmethod
     def health_flags(view: dict) -> dict:
@@ -189,6 +197,8 @@ class Comparator:
         if "combat_state" not in game:
             hp = observation.consume("/game/current_hp")
             expected = "PLAYER_VICTORY" if hp > 0 else "PLAYER_LOSS"
+            if game.get("smoked") is True and hp > 0:
+                expected = "PLAYER_ESCAPE"
             diff = differences(expected, battle.outcome.name, "/outcome")
             return {"differences": diff, "expected": {"outcome": expected},
                     "actual": {"outcome": battle.outcome.name},
@@ -255,6 +265,12 @@ class Comparator:
             self.bridge.POTION_ALIASES.get(p["id"], p["id"])) for p in game["potions"]]
         for index in range(len(game["potions"])):
             observation.consume(f"/game/potions/{index}/id")
+        if any("sacred_bark_doubled" in p for p in game["potions"]):
+            expected["potion_bark_flip"] = self.potion_bark_flip(game)
+            actual["potion_bark_flip"] = int(battle.potion_bark_flip)
+            for index, potion in enumerate(game["potions"]):
+                if "sacred_bark_doubled" in potion:
+                    observation.consume(f"/game/potions/{index}/sacred_bark_doubled")
         expected["rng"] = {name: rng_bits(observation.consume("/rng/" + raw)) for name, raw in RNG_NAMES.items()}
         counters = ("cards_drawn", "energy_wasted")
         if all(key in combat for key in counters):
@@ -401,8 +417,11 @@ class ActionMapper:
                         candidates = [card for unique, card in simulated.items()
                                       if unique not in reserved
                                       and self.c.original_card(original) == self.c.simulator_card(card)]
-                        if len(candidates) != 1:
-                            raise CoverageGap("new hand selection identity is absent or ambiguous")
+                        # Every candidate equals the original's projection, which holds each native card field but
+                        # unique_id (retain is never set in production), so any choice gives the same state; take the
+                        # first unreserved one in hand order (Dual Wield copies under Duplication).
+                        if not candidates:
+                            raise CoverageGap("new hand selection identity is absent")
                         updates[uuid] = candidates[0].unique_id
                         reserved.add(candidates[0].unique_id)
                 self.uuids.update(updates)
