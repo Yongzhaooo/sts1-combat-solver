@@ -8,6 +8,10 @@ Remove any older locally built solver JAR from your loaded mods directories to a
 
 先移除加载目录里旧的本地编译版求解器 JAR，避免重复模组 ID。启动器按 JVM 架构选包；Rosetta 下的 Intel JVM 使用 Intel 后台。首次启动会自动解压到上述用户目录并恢复执行权限。更新使用新的缓存目录，诊断和经验数据保留。
 
+Keys: Enter runs one step, F10 runs this fight, F9 stops, F8 folds the panel, F7 saves the act map with the planned route as a PNG on the desktop, F6 exports diagnostics (Shift+F6 finalizes experience parts).
+
+快捷键：回车执行一步，F10 执行这场战斗，F9 停止，F8 收起面板，F7 把本幕地图和计划路线存成桌面 PNG，F6 导出诊断（Shift+F6 封存经验分卷）。
+
 ## Release verification / 发布验证
 
 CI builds the two architectures independently using pinned, SHA-256-verified CPython archives. It runs four engine CTests, real native search/replay, worker solve/cancel/state-rejection/export/EOF checks, and production Java extraction into a Unicode path with a minimal PATH. Runtime ZIPs contain no game JARs or local developer paths. Windows and Linux source builds also run under Python 3.11 and 3.14.

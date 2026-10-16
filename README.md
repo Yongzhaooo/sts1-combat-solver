@@ -29,7 +29,7 @@ The product contract is described here; component boundaries and the proposed de
 
 > **This is an early training result and its play is not good yet.** On a small dataset it wins roughly 59%–81% of A20 runs. Known weaknesses: it upgrades too rarely, its deckbuilding lacks a plan, and it walks into early elites at full HP. Treat it as an experiment, not a reliable winner.
 
-- **Opt-in per run:** When an Ironclad run starts, the solver asks whether to enable it: full auto, step mode (each decision is shown and waits for confirmation), or manual. It is off by default; press `F9` or click Take over at any time.
+- **Three modes, chosen per run:** When an Ironclad run starts, the solver asks which to use. **AI autopilot** climbs and fights; **Combat auto** runs every fight automatically while you make all other decisions; **Manual (step by step)** covers fights and everything outside them: the solver and the network suggest, and each step waits for `Enter` or a click. AI autopilot is off by default; press `F9` or click Stop at any time to return to Manual. Hide the suggestions card with its x to play outside combat without suggestions.
 - **What it decides:** Neow, card rewards, campfires, shops, events, chests and boss relics are scored by a small network, with candidates and scores shown on the panel. Combat uses the existing solver. The network runs inside Java and needs no extra install.
 - **Map route:** Reviewed rules choose the next node and draw the same connected route to the boss. Act 1 favors preparation before elites, Act 2 favors events and useful shops, and Act 3 includes the burning elite when the green key is missing. Low HP reduces elite preference; each new state can change the route. No whole-act damage-budget veto suppresses a legal plan. This is a preference heuristic, not a survival prediction.
 - **Removal limits:** Removal and transforms only pick curses, Strikes, Defends and Bash.
@@ -82,6 +82,19 @@ CI covers Python 3.11 and 3.14 on Windows, macOS and Linux, plus separately buil
 
 - **Launch:** After Steam finishes downloading, choose **Play with Mods**. In ModTheSpire, enable BaseMod and STS1 Combat Solver, then start an Ironclad run. Remove old separate `CommunicationMod.jar` and `SteamStateExport.jar` files supplied with previous solver versions.
 - **Read the panel:** Switch the panel between English and Chinese on its **Settings** page. In combat, click **Recalculate** to search; compare the displayed routes and potion choices. Search has a finite budget, so a route is a recommendation rather than a proof of optimal play.
-- **Execute a route:** Click a completed, verified route to execute it, or use **Execute one step**, **Execute turn**, or **Auto combat** for the current result. `F10` / `Enter` toggles combat automation; `F9` or **Stop** halts search and execution; `F8` folds the panel.
-- **Choose automation scope:** **Auto potion swap** handles post-combat potion pickup or swaps. **Continuous auto** handles potion use and later fights. These are separate panel switches. Card rewards, paths, shops, rest sites, and events remain your choices unless the full autopilot is on. See the [potion policy](POTION_POLICY.zh-CN.md).
+- **Manual, in combat:** `Enter` or a click on the route runs one step; **Execute one step** does the same, **Execute turn** runs the rest of the turn, and `F10` runs the route for the whole fight. `F9` or **Stop** halts search and execution and returns to Manual; `F8` folds the panel.
+- **Manual, outside combat:** the card lists the candidates with the network's scores and highlights its pick; click another candidate to override it, then press `Enter` or **Confirm this step**.
+- **Combat auto and the autopilot:** **Combat auto** (panel button) runs this and later fights automatically, including potion use; **AI autopilot** also decides everything outside combat. **Auto potion swap** is a separate switch for post-combat potion pickup or swaps. See the [potion policy](POTION_POLICY.zh-CN.md).
+- **Boss fast finish (Settings, off by default):** A Boss is searched like any fight. When on, the search stops as soon as it finds a potion-free win that costs at most half your HP; this saves time but can lose more HP. The switch starts off for every player, including those with saved settings.
+- **Keys:**
+
+  | Key | Action |
+  | --- | --- |
+  | `Enter` | Manual: run one step (in combat) or confirm the suggested outside action; Combat auto and autopilot: resume this fight's automation |
+  | `F10` (rebind in Settings) | Run the solved route for this fight |
+  | `F9` | Stop and return to Manual |
+  | `F8` | Fold or unfold the panel |
+  | `F7` | Save this act's map with the planned route as a PNG on the desktop |
+  | `F6` | Export a diagnostic archive (`Shift+F6` finalizes experience parts when recording is on) |
+  | `0`-`9`, `Enter` | Pick a route when the panel asks |
 - **Report a problem:** Press `F6` to export a local diagnostic archive. Experience recording starts off on every launch; if you enable it, `Shift+F6` finalizes its files. Review files before sharing them. Nothing uploads automatically, and the public build does not record audio; see [Privacy](PRIVACY.md).

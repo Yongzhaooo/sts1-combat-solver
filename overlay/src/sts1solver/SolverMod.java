@@ -117,8 +117,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private boolean decisionDirty=true;
     private boolean busy, awaitingAction, auto, turnOnly, gamblingAuto, paused, collapsed, dragging;
     private boolean runAuto;
+    private boolean runAfterBranch; // F10 pressed while a route choice was pending: run the fight once chosen
     private boolean autoPotionRewards = true;
     private boolean runAutoEnabled = true;
+    private boolean bossFastFinishEnabled; // Settings: stop searching a Boss once a potion-free win is found
     private AbstractPlayer runAutoPlayer;
     private String autoReason = "";
     private PotionRewards.Advice rewardPotionAdvice;
@@ -135,6 +137,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private static final float ROUTE_LEFT = 248, BODY_TOP = 76, BODY_ROW = 30, NOTE_TOP = 234;
     private static final int BODY_ROWS = 5;
     private static final float ACTIONS_TOP = 262, TOGGLES_TOP = 306;
+    private static final float SETTINGS_TOP = 78, SETTINGS_PITCH = 34;
     private static final float PILOT_WIDTH = 440, PILOT_LIST_TOP = 72, PILOT_ROW = 30;
     private static final int PILOT_ROWS = 5;
     private static final float ACTION_SPACING = (PANEL_WIDTH - 24) / 6;
@@ -225,6 +228,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("uiScale", "1");
             defaults.setProperty("autoKey", Integer.toString(Input.Keys.F10));
             defaults.setProperty("brightEyeMode", "false"); // beyond-SL display hints are opt-in; no policy reads them
+            defaults.setProperty("bossFastFinish", "false"); // new key: every player starts with the standard Boss search
             defaults.setProperty("autoPotionRewards", "true");
             defaults.setProperty("runAutoEnabled", "true");
             defaults.setProperty("runLog", "true");
@@ -235,6 +239,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             backendPhase = I18n.t("等待后台接收");
             autoKey = config.getInt("autoKey");
             Foresight.brightEyeMode = config.getBool("brightEyeMode");
+            bossFastFinishEnabled = config.getBool("bossFastFinish");
             autoPotionRewards = config.getBool("autoPotionRewards");
             runAutoEnabled = config.getBool("runAutoEnabled");
             runLog = config.getBool("runLog");
@@ -305,7 +310,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         error = "";
         if (!busy && result == null && !awaitingAction) lastKey = null;
         status = I18n.t("自动执行已开启 · 仅本场战斗");
-        if (result != null && result.get("needs_confirmation").getAsBoolean() && !branchConfirmed) requestBranches();
+        if (result != null && result.get("needs_confirmation").getAsBoolean() && !branchConfirmed) { runAfterBranch = true; requestBranches(); }
     }
 
     private void requestBranches() {
@@ -334,7 +339,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             branchPicker=false;
             branchConfirmed=true;
             boolean manual=result.has("manual_choice") && result.get("manual_choice").getAsBoolean();
-            auto=runAuto || autoAfterBranch(manual);
+            auto=runAuto || (autoAfterBranch(manual) && (RunMode.combatAutomatic(mode()) || runAfterBranch)); // Manual steps unless F10 asked for the run
+            runAfterBranch=false;
             if(manual)thiefPreference=branch;
             paused=false;
             send("choose",state);
@@ -469,7 +475,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         com.megacrit.cardcrawl.rooms.AbstractRoom room=AbstractDungeon.getCurrRoom();
         out.addProperty("room",room==null?"":room.getClass().getSimpleName());
         out.addProperty("boss_candidates_remaining",AbstractDungeon.bossList==null?0:AbstractDungeon.bossList.size());
-        out.addProperty("boss_fast_finish",bossFastFinish(
+        out.addProperty("boss_fast_finish",bossFastFinish(bossFastFinishEnabled,
             room instanceof com.megacrit.cardcrawl.rooms.MonsterRoomBoss,
             AbstractDungeon.actNum,AbstractDungeon.ascensionLevel,
             AbstractDungeon.bossList==null?0:AbstractDungeon.bossList.size(),
@@ -489,6 +495,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         return out;
     }
 
+    /** The Settings switch gates the rule; off means a Boss gets the standard budget and the full search like any fight. */
+    static boolean bossFastFinish(boolean enabled,boolean bossRoom,int act,int ascension,int remainingBosses,boolean noHealing) {
+        return enabled && bossFastFinish(bossRoom,act,ascension,remainingBosses,noHealing);
+    }
+
     static boolean bossFastFinish(boolean bossRoom,int act,int ascension,int remainingBosses,boolean noHealing) {
         return bossRoom && act>=1 && act<=3 && !noHealing
             // Beyond starts with three candidates, removing the current one on
@@ -496,17 +507,27 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             && !(act==3 && ascension>=20 && remainingBosses>1);
     }
 
+    private RunMode mode() { return RunMode.of(outsideMode,runAuto); }
+
+    private boolean inSupportedRun() {
+        return CommandExecutor.isInDungeon() && AbstractDungeon.player!=null && supported();
+    }
+
     private void toggleCombatMode() {
-        if(outsideMode==0 && !runAuto && auto) { cancel(true); return; }
-        if(outsideMode!=0) {
-            chooseOutsideMode(0);
-            runAuto=false; // Switching from the pilot starts combat-only automation.
+        RunMode before=mode();
+        if(RunMode.combatButton(before,auto)==RunMode.MANUAL) {
+            if(runAuto){runAutoEnabled=false;saveAutomation();}
+            cancel(true); // also ends the automatic run of this fight alone
+            if(before==RunMode.COMBAT_AUTO && inSupportedRun())chooseOutsideMode(1);
+            return;
         }
+        if(outsideMode!=0)chooseOutsideMode(0);
+        runAuto=false; // Switching from the pilot or step mode starts combat-only automation.
         toggleRunAuto();
     }
 
     private void togglePilotMode() {
-        if(outsideMode==2)stopAll();
+        if(RunMode.pilotButton(mode())==RunMode.MANUAL)stopAll();
         else chooseOutsideMode(2);
     }
 
@@ -535,10 +556,13 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         saveAutomation();
     }
 
+    /** F9 / Stop: back to Manual, where the solver and the network suggest and every step waits for the player. */
     private void stopAll() {
-        outsideMode=0; outsidePrompt=false; outsidePacket=null; outsideStatePacket=null; outsideScores=null;
-        outsideConfirm=false; outsideAwaiting=false;
-        outsideNotice=I18n.t("全自动已停止；现在由你接管");
+        boolean manual=inSupportedRun();
+        outsidePrompt=false; outsidePacket=null; outsideStatePacket=null; outsideScores=null;
+        outsideConfirm=false; outsideAwaiting=false; outsideFailed=false;
+        outsideMode=manual?1:0; outsidePilotRun=manual;
+        outsideNotice=I18n.t(manual?"已停止 · 人工逐步：每一步回车或点击确认":"全自动已停止；现在由你接管");
         autoPotionRewards=false;
         cancel(true);
     }
@@ -548,8 +572,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         outsideConfirm=false; outsideAwaiting=false; outsideFailed=false;
         if(mode==0) { outsidePilotRun=false; outsideNotice=I18n.t("局外决策由你操作"); return; }
         outsidePilotRun=true;
-        outsideNotice=mode==1?I18n.t("局外步进：每步等你确认；战斗自动执行")
+        outsideNotice=mode==1?I18n.t("人工逐步：求解器和 AI 给出建议，每一步回车或点击确认")
             :I18n.t("全自动爬塔已开启 · F9 随时接管");
+        if(mode==1) { runAuto=false; auto=turnOnly=false; decisionDirty=true; return; } // fights wait for the player too
         runAuto=true; runAutoPlayer=AbstractDungeon.player;
         auto=combat(); paused=false; decisionDirty=true;
     }
@@ -578,7 +603,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             outsidePlayer=AbstractDungeon.player; outsidePrompt=true; outsideMode=0;
             outsidePacket=null; outsideStatePacket=null; outsideScores=null; outsideAwaiting=false;
             outsidePilotRun=false; outsideFailed=false;
-            outsideNotice=I18n.t("新一局：自己构筑请选【自动战斗】；也可随时点击【AI全自动】完全托管");
+            outsideNotice=I18n.t("新一局：选【人工逐步】每步确认，【战斗全自动】只自动打战斗，或【AI全自动】完全托管");
         }
         if(outsidePrompt) return;
         if(outsideMode==0 || combat() || AbstractDungeon.player.isDead || rewardPotionPending!=null) return;
@@ -883,7 +908,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (!pendingSearch) { ++serial; activeId = serial; }
         if (!pendingSearch) clickedBranch = null;
         busy = pendingSearch;
-        awaitingAction = auto = turnOnly = gamblingAuto = false;
+        awaitingAction = auto = turnOnly = gamblingAuto = runAfterBranch = false;
         if (!keepResult) { branchPicker = branchConfirmed = false; branchInput = ""; result = null; }
         decisionDirty = true;
         paused = pause;
@@ -1090,7 +1115,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             runAuto=false;runAutoPlayer=null;
         } else if(supported() && AbstractDungeon.player!=runAutoPlayer) {
             runAutoPlayer=AbstractDungeon.player;
-            runAuto=runAutoEnabled || outsideMode!=0; // the pilot keeps combat automation across acts.
+            runAuto=runAutoEnabled || outsideMode==2; // the pilot keeps combat automation across acts.
             autoPotionRewards=config==null || config.getBool("autoPotionRewards");
         }
         if(AbstractDungeon.player!=null && AbstractDungeon.player.isDead)runAuto=false;
@@ -1114,7 +1139,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         updateDeckChanges();
         if (!inCombat) {
             status = outsidePrompt || outsideMode!=0 || !outsideNotice.isEmpty() ? outsideNotice
-                : runAuto ? I18n.t("跨场自动已开 · 等待下场；其他选择由你决定") : I18n.t("选牌与路线由你决定");
+                : runAuto ? I18n.t("战斗全自动已开 · 等待下场；其他选择由你决定") : I18n.t("选牌与路线由你决定");
             if(outsideMode==0)updatePotionRewards();
             return;
         }
@@ -1386,17 +1411,21 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         } catch(NumberFormatException invalid) { return -1; }
     }
     private void branchKeyboard() {
+        // Manual outside combat: Enter runs the suggested step.
+        if(outsideMode==1 && !combat() && outsidePacket!=null && outsideScores!=null && Gdx.input.isKeyJustPressed(Input.Keys.ENTER))
+            outsideConfirm=true;
         boolean held=Gdx.input.isKeyPressed(Input.Keys.ENTER);
         for(int n=0;n<=9;n++) held |= Gdx.input.isKeyPressed(Input.Keys.NUM_0+n)
                 || Gdx.input.isKeyPressed(Input.Keys.NUMPAD_0+n);
         // Keep native card hotkeys suppressed until the selecting key is released.
         captureBranchKeys=branchPicker || (captureBranchKeys && held);
-        // Enter starts this combat's auto execution (same as the auto key). The key is
+        // Enter runs one step in Manual, otherwise resumes this combat's automation. The key is
         // withheld from the game until released; potion choices keep their own Enter.
         if(!branchPicker && !auto && !turnOnly && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)
                 && supported() && ready()) {
+            if(RunMode.combatAutomatic(mode())) toggleAuto();
+            else executeStep(); // one step per Enter; F10 or Execute turn runs more
             captureBranchKeys=true;
-            toggleAuto();
             return;
         }
         if(!branchPicker || busy || result==null)return;
@@ -1451,13 +1480,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 if (!collapsed && lx >= w-118 && lx < w-54) settingsOpen=!settingsOpen;
                 else if (lx > w-47) { collapsed=!collapsed; autoFolded=false; }
                 else { dragging=true; dx=mx-x; dy=my-y; }
-            } else if (!collapsed && settingsOpen && ly>=80 && ly<192 && (ly-80)%40<32) {
+            } else if (!collapsed && settingsOpen && ly>=SETTINGS_TOP && ly<SETTINGS_TOP+4*SETTINGS_PITCH && (ly-SETTINGS_TOP)%SETTINGS_PITCH<30) {
                 float cw=(w-40)/2, off=lx-(24+cw);
-                int setting=(int)((ly-80)/40);
+                int setting=(int)((ly-SETTINGS_TOP)/SETTINGS_PITCH);
                 if (setting==0 && off<0) toggleBrightEye();
                 else if (setting==0) changeScale(off<cw/3 ? uiScale-.1f : off>=cw*2/3 ? uiScale+.1f : 1);
-                else if (setting==1) { if (off<0) bindingKey=true; else toggleLanguage(); }
-                else if (off<0) toggleRunLog(); else exportRun();
+                else if (setting==1) { if (off<0) toggleBossFinish(); else toggleLanguage(); }
+                else if (setting==2) { if (off<0) toggleRunLog(); else exportRun(); }
+                else if (off<0) bindingKey=true;
             } else if (body && previewCount > 0 && lx >= ROUTE_LEFT && ly >= 42 && ly < 72) {
                 if (transformPreview != null) transformPreview = null;
                 else {
@@ -1488,7 +1518,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                     }
                 }
             } else if (list && result!=null) {
-                if (!auto && !turnOnly) toggleAuto();
+                if (!auto && !turnOnly) { if (RunMode.combatAutomatic(mode())) toggleAuto(); else executeStep(); }
             } else if (!collapsed && lx >= 16 && lx < w-16 && ly >= ACTIONS_TOP && ly <= ACTIONS_TOP+36
                     && (lx-16)%ACTION_SPACING < ACTION_SPACING-8) {
                 int action=(int)((lx-16)/ACTION_SPACING);
@@ -1500,12 +1530,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 else if (action==4) togglePilotMode();
                 else stopAll();
             } else if (!collapsed && lx >= 16 && lx < w-16 && ly >= TOGGLES_TOP && ly <= TOGGLES_TOP+28) {
-                float spacing=(w-24)/(canCreditRest()?4:3);
+                float spacing=(w-24)/(canCreditRest()?3:2);
                 if ((lx-16)%spacing < spacing-8) {
                     int toggle=(int)((lx-16)/spacing);
                     if (toggle==0) { budgetIndex=(budgetIndex+1)%3; recalculate(); }
                     else if (toggle==1) togglePotionRewards();
-                    else if (toggle==2) toggleCombatMode();
                     else { nextRest=!nextRest; recalculate(); }
                 }
             }
@@ -1529,6 +1558,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         Foresight.brightEyeMode = !Foresight.brightEyeMode;
         scroll = 0;
         try { if(config!=null) { config.setBool("brightEyeMode",Foresight.brightEyeMode); config.save(); } }
+        catch(IOException failure) { error=I18n.t("模式保存失败：")+failure.getMessage(); }
+    }
+
+    private void toggleBossFinish() {
+        bossFastFinishEnabled = !bossFastFinishEnabled;
+        try { if(config!=null) { config.setBool("bossFastFinish",bossFastFinishEnabled); config.save(); } }
         catch(IOException failure) { error=I18n.t("模式保存失败：")+failure.getMessage(); }
     }
 
@@ -1663,24 +1698,23 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (settingsOpen) renderSettings(sb,w,note);
         else renderCombatBody(sb,w,note);
         String[] labels={I18n.t("重新计算"),I18n.t("执行一步"),turnOnly?I18n.t("正在执行本回合"):I18n.t("执行本回合"),
-            I18n.t(outsideMode==0 && (runAuto || auto)?"战斗自动：开":"战斗自动"),
+            I18n.t(outsideMode!=2 && (runAuto || auto)?"战斗全自动：开":"战斗全自动"),
             I18n.t(outsideMode==2?"AI全自动：开":"AI全自动"),I18n.t("停止")};
         for(int i=0;i<labels.length;i++) {
             box(sb,16+i*ACTION_SPACING,ACTIONS_TOP,ACTION_SPACING-8,36,i==0?accent:surface);
             label(sb,labels[i],26+i*ACTION_SPACING,ACTIONS_TOP+8,ACTION_SPACING-28,.8f,
                 i==0?background:i==5?danger:i==4&&outsideMode==2?accent
-                :i==3&&outsideMode==0&&(runAuto||auto)?accent:i==2&&result==null?muted:Color.WHITE);
+                :i==3&&outsideMode!=2&&(runAuto||auto)?accent:i==2&&result==null?muted:Color.WHITE);
         }
         List<String> toggles=new ArrayList<>(Arrays.asList(
             I18n.t("搜索预算：")+I18n.t(budgetNames[budgetIndex]),
-            I18n.t("自动换药：")+I18n.t(autoPotionRewards?"开":"关"),
-            I18n.t("跨场自动：")+I18n.t(runAuto?"开":"关")));
+            I18n.t("自动换药：")+I18n.t(autoPotionRewards?"开":"关")));
         if(canCreditRest())toggles.add(I18n.t("羽毛回血：")+I18n.t(nextRest?"是":"仅必经火堆"));
         float spacing=(w-24)/toggles.size();
         for(int i=0;i<toggles.size();i++) {
             box(sb,16+i*spacing,TOGGLES_TOP,spacing-8,28,surface);
             label(sb,toggles.get(i),24+i*spacing,TOGGLES_TOP+5,spacing-24,.8f,
-                i==2?(runAuto?accent:muted):i==1?(autoPotionRewards?accent:muted):accent);
+                i==1?(autoPotionRewards?accent:muted):accent);
         }
         sb.setColor(Color.WHITE);
         cursorOnTop(sb);
@@ -1688,17 +1722,22 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private void renderSettings(SpriteBatch sb, float w, String note) {
         float cw=(w-40)/2, right=24+cw;
-        for(int row=0;row<3;row++) for(int col=0;col<2;col++) box(sb,16+col*(cw+8),80+row*40,cw,32,surface);
-        label(sb,I18n.t("辉眼模式：")+I18n.t(Foresight.brightEyeMode?"开":"关"),26,87,cw-20,.85f,accent);
-        label(sb,"−",right+12,86,24,1,accent);
-        label(sb,Math.round(uiScale*100)+"%",right+cw/2-22,87,60,.85f,Color.WHITE);
-        label(sb,"＋",right+cw-30,86,24,1,accent);
-        label(sb,I18n.t("自动战斗快捷键：")+Input.Keys.toString(autoKey),26,127,cw-20,.85f,accent);
-        label(sb,I18n.t("语言：")+("en".equals(I18n.language())?"English":"简体中文"),right+10,127,cw-20,.85f,accent);
-        label(sb,I18n.t("持续记录：")+" "+I18n.t(runLog?"开":"关"),26,167,cw-20,.85f,runLog?accent:muted);
-        label(sb,I18n.t("导出到桌面 · F6"),right+10,167,cw-20,.85f,accent);
-        label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F8/F9 保留；Esc 取消"):I18n.t("按种子记录牌组、战斗与选择，仅保存到本机"),
-            16,204,w-32,.75f,bindingKey?accent:muted);
+        for(int row=0;row<4;row++) for(int col=0;col<2;col++) box(sb,16+col*(cw+8),SETTINGS_TOP+row*SETTINGS_PITCH,cw,30,surface);
+        float t=SETTINGS_TOP+6, p=SETTINGS_PITCH;
+        label(sb,I18n.t("辉眼模式：")+I18n.t(Foresight.brightEyeMode?"开":"关"),26,t,cw-20,.85f,accent);
+        label(sb,"−",right+12,t-1,24,1,accent);
+        label(sb,Math.round(uiScale*100)+"%",right+cw/2-22,t,60,.85f,Color.WHITE);
+        label(sb,"＋",right+cw-30,t-1,24,1,accent);
+        label(sb,I18n.t("Boss 快速收尾：")+I18n.t(bossFastFinishEnabled?"开":"关"),26,t+p,cw-20,.85f,bossFastFinishEnabled?accent:muted);
+        label(sb,I18n.t("语言：")+("en".equals(I18n.language())?"English":"简体中文"),right+10,t+p,cw-20,.85f,accent);
+        label(sb,I18n.t("持续记录：")+" "+I18n.t(runLog?"开":"关"),26,t+2*p,cw-20,.85f,runLog?accent:muted);
+        label(sb,I18n.t("导出到桌面 · F6"),right+10,t+2*p,cw-20,.85f,accent);
+        label(sb,I18n.t("自动战斗快捷键：")+Input.Keys.toString(autoKey),26,t+3*p,cw-20,.85f,accent);
+        label(sb,"SuperFastMode: "+(Loader.isModLoaded("superfastmode")?"x"+superFastShown():I18n.t("未安装")),right+10,t+3*p,cw-20,.85f,
+            superFastSpeed()>SUPER_FAST_TESTED?danger:muted);
+        label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F7/F8/F9 保留；Esc 取消")
+                :I18n.t("Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同"),
+            16,SETTINGS_TOP+4*p-2,w-32,.7f,bindingKey?accent:muted);
         boolean incompatibleMod = Loader.isModLoaded("SaveStateMod") || Loader.isModLoaded("undothespire") || Loader.isModLoaded("undobutton");
         String fast = superFastNote();
         boolean warn = incompatibleMod || !rngWarning.isEmpty() || superFastSpeed() > SUPER_FAST_TESTED;
@@ -1720,10 +1759,15 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         } catch (ReflectiveOperationException | LinkageError failure) { return 1f; }
     }
 
+    static String superFastShown() {
+        float speed = superFastSpeed();
+        return speed == Math.rint(speed) ? String.valueOf((int) speed) : String.valueOf(speed);
+    }
+
     static String superFastNote() {
         if (!Loader.isModLoaded("superfastmode")) return "";
         float speed = superFastSpeed();
-        String shown = speed == Math.rint(speed) ? String.valueOf((int) speed) : String.valueOf(speed);
+        String shown = superFastShown();
         return speed > SUPER_FAST_TESTED
             ? I18n.t("SuperFastMode 速度 ×") + shown + I18n.t(" 超出已测试的 ×10，如自动执行异常请调低")
             : I18n.t("已兼容 SuperFastMode（当前 ×") + shown + I18n.t("，建议不超过 ×10）");
@@ -1754,7 +1798,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 healing+=" · "+I18n.backend(result.getAsJsonArray("recovery_notes").get(0).getAsString());
             label(sb,healing,26,198,inner,.75f,muted);
         } else {
-            label(sb,error.isEmpty()?I18n.t("自己构筑请开【战斗自动】；点击【AI全自动】随时完全托管"):I18n.backend(error),26,90,inner,.85f,error.isEmpty()?accent:danger);
+            label(sb,error.isEmpty()?I18n.t("自己构筑请开【战斗全自动】；点击【AI全自动】随时完全托管"):I18n.backend(error),26,90,inner,.85f,error.isEmpty()?accent:danger);
             label(sb,error.isEmpty()?I18n.t("仅查看建议，点击按钮后才出牌"):I18n.t("详细原因已写入后台日志"),26,124,inner,.8f,muted);
         }
         List<String> foresight=transformPreview!=null?transformPreview.lines():combat()?Collections.<String>emptyList():Foresight.lines();
@@ -1898,10 +1942,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private float pilotHeight() { return pilotButtonsTop()+38+14; }
     /** Buttons as {action, label}; actions: 2 auto, 1 step, 0 take over, 3 confirm, -1 start manual, -2 auto combat only. */
     private String[][] pilotButtons() {
-        if(outsidePrompt) return new String[][]{{"-2","自动战斗（自己构筑）"},{"2","AI全自动"},{"-1","由我操作"}};
-        if(outsideMode==2) return new String[][]{{"1","改为逐步"},{"0","接管"}};
-        if(outsideMode==1) return new String[][]{{"3","确认这一步"},{"2","AI全自动"},{"0","接管"}};
-        return new String[][]{{"2","继续AI全自动"},{"1","逐步"}};
+        if(outsidePrompt) return new String[][]{{"-1","人工逐步"},{"-2","战斗全自动"},{"2","AI全自动"}};
+        if(outsideMode==2) return new String[][]{{"0","人工逐步"}};
+        if(outsideMode==1) return new String[][]{{"3","确认这一步（回车）"},{"-2","战斗全自动"},{"2","AI全自动"}};
+        return new String[][]{{"2","继续AI全自动"},{"1","人工逐步"}};
     }
     private void pilotInput(float lx, float ly, boolean click, float mx, float my) {
         int rows=pilotListRows();
@@ -1917,8 +1961,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }
         if(!click)return;
         if(ly<40) {
-            if(lx>=PILOT_WIDTH-40 && !outsidePrompt) { // hide the card; the full panel returns.
-                if(outsideMode!=0)stopAll();
+            if(lx>=PILOT_WIDTH-40 && !outsidePrompt) { // hide the card; the full panel returns, without suggestions.
+                if(outsideMode==2)stopAll();
+                outsideMode=0; outsidePacket=null; outsideScores=null; outsideConfirm=false;
                 outsidePilotRun=false;
             } else { dragging=true; dx=mx-x; dy=my-y; }
             return;
@@ -1932,7 +1977,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         switch(Integer.parseInt(buttons[slot][0])) {
             case 3: if(outsidePacket!=null)outsideConfirm=true; break;
             case 0: stopAll(); break;
-            case -1: chooseOutsideMode(0); break;
+            case -1: chooseOutsideMode(1); break;
             case -2:
                 chooseOutsideMode(0);
                 if (!runAuto) toggleRunAuto();
@@ -1945,7 +1990,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         box(sb,0,0,PILOT_WIDTH,height,border);
         box(sb,1,1,PILOT_WIDTH-2,height-2,background);
         label(sb,I18n.t("自动爬塔"),16,10,140,1.05f,Color.WHITE);
-        String chip=outsidePrompt?"新一局":outsideMode==2?"AI全自动中":outsideMode==1?"逐步确认"
+        String chip=outsidePrompt?"新一局":outsideMode==2?"AI全自动中":outsideMode==1?"人工逐步"
             :outsideFailed?"已暂停":"已接管";
         Color chipColor=outsideMode==2?accent:outsideFailed?danger:outsideMode==1?Color.WHITE:muted;
         box(sb,PILOT_WIDTH-170,9,120,24,surface);
