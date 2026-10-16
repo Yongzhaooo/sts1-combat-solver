@@ -1,0 +1,19 @@
+{
+  "schema": "sts1-calibration/1",
+  "id": "synthetic-0001",
+  "game_jar_sha256": "synthetic-not-a-game-build",
+  "character": "IRONCLAD",
+  "ascension": 0,
+  "seed": "123",
+  "actions": [
+    {"kind": "neow", "index": 1},
+    {"kind": "play", "hand": 2, "card": "Strike_R", "target": 0},
+    {"kind": "end"}
+  ],
+  "checkpoints": [
+    {"after": 0, "observation": {"synthetic": true, "step": 0, "log": []}},
+    {"after": 2, "observation": {"synthetic": true, "step": 2, "log": ["neow", "play"]}},
+    {"after": 3, "observation": {"synthetic": true, "step": 3, "log": ["neow", "play", "end"]}}
+  ],
+  "source": {"truth": "synthetic", "truth_identity": "tools/truth_calibration/selftest/fake_adapter.py", "exporter": "written by hand; not a game observation"}
+}

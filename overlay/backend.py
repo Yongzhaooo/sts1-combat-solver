@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 import os
 import importlib.machinery
 import itertools
@@ -24,7 +25,7 @@ for s in (sys.stdin, sys.stdout, sys.stderr):
         except Exception:
             pass
 
-from recovery import health, future_recovery
+from recovery import health, future_recovery, incense_targets
 from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature
 from auto_policy import recommend
 
@@ -34,9 +35,13 @@ sys.path.insert(0, str(REPO))
 # Classes the combat engine imports exactly. Adding one also needs its card/relic
 # coverage in the engine and the same entry in SolverMod.SUPPORTED.
 SUPPORTED_CLASSES = {'IRONCLAD': '战士'}
+COVERAGE_MANIFEST = Path(__file__).with_name('coverage_manifest.json')
 # Bottle sets are compared only when no single bottle wins within this effective loss.
 MULTI_POTION_LOSS = 6
 DEEP_BUDGET = 128000
+# Safety net: if cardRandomRng still drifts after card generation, keep executing the planned
+# route (later random cards are re-checked) instead of letting LiveSearch silently drop it.
+FRAME_RNG = ('/rng/card_random',)
 
 
 def heart_fight(game):
@@ -48,6 +53,7 @@ def boss_fast_plan(game, plan, slots):
             and not slots and plan['outcome'] == 1 and plan['hp'] > 0
             and plan['turns'] <= 20
             and not plan.get('used_tail') and not plan.get('used_fairy')
+            and plan.get('relics_held') is True
             and not plan.get('potion_uses')
             and not any((int(bits) & 0xffffffff) >> 29 == 1 for bits in plan['actions'])
             and 2 * max(0, game['current_hp'] - plan['hp']) <= game['max_hp'])
@@ -94,6 +100,40 @@ def start_selection(comparator, view):
     return original_selection(comparator, adapted)
 
 
+class UnsupportedCombat(ValueError):
+    """The combat holds items the simulator does not implement; reported as a limitation."""
+
+    def __init__(self, items):
+        super().__init__('战斗中有模拟器尚未实现的内容，不开始搜索：'
+                         + '、'.join(f'{name}（{key}）' for key, name in items))
+        self.items = [key for key, _ in items]
+
+
+def _norm(value):
+    return ''.join(ch for ch in str(value).lower() if ch.isalnum())
+
+
+@functools.lru_cache(maxsize=1)
+def coverage_manifest():
+    return json.loads(COVERAGE_MANIFEST.read_text(encoding='utf-8'))
+
+
+def coverage_gaps(game, manifest=None):
+    """(id, display name) of every card and class relic in the combat that the coverage manifest lists as missing."""
+    manifest = manifest or coverage_manifest()
+    missing = {kind: {_norm(key) for key in manifest[kind]} for kind in ('missing_cards', 'missing_relics')}
+    combat = game.get('combat_state', {})
+    found = {}
+    for pile in ('hand', 'draw_pile', 'discard_pile', 'exhaust_pile', 'limbo'):
+        for card in combat.get(pile, ()):
+            if _norm(card.get('id')) in missing['missing_cards']:
+                found.setdefault(card['id'], card.get('name') or card['id'])
+    for relic in game.get('relics', ()):
+        if _norm(relic.get('id')) in missing['missing_relics']:
+            found.setdefault(relic['id'], relic.get('name') or relic['id'])
+    return list(found.items())
+
+
 def view_from_state(state):
     from steam.rng_contract import validate, COMBAT_STREAMS
     game = state.get('game_state', {})
@@ -102,6 +142,9 @@ def view_from_state(state):
             or game.get('screen_type') not in ('NONE', 'HAND_SELECT', 'GRID', 'CARD_REWARD')):
         raise ValueError('仅支持' + '、'.join(SUPPORTED_CLASSES.values())
                          + '的战斗阶段；选奖励牌、路线和商店由你操作。')
+    gaps = coverage_gaps(game)
+    if gaps:
+        raise UnsupportedCombat(gaps)
     if not state.get('ready_for_command'):
         raise ValueError('游戏动画尚未结算，请稍候。')
     # CommunicationMod's canUse(player, null) flag does not guarantee a target.
@@ -194,6 +237,7 @@ class Advisor:
         if type(reroll) is not bool:
             raise ValueError('无效的 Discovery 随机规则')
         self.native_search.set_discovery_reroll(reroll)
+        self.native_search.set_incense_targets(incense_targets(view['game']))
         self.native_search.resume()
         if self.interrupt.is_set():
             self.native_search.cancel()
@@ -548,8 +592,8 @@ class Advisor:
                     raise ValueError('战斗选牌提前关闭')
                 action = s.pending_multi['action']
             else:
-                comparison = s._compare(view)
-                diffs = [d for d in comparison.get('differences', []) if not d.get('path', '').startswith('/rng/card_random')]
+                comparison = s._compare(view, FRAME_RNG)
+                diffs = [d for d in comparison.get('differences', []) if not d.get('path', '').startswith(FRAME_RNG)]
                 if diffs:
                     raise ValueError('确认选牌后状态偏离预测：' + repr(diffs[:4]))
                 return
@@ -558,8 +602,8 @@ class Advisor:
         self.native_search.execute(s.battle,int(action.bits))
         s.actions.popleft()
         s.pending_multi = None
-        comparison = s._compare(view)
-        diffs = [d for d in comparison.get('differences', []) if not d.get('path', '').startswith('/rng/card_random')]
+        comparison = s._compare(view, FRAME_RNG)
+        diffs = [d for d in comparison.get('differences', []) if not d.get('path', '').startswith(FRAME_RNG)]
         if diffs:
             raise ValueError('实际状态偏离预测；已停止执行。' + repr(diffs[:2]))
         if s.battle.input_state == s.sts.InputState.CARD_SELECT:
@@ -771,6 +815,8 @@ def worker(connection, interrupt):
                     sys.stderr.flush()
 
                 result = {'status': 'error', 'message': err_msg, 'traceback': tb_str}
+                if isinstance(error, UnsupportedCombat):
+                    result['limitation'] = error.items
             finally:
                 was_interrupted = interrupt.is_set()
                 stop.set()
@@ -897,7 +943,8 @@ def serve(runs_dir=None):
                                   'sig': fault_signature(value.get('message'), tail), 'frame': state}, state)
         elif value.get('status') not in ('progress',):
             note('reply', {k: value[k] for k in ('id', 'status', 'command', 'hp', 'outcome', 'branch',
-                                                         'backend_seconds', 'interrupted') if k in value}, state)
+                                                         'backend_seconds', 'interrupted', 'boss_fast_finish',
+                                                         'remaining') if k in value}, state)
         print(json.dumps(value, ensure_ascii=False), flush=True)
 
     def start():

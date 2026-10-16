@@ -358,3 +358,8 @@ AI全自动中|AI running
 自动战斗（自己构筑）|Auto combat (build yourself)
 新一局：自己构筑请选【自动战斗】；也可随时点击【AI全自动】完全托管|New run: choose [Auto combat] for manual building; or click [AI autopilot] anytime
 自己构筑请开【战斗自动】；点击【AI全自动】随时完全托管|Turn on [Auto combat] for manual building; click [AI autopilot] anytime
+这些 Mod 会影响随机数（RNG），求解器计算可能不准确，建议关闭：|These mods affect the game RNG, so solver results may be inaccurate; consider disabling: 
+SuperFastMode 速度 ×|SuperFastMode speed x
+ 超出已测试的 ×10，如自动执行异常请调低| exceeds the tested x10; lower it if automation misbehaves
+已兼容 SuperFastMode（当前 ×|SuperFastMode supported (now x
+，建议不超过 ×10）|, recommended at most x10)

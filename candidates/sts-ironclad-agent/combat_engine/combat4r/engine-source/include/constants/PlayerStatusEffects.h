@@ -109,7 +109,10 @@ enum class PlayerStatus : std::uint8_t {
     STRENGTH,
 
     // special
-    THE_BOMB
+    THE_BOMB,
+
+    // Append new statuses above this line; never renumber. Player::statusBits holds STATUS_COUNT of them.
+    STATUS_COUNT
 };
 
 typedef PlayerStatus PS;
@@ -121,6 +124,11 @@ static constexpr const char* const playerStatusStrings[] {
 static constexpr const char* const playerStatusEnumStrings[] {
         "INVALID","DOUBLE_DAMAGE","DRAW_REDUCTION","FRAIL","INTANGIBLE","VULNERABLE","WEAK","BIAS","CONFUSED","CONSTRICTED","ENTANGLED","FASTING","HEX","LOSE_DEXTERITY","LOSE_STRENGTH","NO_BLOCK","NO_DRAW","WRAITH_FORM","BARRICADE","BLASPHEMER","CORRUPTION","ELECTRO","SURROUNDED","MASTER_REALITY","PEN_NIB","WRATH_NEXT_TURN","AMPLIFY","BLUR","BUFFER","COLLECT","DOUBLE_TAP","DUPLICATION","ECHO_FORM","FREE_ATTACK_POWER","REBOUND","MANTRA","ACCURACY","AFTER_IMAGE","BATTLE_HYMN","BRUTALITY","BURST","COMBUST","CREATIVE_AI","DARK_EMBRACE","DEMON_FORM","DEVA","DEVOTION","DRAW_CARD_NEXT_TURN","ENERGIZED","ENVENOM","ESTABLISHMENT","EVOLVE","FEEL_NO_PAIN","FIRE_BREATHING","FLAME_BARRIER","FOCUS","FORESIGHT","HELLO_WORLD","INFINITE_BLADES","JUGGERNAUT","LIKE_WATER","LOOP","MAGNETISM","MAYHEM","METALLICIZE","NEXT_TURN_BLOCK","NOXIOUS_FUMES","OMEGA","PANACHE","PHANTASMAL","PLATED_ARMOR","RAGE","REGEN","RITUAL","RUPTURE","SADISTIC","STATIC_DISCHARGE","THORNS","THOUSAND_CUTS","TOOLS_OF_THE_TRADE","VIGOR","WAVE_OF_THE_HAND","EQUILIBRIUM","ARTIFACT","DEXTERITY","STRENGTH","THE_BOMB",
 };
+
+static_assert(sizeof(playerStatusStrings) / sizeof(playerStatusStrings[0]) == static_cast<int>(PlayerStatus::STATUS_COUNT),
+              "playerStatusStrings must name every PlayerStatus");
+static_assert(sizeof(playerStatusEnumStrings) / sizeof(playerStatusEnumStrings[0]) == static_cast<int>(PlayerStatus::STATUS_COUNT),
+              "playerStatusEnumStrings must name every PlayerStatus");
 
 enum class Stance : uint8_t {
     NEUTRAL=0,

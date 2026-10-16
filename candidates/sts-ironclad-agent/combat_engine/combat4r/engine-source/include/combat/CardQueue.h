@@ -26,6 +26,7 @@ namespace sts {
         bool randomTarget = false;
         bool autoplay = false;
         int regretCardCount = 0; // maybe use to indicate triggerOnUse too?
+        int playTopDrawSize = -1; // draw-pile size when PlayTopCardAction ran applyPowers (Mind Blast)
 
         bool purgeOnUse = false;
         bool exhaustOnUse = false;
