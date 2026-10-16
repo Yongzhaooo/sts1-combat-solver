@@ -166,6 +166,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 最大生命+20%|Max HP +20%
 涅奥的悲恸|Neow's Lament
 涅奥祝福 · 各选项的确定结果|Neow's blessings · seeded outcomes
+涅奥祝福 · 选项（开启辉眼模式可预览结果）|Neow's blessings · offers (turn on Foresight to preview outcomes)
 游戏字段已变化：|Game field changed: 
 火堆|Campfire
 稀有无色牌三选一|Choose one of three rare colorless cards
@@ -372,3 +373,8 @@ Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉
 新一局|New run
 已暂停|Paused
 已接管|Taken over
+Boss 快速收尾：找到不交药的胜利路线就停止搜索|Boss fast finish: stop searching once a potion-free win is found
+狂宴模式：狂宴得到的生命上限按两倍计价|Feed mode: max HP gained by Feed counts double
+测试模式：把本局每张出牌写到桌面 sts1-test-种子.jsonl（只保留最近一局）|Test mode: write every card played this run to sts1-test-SEED.jsonl on the desktop (latest run only)
+路线标注：在地图上画出规划路线|Route marks: draw the planned route on the map
+战斗求解器设置|Combat solver settings

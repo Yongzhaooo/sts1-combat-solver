@@ -689,7 +689,7 @@ double search::BattleScumSearcher2::evaluateEndState4r(const BattleContext &bc, 
     // Keep the existing Feed, potion and turn values, then account for escaped gold.
     // The projection cannot create rewards, enter another room or consume RNG.
     return evaluateEndState4q(bc) + 100.0 * (hp.curHp - bc.player.curHp)
-        + 100.0 * std::max(0, bc.player.maxHp - initialMaxHp)
+        + 100.0 * maxHpGainWeight * std::max(0, bc.player.maxHp - initialMaxHp)
         - 100.0 * escapedThiefPenaltyHp(bc, hp.curHp);
 }
 

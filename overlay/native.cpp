@@ -174,6 +174,7 @@ double overlayRecoveryBonus(const BattleContext &bc) {
         + carriedRelicValue(bc) - deckCurseHp(bc)
         + std::max(0,goldWealth(bc)-initialGoldWealth)/GOLD_PER_HP);
 }
+#include "loop_beam.h"
 PYBIND11_MODULE(overlay_search, m) {
     m.def("revival_inventory", [](const BattleContext &bc) {
         return std::make_pair(bc.player.hasRelic<RelicId::LIZARD_TAIL>() ? 1 : 0, fairyCount(bc));
@@ -181,6 +182,7 @@ PYBIND11_MODULE(overlay_search, m) {
     m.def("revival_value", &revivalValue);
     m.def("carried_relic_value", [](const BattleContext &bc) { return carriedRelicValue(bc); });
     m.def("set_discovery_reroll", [](bool value) { discoveryReroll=value; });
+    m.def("set_max_hp_gain_weight", [](double weight) { search::BattleScumSearcher2::maxHpGainWeight=weight; });
     m.def("set_incense_targets", [](const std::vector<int> &counters) {
         unsigned mask=0;
         for(int counter:counters) {
@@ -231,10 +233,37 @@ PYBIND11_MODULE(overlay_search, m) {
         live.simulations=0; live.rounds=0; live.turn=root.turn; live.bestHp=-1; live.done=0;
         BattleContext predicted(root);
         combat_search::ReuseResult result;
+        bool beamRan=false, beamUsed=false;
+        double mctsValue=0;
         {
             // The copy above was taken under the GIL; the search touches no Python objects.
             py::gil_scoped_release release;
             result=combat_search::playoutReusing(predicted,simulations,4.0,false,false,true,true,true);
+            // Small-loop rescue: only when the MCTS line loses or costs a lot of HP (formed simple loops are found faster by MCTS).
+            // The beam gets LOOP_BEAM_PER_SIM state transitions per MCTS simulation and wins only on the planner's own end-state value.
+            constexpr long long LOOP_BEAM_PER_SIM=160;
+            const bool mctsWin=predicted.outcome==Outcome::PLAYER_VICTORY;
+            const int cost=root.player.curHp-predicted.player.curHp;
+            mctsValue=search::BattleScumSearcher2::evaluateEndState4r(predicted,initialMaxHp);
+            // Deep (refinement) budgets: any HP loss is worth a beam; standard budgets: only a loss or a costly line.
+            if(!mctsWin || cost>(simulations>=128000 ? 0 : std::max(6,root.player.maxHp*15/100))) {
+                beamRan=true;
+                auto best=loop_beam::portfolio(root,LOOP_BEAM_PER_SIM*simulations,
+                    [](const BattleContext &b){return search::BattleScumSearcher2::evaluateEndState4r(b,initialMaxHp);},
+                    [](){return stopRequested.load() || searchGeneration!=generation.load();});
+                const int mctsHp=predicted.player.curHp;
+                if(best.found && (!mctsWin || best.value>mctsValue)) {
+                    predicted=*best.state; result.actions=best.actions; result.bestHp=predicted.player.curHp; beamUsed=true;
+                }
+                if(const char *log=std::getenv("LOOP_BEAM_LOG")) {      // diagnostic only
+                    if(FILE *f=std::fopen(log,"a")) {
+                        std::fprintf(f,"{\"t\":%.3f,\"turn\":%d,\"hp0\":%d,\"sims\":%d,\"mcts_win\":%d,\"mcts_hp\":%d,\"mcts_value\":%.3f,\"beam_found\":%d,\"beam_hp\":%d,\"beam_value\":%.3f,\"used\":%d,\"transitions\":%lld,\"layers\":%d,\"passes\":%d}\n",
+                            std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count(),root.turn,root.player.curHp,simulations,int(mctsWin),mctsHp,mctsValue,int(best.found),best.found?best.state->player.curHp:-1,
+                            best.found?best.value:0.0,int(beamUsed),loop_beam::stats.transitions,loop_beam::stats.layers,loop_beam::stats.passes);
+                        std::fclose(f);
+                    }
+                }
+            }
         }
         live.done=1;
         // Smoke Bomb still invokes AbstractRoom.endBattle and victory healing.
@@ -258,6 +287,10 @@ PYBIND11_MODULE(overlay_search, m) {
         out["lost_gold"]=predicted.outcome==Outcome::PLAYER_VICTORY ? escapedThiefGold(predicted) : 0;
         out["escaped_thieves"]=escapedThieves(predicted);
         out["value"]=search::BattleScumSearcher2::evaluateEndState4r(predicted,initialMaxHp);
+        out["loop_beam_ran"]=beamRan;
+        out["loop_beam_used"]=beamUsed;
+        out["loop_beam_transitions"]=beamRan ? loop_beam::stats.transitions : 0;
+        out["loop_beam_mcts_value"]=mctsValue;
         return out;
     },py::arg("root"),py::arg("simulations"),py::arg("slots"),py::arg("recovery"),py::arg("index"),py::arg("kill_thieves")=false,py::arg("generated_potions")=false,py::arg("boss_fast")=false);
     m.def("cancel", []() { stopRequested=true; ++generation; });

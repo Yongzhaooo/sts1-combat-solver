@@ -14,13 +14,15 @@ import java.util.Set;
  * SL-visible boundary of the decision policy (docs/outside-rules.md). The policy classes (network input, OutsidePacket rules,
  * EventRules, RoutePlanner, ...) must never reach the bright-eye display code, which shows beyond-SL information: map rooms
  * ahead (Foresight.nextRooms / question) and event-fight rewards (EventForesight). The only live reads allowed are the
- * EventRules.SL_PREREAD events. usage: PolicyBoundaryCheck SRC_DIR [extra policy .java ...]
+ * EventRules.SL_PREREAD events. Neow's four offers are on the game's page (policy input); what they roll (cards, relic,
+ * potions, transforms) is beyond SL and shown only with Glowing Eye (brightEyeMode) on. usage: PolicyBoundaryCheck SRC_DIR [extra policy .java ...]
  */
 public final class PolicyBoundaryCheck {
     /** Decision code. DecisionContext is left out: its only Foresight use is the bright_eye_mode flag in recording metadata. */
     static final String[] POLICY = {"OutsidePacket", "Distill2", "RoutePlanner", "EventRules", "RelicScore", "PotionRewards"};
     /** Display-only classes and members that carry beyond-SL information. */
-    static final String[] FORBIDDEN = {"Foresight", "EventForesight", "TransformPreview", "Sandbox", "brightEyeMode", "nextRooms"};
+    static final String[] FORBIDDEN = {"Foresight", "EventForesight", "TransformPreview", "Sandbox", "brightEyeMode", "nextRooms",
+        "NeowEvent", "NeowReward", "neowRows"};
 
     static void check(boolean ok, String what) {
         if (!ok) throw new AssertionError(what);
@@ -55,6 +57,37 @@ public final class PolicyBoundaryCheck {
         return found;
     }
 
+    /** Glowing Eye off: the offers are listed, nothing is rolled and no option note is set; on: unchanged. */
+    static void neowGate() throws Exception {
+        String[] bonus = {"THREE_CARDS", "ONE_RARE_RELIC", "TRANSFORM_CARD", "HUNDRED_GOLD"};
+        String[] drawback = {"NONE", "NONE", "CURSE", "NO_GOLD"};
+        java.lang.reflect.Field notes = Foresight.class.getDeclaredField("optionNotes");
+        notes.setAccessible(true);
+        java.util.Map<?, ?> optionNotes = (java.util.Map<?, ?>) notes.get(null);
+        int[] rolled = {0};
+        java.util.function.IntFunction<List<String>> roll = i -> {
+            rolled[0]++;
+            return Arrays.asList(i == 3 ? "  → none" : "  → Secret Outcome " + i, "  取决于别的");
+        };
+
+        optionNotes.clear();
+        List<String> off = new ArrayList<>();
+        Foresight.neowRows(bonus, drawback, false, roll, off);
+        check(rolled[0] == 0, "Glowing Eye off: no Neow outcome is rolled");
+        check(optionNotes.isEmpty(), "Glowing Eye off: no Neow option note");
+        check(off.size() == 5, "Glowing Eye off: heading and the four offers only: " + off);
+        for (String row : off) check(!row.contains("Secret") && !row.contains("→"), "Glowing Eye off: outcome text in " + row);
+        check(off.get(3).contains(I18n.t("（代价：")), "Glowing Eye off: the offers keep their drawbacks: " + off.get(3));
+
+        optionNotes.clear();
+        List<String> on = new ArrayList<>();
+        Foresight.neowRows(bonus, drawback, true, roll, on);
+        check(rolled[0] == 4, "Glowing Eye on: every option is rolled");
+        check(on.contains("  → Secret Outcome 0") && on.size() == 5 + 8, "Glowing Eye on: outcome rows are listed: " + on);
+        check("Secret Outcome 1".equals(optionNotes.get(1)) && optionNotes.size() == 4, "Glowing Eye on: option notes are set: " + optionNotes);
+        optionNotes.clear();
+    }
+
     public static void main(String[] args) throws Exception {
         // the violating case: a policy that reads the map preview must fail
         check(violations("int route(List<String> out) { Foresight.nextRooms(out); return out.size(); }")
@@ -64,7 +97,16 @@ public final class PolicyBoundaryCheck {
         check(violations("/** same order as EventForesight.scrapOoze */ String s = \"Foresight\"; // nextRooms").isEmpty(),
             "comments and strings are not references");
 
+        check(violations("void neow(NeowReward r) { r.getRewardCards(true); }").contains("NeowReward"),
+            "a policy reading Neow's live rewards is rejected");
+        neowGate();
+
         Path dir = Paths.get(args[0]);
+        // the display callers hand Glowing Eye to the gate: the panel/option rows and the Neow transform labels
+        String display = code(new String(Files.readAllBytes(dir.resolve("Foresight.java")), StandardCharsets.UTF_8))
+            .replaceAll("\\s+", " ");
+        check(display.contains("neowRows(bonus, drawback, brightEyeMode,"), "Neow rows must be gated on brightEyeMode");
+        check(display.contains("if (neow && !brightEyeMode) return;"), "Neow transform labels must be gated on brightEyeMode");
         List<Path> files = new ArrayList<>();
         for (String name : POLICY) files.add(dir.resolve(name + ".java"));
         for (int i = 1; i < args.length; i++) files.add(Paths.get(args[i]));

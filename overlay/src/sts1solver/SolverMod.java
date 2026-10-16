@@ -121,6 +121,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private boolean autoPotionRewards = true;
     private boolean runAutoEnabled = true;
     private boolean bossFastFinishEnabled; // Settings: stop searching a Boss once a potion-free win is found
+    private boolean feedModeEnabled; // Mod config: max HP gained by Feed counts twice in the plan value
+    private boolean routeMarks = true; // Mod config: draw the planned route on the map
     private AbstractPlayer runAutoPlayer;
     private String autoReason = "";
     private PotionRewards.Advice rewardPotionAdvice;
@@ -229,6 +231,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("autoKey", Integer.toString(Input.Keys.F10));
             defaults.setProperty("brightEyeMode", "false"); // beyond-SL display hints are opt-in; no policy reads them
             defaults.setProperty("bossFastFinish", "false"); // new key: every player starts with the standard Boss search
+            defaults.setProperty("feedMode", "false");
+            defaults.setProperty("testMode", "false");
+            defaults.setProperty("routeMarks", "true");
             defaults.setProperty("autoPotionRewards", "true");
             defaults.setProperty("runAutoEnabled", "true");
             defaults.setProperty("runLog", "true");
@@ -240,6 +245,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             autoKey = config.getInt("autoKey");
             Foresight.brightEyeMode = config.getBool("brightEyeMode");
             bossFastFinishEnabled = config.getBool("bossFastFinish");
+            feedModeEnabled = config.getBool("feedMode");
+            TestRecorder.enabled = config.getBool("testMode");
+            routeMarks = config.getBool("routeMarks");
             autoPotionRewards = config.getBool("autoPotionRewards");
             runAutoEnabled = config.getBool("runAutoEnabled");
             runLog = config.getBool("runLog");
@@ -254,6 +262,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     @Override public void receivePostInitialize() {
         initFont();
+        registerConfigPanel();
+        TestRecorder.subscribe();
         Thread warmup = new Thread(() -> {
             List<String> rngMods = RngMods.loaded();
             if (!rngMods.isEmpty()) {
@@ -480,6 +490,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             AbstractDungeon.actNum,AbstractDungeon.ascensionLevel,
             AbstractDungeon.bossList==null?0:AbstractDungeon.bossList.size(),
             AbstractDungeon.player!=null && AbstractDungeon.player.hasRelic("Mark of the Bloom")));
+        out.addProperty("feed_mode",feedModeEnabled);
         float chance=Math.max(0,Math.min(1,(40+AbstractRoom.blizzardPotionMod)/100f));
         if(AbstractDungeon.player.hasRelic("White Beast Statue"))chance=1;
         if(AbstractDungeon.player.hasRelic("Sozu") || AbstractDungeon.getCurrRoom() instanceof com.megacrit.cardcrawl.rooms.MonsterRoomBoss)chance=0;
@@ -1561,6 +1572,33 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         catch(IOException failure) { error=I18n.t("模式保存失败：")+failure.getMessage(); }
     }
 
+    static boolean solverDriving() { return instance != null && (instance.auto || instance.turnOnly || instance.runAuto); }
+    static Path desktop() { return instance != null ? instance.desktopDirectory() : Paths.get(System.getProperty("user.home"), "Desktop"); }
+
+    private void saveSetting(String key, boolean value) {
+        try { if (config != null) { config.setBool(key, value); config.save(); } }
+        catch (IOException failure) { error = I18n.t("模式保存失败：") + failure.getMessage(); }
+    }
+
+    /** Mods menu > Config: the switches that change what the solver plans, records or draws. */
+    private void registerConfigPanel() {
+        basemod.ModPanel panel = new basemod.ModPanel();
+        float x = 380f, y = 700f, step = 70f;
+        Object[][] rows = {
+            {I18n.t("Boss 快速收尾：找到不交药的胜利路线就停止搜索"), bossFastFinishEnabled, (java.util.function.Consumer<Boolean>) v -> { bossFastFinishEnabled = v; saveSetting("bossFastFinish", v); }},
+            {I18n.t("狂宴模式：狂宴得到的生命上限按两倍计价"), feedModeEnabled, (java.util.function.Consumer<Boolean>) v -> { feedModeEnabled = v; saveSetting("feedMode", v); }},
+            {I18n.t("测试模式：把本局每张出牌写到桌面 sts1-test-种子.jsonl（只保留最近一局）"), TestRecorder.enabled, (java.util.function.Consumer<Boolean>) v -> { TestRecorder.enabled = v; saveSetting("testMode", v); }},
+            {I18n.t("路线标注：在地图上画出规划路线"), routeMarks, (java.util.function.Consumer<Boolean>) v -> { routeMarks = v; saveSetting("routeMarks", v); }},
+        };
+        for (int i = 0; i < rows.length; i++) {
+            @SuppressWarnings("unchecked") java.util.function.Consumer<Boolean> set = (java.util.function.Consumer<Boolean>) rows[i][2];
+            panel.addUIElement(new basemod.ModLabeledToggleButton((String) rows[i][0], x, y - i * step, Settings.CREAM_COLOR,
+                font(), (Boolean) rows[i][1], panel, label -> { }, button -> set.accept(button.enabled)));
+        }
+        BaseMod.registerModBadge(ImageMaster.loadImage("sts1solver/badge.png"), "STS1 Combat Solver", "CYZ",
+            I18n.t("战斗求解器设置"), panel);
+    }
+
     private void toggleBossFinish() {
         bossFastFinishEnabled = !bossFastFinishEnabled;
         try { if(config!=null) { config.setBool("bossFastFinish",bossFastFinishEnabled); config.save(); } }
@@ -1883,7 +1921,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(!hint.isEmpty())label(sb,hint,ROUTE_LEFT,NOTE_TOP,w-ROUTE_LEFT-16,.75f,hintColor);
     }
     private void renderOutsideRoute(SpriteBatch sb) {
-        if(routePlan.isEmpty() || AbstractDungeon.screen!=AbstractDungeon.CurrentScreen.MAP
+        if(!routeMarks || routePlan.isEmpty() || AbstractDungeon.screen!=AbstractDungeon.CurrentScreen.MAP
                 || AbstractDungeon.map==null)return;
         if(routePixel==null)routePixel=new com.badlogic.gdx.graphics.g2d.TextureRegion(ImageMaster.WHITE_SQUARE_IMG);
         List<com.megacrit.cardcrawl.map.MapRoomNode> nodes=new ArrayList<>();
