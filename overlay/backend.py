@@ -237,6 +237,8 @@ class Advisor:
         if type(reroll) is not bool:
             raise ValueError('无效的 Discovery 随机规则')
         self.native_search.set_discovery_reroll(reroll)
+        # Feed mode (mod setting): max HP gained in this combat counts twice in the plan value.
+        self.native_search.set_max_hp_gain_weight(2.0 if view['game'].get('solver_auto_context', {}).get('feed_mode') is True else 1.0)
         self.native_search.set_incense_targets(incense_targets(view['game']))
         self.native_search.resume()
         if self.interrupt.is_set():
@@ -771,8 +773,7 @@ def worker(connection, interrupt):
                                          'phase': name, 'worker_init_seconds': round(init_seconds, 3)})
             advisor.on_phase = phase
             phase('校验请求与随机状态')
-            interrupt.clear()
-            advisor.interrupt = interrupt
+            advisor.interrupt = interrupt      # cleared by the parent before it forwards each request
             stop = threading.Event()
             reporter = None
             def watch_interrupt():
@@ -1021,6 +1022,8 @@ def serve(runs_dir=None):
                 if not process.is_alive():
                     stop()
                     start()
+                # Cleared here, before forwarding: a cancel that arrives while the worker is still picking up this request must survive.
+                interrupt.clear()
                 try:
                     connection.send(request)
                 except (BrokenPipeError, OSError):

@@ -141,6 +141,7 @@ namespace sts::search {
         static double evaluateEndState(const BattleContext &bc);
         static double evaluateEndState4q(const BattleContext &bc);
         static double evaluateEndState4r(const BattleContext &bc, int initialMaxHp);
+        inline static double maxHpGainWeight = 1.0; // Feed mode (mod setting) values max HP gained in combat at 2x
 
         void printSearchTree(std::ostream &os, int levels);
         void printSearchStack(std::ostream &os, bool skipLast=false);
