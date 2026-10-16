@@ -13,10 +13,14 @@ final class RoutePlanner {
     private static final JsonObject RULES = loadRules();
     final Map<Integer, Plan> byStart = new LinkedHashMap<>();
     private final Map<Integer, JsonObject> nodes = new HashMap<>();
+    /** Columns of the current node's own edges in the next row; any other offered start costs a Wing Boots charge. */
+    private final Set<Integer> edges = new HashSet<>();
+    /** A flight start must beat the best edge child by more than this, so a charge is never spent on a tie. */
+    static final double FLIGHT_MARGIN = 0.5;
     private final JsonObject game, visible, weights;
     private final Set<String> relics = new HashSet<>();
     private final int act, row, flame, upgrades;
-    private final boolean wantGreen, wantRed, canSmith, canRest;
+    private final boolean wantGreen, wantRed, seekGreen, canSmith, canRest;
 
     static final class Plan {
         final List<OutsidePacket.Step> path;
@@ -33,7 +37,11 @@ final class RoutePlanner {
 
     RoutePlanner(JsonObject game, JsonObject visible) {
         this.game=game; this.visible=visible;
-        act=number(game,"act",1); row=number(visible,"y",-1)+1;
+        act=number(game,"act",1);
+        JsonObject screen=object(game,"screen_state");
+        JsonArray offered=text(game,"screen_type").equals("MAP")?array(screen,"next_nodes"):new JsonArray();
+        // The offered nodes give the row: act 3 opens on act 2's boss node (-1,15), since TheBeyond keeps currMapNode.
+        row=offered.size()>0?number(offered.get(0).getAsJsonObject(),"y",-1):number(visible,"y",-1)+1;
         weights=RULES.getAsJsonObject("weights").getAsJsonObject(act+":balanced");
         for(JsonElement e:array(game,"map")) {
             JsonObject n=e.getAsJsonObject(); nodes.put(key(number(n,"x",-1),number(n,"y",-1)),n);
@@ -48,12 +56,17 @@ final class RoutePlanner {
         }
         upgrades=number(visible,"route_upgrades",count);
         JsonObject keys=object(game,"keys");
-        wantGreen=act==3&&!flag(keys,"emerald"); wantRed=act==3&&!flag(keys,"ruby");
+        boolean finalAct=flag(game,"solver_final_act");
+        wantGreen=act==3&&finalAct&&!flag(keys,"emerald"); wantRed=act==3&&finalAct&&!flag(keys,"ruby");
+        // Acts 1-2: a soft lean (not a key requirement) toward the burning elite when strong: HP >= 70% and an elite
+        // already beaten (act 1) or act 2.
+        seekGreen=act<3&&finalAct&&!flag(keys,"emerald")
+            &&number(game,"current_hp",0)*10>=number(game,"max_hp",1)*7
+            &&(act==2||flag(object(game,"solver_act_prep"),"elite"));
         JsonArray burning=array(visible,"burning_elites");
         flame=burning.size()==0?-1:key(number(burning.get(0).getAsJsonObject(),"x",-1),number(burning.get(0).getAsJsonObject(),"y",-1));
         if(weights==null || row<0 || row>14)return;
         List<Integer> starts=new ArrayList<>();
-        JsonObject screen=object(game,"screen_state");
         if(flag(screen,"boss_available"))return;
         if(text(game,"screen_type").equals("MAP") && screen.has("next_nodes")) {
             for(JsonElement e:array(screen,"next_nodes")) starts.add(number(e.getAsJsonObject(),"x",-1));
@@ -61,6 +74,8 @@ final class RoutePlanner {
             for(int x=0;x<7;x++)if(nodes.containsKey(key(x,0))&&array(nodes.get(key(x,0)),"children").size()>0)starts.add(x);
         } else for(JsonElement e:array(nodes.get(key(number(visible,"x",-1),row-1)),"children"))
             starts.add(number(e.getAsJsonObject(),"x",-1));
+        if(row>0)for(JsonElement e:array(nodes.get(key(number(visible,"x",-1),row-1)),"children"))
+            if(number(e.getAsJsonObject(),"y",-1)==row)edges.add(number(e.getAsJsonObject(),"x",-1));
         for(int x:starts)walk(x,row,new ArrayList<OutsidePacket.Step>(),x);
     }
 
@@ -70,7 +85,8 @@ final class RoutePlanner {
         if(y==14) {
             boolean green=false,red=false;
             for(OutsidePacket.Step p:path) {green|=key(p.x,p.y)==flame; red|=room(p).equals("R");}
-            Plan plan=new Plan(path,score(path),(wantGreen&&!green?1:0)+(wantRed&&!red?1:0));
+            double flight=!edges.isEmpty()&&!edges.contains(start)?FLIGHT_MARGIN:0; // no edge child at all: fly freely
+            Plan plan=new Plan(path,score(path)-flight,(wantGreen&&!green?1:0)+(wantRed&&!red?1:0));
             if(plan.beats(byStart.get(start)))byStart.put(start,plan);
         } else for(JsonElement e:array(n,"children")) {
             JsonObject child=e.getAsJsonObject();
@@ -88,19 +104,23 @@ final class RoutePlanner {
     private String room(OutsidePacket.Step p) {return text(nodes.get(key(p.x,p.y)),"symbol");}
     private double score(List<OutsidePacket.Step> path) {
         int elite=0,fire=0,event=0,monster=0,prepare=0,preFire=0,shop=0,close=0,lastShop=-99;
+        boolean green=false;
         double early=0,late=0;
         int money=number(game,"gold",0),base=number(visible,"purge_base_cost",75);
         int cost=relics.contains("Smiling Mask")?50:(int)Math.floor(base*(relics.contains("Membership Card")?.5:relics.contains("The Courier")?.8:1)+.5);
         for(OutsidePacket.Step p:path) {
             String room=room(p);
-            if(room.equals("E"))elite++;
+            if(room.equals("E")) {elite++; money+=30;} // expected gold of the fight, before any later shop
+            green|=key(p.x,p.y)==flame;
             if(room.equals("R")) {fire++; if(elite==0)preFire=1;}
             if(room.equals("?"))event++;
-            if(room.equals("M")) {monster++; if(elite==0)prepare++;}
+            if(room.equals("M")) {monster++; money+=15; if(elite==0)prepare++;}
             if(room.equals("$")) {
-                if(p.y-lastShop<=3)close++; lastShop=p.y;
                 int spend=money>=150?150:cost;
-                if(money>=spend) {money-=spend;shop++;early+=(14-p.y)/14.;late+=p.y/14.;}
+                if(money>=spend) { // only affordable shops count, and "too close" only between two affordable ones
+                    if(p.y-lastShop<=3)close++; lastShop=p.y;
+                    money-=spend;shop++;early+=(14-p.y)/14.;late+=p.y/14.;
+                }
             }
         }
         int available=Math.max(0,fire-(wantRed?1:0));
@@ -112,6 +132,7 @@ final class RoutePlanner {
         if(elite==0||flag(history,"elite")) prepare=0; else prepare=Math.min(prepare,Math.max(0,(act==1?3:2)-seen));
         if(row!=0||elite==0) preFire=0;
         return w("elite")*elite+w("fire")*fires+w("event")*event+w("monster")*monster
+            +(seekGreen&&green?w("elite"):0)
             +w("prepare")*prepare+w("pre_fire")*preFire+w("shop")*shop
             +w("early_shop")*early+w("late_shop")*late+w("close_shops")*close
             +w("low_hp_elites")*elite*Math.max(0.,1.-2.*number(game,"current_hp",0)/Math.max(1,number(game,"max_hp",1)));

@@ -14,13 +14,21 @@ final class EventRules {
     /** Set by the mod at start-up. Offline checks leave it off so no game class is touched. */
     static boolean live;
 
+    /**
+     * The only events whose live reads may run (docs/outside-rules.md, SL-visible pre-reads): each read replays the current
+     * room's own draws on an RNG copy, from the latest save point and without crossing the next one. Rewards handed out after
+     * an event fight, map rooms ahead and results that reroll on load are not SL-visible and must never be added here.
+     */
+    static final java.util.Set<String> SL_PREREAD = java.util.Collections.unmodifiableSet(new java.util.HashSet<String>(
+        java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust")));
+
     static final int UNKNOWN = -1, SAFE_SEARCH = 0, ELITE_SEARCH = 1;
     static final String MANUAL = "人工规则";
 
     static final class Context {
         String event = "";
         int shown, hp, maxHp, gold, ascension;
-        /** Cards the removal order can reach: removable curses, Strikes, Bash, other attacks, then Defends. */
+        /** Cards the removal order can reach: removable curses, Strikes, Bash, Defends, then other attacks. */
         int removable;
         int freePotionSlots;
         /** Neow's four offers (bonus / drawback names), when the blessing page is up. */
@@ -30,6 +38,7 @@ final class EventRules {
         boolean redMask;
         /** Rooms offered on the next map step; the Cleric may heal only when none of them is a rest site. */
         boolean nextRoomsKnown, nextHasRest;
+        /** HP the gold button costs: shown on the button (6, +1 per gold taken in this event). */
         int skullGoldCost = 6;
         /** Hidden information, read from the live event: total HP lost until Scrap Ooze gives its relic. */
         int oozeLoss = UNKNOWN;
@@ -37,6 +46,8 @@ final class EventRules {
         int adventurerNext = UNKNOWN, adventurerEnemy = UNKNOWN;
         /** Hidden information: Face Trader's trade gives a good face (1) or not (0); the Joust owner wins (1) or loses (0). */
         int goodFace = UNKNOWN, ownerWins = UNKNOWN;
+        /** What readLive pre-read on this decision (event and values), for the decision note; null when nothing was read. */
+        String preread;
     }
 
     static final class Decision {
@@ -49,17 +60,22 @@ final class EventRules {
         Decision(int index, String note, int... avoid) { this.index = index; this.note = note; this.avoid = avoid; }
     }
 
-    /** Lower is removed first: curse, Strike, Bash, other attacks. Everything else (Defend...) is 9. */
+    /** Highest tier the removal order reaches; 9 is never removed by rule. */
+    static final int LAST_REMOVAL_TIER = 4;
+
+    /** Lower is removed first: removable curse, Strike, Bash, Defend, other attacks. Everything else is 9. */
     static int removalTier(String id, String type) {
         if (type.equals("CURSE")) return unremovable(id) ? 9 : 0;
         if (id.equals("Strike_R") || id.equals("STRIKE_RED")) return 1;
         if (id.equals("Bash") || id.equals("BASH")) return 2;
-        if (type.equals("ATTACK")) return 3;
+        if (id.equals("Defend_R") || id.equals("DEFEND_RED")) return 3;
+        if (type.equals("ATTACK")) return 4;
         return 9;
     }
 
     static boolean unremovable(String id) {
-        return id.equals("AscendersBane") || id.equals("CurseOfTheBell") || id.equals("Necronomicurse");
+        return id.equals("AscendersBane") || id.equals("CurseOfTheBell") || id.equals("Necronomicurse")
+            || id.equals("ASCENDERS_BANE") || id.equals("CURSE_OF_THE_BELL") || id.equals("NECRONOMICURSE"); // simulator ids
     }
 
     private static Decision pick(int index, String note) { return new Decision(index, note); }
@@ -94,7 +110,8 @@ final class EventRules {
             case "Knowing Skull":
                 if (n != 4) return null;
                 // potion 0, gold 1 (90), card 2, leave 3; every option and leaving cost HP.
-                return healthy(c, .7) && c.skullGoldCost <= 7 ? pick(1, "全知头骨：血量充足，拿金币") : pick(3, "全知头骨：离开");
+                return c.hp - c.skullGoldCost >= .7 * c.maxHp && c.skullGoldCost <= 7
+                    ? pick(1, "全知头骨：付 " + c.skullGoldCost + " 血后仍充足，拿金币") : pick(3, "全知头骨：离开");
             case "Colosseum":
                 if (n != 2) return null; // the single-button pages are clicked through elsewhere
                 return healthy(c, .5) ? pick(1, "竞技场：血量不低于 50%，再战") : pick(0, "竞技场：血量不足，离开");
@@ -266,18 +283,21 @@ final class EventRules {
     // ---- live reads (game thread only; every failure leaves the field unknown) ----------------
 
     static void readLive(Context c) {
-        if (!live) return;
+        if (!live || !SL_PREREAD.contains(c.event)) return;
         try {
             AbstractEvent event = AbstractDungeon.getCurrRoom().event;
             if (event == null) return;
             switch (c.event) {
-                case "Knowing Skull": c.skullGoldCost = intField(event, "goldCost"); break;
-                case "Scrap Ooze": c.oozeLoss = oozeLoss(event); break;
-                case "Dead Adventurer": adventurer(event, c); break;
-                case "FaceTrader": c.goodFace = goodFace(); break;
-                case "The Joust": c.ownerWins = AbstractDungeon.miscRng.copy().randomBoolean(0.3f) ? 1 : 0; break;
+                case "Knowing Skull": c.skullGoldCost = intField(event, "goldCost"); c.preread = "goldCost=" + c.skullGoldCost; break;
+                case "Scrap Ooze": c.oozeLoss = oozeLoss(event); c.preread = "oozeLoss=" + c.oozeLoss; break;
+                case "Dead Adventurer": adventurer(event, c);
+                    c.preread = "next=" + (c.adventurerNext == SAFE_SEARCH ? "safe" : "elite") + " enemy=" + c.adventurerEnemy; break;
+                case "FaceTrader": c.goodFace = goodFace(); c.preread = "goodFace=" + c.goodFace; break;
+                case "The Joust": c.ownerWins = AbstractDungeon.miscRng.copy().randomBoolean(0.3f) ? 1 : 0;
+                    c.preread = "ownerWins=" + c.ownerWins; break;
                 default: break;
             }
+            if (c.preread != null) c.preread = c.event + ": " + c.preread;
         } catch (Throwable ignored) {
             // Stay UNKNOWN: the caller falls back to the network.
         }

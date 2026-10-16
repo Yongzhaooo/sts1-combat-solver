@@ -33,7 +33,7 @@ final class PotionRewards {
         // when future-battle import is available. This does not force potion use in combat.
         switch(id) {
             case "FairyPotion": case "GhostInAJar": return 20;
-            case "Swift Potion": case "Gambler's Brew": case "DistilledChaos": return 18;
+            case "Swift Potion": case "GamblersBrew": case "DistilledChaos": return 18;
             case "PowerPotion": return 24;
             case "LiquidMemories": case "Ancient Potion": return 16;
             case "CultistPotion": return 18;
@@ -63,7 +63,7 @@ final class PotionRewards {
             case "Dexterity Potion": return 24;
             case "Energy Potion": return 20;
             case "Swift Potion": return 34;
-            case "Gambler's Brew": return 34;
+            case "GamblersBrew": return 34;
             case "DistilledChaos": return 36;
             case "FearPotion": return 24;
             case "Weak Potion": return 22;
@@ -87,6 +87,7 @@ final class PotionRewards {
             case "HeartOfIron": return 36;
             case "ElixirPotion": return 18;
             case "SmokeBomb": return 12;
+            case "BlessingOfTheForge": return 9;
             default: return -1; // Unknown/modded bottles need manual comparison.
         }
     }
@@ -116,7 +117,7 @@ final class PotionRewards {
         if(hasCeiling(game))return 0;
         int draw=0, options=0;
         for(String id:ids) {
-            if(Arrays.asList("Swift Potion","Gambler's Brew").contains(id))draw++;
+            if(Arrays.asList("Swift Potion","GamblersBrew").contains(id))draw++;
             if(Arrays.asList("PowerPotion","SkillPotion","AttackPotion","ColorlessPotion",
                     "EntropicBrew","SneckoOil","CultistPotion","Strength Potion").contains(id))options++;
         }

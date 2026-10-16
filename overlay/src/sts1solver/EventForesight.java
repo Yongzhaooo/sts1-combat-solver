@@ -300,8 +300,11 @@ final class EventForesight {
         for (int search = 1; found < 3 && !rewards.isEmpty(); search++) {
             if (rng.random(0, 99) < chance) {
                 int gold = Settings.isDailyRun ? rng.random(30) : rng.random(25, 35);
-                out.add(I18n.t("搜第 ") + search + I18n.t(" 次：遇敌 ") + fight + "（+" + gold + I18n.t(" 金币）"));
+                // the fight's gold and the post-fight relics are handed out after the event fight: beyond SL, bright-eye only
+                out.add(I18n.t("搜第 ") + search + I18n.t(" 次：遇敌 ") + fight
+                    + (Foresight.brightEyeMode ? "（+" + gold + I18n.t(" 金币）") : ""));
                 seq.add(I18n.t("遇敌"));
+                if (!Foresight.brightEyeMode) break;
                 List<String> left = new ArrayList<>();
                 for (String r : rewards) {
                     if ("GOLD".equals(r)) left.add(I18n.t("金币 30"));
@@ -324,7 +327,7 @@ final class EventForesight {
 
     // screenNum 0 click -> screenNum 2; the second click rolls the fight gold (daily: random(25) else random(20,30)).
     private static void mushrooms(AbstractEvent e, List<String> out) {
-        if (!onPage(e, "0", "2")) return;
+        if (!onPage(e, "0", "2") || !Foresight.brightEyeMode) return;  // event-fight gold: beyond SL
         int gold = Settings.isDailyRun ? misc().random(25) : misc().random(20, 30);
         out.add(I18n.t("战斗奖励 → ") + gold + I18n.t(" 金币"));
         // slots: fight 0 (addDialogOption @45; the second click, still slot 0, rolls the gold), eat 1 (@99)
@@ -408,7 +411,7 @@ final class EventForesight {
 
     // Fight option: gold = daily ? random(30) : random(25,35); Red Mask is fixed.
     private static void maskedBandits(AbstractEvent e, List<String> out) {
-        if (!onPage(e, "INTRO")) return;
+        if (!onPage(e, "INTRO") || !Foresight.brightEyeMode) return;  // event-fight gold: beyond SL
         int gold = Settings.isDailyRun ? misc().random(30) : misc().random(25, 35);
         out.add(I18n.t("战斗奖励 → ") + gold + I18n.t(" 金币"));
         Foresight.note(1, I18n.t("战利品 +") + gold + I18n.t(" 金币"));  // slots: pay 0 (addDialogOption @29), fight 1 (@41)
@@ -455,7 +458,7 @@ final class EventForesight {
 
     // Fight rewards: gold (daily also random(50)) = random(45,55), then returnRandomScreenlessRelic(RARE).
     private static void mysteriousSphere(AbstractEvent e, List<String> out) {
-        if (!onPage(e, "INTRO", "PRE_COMBAT")) return;
+        if (!onPage(e, "INTRO", "PRE_COMBAT") || !Foresight.brightEyeMode) return;  // event-fight rewards: beyond SL
         Random rng = misc();
         int gold = (Settings.isDailyRun ? rng.random(50) : 0) + rng.random(45, 55);
         String reward = gold + I18n.t(" 金币 + ") + AbstractDungeon.returnRandomScreenlessRelic(AbstractRelic.RelicTier.RARE).name;
