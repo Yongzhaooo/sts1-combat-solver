@@ -354,8 +354,8 @@ AI全自动中|AI running
 
 第三幕最后宝箱：开箱取得蓝钥匙|Last Act 3 chest: open it for the Sapphire Key
 第三幕最后宝箱：蓝钥匙最高优先级|Last Act 3 chest: Sapphire Key takes priority
-战斗全自动（自己构筑）|Combat auto (build yourself)
-新一局：自己构筑请选【战斗全自动】；也可随时点击【AI全自动】完全托管|New run: choose [Combat auto] to build yourself; or click [AI autopilot] anytime
+人工逐步|Manual (step)
+新一局：选【人工逐步】每步确认，【战斗全自动】只自动打战斗，或【AI全自动】完全托管|New run: pick [Manual (step)] to confirm every step, [Combat auto] to automate fights only, or [AI autopilot] for everything
 自己构筑请开【战斗全自动】；点击【AI全自动】随时完全托管|Turn on [Combat auto] to build yourself; click [AI autopilot] anytime
 这些 Mod 会影响随机数（RNG），求解器计算可能不准确，建议关闭：|These mods affect the game RNG, so solver results may be inaccurate; consider disabling: 
 SuperFastMode 速度 ×|SuperFastMode speed x
@@ -365,3 +365,10 @@ SuperFastMode 速度 ×|SuperFastMode speed x
 Boss 快速收尾：|Boss fast finish: 
 Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同|Boss fast finish: stop searching once a potion-free win is found; saves time but may lose more HP. Off: a Boss is searched like any fight
 未安装|not installed
+确认这一步（回车）|Confirm this step (Enter)
+已停止 · 人工逐步：每一步回车或点击确认|Stopped · Manual: every step waits for Enter or a click
+人工逐步：求解器和 AI 给出建议，每一步回车或点击确认|Manual: the solver and the AI suggest; every step waits for Enter or a click
+自动爬塔|Autopilot
+新一局|New run
+已暂停|Paused
+已接管|Taken over
