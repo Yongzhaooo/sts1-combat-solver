@@ -142,6 +142,26 @@ public final class OutsidePacketCheck {
         visible.addProperty("x", 0);
         if (!sameEncoding(blessing, OutsidePacket.build(Distill2.load(), state, visible)))
             throw new AssertionError("Neow at (0,-1) must encode as (-1,-1)");
+        // Neow's rolled outcomes are beyond SL (Glowing Eye display only): any outcome text around the offers
+        // leaves the policy input, the scores and the rule note unchanged.
+        JsonObject plainState = new JsonParser().parse(state.toString()).getAsJsonObject(),
+            plainVisible = new JsonParser().parse(visible.toString()).getAsJsonObject();
+        for (JsonElement item : visible.getAsJsonArray("neow_options")) {
+            item.getAsJsonObject().addProperty("outcome", "Bash / Defend / Anger");
+            item.getAsJsonObject().addProperty("relic", "Burning Blood");
+        }
+        visible.addProperty("neow_outcomes", "1 Bash / Defend / Anger");
+        neow.addProperty("rolled", "Transform: Strike -> Bash");
+        OutsidePacket plain = OutsidePacket.build(Distill2.load(), plainState, plainVisible),
+            withOutcomes = OutsidePacket.build(Distill2.load(), state, visible);
+        if (!sameEncoding(plain, withOutcomes) || !plain.sameDecision(withOutcomes)
+                || !java.util.Arrays.equals(plain.score().scores, withOutcomes.score().scores)
+                || !java.util.Objects.equals(plain.ruleNote, withOutcomes.ruleNote))
+            throw new AssertionError("Neow outcomes must not reach the policy input");
+        for (JsonElement item : visible.getAsJsonArray("neow_options")) {
+            item.getAsJsonObject().remove("outcome"); item.getAsJsonObject().remove("relic");
+        }
+        visible.remove("neow_outcomes"); neow.remove("rolled");
         visible.addProperty("x", -1); game.addProperty("floor", floor);
         JsonArray leave = new JsonArray();
         leave.add("Leave");
