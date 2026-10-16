@@ -119,6 +119,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private boolean runAuto;
     private boolean autoPotionRewards = true;
     private boolean runAutoEnabled = true;
+    private boolean bossFastFinishEnabled; // Settings: stop searching a Boss once a potion-free win is found
     private AbstractPlayer runAutoPlayer;
     private String autoReason = "";
     private PotionRewards.Advice rewardPotionAdvice;
@@ -135,6 +136,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private static final float ROUTE_LEFT = 248, BODY_TOP = 76, BODY_ROW = 30, NOTE_TOP = 234;
     private static final int BODY_ROWS = 5;
     private static final float ACTIONS_TOP = 262, TOGGLES_TOP = 306;
+    private static final float SETTINGS_TOP = 78, SETTINGS_PITCH = 34;
     private static final float PILOT_WIDTH = 440, PILOT_LIST_TOP = 72, PILOT_ROW = 30;
     private static final int PILOT_ROWS = 5;
     private static final float ACTION_SPACING = (PANEL_WIDTH - 24) / 6;
@@ -225,6 +227,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("uiScale", "1");
             defaults.setProperty("autoKey", Integer.toString(Input.Keys.F10));
             defaults.setProperty("brightEyeMode", "false"); // beyond-SL display hints are opt-in; no policy reads them
+            defaults.setProperty("bossFastFinish", "false"); // new key: every player starts with the standard Boss search
             defaults.setProperty("autoPotionRewards", "true");
             defaults.setProperty("runAutoEnabled", "true");
             defaults.setProperty("runLog", "true");
@@ -235,6 +238,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             backendPhase = I18n.t("等待后台接收");
             autoKey = config.getInt("autoKey");
             Foresight.brightEyeMode = config.getBool("brightEyeMode");
+            bossFastFinishEnabled = config.getBool("bossFastFinish");
             autoPotionRewards = config.getBool("autoPotionRewards");
             runAutoEnabled = config.getBool("runAutoEnabled");
             runLog = config.getBool("runLog");
@@ -469,7 +473,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         com.megacrit.cardcrawl.rooms.AbstractRoom room=AbstractDungeon.getCurrRoom();
         out.addProperty("room",room==null?"":room.getClass().getSimpleName());
         out.addProperty("boss_candidates_remaining",AbstractDungeon.bossList==null?0:AbstractDungeon.bossList.size());
-        out.addProperty("boss_fast_finish",bossFastFinish(
+        out.addProperty("boss_fast_finish",bossFastFinish(bossFastFinishEnabled,
             room instanceof com.megacrit.cardcrawl.rooms.MonsterRoomBoss,
             AbstractDungeon.actNum,AbstractDungeon.ascensionLevel,
             AbstractDungeon.bossList==null?0:AbstractDungeon.bossList.size(),
@@ -489,6 +493,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         return out;
     }
 
+    /** The Settings switch gates the rule; off means a Boss gets the standard budget and the full search like any fight. */
+    static boolean bossFastFinish(boolean enabled,boolean bossRoom,int act,int ascension,int remainingBosses,boolean noHealing) {
+        return enabled && bossFastFinish(bossRoom,act,ascension,remainingBosses,noHealing);
+    }
+
     static boolean bossFastFinish(boolean bossRoom,int act,int ascension,int remainingBosses,boolean noHealing) {
         return bossRoom && act>=1 && act<=3 && !noHealing
             // Beyond starts with three candidates, removing the current one on
@@ -496,8 +505,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             && !(act==3 && ascension>=20 && remainingBosses>1);
     }
 
+    private RunMode mode() { return RunMode.of(outsideMode,runAuto); }
+
     private void toggleCombatMode() {
-        if(outsideMode==0 && !runAuto && auto) { cancel(true); return; }
+        RunMode target=RunMode.combatButton(mode(),auto);
+        if(target==RunMode.MANUAL && !runAuto) { cancel(true); return; }  // only this fight was automatic
         if(outsideMode!=0) {
             chooseOutsideMode(0);
             runAuto=false; // Switching from the pilot starts combat-only automation.
@@ -506,7 +518,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     private void togglePilotMode() {
-        if(outsideMode==2)stopAll();
+        if(RunMode.pilotButton(mode())==RunMode.MANUAL)stopAll();
         else chooseOutsideMode(2);
     }
 
@@ -578,7 +590,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             outsidePlayer=AbstractDungeon.player; outsidePrompt=true; outsideMode=0;
             outsidePacket=null; outsideStatePacket=null; outsideScores=null; outsideAwaiting=false;
             outsidePilotRun=false; outsideFailed=false;
-            outsideNotice=I18n.t("新一局：自己构筑请选【自动战斗】；也可随时点击【AI全自动】完全托管");
+            outsideNotice=I18n.t("新一局：自己构筑请选【战斗全自动】；也可随时点击【AI全自动】完全托管");
         }
         if(outsidePrompt) return;
         if(outsideMode==0 || combat() || AbstractDungeon.player.isDead || rewardPotionPending!=null) return;
@@ -1114,7 +1126,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         updateDeckChanges();
         if (!inCombat) {
             status = outsidePrompt || outsideMode!=0 || !outsideNotice.isEmpty() ? outsideNotice
-                : runAuto ? I18n.t("跨场自动已开 · 等待下场；其他选择由你决定") : I18n.t("选牌与路线由你决定");
+                : runAuto ? I18n.t("战斗全自动已开 · 等待下场；其他选择由你决定") : I18n.t("选牌与路线由你决定");
             if(outsideMode==0)updatePotionRewards();
             return;
         }
@@ -1451,13 +1463,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 if (!collapsed && lx >= w-118 && lx < w-54) settingsOpen=!settingsOpen;
                 else if (lx > w-47) { collapsed=!collapsed; autoFolded=false; }
                 else { dragging=true; dx=mx-x; dy=my-y; }
-            } else if (!collapsed && settingsOpen && ly>=80 && ly<192 && (ly-80)%40<32) {
+            } else if (!collapsed && settingsOpen && ly>=SETTINGS_TOP && ly<SETTINGS_TOP+4*SETTINGS_PITCH && (ly-SETTINGS_TOP)%SETTINGS_PITCH<30) {
                 float cw=(w-40)/2, off=lx-(24+cw);
-                int setting=(int)((ly-80)/40);
+                int setting=(int)((ly-SETTINGS_TOP)/SETTINGS_PITCH);
                 if (setting==0 && off<0) toggleBrightEye();
                 else if (setting==0) changeScale(off<cw/3 ? uiScale-.1f : off>=cw*2/3 ? uiScale+.1f : 1);
-                else if (setting==1) { if (off<0) bindingKey=true; else toggleLanguage(); }
-                else if (off<0) toggleRunLog(); else exportRun();
+                else if (setting==1) { if (off<0) toggleBossFinish(); else toggleLanguage(); }
+                else if (setting==2) { if (off<0) toggleRunLog(); else exportRun(); }
+                else if (off<0) bindingKey=true;
             } else if (body && previewCount > 0 && lx >= ROUTE_LEFT && ly >= 42 && ly < 72) {
                 if (transformPreview != null) transformPreview = null;
                 else {
@@ -1500,12 +1513,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 else if (action==4) togglePilotMode();
                 else stopAll();
             } else if (!collapsed && lx >= 16 && lx < w-16 && ly >= TOGGLES_TOP && ly <= TOGGLES_TOP+28) {
-                float spacing=(w-24)/(canCreditRest()?4:3);
+                float spacing=(w-24)/(canCreditRest()?3:2);
                 if ((lx-16)%spacing < spacing-8) {
                     int toggle=(int)((lx-16)/spacing);
                     if (toggle==0) { budgetIndex=(budgetIndex+1)%3; recalculate(); }
                     else if (toggle==1) togglePotionRewards();
-                    else if (toggle==2) toggleCombatMode();
                     else { nextRest=!nextRest; recalculate(); }
                 }
             }
@@ -1529,6 +1541,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         Foresight.brightEyeMode = !Foresight.brightEyeMode;
         scroll = 0;
         try { if(config!=null) { config.setBool("brightEyeMode",Foresight.brightEyeMode); config.save(); } }
+        catch(IOException failure) { error=I18n.t("模式保存失败：")+failure.getMessage(); }
+    }
+
+    private void toggleBossFinish() {
+        bossFastFinishEnabled = !bossFastFinishEnabled;
+        try { if(config!=null) { config.setBool("bossFastFinish",bossFastFinishEnabled); config.save(); } }
         catch(IOException failure) { error=I18n.t("模式保存失败：")+failure.getMessage(); }
     }
 
@@ -1663,7 +1681,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (settingsOpen) renderSettings(sb,w,note);
         else renderCombatBody(sb,w,note);
         String[] labels={I18n.t("重新计算"),I18n.t("执行一步"),turnOnly?I18n.t("正在执行本回合"):I18n.t("执行本回合"),
-            I18n.t(outsideMode==0 && (runAuto || auto)?"战斗自动：开":"战斗自动"),
+            I18n.t(outsideMode==0 && (runAuto || auto)?"战斗全自动：开":"战斗全自动"),
             I18n.t(outsideMode==2?"AI全自动：开":"AI全自动"),I18n.t("停止")};
         for(int i=0;i<labels.length;i++) {
             box(sb,16+i*ACTION_SPACING,ACTIONS_TOP,ACTION_SPACING-8,36,i==0?accent:surface);
@@ -1673,14 +1691,13 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }
         List<String> toggles=new ArrayList<>(Arrays.asList(
             I18n.t("搜索预算：")+I18n.t(budgetNames[budgetIndex]),
-            I18n.t("自动换药：")+I18n.t(autoPotionRewards?"开":"关"),
-            I18n.t("跨场自动：")+I18n.t(runAuto?"开":"关")));
+            I18n.t("自动换药：")+I18n.t(autoPotionRewards?"开":"关")));
         if(canCreditRest())toggles.add(I18n.t("羽毛回血：")+I18n.t(nextRest?"是":"仅必经火堆"));
         float spacing=(w-24)/toggles.size();
         for(int i=0;i<toggles.size();i++) {
             box(sb,16+i*spacing,TOGGLES_TOP,spacing-8,28,surface);
             label(sb,toggles.get(i),24+i*spacing,TOGGLES_TOP+5,spacing-24,.8f,
-                i==2?(runAuto?accent:muted):i==1?(autoPotionRewards?accent:muted):accent);
+                i==1?(autoPotionRewards?accent:muted):accent);
         }
         sb.setColor(Color.WHITE);
         cursorOnTop(sb);
@@ -1688,17 +1705,22 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private void renderSettings(SpriteBatch sb, float w, String note) {
         float cw=(w-40)/2, right=24+cw;
-        for(int row=0;row<3;row++) for(int col=0;col<2;col++) box(sb,16+col*(cw+8),80+row*40,cw,32,surface);
-        label(sb,I18n.t("辉眼模式：")+I18n.t(Foresight.brightEyeMode?"开":"关"),26,87,cw-20,.85f,accent);
-        label(sb,"−",right+12,86,24,1,accent);
-        label(sb,Math.round(uiScale*100)+"%",right+cw/2-22,87,60,.85f,Color.WHITE);
-        label(sb,"＋",right+cw-30,86,24,1,accent);
-        label(sb,I18n.t("自动战斗快捷键：")+Input.Keys.toString(autoKey),26,127,cw-20,.85f,accent);
-        label(sb,I18n.t("语言：")+("en".equals(I18n.language())?"English":"简体中文"),right+10,127,cw-20,.85f,accent);
-        label(sb,I18n.t("持续记录：")+" "+I18n.t(runLog?"开":"关"),26,167,cw-20,.85f,runLog?accent:muted);
-        label(sb,I18n.t("导出到桌面 · F6"),right+10,167,cw-20,.85f,accent);
-        label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F8/F9 保留；Esc 取消"):I18n.t("按种子记录牌组、战斗与选择，仅保存到本机"),
-            16,204,w-32,.75f,bindingKey?accent:muted);
+        for(int row=0;row<4;row++) for(int col=0;col<2;col++) box(sb,16+col*(cw+8),SETTINGS_TOP+row*SETTINGS_PITCH,cw,30,surface);
+        float t=SETTINGS_TOP+6, p=SETTINGS_PITCH;
+        label(sb,I18n.t("辉眼模式：")+I18n.t(Foresight.brightEyeMode?"开":"关"),26,t,cw-20,.85f,accent);
+        label(sb,"−",right+12,t-1,24,1,accent);
+        label(sb,Math.round(uiScale*100)+"%",right+cw/2-22,t,60,.85f,Color.WHITE);
+        label(sb,"＋",right+cw-30,t-1,24,1,accent);
+        label(sb,I18n.t("Boss 快速收尾：")+I18n.t(bossFastFinishEnabled?"开":"关"),26,t+p,cw-20,.85f,bossFastFinishEnabled?accent:muted);
+        label(sb,I18n.t("语言：")+("en".equals(I18n.language())?"English":"简体中文"),right+10,t+p,cw-20,.85f,accent);
+        label(sb,I18n.t("持续记录：")+" "+I18n.t(runLog?"开":"关"),26,t+2*p,cw-20,.85f,runLog?accent:muted);
+        label(sb,I18n.t("导出到桌面 · F6"),right+10,t+2*p,cw-20,.85f,accent);
+        label(sb,I18n.t("自动战斗快捷键：")+Input.Keys.toString(autoKey),26,t+3*p,cw-20,.85f,accent);
+        label(sb,"SuperFastMode: "+(Loader.isModLoaded("superfastmode")?"x"+superFastShown():I18n.t("未安装")),right+10,t+3*p,cw-20,.85f,
+            superFastSpeed()>SUPER_FAST_TESTED?danger:muted);
+        label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F7/F8/F9 保留；Esc 取消")
+                :I18n.t("Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同"),
+            16,SETTINGS_TOP+4*p-2,w-32,.7f,bindingKey?accent:muted);
         boolean incompatibleMod = Loader.isModLoaded("SaveStateMod") || Loader.isModLoaded("undothespire") || Loader.isModLoaded("undobutton");
         String fast = superFastNote();
         boolean warn = incompatibleMod || !rngWarning.isEmpty() || superFastSpeed() > SUPER_FAST_TESTED;
@@ -1720,10 +1742,15 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         } catch (ReflectiveOperationException | LinkageError failure) { return 1f; }
     }
 
+    static String superFastShown() {
+        float speed = superFastSpeed();
+        return speed == Math.rint(speed) ? String.valueOf((int) speed) : String.valueOf(speed);
+    }
+
     static String superFastNote() {
         if (!Loader.isModLoaded("superfastmode")) return "";
         float speed = superFastSpeed();
-        String shown = speed == Math.rint(speed) ? String.valueOf((int) speed) : String.valueOf(speed);
+        String shown = superFastShown();
         return speed > SUPER_FAST_TESTED
             ? I18n.t("SuperFastMode 速度 ×") + shown + I18n.t(" 超出已测试的 ×10，如自动执行异常请调低")
             : I18n.t("已兼容 SuperFastMode（当前 ×") + shown + I18n.t("，建议不超过 ×10）");
@@ -1754,7 +1781,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 healing+=" · "+I18n.backend(result.getAsJsonArray("recovery_notes").get(0).getAsString());
             label(sb,healing,26,198,inner,.75f,muted);
         } else {
-            label(sb,error.isEmpty()?I18n.t("自己构筑请开【战斗自动】；点击【AI全自动】随时完全托管"):I18n.backend(error),26,90,inner,.85f,error.isEmpty()?accent:danger);
+            label(sb,error.isEmpty()?I18n.t("自己构筑请开【战斗全自动】；点击【AI全自动】随时完全托管"):I18n.backend(error),26,90,inner,.85f,error.isEmpty()?accent:danger);
             label(sb,error.isEmpty()?I18n.t("仅查看建议，点击按钮后才出牌"):I18n.t("详细原因已写入后台日志"),26,124,inner,.8f,muted);
         }
         List<String> foresight=transformPreview!=null?transformPreview.lines():combat()?Collections.<String>emptyList():Foresight.lines();
@@ -1898,7 +1925,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private float pilotHeight() { return pilotButtonsTop()+38+14; }
     /** Buttons as {action, label}; actions: 2 auto, 1 step, 0 take over, 3 confirm, -1 start manual, -2 auto combat only. */
     private String[][] pilotButtons() {
-        if(outsidePrompt) return new String[][]{{"-2","自动战斗（自己构筑）"},{"2","AI全自动"},{"-1","由我操作"}};
+        if(outsidePrompt) return new String[][]{{"-2","战斗全自动（自己构筑）"},{"2","AI全自动"},{"-1","由我操作"}};
         if(outsideMode==2) return new String[][]{{"1","改为逐步"},{"0","接管"}};
         if(outsideMode==1) return new String[][]{{"3","确认这一步"},{"2","AI全自动"},{"0","接管"}};
         return new String[][]{{"2","继续AI全自动"},{"1","逐步"}};

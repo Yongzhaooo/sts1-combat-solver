@@ -67,7 +67,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 抢劫怪：选定路线后可开启自动战斗|Thief: select route, then enable auto combat
 拒绝局外动作|Out-of-combat action rejected
 拖动标题栏移动 · F8 收起 / 展开|Drag title to move · F8 fold / expand
-按 F1-F12 绑定；F6/F8/F9 保留；Esc 取消|Bind F1-F12; F6/F8/F9 reserved; Esc cancels
+按 F1-F12 绑定；F6/F7/F8/F9 保留；Esc 取消|Bind F1-F12; F6/F7/F8/F9 reserved; Esc cancels
 损 |Loss 
 换药未出现空栏，停止领取|No empty slot after discard; pickup stopped
 换药未能提交弃药|Potion discard could not be submitted
@@ -120,7 +120,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 详细原因已写入后台日志|Details are in the backend log
 请求 #|Request #
 请确认战斗与用药路线 · 等待数字选择|Confirm combat / potion route · waiting for number
-跨场自动已开 · 等待下场；其他选择由你决定|Continuous auto on · waiting; other choices are yours
+战斗全自动已开 · 等待下场；其他选择由你决定|Combat auto on · waiting for the next fight; other choices are yours
 路线已就绪 · 等待你的操作|Route ready · waiting for you
 路线已结束 · 可手动操作或重新计算|Route ended · play manually or recalculate
 跳过战斗选牌|Skip combat selection
@@ -325,7 +325,6 @@ F6 导出错误报告|F6 Export bug report
 拖动标题栏移动 · 右上角调整大小|Drag title to move · Resize at top right
 设置|Settings
 返回|Back
-跨场自动：|Continuous auto: 
 羽毛回血：|Feather heal: 
 
 规则推荐下一步|Rule-recommended next node
@@ -346,8 +345,8 @@ F6 导出记录到桌面，发这一个文件即可|F6 exports the record to you
 当前没有地图|No map to export
 地图已导出到桌面：|Map saved to the desktop: 
 
-战斗自动|Auto combat
-战斗自动：开|Combat: on
+战斗全自动|Combat auto
+战斗全自动：开|Combat auto: on
 AI全自动|AI autopilot
 AI全自动：开|AI: on
 AI全自动中|AI running
@@ -355,11 +354,14 @@ AI全自动中|AI running
 
 第三幕最后宝箱：开箱取得蓝钥匙|Last Act 3 chest: open it for the Sapphire Key
 第三幕最后宝箱：蓝钥匙最高优先级|Last Act 3 chest: Sapphire Key takes priority
-自动战斗（自己构筑）|Auto combat (build yourself)
-新一局：自己构筑请选【自动战斗】；也可随时点击【AI全自动】完全托管|New run: choose [Auto combat] for manual building; or click [AI autopilot] anytime
-自己构筑请开【战斗自动】；点击【AI全自动】随时完全托管|Turn on [Auto combat] for manual building; click [AI autopilot] anytime
+战斗全自动（自己构筑）|Combat auto (build yourself)
+新一局：自己构筑请选【战斗全自动】；也可随时点击【AI全自动】完全托管|New run: choose [Combat auto] to build yourself; or click [AI autopilot] anytime
+自己构筑请开【战斗全自动】；点击【AI全自动】随时完全托管|Turn on [Combat auto] to build yourself; click [AI autopilot] anytime
 这些 Mod 会影响随机数（RNG），求解器计算可能不准确，建议关闭：|These mods affect the game RNG, so solver results may be inaccurate; consider disabling: 
 SuperFastMode 速度 ×|SuperFastMode speed x
  超出已测试的 ×10，如自动执行异常请调低| exceeds the tested x10; lower it if automation misbehaves
 已兼容 SuperFastMode（当前 ×|SuperFastMode supported (now x
 ，建议不超过 ×10）|, recommended at most x10)
+Boss 快速收尾：|Boss fast finish: 
+Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同|Boss fast finish: stop searching once a potion-free win is found; saves time but may lose more HP. Off: a Boss is searched like any fight
+未安装|not installed

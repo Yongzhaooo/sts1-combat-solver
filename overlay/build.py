@@ -79,7 +79,8 @@ def main():
                         str(here / 'test/OutsidePacketParityCheck.java'),
                         str(here / 'test/EventRulesCheck.java'),
                         str(here / 'test/RngModsCheck.java'),
-                        str(here / 'test/PolicyBoundaryCheck.java')], check=True)
+                        str(here / 'test/PolicyBoundaryCheck.java'),
+                        str(here / 'test/ModeCheck.java')], check=True)
         subprocess.run(['javac', '--release', '8', '-proc:none', '-encoding', 'UTF-8', '-cp',
                         os.pathsep.join((str(classes), classpath)), '-d', str(checks),
                         str(here / 'test/PotionRewardsCheck.java')], check=True)
@@ -92,6 +93,7 @@ def main():
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.LanguageCheck'], check=True)
         subprocess.run(['java', '-cp', check_cp, 'sts1solver.PanelSizeCheck'], check=True)
         subprocess.run(['java', '-cp', check_cp, 'sts1solver.RngModsCheck'], check=True)
+        subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.ModeCheck'], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.StateKeyCheck'], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
                         'sts1solver.Distill2Check', str(here / 'test/distill2-reference.json')], check=True)
