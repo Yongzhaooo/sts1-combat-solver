@@ -29,6 +29,7 @@ import com.megacrit.cardcrawl.rooms.AbstractRoom;
 import communicationmod.ChoiceScreenUtils;
 import java.lang.reflect.Field;
 import java.util.*;
+import java.util.function.IntFunction;
 
 /**
  * Out-of-combat foresight: Neow blessings, the next map rooms and the current
@@ -38,7 +39,7 @@ import java.util.*;
  */
 public final class Foresight {
     private static String signature = "";
-    /** Beyond-SL display hints (map rooms ahead, event-fight rewards). Display only, off by default; no policy reads them. */
+    /** Glowing Eye: beyond-SL display hints (map rooms ahead, event-fight rewards, Neow's rolled outcomes). Display only, off by default; no policy reads them. */
     static boolean brightEyeMode = false;
     private static List<String> cached = Collections.emptyList();
     private static String failure = "";
@@ -167,6 +168,7 @@ public final class Foresight {
             boolean eventTransform = room != null && EventForesight.transformSelecting(room.event);
             if ((!screen.forTransform && !astrolabe && !eventTransform) || screen.targetGroup == null || AbstractDungeon.player == null) return;
             boolean neow = room != null && room.event instanceof NeowEvent;
+            if (neow && !brightEyeMode) return;  // Neow's transform results are beyond SL
             Random stream = neow ? NeowEvent.rng : AbstractDungeon.miscRng;
             if (stream == null) return;
             boolean upgrade = astrolabe;
@@ -318,19 +320,35 @@ public final class Foresight {
         // Only while the blessing buttons are on screen; after a pick the list is stale.
         if (rewards == null || rewards.isEmpty() || NeowEvent.rng == null
                 || RoomEventDialog.optionList.size() != rewards.size()) return;
-        out.add(I18n.t("涅奥祝福 · 各选项的确定结果"));
-        for (int i = 0; i < rewards.size(); i++) {
+        String[] bonus = new String[rewards.size()], drawback = new String[rewards.size()];
+        for (int i = 0; i < bonus.length; i++) {
             NeowReward r = rewards.get(i);
-            String head = (i + 1) + " " + NEOW.getOrDefault(r.type.name(), r.type.name());
-            if (r.drawback != null && r.drawback != NeowReward.NeowRewardDrawback.NONE)
-                head += I18n.t("（代价：") + NEOW.getOrDefault(r.drawback.name(), r.drawback.name()) + "）";
-            out.add(head);
-            int start = out.size();
-            try (Sandbox ignored = new Sandbox()) {
-                neowResult(r, out);
-            }
+            bonus[i] = r.type.name();
+            drawback[i] = r.drawback == null ? "NONE" : r.drawback.name();
+        }
+        neowRows(bonus, drawback, brightEyeMode, i -> {
             List<String> rows = new ArrayList<>();
-            for (String row : out.subList(start, out.size()))
+            try (Sandbox ignored = new Sandbox()) {
+                neowResult(rewards.get(i), rows);
+            }
+            return rows;
+        }, out);
+    }
+
+    /** The four offers are on the game's own page, so they are always listed. Each option's rolled outcome
+     *  (cards, relic, potions, transforms) is beyond SL: it is rolled only when {@code outcomes} (Glowing Eye) is on. */
+    static void neowRows(String[] bonus, String[] drawback, boolean outcomes, IntFunction<List<String>> roll, List<String> out) {
+        out.add(I18n.t(outcomes ? "涅奥祝福 · 各选项的确定结果" : "涅奥祝福 · 选项（开启辉眼模式可预览结果）"));
+        for (int i = 0; i < bonus.length; i++) {
+            String head = (i + 1) + " " + NEOW.getOrDefault(bonus[i], bonus[i]);
+            if (!"NONE".equals(drawback[i]))
+                head += I18n.t("（代价：") + NEOW.getOrDefault(drawback[i], drawback[i]) + "）";
+            out.add(head);
+            if (!outcomes) continue;
+            List<String> rolled = roll.apply(i);
+            out.addAll(rolled);
+            List<String> rows = new ArrayList<>();
+            for (String row : rolled)
                 if (!row.contains(I18n.t("取决于"))) rows.add(row.replace("  → ", "").trim());
             if (!rows.isEmpty()) note(i, String.join("；", rows));
         }

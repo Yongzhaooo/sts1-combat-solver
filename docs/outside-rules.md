@@ -675,7 +675,9 @@ Boss 遗物按手写评分强制选最高分，只有全部低于 2 分时才强
 | 全知头骨：金币选项扣血 | 打开（按钮上本来可见，结果不变） | 不变，白名单内 | 药水、无色牌预览 |
 | 蒙面强盗、蘑菇、神秘圆球的战后金币与遗物 | 不读 | 规则本来就不读，确认无策略输入 | 只在辉眼模式下显示 |
 | 地图下一步房间内容（问号房结果、下一场遭遇） | 不读（参考链不编译 Foresight） | 无策略输入；牧师只看地图符号是否为火堆 | 只在辉眼模式下显示 |
-| 涅奥诅咒种类、营火挖掘、变牌、事件选项结果 | 不读 | 无策略输入 | 照常显示（涅奥诅咒种类读档会重掷，只显示“无法预测”） |
+| 涅奥四个选项（奖励类型与代价） | 读（游戏在祝福页面直接显示；该页出现前 `rewards` 为空，不会提前读到） | 网络输入和涅奥规则 | 辉眼关闭时也列出（涅奥诅咒种类读档会重掷，只显示“无法预测”） |
+| 涅奥各选项的随机结果（三选一牌、稀有牌、遗物、药水、变牌结果） | 不读 | 无策略输入 | 只在辉眼模式下显示：面板、选项旁、变牌选牌界面；关闭时不掷这些结果 |
+| 营火挖掘、变牌、事件选项结果 | 不读 | 无策略输入 | 照常显示 |
 
-- 辉眼模式（brightEyeMode）默认改为关闭。玩家可在设置页打开，作为显示提示；它只控制越过 SL 的预览（地图房间内容、事件战后奖励），不进入任何策略路径。
-- `PolicyBoundaryCheck` 检查策略源码（OutsidePacket、Distill2、RoutePlanner、EventRules、RelicScore、PotionRewards，参考链另加 ReferenceChain 和去掉 Foresight 的 DecisionContext）不引用 Foresight、EventForesight、TransformPreview、Sandbox、brightEyeMode、nextRooms，并核对白名单正好是上表五个事件。违例用例：一段读 `Foresight.nextRooms` 的策略代码必须被拒绝。
+- 辉眼模式（brightEyeMode）默认改为关闭。玩家可在设置页打开，作为显示提示；它只控制越过 SL 的预览（地图房间内容、事件战后奖励、涅奥各选项的随机结果），不进入任何策略路径。
+- `PolicyBoundaryCheck` 检查策略源码（OutsidePacket、Distill2、RoutePlanner、EventRules、RelicScore、PotionRewards，参考链另加 ReferenceChain 和去掉 Foresight 的 DecisionContext）不引用 Foresight、EventForesight、TransformPreview、Sandbox、brightEyeMode、nextRooms、NeowEvent、NeowReward、neowRows，并核对白名单正好是上表五个事件。违例用例：一段读 `Foresight.nextRooms` 或涅奥实时奖励的策略代码必须被拒绝。另检查：辉眼关闭时 `Foresight.neowRows` 只列四个选项，不掷结果、不设选项旁提示；开启时行为不变（`PolicyBoundaryCheck`）。涅奥页面带上结果文字时，局外决策输入、评分和规则说明与不带时逐位相同（`OutsidePacketCheck`）。
