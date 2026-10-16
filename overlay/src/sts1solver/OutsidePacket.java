@@ -197,7 +197,7 @@ final class OutsidePacket {
             float top=Float.NEGATIVE_INFINITY;
             for(float value:scores)top=Math.max(top,value);
             scores[forced]=top+1;
-            ruleNote="鎴樻枟澶栬嵂姘达細"+choices.get(forced).label;
+            ruleNote="战斗外药水："+choices.get(forced).label;
             return new Distill2.Result(scores,forced);
         }
         if(result.best<0 || result.best>=choices.size() || !choices.get(result.best).command.startsWith("potion "))return result;
@@ -208,7 +208,7 @@ final class OutsidePacket {
             else if(best<0 || scores[i]>scores[best])best=i;
         }
         if(best<0)return result;
-        ruleNote="鎴樻枟澶栦笉鐢ㄨ嵂涔熶笉寮冭嵂";
+        ruleNote="战斗外不用药也不弃药";
         return new Distill2.Result(scores,best);
     }
 
