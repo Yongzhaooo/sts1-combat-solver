@@ -16,10 +16,8 @@ def package(python_root, output):
     repo = Path('candidates/sts-ironclad-agent')
     if sys.platform != 'darwin' or sys.version_info[:2] != (3, 14):
         raise RuntimeError('Build and package with the pinned macOS Python 3.14 interpreter')
-    files = [Path('overlay') / name for name in ('backend.py', 'auto_policy.py', 'recovery.py', 'diagnostics.py', 'coverage_manifest.json')]
-    files += [repo / 'steam' / name for name in ('live_search.py', 'selection_import.py', 'rng_contract.py', 'steam_mcts.py')]
-    files += [repo / 'sim_patch/parity' / name for name in ('adapter.py', 'core.py', '__init__.py')]
-    files += [repo / 'sim_patch/alignment/tests' / name for name in ('compare_cards.py', 'compare_powers.py')]
+    from runpy import run_path
+    files = [Path(name) for name in run_path(str(root / 'overlay/runtime_files.py'))['PYTHON_FILES']]
     manifest = json.loads((root / repo / 'runtime/live-manifest.json').read_text(encoding='utf-8'))
     files.append(repo / 'runtime/live-manifest.json')
     for name, digest in manifest['engine_files'].items():

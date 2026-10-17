@@ -359,6 +359,8 @@ void Player::hpWasLost(BattleContext &bc, int amount, bool selfDamage) {
     // Each queued draw owns its amount and acts on its executing battle copy.
     const auto drawRelics = hpLossDrawRelics;
     for (auto relic : drawRelics) {
+        // Both relics require RoomPhase.COMBAT, including retained lethal thorns damage.
+        if (bc.outcome != Outcome::UNDECIDED) break;
         if (relic == RelicId::CENTENNIAL_PUZZLE) {
             setHasRelic<RelicId::CENTENNIAL_PUZZLE>(false);
             bc.addToTop(Actions::DrawCards(3));

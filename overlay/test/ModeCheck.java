@@ -9,6 +9,11 @@ public final class ModeCheck {
     }
 
     public static void main(String[] args) {
+        require(SolverMod.smokeOpening(1,0,0,0), "untouched T1 smoke policy entry");
+        require(!SolverMod.smokeOpening(1,1,0,0), "real card history closes smoke policy entry");
+        require(!SolverMod.smokeOpening(1,0,1,0), "real damage closes entry even after healing");
+        require(!SolverMod.smokeOpening(1,0,0,1), "HP loss closes entry");
+        require(!SolverMod.smokeOpening(2,0,0,0), "T2 closes entry");
         // Flags -> mode. outsideMode: 0 no outside suggestions, 1 suggest and confirm each step, 2 pilot.
         for (boolean run : new boolean[]{false, true})
             require(RunMode.of(2, run) == RunMode.PILOT, "pilot ignores runAuto");

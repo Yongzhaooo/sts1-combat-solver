@@ -64,17 +64,42 @@ def assess_deck(game):
                          + ('、'.join(weaknesses) or '未发现明显短板')) + '（启发式）')
 
 
+def smoke_opening(game):
+    """Solver policy is stricter than Java legality; missing history is not an opening."""
+    context = game.get('solver_auto_context', {})
+    return (context.get('smoke_opening') is True
+            and game.get('combat_state', {}).get('turn') == 1
+            and game.get('screen_type') == 'NONE')
+
+
+def smoke_threshold(game):
+    threshold = game.get('solver_auto_context', {}).get('smoke_loss_threshold', 15)
+    return threshold if type(threshold) is int and threshold >= 0 else 15
+
+
+def smoke_probe_keeps(plan, game):
+    threshold = smoke_threshold(game)
+    # Raw combat loss excludes future recovery credit and post-combat healing.
+    return (plan.get('outcome') == 1 and plan.get('hp', 0) > 0
+            and not plan.get('used_fairy') and not plan.get('used_tail')
+            and max(0, game['current_hp'] - plan['hp']) < threshold)
+
+
 def recommend(game, branches):
     profile = assess_deck(game)
+    fallback = next((b for b in branches if b.get('available') and b.get('smoke_stop_loss')), None)
+    if fallback and game.get('solver_auto_context', {}).get('run_auto') is True:
+        return dict(branch=fallback['id'], reason='无药预算内未找到低战损胜线，执行T1烟雾止损候选', assessment=profile)
     context = game.get('solver_auto_context', {})
     relics = {r['id'] for r in game.get('relics', [])}
     probability = context.get('potion_drop_probability')
     if 'Sozu' in relics: probability = 0
     if 'White Beast Statue' in relics and 'Sozu' not in relics: probability = 1
-    if 'Boss' in context.get('room', ''): probability = 0
+    if context.get('potion_reward_blocked', 'Boss' in context.get('room', '')) is True: probability = 0
     potions = game.get('potions', [])
     full = bool(potions) and all(p['id'] != 'Potion Slot' for p in potions)
-    supply = full and isinstance(probability, (int, float)) and probability >= .6
+    supply = isinstance(probability, (int, float)) and probability >= .6
+    guaranteed = probability == 1 and 'White Beast Statue' in relics and 'Sozu' not in relics
     winners = [b for b in branches if b.get('available') and b.get('won')]
     if not winners:
         return dict(branch=None, reason='未找到可验证的获胜路线，停止自动', assessment=profile)
@@ -97,7 +122,17 @@ def recommend(game, branches):
             reserve = profile['reserve'] and (valuable or covers_gap)
             # Full inventory discounts strong bottles too; otherwise it hoards
             # Strength/Dexterity even when the next drop is likely to be wasted.
-            total += 20 if reserve else (5 if valuable else 3) if supply else 10 if valuable else 5
+            # A consumed bottle creates a real slot. A guaranteed refill lowers its
+            # reserve cost even when the deck screen recommends keeping that type.
+            free_slot = branch.get('empty_potion_slots', 0) > 0
+            if guaranteed and free_slot:
+                total += 5 if valuable else 3
+            elif reserve:
+                total += 20
+            elif supply and full and free_slot:
+                total += 5 if valuable else 3
+            else:
+                total += 10 if valuable else 5
         return total
 
     def score(b):
@@ -108,7 +143,8 @@ def recommend(game, branches):
     saved = round(baseline['loss'] - chosen['loss'], 1) if baseline else None
     if chosen.get('potion_uses'):
         reason = '无药未找到胜线，优先保命' if baseline is None else f'省 {saved:g} 血；用药门槛 {price(chosen)}'
-        if supply: reason += '；满栏且掉药概率高'
+        if guaranteed and chosen.get('empty_potion_slots', 0) > 0: reason += '；白兽雕像，合法用药腾槽后可接战后药水'
+        elif supply and full and chosen.get('empty_potion_slots', 0) > 0: reason += '；满栏且掉药概率高'
     else:
         reason = '保留药水；收益未超过用药/保留价值'
     if chosen.get('used_tail') or chosen.get('used_fairy'):

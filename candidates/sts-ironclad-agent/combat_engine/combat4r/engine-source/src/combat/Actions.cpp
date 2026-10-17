@@ -827,7 +827,7 @@ Action Actions::ForethoughtAction(bool upgraded) {
 
 Action Actions::HeadbuttAction() {
     return {[=] (BattleContext &bc) {
-        if (bc.cards.discardPile.empty()) {
+        if (bc.outcome != Outcome::UNDECIDED || bc.monsters.areMonstersBasicallyDead() || bc.cards.discardPile.empty()) {
             return;
 
         } else if (bc.cards.discardPile.size() == 1) {

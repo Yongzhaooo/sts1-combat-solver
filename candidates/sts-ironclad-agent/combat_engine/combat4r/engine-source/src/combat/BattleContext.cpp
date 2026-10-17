@@ -735,10 +735,13 @@ void BattleContext::executeActions() {
     // todo find a place for checking where card queue is empty and player doesn't have control for calling onEndingTurn
     ++sum;
     g_debug_bc = this;
+    int iterations = 0;
 
     while (true)
     {
-        if (++loopCount > 1000000 || monsters.monstersAlive < 0 || turn > 500) {
+        ++loopCount;
+        // Queue liveness is local to this call; searches separately bound a copied trajectory.
+        if (++iterations > ACTION_EXECUTION_LIMIT || monsters.monstersAlive < 0 || turn > 500) {
             std::ostringstream state;
             state << *this;
             throw std::runtime_error("battle execution limit or invalid monster count: seed=" + std::to_string(seed) +

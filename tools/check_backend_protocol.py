@@ -47,7 +47,10 @@ def main():
                 reply = send({'id': 2, 'op': 'cancel'})
                 assert reply.get('id') == 2 and reply.get('status') == 'cancelled', reply
                 state = json.loads((Path(__file__).resolve().parents[1] / 'overlay/test/live-root.json').read_text(encoding='utf-8'))
-                reply = send({'id': 3, 'op': 'solve', 'state': state, 'budget': 2000})
+                reply = send({'id': 3, 'op': 'solve', 'state': state, 'budget': 2000, 'progress': True})
+                assert reply['status'] == 'progress' and reply['timeout_seconds'] == 150, reply
+                while reply.get('status') == 'progress':
+                    reply = replies.get(timeout=30)
                 assert reply.get('id') == 3 and reply.get('status') == 'ready' and reply.get('command'), reply
                 divergent = json.loads(json.dumps(state))
                 divergent['game_state']['current_hp'] -= 7

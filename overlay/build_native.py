@@ -108,15 +108,8 @@ battle=battle.replace(early_end,'''    // Time Warp queues turn end while Unceas
         }
     });
 '''+early_end,1)
-# Dark Embrace uses areMonstersBasicallyDead, which keeps the rebirth interval
-# alive. A failed Havoc autoplay fades its card below; that is not an exhaust.
-unplayable='''    } else if (!canUseCard && item.autoplay) {'''
-assert battle.count(unplayable)==1,'upstream autoplay failure handling changed'
-battle=battle.replace(unplayable,unplayable+'''
-        // With no living target, GameActionManager fades the rejected limbo card.
-        // That visual exhaust neither adds it to exhaustPile nor triggers exhaust powers.
-        if (c.requiresTarget() && monsters.getTargetableCount() == 0) return;
-''',1)
+# playCardQueueItem distinguishes playable cards with no target from rejected autoplay.
+# A rejected Clash still runs UseCardAction and Havoc exhausts it during rebirth.
 patched_battle.write_text(battle,encoding='utf-8')
 # FlightPower queues ReducePowerAction at the bottom; all already queued hits
 # still see Flight. Removing it immediately overestimates Sword Boomerang damage.

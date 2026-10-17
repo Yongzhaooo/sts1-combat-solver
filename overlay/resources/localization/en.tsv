@@ -378,3 +378,15 @@ Boss 快速收尾：找到不交药的胜利路线就停止搜索|Boss fast fini
 测试模式：把本局每张出牌写到桌面 sts1-test-种子.jsonl（只保留最近一局）|Test mode: write every card played this run to sts1-test-SEED.jsonl on the desktop (latest run only)
 路线标注：在地图上画出规划路线|Route marks: draw the planned route on the map
 战斗求解器设置|Combat solver settings
+路线可执行|Route ready
+验证与精简|Validating and shortening
+循环启动搜索|Loop setup search
+循环补充搜索|Loop rescue search
+无药止损预检|Potion-free escape check
+开局逃跑候选|Opening escape candidates
+追加深搜|Deeper search
+基础搜索|Base search
+本轮模拟 |Current simulations:
+次 · 循环展开 |; loop transitions:
+步|steps
+次|simulations

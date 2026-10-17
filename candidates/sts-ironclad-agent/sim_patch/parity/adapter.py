@@ -396,6 +396,7 @@ class ActionMapper:
         for pile in PILES:
             if (pile == "hand" and self.uuids
                     and view["game"].get("screen_type") == "HAND_SELECT"
+                    and len(combat.get("hand", [])) != len(battle.hand)
                     and battle.input_state == self.c.sts.InputState.CARD_SELECT):
                 # Armaments temporarily removes non-upgradeable cards from the
                 # original hand. The native selection retains the full hand;

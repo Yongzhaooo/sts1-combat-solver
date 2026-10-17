@@ -49,6 +49,8 @@ namespace sts {
 
     struct BattleContext {
 
+        static constexpr int ACTION_EXECUTION_LIMIT = 1000000;
+
         // begin for debugging purposes
         inline static int sum = 0; // for preventing optimization in benchmarks
         bool haveUsedDiscoveryAction = false;

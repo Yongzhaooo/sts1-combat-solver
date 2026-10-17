@@ -32,15 +32,11 @@ def package(source, python_zip, vc_runtime, pybind_license, output):
         metadata = json.loads(jar.read('ModTheSpire.json'))
         if metadata['dependencies'] != ['basemod']:
             raise ValueError('Expected the integrated single-mod build')
-    for name in ('backend.py', 'auto_policy.py', 'recovery.py', 'diagnostics.py', 'coverage_manifest.json'):
-        copy('overlay/' + name)
+    from runpy import run_path
+    files = run_path(str(source / 'overlay/runtime_files.py'))['PYTHON_FILES']
+    for relative in files:
+        copy(relative)
     repo = Path('candidates/sts-ironclad-agent')
-    for name in ('live_search.py', 'selection_import.py', 'rng_contract.py', 'steam_mcts.py'):
-        copy(repo / 'steam' / name)
-    for name in ('adapter.py', 'core.py', '__init__.py'):
-        copy(repo / 'sim_patch/parity' / name)
-    for name in ('compare_cards.py', 'compare_powers.py'):
-        copy(repo / 'sim_patch/alignment/tests' / name)
     copy(repo / 'runtime/live-manifest.json')
     manifest = json.loads((source / repo / 'runtime/live-manifest.json').read_text(encoding='utf-8'))
     for name, digest in manifest['engine_files'].items():

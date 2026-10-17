@@ -27,7 +27,10 @@ for s in (sys.stdin, sys.stdout, sys.stderr):
 
 from recovery import health, future_recovery, incense_targets
 from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature
-from auto_policy import recommend
+from auto_policy import recommend, smoke_opening, smoke_probe_keeps, smoke_threshold
+from solver_search import DEEP_BUDGET, boss_fast_plan, finalize_plan, search_plan
+from runtime_files import OVERLAY_FILES
+from search_status import search_timeout
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT / 'candidates/sts-ironclad-agent'
@@ -38,7 +41,6 @@ SUPPORTED_CLASSES = {'IRONCLAD': '战士'}
 COVERAGE_MANIFEST = Path(__file__).with_name('coverage_manifest.json')
 # Bottle sets are compared only when no single bottle wins within this effective loss.
 MULTI_POTION_LOSS = 6
-DEEP_BUDGET = 128000
 # Safety net: if cardRandomRng still drifts after card generation, keep executing the planned
 # route (later random cards are re-checked) instead of letting LiveSearch silently drop it.
 FRAME_RNG = ('/rng/card_random',)
@@ -46,17 +48,6 @@ FRAME_RNG = ('/rng/card_random',)
 
 def heart_fight(game):
     return any(m['id'] == 'CorruptHeart' for m in game['combat_state']['monsters'])
-
-
-def boss_fast_plan(game, plan, slots):
-    return (game.get('solver_auto_context', {}).get('boss_fast_finish') is True
-            and not slots and plan['outcome'] == 1 and plan['hp'] > 0
-            and plan['turns'] <= 20
-            and not plan.get('used_tail') and not plan.get('used_fairy')
-            and plan.get('relics_held') is True
-            and not plan.get('potion_uses')
-            and not any((int(bits) & 0xffffffff) >> 29 == 1 for bits in plan['actions'])
-            and 2 * max(0, game['current_hp'] - plan['hp']) <= game['max_hp'])
 
 
 def toolbox_selection(game):
@@ -191,40 +182,13 @@ class Advisor:
         if hasattr(self, 'on_phase'):
             self.on_phase(name)
 
+    # Keep the existing consumer API while sharing the implementation.
+    finalize_plan = staticmethod(finalize_plan)
+
     def search_plan(self, root, budget, slots, credit, index, kill_thieves, generated, initial_plan=None):
-        fast_boss = not slots and self.root_game.get('solver_auto_context', {}).get('boss_fast_finish') is True
-        if fast_boss:
-            generated = False
-        initial_budget = 2000 if fast_boss else budget
-        args = (root, initial_budget, slots, credit, index, kill_thieves, generated)
-        best = dict(initial_plan) if initial_plan is not None else dict(
-            self.native_search.plan(*args, True) if fast_boss else self.native_search.plan(*args))
-        if boss_fast_plan(self.root_game, best, slots):
-            best['boss_fast_finish'] = True
-            return best
-        if initial_budget != budget and not self.interrupt.is_set():
-            candidate = dict(self.native_search.plan(root, budget, slots, credit, index, kill_thieves, generated, fast_boss))
-            if candidate['value'] > best['value']:
-                best = candidate
-            if boss_fast_plan(self.root_game, best, slots):
-                best['boss_fast_finish'] = True
-                return best
-        # Standard search gets one bounded refinement when its route still loses HP.
-        if budget == 8000 and not self.interrupt.is_set() and (
-                best['outcome'] != int(self.search.sts.Outcome.PLAYER_VICTORY)
-                or health(best, self.root_game, True)['loss'] > 0
-                or best.get('used_tail') or best.get('used_fairy')):
-            try:
-                refined = dict(self.native_search.plan(root, DEEP_BUDGET, slots, credit, index, kill_thieves, generated, fast_boss))
-            except RuntimeError:
-                if not self.interrupt.is_set():
-                    raise
-                return best
-            if refined['value'] > best['value']:
-                best = refined
-        if boss_fast_plan(self.root_game, best, slots):
-            best['boss_fast_finish'] = True
-        return best
+        return search_plan(self.native_search, root, budget, slots, credit, index,
+                           kill_thieves, generated, game=self.root_game,
+                           interrupt=self.interrupt, initial_plan=initial_plan)
 
     def solve(self, view, budget):
         self.phase('导入战斗状态')
@@ -271,7 +235,17 @@ class Advisor:
         potions = [(slot, potion.get('name', potion['id']))
                    for slot, potion in enumerate(view['game'].get('potions', []))
                    if potion.get('can_use') and potion['id'] not in ('Potion Slot', 'FairyPotion')]
+        opening = smoke_opening(self.root_game)
+        potions = [(slot, name) for slot, name in potions
+                   if view['game']['potions'][slot]['id'] != 'SmokeBomb' or opening]
         names = dict(potions)
+        brew_slots = {slot for slot, _ in potions if view['game']['potions'][slot]['id'] == 'EntropicBrew'}
+        brew_order = (bool(brew_slots) and not any(r['id'] == 'Sozu' for r in self.root_game.get('relics', []))) and any(view['game']['potions'][slot]['id'] not in ('EntropicBrew', 'SmokeBomb')
+                                             for slot, _ in potions)
+        smoke_slots = [slot for slot, _ in potions if view['game']['potions'][slot]['id'] == 'SmokeBomb']
+        if smoke_slots and self.root_game.get('solver_auto_context', {}).get('run_auto') is True:
+            self.solve_smoke_opening(view, smoke_slots[0], credit, started, before)
+            return
         if heart_fight(self.root_game):
             self.searching = [(0, 'heart-all', '心脏：全部资源求胜')]
             try:
@@ -282,6 +256,7 @@ class Advisor:
                         list(names), 0, 0, False, True))
                     if refined['value'] > self.plan['value']:
                         self.plan = refined
+                self.plan = self.finalize_plan(self.root, self.plan)
                 replay = self.root.clone()
                 for bits in self.plan['actions']:
                     self.native_search.execute(replay, bits & 0xffffffff)
@@ -301,7 +276,16 @@ class Advisor:
             return
         if any(m['id'] in ('Looter', 'Mugger') and not m.get('is_gone')
                for m in view['game']['combat_state']['monsters']):
-            self.solve_thief(view, budget, credit, started, before, potions)
+            self.solve_thief(view, budget, credit, started, before,
+                             [(slot, name) for slot, name in potions if slot not in smoke_slots])
+            if smoke_slots and not self.interrupt.is_set():
+                self.native_search.resume()
+            for slot in (smoke_slots if not self.interrupt.is_set() else []):
+                from concurrent.futures import Future
+                future = Future()
+                future.set_result(self.native_search.plan(self.root, 1, [slot], credit, 31,
+                    False, False, False, True))
+                self.potion_branch((slot,), names, future, started, view, budget)
             return
         # Every branch searches its own copy of the root on its own thread (the
         # native call releases the GIL). A clean no-potion 8k plan avoids
@@ -312,7 +296,7 @@ class Advisor:
         fast_boss = view['game'].get('solver_auto_context', {}).get('boss_fast_finish') is True
         initial_plan = None
         clean_regular = False
-        if budget == 8000 and not fast_boss and potions:
+        if budget == 8000 and not fast_boss and potions and not smoke_slots:
             self.searching = [(0, 'no-potion', '不用药')]
             try:
                 initial_plan = dict(self.native_search.plan(self.root, budget, [], credit, 0, False, False))
@@ -324,7 +308,13 @@ class Advisor:
                              and health(initial_plan, self.root_game, True)['loss'] == 0
                              and not initial_plan.get('used_tail') and not initial_plan.get('used_fairy')
                              and not toolbox_selection(view['game']))
-        stages = [[()]] if fast_boss or clean_regular else [[()] + [(slot,) for slot, _ in potions]]
+        stages = [[()]] if fast_boss or (clean_regular and not brew_order) else [[()] + [(slot,) for slot, _ in potions]]
+        strength_slots = [slot for slot, _ in potions
+                          if view['game']['potions'][slot]['id'] in ('Strength Potion', 'FlexPotion')]
+        if smoke_slots and strength_slots:
+            stages[0].extend((smoke, strength) for smoke in smoke_slots for strength in strength_slots)
+            if len(strength_slots) > 1:
+                stages[0].extend((smoke, *strength_slots) for smoke in smoke_slots)
         self.searching = []
         pool = ThreadPoolExecutor(max_workers=max(1, 2 ** len(potions)))
         try:
@@ -334,6 +324,10 @@ class Advisor:
                     index = len(self.searching)
                     branch_id = 'no-potion' if not slots else 'potion-' + '+'.join(map(str, slots))
                     self.searching.append((index, branch_id, '+'.join(names[i] for i in slots) or '不用药'))
+                    if any(slot in smoke_slots for slot in slots):
+                        futures[slots] = pool.submit(self.native_search.plan, self.root, 1,
+                            list(slots), credit, index, False, False, False, True)
+                        continue
                     futures[slots] = pool.submit(self.search_plan, self.root, budget,
                                                  list(slots), credit, index, False,
                                                  budget >= DEEP_BUDGET,
@@ -349,13 +343,11 @@ class Advisor:
                     self.branch_info = [self.branch_summary('no-potion', '不主动用药', self.plan, view)]
                     if self.plan.get('boss_fast_finish'):
                         break
-                    if (self.plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
+                    if (not smoke_slots and self.plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
                             and self.branch_info[0]['loss'] == 0
                             and not self.plan.get('used_tail') and not self.plan.get('used_fairy')
                             and not toolbox_selection(view['game'])
-                            and not (budget >= DEEP_BUDGET and any(
-                                view['game']['potions'][slot]['id'] == 'EntropicBrew'
-                                for slot, _ in potions))):
+                            and not (brew_order or (budget >= DEEP_BUDGET and brew_slots))):
                         break
                 for slots, future in futures.items():
                     if slots:
@@ -367,10 +359,10 @@ class Advisor:
                     stages.append([(slot,) for slot, _ in potions])
                 singles_done = (not fast_boss and stage is stages[0]) or (
                     fast_boss and len(stages) > 1 and stage is stages[1])
-                if singles_done and not self.interrupt.is_set() and not good and len(potions) > 1:
+                if singles_done and not self.interrupt.is_set() and (not good or brew_order) and len(potions) > 1:
                     combos = [c for n in range(2, len(potions) + 1)
-                              for c in itertools.combinations([slot for slot, _ in potions], n)
-                              if n == 2 or n == len(potions)]
+                              for c in itertools.combinations([slot for slot, _ in potions if slot not in smoke_slots], n)
+                              if (n == 2 or n == len(potions)) and (not good or bool(brew_slots.intersection(c)))]
                     stages.append(combos)
         finally:
             # Unneeded or abandoned branches stop at their next round; do not wait for them.
@@ -391,6 +383,48 @@ class Advisor:
                     self.branch_info.sort(key=lambda branch: branch['id'] != key)
         s.actions.extend(self.plan['actions'])
         s.mapper = ActionMapper(s.comparator, s.battle, view)
+
+    def solve_smoke_opening(self, view, slot, credit, started, before):
+        """Automatic policy only: one bounded no-active-potion probe, then keep or escape."""
+        from sim_patch.parity.adapter import ActionMapper
+        context = self.root_game.get('solver_auto_context', {})
+        simulations = context.get('smoke_probe_budget', 12000)
+        if type(simulations) is not int or not 1 <= simulations <= DEEP_BUDGET:
+            simulations = 12000
+        self.searching = [(0, 'no-potion', '无药烟雾弹预检')]
+        try:
+            baseline = dict(self.native_search.plan(self.root, simulations, [], credit, 0,
+                False, False, False, False, True, smoke_threshold(self.root_game)))
+            keep = smoke_probe_keeps(baseline, self.root_game)
+            if keep:
+                baseline = self.finalize_plan(self.root, baseline)
+            baseline['smoke_policy'] = True
+            baseline['seconds'] = round(time.monotonic() - started, 2)
+            self.branches = {'no-potion': baseline}
+            self.branch_info = [self.branch_summary('no-potion', '不主动用药', baseline, view)]
+            self.branch_info[0]['smoke_probe_keep'] = keep
+            self.selected_branch, self.plan = 'no-potion', baseline
+            if not keep and not self.interrupt.is_set():
+                strength_slots = [i for i, p in enumerate(view['game'].get('potions', []))
+                                  if p.get('can_use') and p['id'] in ('Strength Potion', 'FlexPotion')]
+                plan = dict(self.native_search.plan(self.root, 1, [slot, *strength_slots], credit, 1,
+                    False, False, False, True))
+                plan['seconds'] = round(time.monotonic() - started, 2)
+                plan['smoke_policy'] = True
+                plan['smoke_stop_loss'] = True
+                branch_id = 'potion-' + str(slot)
+                self.branches[branch_id] = plan
+                label = ('T1 收割致胜 · 保留烟雾弹' if plan['outcome'] == 1 else
+                         'T1 收割后烟雾弹逃跑' if len(plan['actions']) > 1 else 'T1 烟雾弹 · 立即逃跑')
+                self.branch_info.append(self.branch_summary(branch_id, label, plan, view))
+                self.selected_branch, self.plan = branch_id, plan
+            if before != self.search.comparator.clone_fingerprint(self.search.battle):
+                raise RuntimeError('搜索修改了输入快照')
+            self.search.actions.extend(self.plan['actions'])
+            self.search.mapper = ActionMapper(self.search.comparator, self.search.battle, view)
+        finally:
+            self.native_search.cancel()
+            self.searching = []
 
     def solve_thief(self, view, budget, credit, started, before, potions):
         """Show forced-kill and HP-preserving lines for the player to choose from."""
@@ -515,11 +549,13 @@ class Advisor:
                         initial_slots_used.add(slot)
                         uses.append({'slot': slot, 'turn': int(replay.turn)+1, 'step': step+1})
                 self.native_search.execute(replay, int(action.bits))
-            if not uses:
+            smoke = any(view['game']['potions'][slot]['id'] == 'SmokeBomb' for slot in slots)
+            if not uses and not (smoke and plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)):
                 self.branch_info.append({'id': branch_id, 'name': name, 'available': False,
                                          'message': '本轮搜索未找到使用路线'})
                 return
-            plan['potion_use'] = uses[0]
+            if uses:
+                plan['potion_use'] = uses[0]
             plan['potion_uses'] = uses
             plan['generated_potion_uses'] = generated_uses
             plan['potion_gain'] = sum(
@@ -532,6 +568,11 @@ class Advisor:
             for u in uses:
                 turns.setdefault(u['turn'], []).append(names[u['slot']])
             label = ' '.join(f"T{turn} " + '+'.join(bottles) for turn, bottles in turns.items())
+            if smoke:
+                label = ('T1 收割致胜 · 保留烟雾弹' if plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
+                         else 'T1 收割后烟雾弹逃跑' if len(plan['actions']) > 1 else 'T1 烟雾弹 · 立即逃跑')
+                if len(uses) > 1:
+                    label += ' · ' + '+'.join(names[u['slot']] for u in uses if view['game']['potions'][u['slot']]['id'] != 'SmokeBomb')
             self.branch_info.append(self.branch_summary(branch_id, label, plan, view))
         except (ValueError, RuntimeError) as error:
             self.branch_info.append({'id': branch_id, 'name': name, 'available': False,
@@ -544,7 +585,10 @@ class Advisor:
         for index, branch_id, name in list(self.searching):
             p = self.native_search.progress(index)
             rows.append({'id': branch_id, 'name': name, 'simulations': p['simulations'], 'turn': p['turn'],
-                         'best_hp': p['best_hp'], 'done': p['done'], 'ready': branch_id in accepted})
+                         'best_hp': p['best_hp'], 'done': p['done'], 'ready': branch_id in accepted,
+                         'phase': 'ready' if branch_id in accepted else 'finalizing' if p['done'] else p['phase'],
+                         'transitions': p['transitions'], 'transition_limit': p['transition_limit'],
+                         'budget': p['budget']})
         return rows
 
     def branch_summary(self, branch_id, name, plan, view):
@@ -560,7 +604,9 @@ class Advisor:
                         used.add(slot)
             plan['potion_uses'] = [{'slot': slot} for slot in sorted(used)]
         return {'id': branch_id, 'name': name, 'available': True,
-                'won': won, 'potion_gain': plan.get('potion_gain', 0),
+                'won': won, 'escaped': plan['outcome'] == int(self.search.sts.Outcome.PLAYER_ESCAPE), 'potion_gain': plan.get('potion_gain', 0),
+                'empty_potion_slots': plan.get('empty_potion_slots', 0),
+                'smoke_stop_loss': plan.get('smoke_stop_loss', False),
                 'potion_uses': plan.get('potion_uses', []),
                 **health(plan, view['game'], won)}
 
@@ -693,6 +739,7 @@ class Advisor:
                 'outcome': int(self.plan['outcome']),
                 'won': won,
                 'boss_fast_finish': self.plan.get('boss_fast_finish', False),
+                'smoke_policy': self.plan.get('smoke_policy', False),
                 'seconds': self.plan['seconds'], 'simulations': self.plan['simulations'],
                 'remaining': len(s.actions), 'branch': self.selected_branch,
                 'branches': self.branch_info,
@@ -846,7 +893,7 @@ def worker(connection, interrupt):
 def worker_version():
     """Detect a replaced build without hashing it on every frame or losing warm workers."""
     here = Path(__file__).resolve().parent
-    paths = [Path(__file__).resolve(), here / 'recovery.py', here / 'diagnostics.py', here / 'auto_policy.py']
+    paths = [here / name for name in OVERLAY_FILES]
     paths.extend(here / 'build/native' / ('overlay_search'+suffix)
                  for suffix in importlib.machinery.EXTENSION_SUFFIXES
                  if (here / 'build/native' / ('overlay_search'+suffix)).exists())
@@ -976,7 +1023,8 @@ def serve(runs_dir=None):
                     try:
                         reports.flush()
                         seed = request.get('seed') or reports.runs_seed()
-                        target = export_run(runs_dir, seed, request['directory'], request.get('metadata'))
+                        target = export_run(runs_dir, seed, request['directory'], request.get('metadata'),
+                                            request.get('recent_battles'))
                         answer = {'status': 'debug_run_export', 'file': target.name, 'directory': str(target.parent)}
                     except Exception as failure:
                         answer = {'status': 'debug_error', 'message': str(failure)}
@@ -1010,7 +1058,8 @@ def serve(runs_dir=None):
                 last_solve_ready = None
                 received_at = time.monotonic()
                 if request.get('progress'):
-                    emit({'id': request['id'], 'status': 'progress', 'phase': '后台已接收，准备工作进程'}, request.get('state'))
+                    emit({'id': request['id'], 'status': 'progress', 'phase': '后台已接收，准备工作进程',
+                          'timeout_seconds': search_timeout(request.get('budget', 0))}, request.get('state'))
                 if active:
                     stop()
                 if request.get('op') == 'solve' and worker_version() != loaded_version:
@@ -1030,7 +1079,7 @@ def serve(runs_dir=None):
                     stop()
                     start()
                     connection.send(request)
-                timeout_limit = 600 if request.get('budget', 0) >= 128000 else 150
+                timeout_limit = search_timeout(request.get('budget', 0))
                 active = (request['id'], received_at, request.get('state'), log_offset, request.get('op'), None, timeout_limit)
             while active and connection.poll():
                 completed_active = active
