@@ -113,6 +113,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private Process backend;
     private BufferedWriter writer;
     private long serial, activeId, sentAt;
+    private long searchTimeoutMillis = SearchStatus.timeoutMillis(8000);
     private JsonObject rootKey, lastKey, result;
     private boolean decisionDirty=true;
     private boolean busy, awaitingAction, auto, turnOnly, gamblingAuto, paused, collapsed, dragging;
@@ -121,6 +122,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private boolean autoPotionRewards = true;
     private boolean runAutoEnabled = true;
     private boolean bossFastFinishEnabled; // Settings: stop searching a Boss once a potion-free win is found
+    private int smokeProbeBudget=12000, smokeLossThreshold=15; // Mod config: raw combat HP loss, strict less-than threshold
     private boolean feedModeEnabled; // Mod config: max HP gained by Feed counts twice in the plan value
     private boolean routeMarks = true; // Mod config: draw the planned route on the map
     private AbstractPlayer runAutoPlayer;
@@ -232,6 +234,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("brightEyeMode", "false"); // beyond-SL display hints are opt-in; no policy reads them
             defaults.setProperty("bossFastFinish", "false"); // new key: every player starts with the standard Boss search
             defaults.setProperty("feedMode", "false");
+            defaults.setProperty("smokeProbeBudget", "12000");
+            defaults.setProperty("smokeLossThreshold", "15");
             defaults.setProperty("testMode", "false");
             defaults.setProperty("routeMarks", "true");
             defaults.setProperty("autoPotionRewards", "true");
@@ -246,6 +250,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             Foresight.brightEyeMode = config.getBool("brightEyeMode");
             bossFastFinishEnabled = config.getBool("bossFastFinish");
             feedModeEnabled = config.getBool("feedMode");
+            smokeProbeBudget = Math.max(1,Math.min(128000,config.getInt("smokeProbeBudget")));
+            smokeLossThreshold = Math.max(0,config.getInt("smokeLossThreshold"));
             TestRecorder.enabled = config.getBool("testMode");
             routeMarks = config.getBool("routeMarks");
             autoPotionRewards = config.getBool("autoPotionRewards");
@@ -491,9 +497,19 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             AbstractDungeon.bossList==null?0:AbstractDungeon.bossList.size(),
             AbstractDungeon.player!=null && AbstractDungeon.player.hasRelic("Mark of the Bloom")));
         out.addProperty("feed_mode",feedModeEnabled);
+        out.addProperty("run_auto",runAuto);
+        out.addProperty("smoke_probe_budget",smokeProbeBudget);
+        out.addProperty("smoke_loss_threshold",smokeLossThreshold);
+        out.addProperty("smoke_opening",smokeOpening(GameActionManager.turn,
+            AbstractDungeon.actionManager.cardsPlayedThisCombat.size(),
+            GameActionManager.damageReceivedThisCombat,GameActionManager.hpLossThisCombat));
         float chance=Math.max(0,Math.min(1,(40+AbstractRoom.blizzardPotionMod)/100f));
         if(AbstractDungeon.player.hasRelic("White Beast Statue"))chance=1;
-        if(AbstractDungeon.player.hasRelic("Sozu") || AbstractDungeon.getCurrRoom() instanceof com.megacrit.cardcrawl.rooms.MonsterRoomBoss)chance=0;
+        boolean rewardBlocked=room==null || room.rewards.size()>=4 || room.smoked
+            || (room instanceof com.megacrit.cardcrawl.rooms.MonsterRoomBoss
+                && (AbstractDungeon.actNum>=3) && !Settings.isEndless);
+        if(AbstractDungeon.player.hasRelic("Sozu") || rewardBlocked)chance=0;
+        out.addProperty("potion_reward_blocked",rewardBlocked);
         out.addProperty("potion_drop_probability",chance);
         JsonArray deck=new JsonArray();
         for(AbstractCard card:AbstractDungeon.player.masterDeck.group) {
@@ -504,6 +520,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }
         out.add("deck",deck);
         return out;
+    }
+
+    /** Solver policy only; Java itself also permits later escapes. Never erase real damage or card history. */
+    static boolean smokeOpening(int turn,int played,int received,int hpLoss) {
+        return turn==1 && played==0 && received==0 && hpLoss==0;
     }
 
     /** The Settings switch gates the rule; off means a Boss gets the standard budget and the full search like any fight. */
@@ -776,6 +797,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private void chooseAutomaticBranch() {
         if(!ready())return;
+        if(smokeOpening(GameActionManager.turn,AbstractDungeon.actionManager.cardsPlayedThisCombat.size(),
+                GameActionManager.damageReceivedThisCombat,GameActionManager.hpLossThisCombat)
+                && (!result.has("smoke_policy") || !result.get("smoke_policy").getAsBoolean())) {
+            for(com.megacrit.cardcrawl.potions.AbstractPotion potion:AbstractDungeon.player.potions)
+                if("SmokeBomb".equals(potion.ID) && potion.canUse()) {recalculate();return;}
+        }
         JsonObject advice=result.getAsJsonObject("auto_recommendation");
         if(advice==null || !advice.has("branch") || advice.get("branch").isJsonNull()) {
             fail(I18n.t("自动模式未找到获胜路线，请手动检查"));return;
@@ -864,6 +891,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         request.addProperty("id", ++serial);
         request.addProperty("op", op);
         request.addProperty("budget", budgets[budgetIndex]);
+        if (!op.equals("cancel")) searchTimeoutMillis = SearchStatus.timeoutMillis(budgets[budgetIndex]);
         if (op.equals("choose")) request.addProperty("branch", chosenBranch);
         if (op.equals("solve")) request.addProperty("progress", true);
         if (!op.equals("cancel")) {
@@ -1166,6 +1194,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             if (reply.get("id").getAsLong() != activeId) continue;
             String kind = reply.get("status").getAsString();
             if (kind.equals("progress")) {
+                if (reply.has("timeout_seconds"))
+                    searchTimeoutMillis = SearchStatus.acknowledgedTimeoutMillis(reply.get("timeout_seconds").getAsLong());
                 lastProgressAt = System.currentTimeMillis();
                 if (reply.has("phase")) {
                     backendPhase = reply.get("phase").getAsString();
@@ -1223,7 +1253,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }
         long now = System.currentTimeMillis();
         if (busy && (backend == null || !backend.isAlive()
-                || now - sentAt > (budgets[budgetIndex] >= 128000 ? 600000 : 100000))) {
+                || SearchStatus.expired(now, sentAt, searchTimeoutMillis))) {
             fail(I18n.t("后台求解器未响应，请重新计算。详情见数据目录中的 backend.log。"));
             return;
         }
@@ -1668,14 +1698,15 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
     private static String count(long n) { return n>=10000 ? String.format(I18n.t("%.1f 万"), n/10000.0) : Long.toString(n); }
     private String progressSummary() {
-        long total=0; int turn=0, best=-1;
+        long total=0, transitions=0; int turn=0, best=-1;
         for (JsonElement e : progressRows) {
             JsonObject row=e.getAsJsonObject();
             total+=row.get("simulations").getAsLong();
+            if(row.has("transitions"))transitions+=row.get("transitions").getAsLong();
             turn=Math.max(turn,row.get("turn").getAsInt());
             best=Math.max(best,row.get("best_hp").getAsInt());
         }
-        return I18n.t("已模拟 ")+count(total)+I18n.t("次 · 规划至 T")+turn+(best>0?I18n.t(" · 最佳 HP ")+best:"");
+        return I18n.t("本轮模拟 ")+count(total)+I18n.t("次 · 循环展开 ")+count(transitions)+I18n.t("步");
     }
     private String shortText(String value, int max) { return I18n.t(value); }
     private boolean canCreditRest() {
@@ -1900,7 +1931,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 JsonObject row=progressRows.get(i).getAsJsonObject();
                 int best=row.get("best_hp").getAsInt();
                 String line=(best>0?"HP "+best:I18n.t("未胜"))+" · T"+row.get("turn").getAsInt()+" · "
-                    +count(row.get("simulations").getAsLong())+" · "+I18n.backend(row.get("name").getAsString());
+                    +SearchStatus.phase(row)+" · "+(row.has("transitions") && (row.get("phase").getAsString().equals("beam") || row.get("phase").getAsString().equals("cycle"))
+                        ? count(row.get("transitions").getAsLong())+I18n.t("步") : count(row.get("simulations").getAsLong())+I18n.t("次"))
+                    +" · "+I18n.backend(row.get("name").getAsString());
                 label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+i*BODY_ROW,textWidth,.85f,row.has("ready") && row.get("ready").getAsBoolean()?accent:muted);
             }
         } else if (!foresight.isEmpty()) {

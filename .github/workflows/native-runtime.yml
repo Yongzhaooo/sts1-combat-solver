@@ -51,6 +51,8 @@ jobs:
       - run: python tools/build_solver_runtime.py
       - run: python tools/check_search_boundary.py
       - run: python tools/check_plan_reduction.py
+      - run: python tools/check_potion_policy.py --native-root .
+      - run: python tools/check_search_progress.py
       - run: python tools/check_snapshot_import.py
       - run: python tools/check_headbutt.py
       - run: python tools/check_discovery_frames.py

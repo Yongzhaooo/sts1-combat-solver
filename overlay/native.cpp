@@ -19,13 +19,16 @@ thread_local bool requireThiefKill=false;
 thread_local bool heartFight=false, fastBoss=false, fastReady=false, initialTail=false;
 thread_local int initialHp=0, initialFairies=0;
 thread_local int initialTurn=0;
+thread_local bool smokeProbe=false;
+thread_local int smokeLossThreshold=15;
 thread_local Random originalPotionRng;
 // Set under the GIL before any search starts; searches only read them.
 bool discoveryReroll=true;
 unsigned incenseTargets=0;  // bit c: ending the fight with Incense Burner counter c is worth one Intangible
 std::map<std::string,std::vector<CardId>> actualPools;
 // Live counters per branch index, read by the progress reporter while plans run.
-struct Progress { std::atomic<long long> simulations{0}; std::atomic<int> rounds{0}, turn{0}, bestHp{-1}, done{0}; };
+struct Progress { std::atomic<long long> simulations{0}, transitions{0}, transitionLimit{0};
+    std::atomic<int> rounds{0}, turn{0}, bestHp{-1}, done{0}, phase{0}, budget{0}; };
 std::array<Progress,32> progress;
 // cancel() bumps the generation; older searches stop at their next replanning round.
 std::atomic<int> generation{0};
@@ -58,6 +61,8 @@ const std::vector<CardId> *overlayCardPool(CardType type) {
 }
 bool overlayPotionAllowed(const BattleContext &bc, int slot) {
     if(slot<0 || slot>=16)return false;
+    // Smoke is an immediate opening policy branch, never a rollout action.
+    if(bc.potions[slot]==Potion::SMOKE_BOMB)return false;
     if(allowGeneratedPotions && bc.potionRng.counter!=originalPotionRng.counter
             && (initialPotion[slot]==Potion::EMPTY_POTION_SLOT || bc.potions[slot]!=initialPotion[slot]))
         return true;
@@ -84,6 +89,12 @@ static int fairyCount(const BattleContext &bc) {
 static bool relicsHeld(const BattleContext &bc);
 bool overlayAcceptTerminal(const BattleContext &bc, const std::vector<search::Action> &actions) {
     if(bc.outcome!=Outcome::PLAYER_VICTORY || bc.player.curHp<=0)return false;
+    if(smokeProbe) {
+        if(std::max(0,initialHp-bc.player.curHp)<smokeLossThreshold
+                && fairyCount(bc)>=initialFairies
+                && (!initialTail || bc.player.hasRelic<RelicId::LIZARD_TAIL>()))return fastReady=true;
+        return false;
+    }
     if(heartFight)return fastReady=true;
     if(!fastBoss || bc.turn-initialTurn>20 || 2*std::max(0,initialHp-bc.player.curHp)>initialMaxHp
             || fairyCount(bc)<initialFairies
@@ -212,6 +223,14 @@ static bool overlaySameVictory(const BattleContext &a, const BattleContext &b) {
 
 #include "growth_gate.h"
 #include "loop_beam.h"
+#include "smoke_opening.h"
+static bool overlayBeamTick() {
+    if (auto *p=live()) {
+        if (loop_beam::stats.transitions-p->transitions.load(std::memory_order_relaxed)>=256)
+            p->transitions.store(loop_beam::stats.transitions,std::memory_order_relaxed);
+    }
+    return overlayInterrupted();
+}
 static bool macroFinish(const BattleContext &root, const BattleContext &end) {
     if (end.outcome != Outcome::PLAYER_VICTORY || end.player.curHp <= 0) return false;
     if (heartFight) return true;
@@ -257,11 +276,19 @@ PYBIND11_MODULE(overlay_search, m) {
         if(!action.isValidAction(battle))throw std::invalid_argument("invalid predicted action");
         action.execute(battle);
     });
-    m.def("plan", [](const BattleContext &root, int simulations, const std::vector<int> &slots, int recovery, int index, bool killThieves, bool generatedPotions, bool bossFast) {
+    m.def("plan", [](const BattleContext &root, int simulations, const std::vector<int> &slots, int recovery, int index, bool killThieves, bool generatedPotions, bool bossFast, bool smokeOpening, bool bounded, int lossThreshold) {
         if(root.outcome != Outcome::UNDECIDED || root.player.curHp <= 0)
             throw std::invalid_argument("search requires a living combat decision");
         if(recovery<0 || index<0 || index>=static_cast<int>(progress.size()))
             throw std::invalid_argument("invalid potion/recovery policy");
+        if(lossThreshold<0)throw std::invalid_argument("negative Smoke Bomb loss threshold");
+        smokeProbe=bounded; smokeLossThreshold=lossThreshold;
+        if(bounded && (!slots.empty() || simulations<=0))
+            throw std::invalid_argument("bounded probe requires no active potions and a positive budget");
+        bool smoke=false;
+        for(int slot:slots)if(slot>=0 && slot<root.potionCapacity && root.potions[slot]==Potion::SMOKE_BOMB)smoke=true;
+        if(smoke && (!smokeOpening || root.turn!=0 || root.player.cardsPlayedThisTurn!=0 || root.player.timesDamagedThisCombat!=0))
+            throw std::invalid_argument("Smoke Bomb requires an untouched turn-one opening");
         allowedMask=0;
         heartFight=false;
         for(int i=0;i<root.monsters.monsterCount;++i)heartFight |= root.monsters.arr[i].id==MonsterId::CORRUPT_HEART;
@@ -287,21 +314,58 @@ PYBIND11_MODULE(overlay_search, m) {
         finishedRounds=0;
         auto &live=progress[index];
         live.simulations=0; live.rounds=0; live.turn=root.turn; live.bestHp=-1; live.done=0;
+        live.phase=1; live.budget=simulations; live.transitions=0; live.transitionLimit=0;
         BattleContext predicted(root);
         combat_search::ReuseResult result;
         bool beamRan=false, beamUsed=false;
         bool macroUsed=false;
+        int smokePrefixes=0;
+        bool smokeCapped=false;
         double mctsValue=0;
         {
             // The copy above was taken under the GIL; the search touches no Python objects.
             py::gil_scoped_release release;
             loop_beam::stats = {};
-            loop_beam::Best quick;
+            if(smoke) {
+                live.phase=5;
+                int smokeSlot=-1;
+                for(int slot:slots) {
+                    auto p=root.potions[slot];
+                    if(p==Potion::SMOKE_BOMB)smokeSlot=slot;
+                    else if(p!=Potion::STRENGTH_POTION && p!=Potion::FLEX_POTION)
+                        throw std::invalid_argument("Smoke prefix only authorizes immediate strength potions");
+                }
+                auto opening=smokeOpeningPlan(root,smokeSlot,slots);
+                predicted=opening.state; result.actions=opening.actions;
+                smokePrefixes=opening.prefixes; smokeCapped=opening.capped;
+                result.bestHp=predicted.player.curHp;
+            } else if(bounded) {
+                live.phase=4;
+                search::BattleScumSearcher2 probe(root);
+                probe.preservePotions=true;
+                probe.combat4qEnabled=probe.combat4rEnabled=true;
+                probe.combatInitialMaxHp=initialMaxHp;
+                probe.search(simulations);
+                result.simulations=probe.root.simulationCount;
+                // Only a complete terminal witness qualifies; an unfinished probe does not act.
+                BattleContext replay(root);
+                for(const auto &action:probe.bestActionSequence) {
+                    if(!action.isValidAction(replay))throw std::runtime_error("invalid bounded probe action");
+                    action.execute(replay);
+                }
+                if(replay.outcome==Outcome::PLAYER_VICTORY) {
+                    predicted=replay;
+                    for(const auto &action:probe.bestActionSequence)result.actions.push_back(static_cast<int>(action.bits));
+                    result.bestHp=predicted.player.curHp;
+                }
+            } else {
+                loop_beam::Best quick;
             const long long beamCap = 160LL * simulations;
             auto value = [](const BattleContext &b){return search::BattleScumSearcher2::evaluateEndState4r(b,initialMaxHp);};
-            auto cancelled = [](){return stopRequested.load() || searchGeneration!=generation.load();};
+            auto cancelled = [](){return overlayBeamTick();};
             if (loop_beam::cyclePotential(root)) {
                 beamRan=true;
+                live.phase=2; live.transitionLimit=std::min(beamCap/32,40000LL);
                 loop_beam::pass(root,8,std::min(beamCap/32,40000LL),value,cancelled,quick,true);
                 ++loop_beam::stats.passes;
             }
@@ -310,6 +374,7 @@ PYBIND11_MODULE(overlay_search, m) {
                 macroUsed=beamUsed=true;
                 fastReady=heartFight;
             } else {
+                live.transitions=loop_beam::stats.transitions; live.phase=1;
                 result=combat_search::playoutReusing(predicted,simulations,4.0,false,false,true,true,true);
             }
             // Small-loop rescue: only when the MCTS line loses or costs a lot of HP (formed simple loops are found faster by MCTS).
@@ -322,10 +387,11 @@ PYBIND11_MODULE(overlay_search, m) {
             // Heart victory ends the run; further HP or turn improvements have no continuation value.
             if(!macroUsed && !(heartFight && mctsWin) && (!mctsWin || cost>(simulations>=128000 ? 0 : std::max(6,root.player.maxHp*15/100)))) {
                 beamRan=true;
+                live.phase=3; live.transitionLimit=LOOP_BEAM_PER_SIM*simulations;
                 const int growth = simulations == 128000 ? growth_gate::remaining(root,allowedMask,allowGeneratedPotions) : -1;
                 auto best=loop_beam::portfolio(root,LOOP_BEAM_PER_SIM*simulations,
                     [](const BattleContext &b){return search::BattleScumSearcher2::evaluateEndState4r(b,initialMaxHp);},
-                    [](){return stopRequested.load() || searchGeneration!=generation.load();},std::move(quick),loop_beam::stats,
+                    [](){return overlayBeamTick();},std::move(quick),loop_beam::stats,
                     simulations == 128000 ? &predicted : nullptr, growth < 0 ? -1 : root.player.maxHp+growth);
                 const int mctsHp=predicted.player.curHp;
                 if(best.found && (!mctsWin || best.value>mctsValue)) {
@@ -340,15 +406,23 @@ PYBIND11_MODULE(overlay_search, m) {
                     }
                 }
             }
+            }
         }
         if(macroUsed){ live.bestHp=predicted.player.curHp; live.turn=predicted.turn; }
+        live.transitions=loop_beam::stats.transitions;
+        if(bounded)live.simulations=result.simulations;
         live.done=1;
         // Smoke Bomb still invokes AbstractRoom.endBattle and victory healing.
         auto hp=(predicted.outcome==Outcome::PLAYER_VICTORY || predicted.outcome==Outcome::PLAYER_ESCAPE)
             ? predicted.victoryHpRelics.project(predicted.player.curHp,predicted.player.maxHp)
             : VictoryHp{predicted.player.curHp,predicted.player.maxHp};
         py::dict out;
+        int emptySlots=0;
+        for(int slot=0;slot<predicted.potionCapacity;++slot)emptySlots+=predicted.potions[slot]==Potion::EMPTY_POTION_SLOT;
+        out["empty_potion_slots"]=emptySlots;
         out["actions"]=result.actions;
+        out["smoke_prefixes"]=smokePrefixes;
+        out["smoke_prefix_capped"]=smokeCapped;
         out["turns"]=predicted.turn-root.turn;
         out["fast_ready"]=fastReady;
         out["simulations"]=result.simulations;
@@ -371,13 +445,16 @@ PYBIND11_MODULE(overlay_search, m) {
         out["loop_macro_used"]=macroUsed;
         out["loop_macro_actions"]=loop_beam::stats.macroActions;
         return out;
-    },py::arg("root"),py::arg("simulations"),py::arg("slots"),py::arg("recovery"),py::arg("index"),py::arg("kill_thieves")=false,py::arg("generated_potions")=false,py::arg("boss_fast")=false);
+    },py::arg("root"),py::arg("simulations"),py::arg("slots"),py::arg("recovery"),py::arg("index"),py::arg("kill_thieves")=false,py::arg("generated_potions")=false,py::arg("boss_fast")=false,py::arg("smoke_opening")=false,py::arg("bounded")=false,py::arg("smoke_loss_threshold")=15);
     m.def("cancel", []() { stopRequested=true; ++generation; });
     m.def("resume", []() { stopRequested=false; });
     m.def("progress", [](int index) {
         if(index<0 || index>=static_cast<int>(progress.size()))throw std::invalid_argument("invalid branch");
         auto &p=progress[index];
         py::dict out;
+        const char *phases[]={"waiting","mcts","cycle","beam","smoke_probe","smoke_opening"};
+        out["phase"]=phases[p.phase.load()]; out["budget"]=p.budget.load();
+        out["transitions"]=p.transitions.load(); out["transition_limit"]=p.transitionLimit.load();
         out["simulations"]=p.simulations.load(); out["rounds"]=p.rounds.load();
         out["turn"]=p.turn.load()+1; out["best_hp"]=p.bestHp.load(); out["done"]=p.done.load()!=0;
         return out;
