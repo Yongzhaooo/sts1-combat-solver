@@ -983,6 +983,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             request.addProperty("directory", desktopDirectory().toString());
             if (AbstractDungeon.player != null) request.addProperty("seed", Long.toString(Settings.seed));
             request.add("metadata", DecisionContext.metadata());
+            request.add("recent_battles", TestRecorder.recentBattles());
             writer.write(gson.toJson(request)); writer.newLine(); writer.flush();
             debugMessageError = false;
             debugMessage = I18n.t("正在导出记录…");

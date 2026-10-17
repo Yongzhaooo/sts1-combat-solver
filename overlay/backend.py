@@ -28,6 +28,8 @@ for s in (sys.stdin, sys.stdout, sys.stderr):
 from recovery import health, future_recovery, incense_targets
 from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature
 from auto_policy import recommend
+from solver_search import DEEP_BUDGET, boss_fast_plan, finalize_plan, search_plan
+from runtime_files import OVERLAY_FILES
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT / 'candidates/sts-ironclad-agent'
@@ -38,7 +40,6 @@ SUPPORTED_CLASSES = {'IRONCLAD': '战士'}
 COVERAGE_MANIFEST = Path(__file__).with_name('coverage_manifest.json')
 # Bottle sets are compared only when no single bottle wins within this effective loss.
 MULTI_POTION_LOSS = 6
-DEEP_BUDGET = 128000
 # Safety net: if cardRandomRng still drifts after card generation, keep executing the planned
 # route (later random cards are re-checked) instead of letting LiveSearch silently drop it.
 FRAME_RNG = ('/rng/card_random',)
@@ -46,17 +47,6 @@ FRAME_RNG = ('/rng/card_random',)
 
 def heart_fight(game):
     return any(m['id'] == 'CorruptHeart' for m in game['combat_state']['monsters'])
-
-
-def boss_fast_plan(game, plan, slots):
-    return (game.get('solver_auto_context', {}).get('boss_fast_finish') is True
-            and not slots and plan['outcome'] == 1 and plan['hp'] > 0
-            and plan['turns'] <= 20
-            and not plan.get('used_tail') and not plan.get('used_fairy')
-            and plan.get('relics_held') is True
-            and not plan.get('potion_uses')
-            and not any((int(bits) & 0xffffffff) >> 29 == 1 for bits in plan['actions'])
-            and 2 * max(0, game['current_hp'] - plan['hp']) <= game['max_hp'])
 
 
 def toolbox_selection(game):
@@ -191,40 +181,13 @@ class Advisor:
         if hasattr(self, 'on_phase'):
             self.on_phase(name)
 
+    # Keep the existing consumer API while sharing the implementation.
+    finalize_plan = staticmethod(finalize_plan)
+
     def search_plan(self, root, budget, slots, credit, index, kill_thieves, generated, initial_plan=None):
-        fast_boss = not slots and self.root_game.get('solver_auto_context', {}).get('boss_fast_finish') is True
-        if fast_boss:
-            generated = False
-        initial_budget = 2000 if fast_boss else budget
-        args = (root, initial_budget, slots, credit, index, kill_thieves, generated)
-        best = dict(initial_plan) if initial_plan is not None else dict(
-            self.native_search.plan(*args, True) if fast_boss else self.native_search.plan(*args))
-        if boss_fast_plan(self.root_game, best, slots):
-            best['boss_fast_finish'] = True
-            return best
-        if initial_budget != budget and not self.interrupt.is_set():
-            candidate = dict(self.native_search.plan(root, budget, slots, credit, index, kill_thieves, generated, fast_boss))
-            if candidate['value'] > best['value']:
-                best = candidate
-            if boss_fast_plan(self.root_game, best, slots):
-                best['boss_fast_finish'] = True
-                return best
-        # Standard search gets one bounded refinement when its route still loses HP.
-        if budget == 8000 and not self.interrupt.is_set() and (
-                best['outcome'] != int(self.search.sts.Outcome.PLAYER_VICTORY)
-                or health(best, self.root_game, True)['loss'] > 0
-                or best.get('used_tail') or best.get('used_fairy')):
-            try:
-                refined = dict(self.native_search.plan(root, DEEP_BUDGET, slots, credit, index, kill_thieves, generated, fast_boss))
-            except RuntimeError:
-                if not self.interrupt.is_set():
-                    raise
-                return best
-            if refined['value'] > best['value']:
-                best = refined
-        if boss_fast_plan(self.root_game, best, slots):
-            best['boss_fast_finish'] = True
-        return best
+        return search_plan(self.native_search, root, budget, slots, credit, index,
+                           kill_thieves, generated, game=self.root_game,
+                           interrupt=self.interrupt, initial_plan=initial_plan)
 
     def solve(self, view, budget):
         self.phase('导入战斗状态')
@@ -282,6 +245,7 @@ class Advisor:
                         list(names), 0, 0, False, True))
                     if refined['value'] > self.plan['value']:
                         self.plan = refined
+                self.plan = self.finalize_plan(self.root, self.plan)
                 replay = self.root.clone()
                 for bits in self.plan['actions']:
                     self.native_search.execute(replay, bits & 0xffffffff)
@@ -846,7 +810,7 @@ def worker(connection, interrupt):
 def worker_version():
     """Detect a replaced build without hashing it on every frame or losing warm workers."""
     here = Path(__file__).resolve().parent
-    paths = [Path(__file__).resolve(), here / 'recovery.py', here / 'diagnostics.py', here / 'auto_policy.py']
+    paths = [here / name for name in OVERLAY_FILES]
     paths.extend(here / 'build/native' / ('overlay_search'+suffix)
                  for suffix in importlib.machinery.EXTENSION_SUFFIXES
                  if (here / 'build/native' / ('overlay_search'+suffix)).exists())
@@ -976,7 +940,8 @@ def serve(runs_dir=None):
                     try:
                         reports.flush()
                         seed = request.get('seed') or reports.runs_seed()
-                        target = export_run(runs_dir, seed, request['directory'], request.get('metadata'))
+                        target = export_run(runs_dir, seed, request['directory'], request.get('metadata'),
+                                            request.get('recent_battles'))
                         answer = {'status': 'debug_run_export', 'file': target.name, 'directory': str(target.parent)}
                     except Exception as failure:
                         answer = {'status': 'debug_error', 'message': str(failure)}

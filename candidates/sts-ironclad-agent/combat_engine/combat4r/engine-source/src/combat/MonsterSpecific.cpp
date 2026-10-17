@@ -693,12 +693,13 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
             bc.aiRng.random(0, 2); // for in game quote
             // buff all monsters
             // not going to use action queue here, doesn't seem necessary
-            for (int i = 0; i < 3; ++i) {
+            for (int i = 0; i < bc.monsters.monsterCount; ++i) {
                 auto &minion = bc.monsters.arr[i];
-                if (!minion.isDying()) {
-                    minion.buff<MS::STRENGTH>(strGain);
-                    minion.addBlock(asc3 ? 10 : 6);
+                if (minion.id == MonsterId::GREMLIN_LEADER || minion.id == MonsterId::INVALID || minion.isDying()) {
+                    continue;
                 }
+                minion.buff<MS::STRENGTH>(strGain);
+                minion.addBlock(asc3 ? 10 : 6);
             }
             buff<MS::STRENGTH>(strGain);
             bc.addToBot( Actions::RollMove(idx) );
@@ -2382,7 +2383,10 @@ MMID Monster::getMoveForRoll(BattleContext &bc, int &monsterData, const int roll
                     }
 
                 } else if (lastMove(MMID::GREMLIN_LEADER_STAB)) {
-                    const auto roll2 = bc.aiRng.random(0, 80);
+                    auto roll2 = bc.aiRng.random(0, 80);
+                    while (roll2 == 80) {
+                        roll2 = bc.aiRng.random(0, 80);
+                    }
                     if (roll2 < 50) {
                         return (MMID::GREMLIN_LEADER_RALLY);
                     } else {
@@ -3589,11 +3593,12 @@ void Monster::reptomancerSummon(BattleContext &bc, int daggerCount) {
 
 int Monster::getAliveGremlinCount(const BattleContext &bc) {
     int count = 0;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < bc.monsters.monsterCount; ++i) {
         const auto &m = bc.monsters.arr[i];
-        if (!m.isDying()) {
-            ++count;
+        if (m.id == MonsterId::GREMLIN_LEADER || m.id == MonsterId::INVALID || m.isDying()) {
+            continue;
         }
+        ++count;
     }
     return count;
 }

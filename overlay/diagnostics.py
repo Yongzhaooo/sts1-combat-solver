@@ -247,21 +247,28 @@ class RunLog:
                     pass
 
 
-def export_run(directory, seed, target_dir, metadata=None):
+def export_run(directory, seed, target_dir, metadata=None, recent_battles=None):
     """Write the seed's whole record as ONE json file for the user to send."""
     path = Path(directory) / (safe_name(seed, 64) + '.jsonl')
-    if not path.exists():
+    if not path.exists() and not recent_battles:
         raise FileNotFoundError('还没有这个种子的记录')
     events = []
-    with path.open('r', encoding='utf-8') as stream:
-        for line in stream:
-            try:
-                events.append(json.loads(line))
-            except ValueError:
-                pass  # A torn last line after a crash must not block the export.
+    if path.exists():
+        with path.open('r', encoding='utf-8') as stream:
+            for line in stream:
+                try:
+                    events.append(json.loads(line))
+                except ValueError:
+                    pass  # A torn last line after a crash must not block the export.
     fault = next((e for e in reversed(events) if e.get('k') == 'fault'), None)
     signature = safe_name(fault.get('sig', 'error')) if fault else 'run'
-    floor = max([e['f'] for e in events if isinstance(e.get('f'), int)] or [0])
+    floors = [e['f'] for e in events if isinstance(e.get('f'), int)]
+    if recent_battles:
+        battles = list(recent_battles.get('completed', []))
+        if recent_battles.get('current'):
+            battles.append(recent_battles['current'])
+        floors.extend(b['start']['floor'] for b in battles if isinstance(b.get('start', {}).get('floor'), int))
+    floor = max(floors or [0])
     meta = metadata or {}
     own = next((m.get('version') for m in meta.get('mods', []) if 'solver' in str(m.get('id', '')).lower()), None)
     version = safe_name(meta.get('mod_version') or own or 'x', 12)
@@ -269,6 +276,8 @@ def export_run(directory, seed, target_dir, metadata=None):
                                            time.strftime('%m%d-%H%M'))
     document = {'format': 'sts1-run-v1', 'purpose': 'bug diagnosis; no training permission implied',
                 'seed': str(seed), 'metadata': redact(meta), 'events': redact(events)}
+    if recent_battles is not None:
+        document['recent_battles'] = redact(recent_battles)
     target = Path(target_dir)
     target.mkdir(parents=True, exist_ok=True)
     out = target / name

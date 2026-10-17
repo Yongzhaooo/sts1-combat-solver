@@ -1,11 +1,14 @@
 """Recorded Armaments picker plus an explicitly reconstructed pre-play prefix."""
 from collections import deque
+import argparse
 import copy
 import json
 from pathlib import Path
 import sys
 
-root = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser()
+parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
+root = parser.parse_args().root
 sys.path.insert(0, str(root / 'overlay'))
 from backend import Advisor, view_from_state
 from sim_patch.parity.adapter import ActionMapper, CoverageGap, IdentityDifference
@@ -100,3 +103,14 @@ except IdentityDifference:
 else:
     raise AssertionError('normal-hand identity mismatch was suppressed')
 print('PASS: recorded Armaments filtered picker, stable duplicate UUIDs, selection transport and strict rejection')
+
+# A full, unfiltered hand can bind Stasis's new Java object by exact pile order.
+returned = copy.deepcopy(after)
+returned['game']['screen_type'] = 'HAND_SELECT'
+returned['game']['screen_state'] = dict(hand=returned['game']['combat_state']['hand'], for_upgrade=False)
+card = returned['game']['combat_state']['hand'][0]
+previous = mapper.uuids[card['uuid']]
+card['uuid'] = 'returned-stasis-instance'
+mapper.refresh(battle, returned)
+assert mapper.uuids[card['uuid']] == previous
+print('PASS: unfiltered hand picker binds a returned instance without reassigning known cards')

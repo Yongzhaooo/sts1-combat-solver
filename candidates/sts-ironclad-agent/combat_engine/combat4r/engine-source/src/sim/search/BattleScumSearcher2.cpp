@@ -240,7 +240,8 @@ void search::BattleScumSearcher2::updateFromEvaluation(const std::vector<Node *>
 bool search::BattleScumSearcher2::isTerminalState(const BattleContext &bc) const { // maybe can optimize by making this evaluate directly if score cannot possibly be higher than best
     // A random rollout can exhaust all attacks and enter a real stalemate.
     // End that search branch before the executor's safety limit is reached.
-    return bc.outcome != Outcome::UNDECIDED || bc.turn >= 500;
+    return bc.outcome != Outcome::UNDECIDED || bc.turn >= 500
+        || bc.loopCount >= BattleContext::ACTION_EXECUTION_LIMIT;
 }
 
 double search::BattleScumSearcher2::evaluateEdge(const search::BattleScumSearcher2::Node &parent, int edgeIdx) {
@@ -583,9 +584,12 @@ void enumerateCardSelectActionsImpl(NodeLike &node,
 } // namespace sts::search
 
 void search::BattleScumSearcher2::enumerateActionsForNode(Node &node, const BattleContext &bc) {
-    expansionActions.edges.clear();
-    enumerateActionsImpl(expansionActions, bc, preservePotions);
+    enumerateActionsForNode(expansionActions, bc);
     appendActions(node, expansionActions.edges);
+}
+void search::BattleScumSearcher2::enumerateActionsForNode(RolloutNode &node, const BattleContext &bc) {
+    node.edges.clear();
+    enumerateActionsImpl(node, bc, preservePotions);
 }
 void search::BattleScumSearcher2::enumerateCardActions(Node &node, const BattleContext &bc) {
     expansionActions.edges.clear();

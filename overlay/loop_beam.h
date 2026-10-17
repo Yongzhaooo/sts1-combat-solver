@@ -2,7 +2,7 @@
 // Generic small-loop rescue search. Kernel (three scoring lanes, diversity buckets, beam over decision points) is taken from
 // sts1-combat-solver reports/experiments/time-eater-loop-20261016/generic_search.h (Codex). Production changes only:
 // budget in state transitions (deterministic, no wall clock), cooperative cancellation, best line chosen by the planner's own
-// end-state value, no witness / human actions. Potions are never used by the beam.
+// end-state value, no witness / human actions. Potion permissions come from the overlay's shared enumerator.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -16,14 +16,109 @@
 #include <vector>
 
 namespace loop_beam {
-struct Path { std::shared_ptr<const Path> parent; unsigned bits; };
+struct Path {
+    std::shared_ptr<const Path> parent;
+    unsigned bits;
+    int card = -1, turn = -1;
+    CardId id = CardId::INVALID;
+};
 struct Node {
     std::shared_ptr<BattleContext> state;
     std::shared_ptr<const Path> path;
     double powers = 0;
+    std::array<double, 3> scores{};
+    std::string key;
 };
-struct Stats { long long transitions = 0; int layers = 0; int passes = 0; };
+struct Stats {
+    long long transitions = 0, macroActions = 0;
+    int layers = 0, passes = 0, macroAttempts = 0, macroCycles = 0;
+};
 thread_local Stats stats;
+
+inline std::shared_ptr<const Path> append(const Node &node, search::Action action) {
+    auto path = std::make_shared<Path>(Path{node.path, action.bits});
+    if (action.getActionType() == search::ActionType::CARD) {
+        const auto &card = node.state->cards.hand[action.getSourceIdx()];
+        path->card = card.uniqueId;
+        path->id = card.id;
+        path->turn = node.state->turn;
+    }
+    return path;
+}
+
+inline bool cyclePotential(const BattleContext &b) {
+    // shortcut: a cheap Ironclad/colorless draw gate; add other characters with their simulator coverage.
+    auto draws = [](const CardInstance &c) {
+        switch (c.id) {
+        case CardId::POMMEL_STRIKE: case CardId::DROPKICK: case CardId::SHRUG_IT_OFF:
+        case CardId::FINESSE: case CardId::FLASH_OF_STEEL: case CardId::DARK_EMBRACE:
+            return true;
+        default: return false;
+        }
+    };
+    if (b.player.hasStatus<PS::DARK_EMBRACE>()) return true;
+    for (int i = 0; i < b.cards.cardsInHand; ++i) if (draws(b.cards.hand[i])) return true;
+    for (auto &c : b.cards.drawPile) if (draws(c)) return true;
+    for (auto &c : b.cards.discardPile) if (draws(c)) return true;
+    return false;
+}
+
+inline std::vector<const Path *> cycle(const Node &node) {
+    std::vector<const Path *> motif;
+    const auto *last = node.path.get();
+    if (!last || last->card < 0 || last->turn != node.state->turn) return motif;
+    for (auto p = last; p && motif.size() < 12; p = p->parent.get()) {
+        if (p->card < 0 || p->turn != last->turn) break;
+        if (p != last && p->card == last->card && p->id == last->id
+                && search::Action(p->bits).getTargetIdx() == search::Action(last->bits).getTargetIdx()) {
+            std::reverse(motif.begin(), motif.end());
+            return motif;
+        }
+        motif.push_back(p);
+    }
+    return {};
+}
+
+template <class Cancel, class Exit>
+Node repeatCycle(const Node &start, const std::vector<const Path *> &motif, long long cap, Cancel cancelled, Exit checkpoint) {
+    Node out{std::make_shared<BattleContext>(*start.state), start.path, start.powers};
+    ++stats.macroAttempts;
+    int played = 0;
+    while (played < 256) {
+        const int hp = out.state->player.curHp, energy = out.state->player.energy;
+        const auto beforeShuffle = out.state->shuffleRng.counter;
+        for (auto p : motif) {
+            auto &b = *out.state;
+            if (stats.transitions >= cap || cancelled() || played >= 256
+                    || b.loopCount >= BattleContext::ACTION_EXECUTION_LIMIT
+                    || b.outcome != Outcome::UNDECIDED || b.inputState != InputState::PLAYER_NORMAL
+                    || b.turn != start.state->turn || b.player.curHp < hp
+                    || b.player.hasStatus<PS::NO_DRAW>()) return out;
+            int source = -1;
+            for (int i = 0; i < b.cards.cardsInHand; ++i)
+                if (b.cards.hand[i].uniqueId == p->card && b.cards.hand[i].id == p->id) {
+                    if (source >= 0) return out; // Ambiguous identities must go through normal search.
+                    source = i;
+                }
+            if (source < 0) return out;
+            search::Action action(search::ActionType::CARD, source, search::Action(p->bits).getTargetIdx());
+            if (!action.isValidAction(b)) return out;
+            auto path = append(out, action);
+            action.execute(b);
+            out.path = std::move(path);
+            ++stats.transitions; ++stats.macroActions; ++played;
+            for (int i = 0; i < b.monsters.monsterCount; ++i)
+                if (b.monsters.arr[i].miscInfo != start.state->monsters.arr[i].miscInfo) return out;
+        }
+        ++stats.macroCycles;
+        // Replaying one circuit is evidence of a candidate, not proof of an infinite loop.
+        if (out.state->player.curHp < hp || out.state->shuffleRng.counter == beforeShuffle) return out;
+        // Finite cycles may spend energy; preserve each exit before trying another legal circuit.
+        if (out.state->player.energy < energy)
+            checkpoint(Node{std::make_shared<BattleContext>(*out.state), out.path, out.powers});
+    }
+    return out;
+}
 
 inline std::vector<int> actions(std::shared_ptr<const Path> path) {
     std::vector<int> out;
@@ -58,28 +153,44 @@ inline double score(const Node &n, int lane) {
 }
 
 inline std::string bucket(const BattleContext &b) {
-    std::ostringstream s;
-    s << b.turn << ':' << b.player.curHp << ':' << b.player.block << ':' << b.player.energy
-      << ':' << b.player.statusBits0 << ':' << b.player.statusBits1 << ':' << b.player.strength
-      << ':' << int(b.player.sundialCounter) << ':' << b.player.cardsPlayedThisTurn;
-    for (auto p : b.player.powerOrder) s << ':' << int(p.status) << '=' << (b.player.statusMap.contains(p.status) ? b.player.statusMap.at(p.status) : 0);
+    std::string s;
+    s.reserve(128 + 20 * (b.cards.cardsInHand + b.cards.drawPile.size() + b.cards.discardPile.size()));
+    const auto scalar = [&](auto value) { s.append(reinterpret_cast<const char *>(&value), sizeof(value)); };
+    scalar(b.turn); scalar(b.player.curHp); scalar(b.player.block); scalar(b.player.energy);
+    scalar(b.player.statusBits0); scalar(b.player.statusBits1); scalar(b.player.strength);
+    scalar(int(b.player.sundialCounter)); scalar(b.player.cardsPlayedThisTurn);
+    scalar(b.player.powerOrder.size());
+    for (auto p : b.player.powerOrder) {
+        scalar(int(p.status));
+        scalar(b.player.statusMap.contains(p.status) ? b.player.statusMap.at(p.status) : 0);
+    }
+    scalar(b.monsters.monsterCount);
     for (int i = 0; i < b.monsters.monsterCount; ++i) {
         const auto &m = b.monsters.arr[i];
-        s << '/' << m.curHp << ':' << m.block << ':' << int(m.moveHistory[0])
-          << ':' << m.uniquePower0 << ':' << m.uniquePower1 << ':' << m.strength << ':' << m.vulnerable;
+        scalar(m.curHp); scalar(m.block); scalar(int(m.moveHistory[0]));
+        scalar(m.uniquePower0); scalar(m.uniquePower1); scalar(m.strength); scalar(m.vulnerable);
     }
-    auto card = [](const CardInstance &c) {
-        return std::to_string(int(c.getId())) + "," + std::to_string(c.isUpgraded()) + "," +
-            std::to_string(c.cost) + "," + std::to_string(c.costForTurn) + "," + std::to_string(c.specialData);
+    using CardKey = std::array<int,5>;
+    const auto card = [](const CardInstance &c) -> CardKey {
+        return {int(c.getId()), int(c.isUpgraded()), int(c.cost), int(c.costForTurn), int(c.specialData)};
     };
-    std::vector<std::string> hand, discard;
-    for (int i = 0; i < b.cards.cardsInHand; ++i) hand.push_back(card(b.cards.hand[i]));
-    for (auto &c : b.cards.discardPile) discard.push_back(card(c));
-    std::sort(hand.begin(), hand.end()); std::sort(discard.begin(), discard.end());
-    s << 'H'; for (auto &c : hand) s << c << ';';
-    s << 'D'; for (auto &c : b.cards.drawPile) s << card(c) << ';';
-    s << 'C'; for (auto &c : discard) s << c << ';';
-    return s.str();
+    const auto write = [&](const CardKey &c) {
+        s.append(reinterpret_cast<const char *>(c.data()), 5 * sizeof(int));
+    };
+    std::array<CardKey,10> hand;
+    for (int i = 0; i < b.cards.cardsInHand; ++i) hand[i] = card(b.cards.hand[i]);
+    std::sort(hand.begin(), hand.begin() + b.cards.cardsInHand);
+    scalar(b.cards.cardsInHand);
+    for (int i = 0; i < b.cards.cardsInHand; ++i) write(hand[i]);
+    scalar(b.cards.drawPile.size());
+    for (const auto &c : b.cards.drawPile) write(card(c));
+    std::vector<CardKey> discard;
+    discard.reserve(b.cards.discardPile.size());
+    for (const auto &c : b.cards.discardPile) discard.push_back(card(c));
+    std::sort(discard.begin(), discard.end());
+    scalar(discard.size());
+    for (const auto &c : discard) write(c);
+    return s;
 }
 
 struct Best {
@@ -89,18 +200,21 @@ struct Best {
     std::vector<int> actions;
 };
 
+inline const std::string &bucketKey(Node &n) {
+    if (n.key.empty()) n.key = bucket(*n.state);
+    return n.key;
+}
+
 // One beam pass of the given width; stops at `cap` total transitions (stats.transitions) or when cancelled().
 template <class Value, class Cancel>
-void pass(const BattleContext &root, int width, long long cap, Value value, Cancel cancelled, Best &best) {
+void pass(const BattleContext &root, int width, long long cap, Value value, Cancel cancelled, Best &best, bool macros = false) {
+    if (root.loopCount >= BattleContext::ACTION_EXECUTION_LIMIT) return;
     search::BattleScumSearcher2 enumerator(root);
     enumerator.preservePotions = true;
-    auto legal = [&](const BattleContext &b) {
-        search::BattleScumSearcher2::Node n;
-        enumerator.enumerateActionsForNode(n, b);
-        std::vector<search::Action> out;
-        for (auto &e : n.edges) out.push_back(e.action);
-        enumerator.edgeArena = {};
-        return out;
+    search::RolloutNode legalActions;
+    auto legal = [&](const BattleContext &b) -> const std::vector<search::RolloutNode::Edge> & {
+        enumerator.enumerateActionsForNode(legalActions, b);
+        return legalActions.edges;
     };
     auto stop = [&]() { return stats.transitions >= cap || cancelled(); };
     std::vector<Node> frontier{{std::make_shared<BattleContext>(root), nullptr, 0}};
@@ -112,31 +226,56 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
         // keeping those, in arrival order, leaves the final selection unchanged.
         const std::size_t compactAt = 12 * std::size_t(width) + 64;
         auto compact = [&]() {
-            std::vector<std::array<double, 3>> sc;
-            std::vector<std::string> keys;
-            sc.reserve(candidates.size()); keys.reserve(candidates.size());
-            for (auto &n : candidates) { sc.push_back({score(n, 0), score(n, 1), score(n, 2)}); keys.push_back(bucket(*n.state)); }
             std::vector<std::size_t> order(candidates.size());
             std::iota(order.begin(), order.end(), 0);
             std::vector<char> keep(candidates.size(), 0);
             for (int lane = 0; lane < 3; ++lane) {
-                std::stable_sort(order.begin(), order.end(), [&](auto x, auto y) { return sc[x][lane] > sc[y][lane]; });
+                std::stable_sort(order.begin(), order.end(), [&](auto x, auto y) { return candidates[x].scores[lane] > candidates[y].scores[lane]; });
                 std::unordered_set<std::string> seen;
                 for (std::size_t k = 0; k < order.size() && seen.size() < std::size_t(lane + 1) * width; ++k)
-                    if (seen.insert(keys[order[k]]).second) keep[order[k]] = 1;
+                    if (seen.insert(bucketKey(candidates[order[k]])).second) keep[order[k]] = 1;
             }
             std::vector<Node> kept;
             for (std::size_t i = 0; i < candidates.size(); ++i) if (keep[i]) kept.push_back(std::move(candidates[i]));
             candidates.swap(kept);
         };
         for (auto &parent : frontier) {
+            if (macros && !stop() && !parent.state->player.hasStatus<PS::NO_DRAW>()) {
+                auto motif = cycle(parent);
+                if (!motif.empty()) {
+                    auto checkpoint = [&](Node child) {
+                        auto &b = *child.state;
+                        if (b.outcome == Outcome::UNDECIDED && b.player.curHp > 0
+                                && b.turn < 100 && b.inputState == InputState::PLAYER_NORMAL
+                                && b.loopCount < BattleContext::ACTION_EXECUTION_LIMIT) {
+                            child.scores = {score(child, 0), score(child, 1), score(child, 2)};
+                            candidates.push_back(std::move(child));
+                            if (candidates.size() > compactAt) compact();
+                        }
+                    };
+                    auto child = repeatCycle(parent, motif, cap, cancelled, checkpoint);
+                    auto &b = *child.state;
+                    if (b.outcome == Outcome::PLAYER_VICTORY && b.player.curHp > 0) {
+                        double v = value(b);
+                        if (!best.found || v > best.value) { best = {true, v, child.state, actions(child.path)}; }
+                        if (best.state->player.curHp >= root.player.curHp) return;
+                    } else if (child.path != parent.path && b.outcome == Outcome::UNDECIDED
+                            && b.player.curHp > 0 && b.turn < 100 && b.inputState == InputState::PLAYER_NORMAL
+                            && b.loopCount < BattleContext::ACTION_EXECUTION_LIMIT) {
+                        child.scores = {score(child, 0), score(child, 1), score(child, 2)};
+                        candidates.push_back(std::move(child));
+                        if (candidates.size() > compactAt) compact();
+                    }
+                }
+            }
             std::vector<Node> pending{parent};
             while (!pending.empty() && !stop()) {
                 auto current = std::move(pending.back()); pending.pop_back();
-                for (auto a : legal(*current.state)) {
+                for (auto edge : legal(*current.state)) {
                     if (stop()) break;
+                    const auto a = edge.action;
                     Node child{std::make_shared<BattleContext>(*current.state),
-                               std::make_shared<Path>(Path{current.path, a.bits}), current.powers};
+                               append(current, a), current.powers};
                     if (a.getActionType() == search::ActionType::CARD &&
                         current.state->cards.hand[a.getSourceIdx()].getType() == CardType::POWER) child.powers += 1;
                     a.execute(*child.state); ++stats.transitions;
@@ -144,9 +283,11 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                     if (b.outcome == Outcome::PLAYER_VICTORY && b.player.curHp > 0) {
                         double v = value(b);
                         if (!best.found || v > best.value) { best.found = true; best.value = v; best.state = child.state; best.actions = actions(child.path); }
-                    } else if (b.outcome == Outcome::UNDECIDED && b.player.curHp > 0 && b.turn < 100) {
+                    } else if (b.outcome == Outcome::UNDECIDED && b.player.curHp > 0 && b.turn < 100
+                            && b.loopCount < BattleContext::ACTION_EXECUTION_LIMIT) {
                         // turn < 100: stalling lines (end turn behind block forever) otherwise reach the engine's 500-turn limit, which throws
                         if (b.inputState == InputState::PLAYER_NORMAL) {
+                            child.scores = {score(child, 0), score(child, 1), score(child, 2)};
                             candidates.push_back(std::move(child));
                             if (candidates.size() > compactAt) compact();
                         }
@@ -157,17 +298,14 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
         }
         std::vector<std::size_t> order(candidates.size());
         std::iota(order.begin(), order.end(), 0);
-        std::vector<std::array<double, 3>> scores;
-        scores.reserve(candidates.size());
-        for (auto &n : candidates) scores.push_back({score(n, 0), score(n, 1), score(n, 2)});
         std::unordered_set<std::string> buckets;
         std::vector<Node> next;
         for (int lane = 0; lane < 3; ++lane) {
-            std::stable_sort(order.begin(), order.end(), [&](auto x, auto y) { return scores[x][lane] > scores[y][lane]; });
+            std::stable_sort(order.begin(), order.end(), [&](auto x, auto y) { return candidates[x].scores[lane] > candidates[y].scores[lane]; });
             int kept = 0;
             for (std::size_t k = 0; k < order.size() && kept < width; ++k) {
                 auto &n = candidates[order[k]];
-                if (buckets.insert(bucket(*n.state)).second) { next.push_back(n); ++kept; }
+                if (buckets.insert(bucketKey(n)).second) { next.push_back(n); ++kept; }
             }
         }
         frontier = std::move(next);
@@ -178,12 +316,33 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
 // Widths 32, 128, 512, 2048 in turn (Codex v2 schedule plus one wider pass) until the transition cap is spent; returns the best victory
 // found. Stops early once a pass has found a win that loses no combat HP (no later pass can do better on HP).
 template <class Value, class Cancel>
-Best portfolio(const BattleContext &root, long long cap, Value value, Cancel cancelled) {
-    stats = {};
-    Best best;
+Best portfolio(const BattleContext &root, long long cap, Value value, Cancel cancelled, Best best = {}, Stats prior = {}, const BattleContext *mctsEnd = nullptr, int growthTarget = -1) {
+    stats = prior;
+    if (best.found && best.state->player.curHp >= root.player.curHp) return best;
+    const bool macros = cyclePotential(root);
+    auto available = [&]() -> const BattleContext * {
+        if (best.found && (!mctsEnd || mctsEnd->outcome != Outcome::PLAYER_VICTORY || best.value > value(*mctsEnd))) return best.state.get();
+        return mctsEnd;
+    };
+    bool plateau128 = false, plateau512 = false;
     for (int width : {32, 128, 512, 2048}) {
         if (stats.transitions >= cap || cancelled()) break;
-        pass(root, width, cap, value, cancelled, best);
+        const auto *before = available();
+        const double beforeValue = before ? value(*before) : -1e300;
+        if (width == 2048 && mctsEnd) {
+            const bool skip = growth_gate::stop(growthTarget, plateau128, plateau512, before);
+            if (const char *log = std::getenv("LOOP_BEAM_LOG")) if (FILE *f=std::fopen(log,"a")) {
+                std::fprintf(f,"{\"kind\":\"growth_gate\",\"target\":%d,\"hp\":%d,\"max_hp\":%d,\"value\":%.17g,\"plateau128\":%d,\"plateau512\":%d,\"skip\":%d}\n",
+                    growthTarget,before?before->player.curHp:-1,before?before->player.maxHp:-1,beforeValue,int(plateau128),int(plateau512),int(skip));
+                std::fclose(f);
+            }
+            if (skip) break;
+        }
+        pass(root, width, cap, value, cancelled, best, macros);
+        const auto *after = available();
+        const bool plateau = after && value(*after) <= beforeValue;
+        if (width == 128) plateau128 = plateau;
+        if (width == 512) plateau512 = plateau;
         ++stats.passes;
         if (best.found && best.state->player.curHp >= root.player.curHp) break;
     }

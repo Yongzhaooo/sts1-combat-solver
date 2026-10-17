@@ -1,3 +1,4 @@
+#include <tuple>
 // Search user-authorized bottles (one or a set), including timing, without changing inventory.
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -174,8 +175,63 @@ double overlayRecoveryBonus(const BattleContext &bc) {
         + carriedRelicValue(bc) - deckCurseHp(bc)
         + std::max(0,goldWealth(bc)-initialGoldWealth)/GOLD_PER_HP);
 }
+static bool overlaySameVictory(const BattleContext &a, const BattleContext &b) {
+    if (a.outcome != Outcome::PLAYER_VICTORY || b.outcome != Outcome::PLAYER_VICTORY
+            || a.player.curHp <= 0 || b.player.curHp <= 0) return false;
+    const auto ah = a.victoryHpRelics.project(a.player.curHp,a.player.maxHp);
+    const auto bh = b.victoryHpRelics.project(b.player.curHp,b.player.maxHp);
+    auto inventory = [](const BattleContext &s) {
+        const auto &p=s.player;
+        return std::make_tuple(p.curHp,p.maxHp,p.gold,p.relicBits0,p.relicBits1,
+            p.happyFlowerCounter,p.incenseBurnerCounter,p.inkBottleCounter,p.inserterCounter,
+            p.nunchakuCounter,p.penNibCounter,p.sundialCounter,
+            goldWealth(s),escapedThiefGold(s),escapedThieves(s),deckCurseHp(s));
+    };
+    if (inventory(a)!=inventory(b) || ah.curHp!=bh.curHp || ah.maxHp!=bh.maxHp
+            || a.potionCapacity!=b.potionCapacity || a.potionBarkFlip!=b.potionBarkFlip) return false;
+    for (int i=0;i<a.potionCapacity;++i) if (a.potions[i]!=b.potions[i]) return false;
+    auto growth = [](const BattleContext &s, bool &supported) {
+        std::vector<std::pair<int,int>> out;
+        auto card = [&](const CardInstance &c) {
+            // shortcut: these permanent rewards are not modeled by the native exit path.
+            if (c.id==CardId::LESSON_LEARNED || c.id==CardId::GENETIC_ALGORITHM) supported=false;
+            if (c.id==CardId::RITUAL_DAGGER) out.emplace_back(c.uniqueId,c.specialData);
+        };
+        for (int i=0;i<s.cards.cardsInHand;++i) card(s.cards.hand[i]);
+        for (auto &c:s.cards.drawPile) card(c);
+        for (auto &c:s.cards.discardPile) card(c);
+        for (auto &c:s.cards.exhaustPile) card(c);
+        for (auto &c:s.cards.stasisCards) card(c);
+        std::sort(out.begin(),out.end());
+        return out;
+    };
+    bool supported=true;
+    const auto ag=growth(a,supported), bg=growth(b,supported);
+    return supported && ag==bg;
+}
+
+#include "growth_gate.h"
 #include "loop_beam.h"
+static bool macroFinish(const BattleContext &root, const BattleContext &end) {
+    if (end.outcome != Outcome::PLAYER_VICTORY || end.player.curHp <= 0) return false;
+    if (heartFight) return true;
+    auto hp = end.victoryHpRelics.project(end.player.curHp, end.player.maxHp);
+    if (hp.curHp < hp.maxHp || end.player.maxHp < root.player.maxHp || !relicsHeld(end)
+            || escapedThieves(end) || deckCurseHp(end) || goldWealth(end) < goldWealth(root)
+            || fairyCount(end) < fairyCount(root)
+            || (initialTail && !end.player.hasRelic<RelicId::LIZARD_TAIL>())) return false;
+    for (int i = 0; i < root.potionCapacity; ++i) if (root.potions[i] != end.potions[i]) return false;
+    // Full HP is not an upper bound on permanent card rewards.
+    auto reward = [](const CardInstance &c) { return c.id == CardId::FEED || c.id == CardId::HAND_OF_GREED
+        || c.id == CardId::RITUAL_DAGGER || c.id == CardId::WISH || c.id == CardId::LESSON_LEARNED; };
+    for (int i = 0; i < root.cards.cardsInHand; ++i) if (reward(root.cards.hand[i])) return false;
+    for (auto &c : root.cards.drawPile) if (reward(c)) return false;
+    for (auto &c : root.cards.discardPile) if (reward(c)) return false;
+    for (auto &c : root.cards.exhaustPile) if (reward(c)) return false;
+    return true;
+}
 PYBIND11_MODULE(overlay_search, m) {
+    m.def("_same_victory", &overlaySameVictory);
     m.def("revival_inventory", [](const BattleContext &bc) {
         return std::make_pair(bc.player.hasRelic<RelicId::LIZARD_TAIL>() ? 1 : 0, fairyCount(bc));
     });
@@ -234,11 +290,28 @@ PYBIND11_MODULE(overlay_search, m) {
         BattleContext predicted(root);
         combat_search::ReuseResult result;
         bool beamRan=false, beamUsed=false;
+        bool macroUsed=false;
         double mctsValue=0;
         {
             // The copy above was taken under the GIL; the search touches no Python objects.
             py::gil_scoped_release release;
-            result=combat_search::playoutReusing(predicted,simulations,4.0,false,false,true,true,true);
+            loop_beam::stats = {};
+            loop_beam::Best quick;
+            const long long beamCap = 160LL * simulations;
+            auto value = [](const BattleContext &b){return search::BattleScumSearcher2::evaluateEndState4r(b,initialMaxHp);};
+            auto cancelled = [](){return stopRequested.load() || searchGeneration!=generation.load();};
+            if (loop_beam::cyclePotential(root)) {
+                beamRan=true;
+                loop_beam::pass(root,8,std::min(beamCap/32,40000LL),value,cancelled,quick,true);
+                ++loop_beam::stats.passes;
+            }
+            if (quick.found && loop_beam::stats.macroActions > 0 && macroFinish(root,*quick.state)) {
+                predicted=*quick.state; result.actions=quick.actions; result.bestHp=predicted.player.curHp;
+                macroUsed=beamUsed=true;
+                fastReady=heartFight;
+            } else {
+                result=combat_search::playoutReusing(predicted,simulations,4.0,false,false,true,true,true);
+            }
             // Small-loop rescue: only when the MCTS line loses or costs a lot of HP (formed simple loops are found faster by MCTS).
             // The beam gets LOOP_BEAM_PER_SIM state transitions per MCTS simulation and wins only on the planner's own end-state value.
             constexpr long long LOOP_BEAM_PER_SIM=160;
@@ -246,11 +319,14 @@ PYBIND11_MODULE(overlay_search, m) {
             const int cost=root.player.curHp-predicted.player.curHp;
             mctsValue=search::BattleScumSearcher2::evaluateEndState4r(predicted,initialMaxHp);
             // Deep (refinement) budgets: any HP loss is worth a beam; standard budgets: only a loss or a costly line.
-            if(!mctsWin || cost>(simulations>=128000 ? 0 : std::max(6,root.player.maxHp*15/100))) {
+            // Heart victory ends the run; further HP or turn improvements have no continuation value.
+            if(!macroUsed && !(heartFight && mctsWin) && (!mctsWin || cost>(simulations>=128000 ? 0 : std::max(6,root.player.maxHp*15/100)))) {
                 beamRan=true;
+                const int growth = simulations == 128000 ? growth_gate::remaining(root,allowedMask,allowGeneratedPotions) : -1;
                 auto best=loop_beam::portfolio(root,LOOP_BEAM_PER_SIM*simulations,
                     [](const BattleContext &b){return search::BattleScumSearcher2::evaluateEndState4r(b,initialMaxHp);},
-                    [](){return stopRequested.load() || searchGeneration!=generation.load();});
+                    [](){return stopRequested.load() || searchGeneration!=generation.load();},std::move(quick),loop_beam::stats,
+                    simulations == 128000 ? &predicted : nullptr, growth < 0 ? -1 : root.player.maxHp+growth);
                 const int mctsHp=predicted.player.curHp;
                 if(best.found && (!mctsWin || best.value>mctsValue)) {
                     predicted=*best.state; result.actions=best.actions; result.bestHp=predicted.player.curHp; beamUsed=true;
@@ -265,6 +341,7 @@ PYBIND11_MODULE(overlay_search, m) {
                 }
             }
         }
+        if(macroUsed){ live.bestHp=predicted.player.curHp; live.turn=predicted.turn; }
         live.done=1;
         // Smoke Bomb still invokes AbstractRoom.endBattle and victory healing.
         auto hp=(predicted.outcome==Outcome::PLAYER_VICTORY || predicted.outcome==Outcome::PLAYER_ESCAPE)
@@ -291,6 +368,8 @@ PYBIND11_MODULE(overlay_search, m) {
         out["loop_beam_used"]=beamUsed;
         out["loop_beam_transitions"]=beamRan ? loop_beam::stats.transitions : 0;
         out["loop_beam_mcts_value"]=mctsValue;
+        out["loop_macro_used"]=macroUsed;
+        out["loop_macro_actions"]=loop_beam::stats.macroActions;
         return out;
     },py::arg("root"),py::arg("simulations"),py::arg("slots"),py::arg("recovery"),py::arg("index"),py::arg("kill_thieves")=false,py::arg("generated_potions")=false,py::arg("boss_fast")=false);
     m.def("cancel", []() { stopRequested=true; ++generation; });

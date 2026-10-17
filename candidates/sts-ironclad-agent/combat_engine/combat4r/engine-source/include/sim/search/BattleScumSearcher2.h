@@ -135,6 +135,7 @@ namespace sts::search {
         void playoutRandom(BattleContext &state, std::vector<Action> &actionStack);
 
         void enumerateActionsForNode(Node &node, const BattleContext &bc);
+        void enumerateActionsForNode(RolloutNode &node, const BattleContext &bc);
         void enumerateCardActions(Node &node, const BattleContext &bc);
         void enumeratePotionActions(Node &node, const BattleContext &bc);
         void enumerateCardSelectActions(Node &node, const BattleContext &bc);
