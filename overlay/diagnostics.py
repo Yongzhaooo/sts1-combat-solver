@@ -247,10 +247,10 @@ class RunLog:
                     pass
 
 
-def export_run(directory, seed, target_dir, metadata=None, recent_battles=None):
+def export_run(directory, seed, target_dir, metadata=None, recent_battles=None, shop_history=None):
     """Write the seed's whole record as ONE json file for the user to send."""
     path = Path(directory) / (safe_name(seed, 64) + '.jsonl')
-    if not path.exists() and not recent_battles:
+    if not path.exists() and not recent_battles and not shop_history:
         raise FileNotFoundError('还没有这个种子的记录')
     events = []
     if path.exists():
@@ -268,6 +268,11 @@ def export_run(directory, seed, target_dir, metadata=None, recent_battles=None):
         if recent_battles.get('current'):
             battles.append(recent_battles['current'])
         floors.extend(b['start']['floor'] for b in battles if isinstance(b.get('start', {}).get('floor'), int))
+    if shop_history:
+        visits = list(shop_history.get('completed', []))
+        if shop_history.get('current'):
+            visits.append(shop_history['current'])
+        floors.extend(v['before']['floor'] for v in visits if isinstance(v.get('before', {}).get('floor'), int))
     floor = max(floors or [0])
     meta = metadata or {}
     own = next((m.get('version') for m in meta.get('mods', []) if 'solver' in str(m.get('id', '')).lower()), None)
@@ -278,6 +283,8 @@ def export_run(directory, seed, target_dir, metadata=None, recent_battles=None):
                 'seed': str(seed), 'metadata': redact(meta), 'events': redact(events)}
     if recent_battles is not None:
         document['recent_battles'] = redact(recent_battles)
+    if shop_history is not None:
+        document['shop_history'] = redact(shop_history)
     target = Path(target_dir)
     target.mkdir(parents=True, exist_ok=True)
     out = target / name

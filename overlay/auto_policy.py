@@ -81,13 +81,15 @@ def smoke_probe_keeps(plan, game):
     threshold = smoke_threshold(game)
     # Raw combat loss excludes future recovery credit and post-combat healing.
     return (plan.get('outcome') == 1 and plan.get('hp', 0) > 0
+            and not plan.get('new_permanent_curse')
             and not plan.get('used_fairy') and not plan.get('used_tail')
             and max(0, game['current_hp'] - plan['hp']) < threshold)
 
 
 def recommend(game, branches):
     profile = assess_deck(game)
-    fallback = next((b for b in branches if b.get('available') and b.get('smoke_stop_loss')), None)
+    fallback = next((b for b in branches if b.get('available') and b.get('smoke_stop_loss')
+                     and not b.get('new_permanent_curse')), None)
     if fallback and game.get('solver_auto_context', {}).get('run_auto') is True:
         return dict(branch=fallback['id'], reason='无药预算内未找到低战损胜线，执行T1烟雾止损候选', assessment=profile)
     context = game.get('solver_auto_context', {})
@@ -105,6 +107,9 @@ def recommend(game, branches):
         return dict(branch=None, reason='未找到可验证的获胜路线，停止自动', assessment=profile)
     if any(m['id'] == 'CorruptHeart' for m in game.get('combat_state', {}).get('monsters', [])):
         return dict(branch=winners[0]['id'], reason='心脏：全部资源可用，找到存活胜线即执行', assessment=profile)
+    clean = [b for b in winners if not b.get('new_permanent_curse')]
+    if clean:
+        winners = clean
     baseline = min((b for b in winners if not b.get('potion_uses')), key=lambda b: b['loss'], default=None)
     strong = {'GhostInAJar', 'DuplicationPotion', 'CultistPotion',
               'Swift Potion', "Gambler's Brew", 'DistilledChaos',

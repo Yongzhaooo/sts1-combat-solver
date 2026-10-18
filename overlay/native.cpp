@@ -6,6 +6,7 @@
 #include <array>
 #include <atomic>
 #include <map>
+#include <cmath>
 namespace py = pybind11;
 using namespace sts;
 namespace {
@@ -80,6 +81,8 @@ bool overlayPotionAllowed(const BattleContext &bc, int slot) {
 constexpr double EXTRA_PER_MAX_HP=2.0;   // on top of the engine's +1 and the healed current HP
 constexpr double ENERGY_HP=4.0, PEN_NIB_HP=4.0, INTANGIBLE_HP=10.0, DRAW_HP=1.5;
 thread_local int initialMaxHp=0;
+thread_local double initialDeckCurseHp=0;
+thread_local bool initialParasiteRisk=false;
 thread_local int initialGoldWealth=0;
 static int fairyCount(const BattleContext &bc) {
     int count=0;
@@ -87,8 +90,10 @@ static int fairyCount(const BattleContext &bc) {
     return count;
 }
 static bool relicsHeld(const BattleContext &bc);
+static bool newPermanentCurse(const BattleContext &bc);
 bool overlayAcceptTerminal(const BattleContext &bc, const std::vector<search::Action> &actions) {
     if(bc.outcome!=Outcome::PLAYER_VICTORY || bc.player.curHp<=0)return false;
+    if(newPermanentCurse(bc))return false;
     if(smokeProbe) {
         if(std::max(0,initialHp-bc.player.curHp)<smokeLossThreshold
                 && fairyCount(bc)>=initialFairies
@@ -154,6 +159,16 @@ static double deckCurseHp(const BattleContext &bc) {
     if(m.id!=MonsterId::WRITHING_MASS || !m.miscInfo)return 0;
     return bc.player.hasRelic<RelicId::OMAMORI>() ? OMAMORI_CHARGE_HP : CURSE_HP;
 }
+static bool newPermanentCurse(const BattleContext &bc) {
+    return initialParasiteRisk && deckCurseHp(bc)==CURSE_HP;
+}
+double overlayRankTerminal(const BattleContext &bc, double value) {
+    if(!initialParasiteRisk)return value;
+    const int tier=bc.outcome==Outcome::PLAYER_VICTORY ? (newPermanentCurse(bc) ? 1 : 2)
+        : bc.outcome==Outcome::PLAYER_ESCAPE ? 2 : 0;
+    const double scale=100.0*std::max(1,initialMaxHp);
+    return tier+0.5*(1.0+value/(scale+std::abs(value)));
+}
 static int escapedThiefGold(const BattleContext &bc) {
     if(bc.player.hasRelic<RelicId::ECTOPLASM>())return 0;
     int stolen=0;
@@ -181,8 +196,14 @@ double overlayRecoveryBonus(const BattleContext &bc) {
     if(bc.outcome!=Outcome::PLAYER_VICTORY)return 0;
     if(requireThiefKill && escapedThieves(bc))return -100000000.0;
     auto hp=bc.victoryHpRelics.project(bc.player.curHp,bc.player.maxHp);
+    const int curseGrowth=deckCurseHp(bc)>initialDeckCurseHp
+        && bc.player.hasRelic<RelicId::DARKSTONE_PERIAPT>()
+        && !bc.player.hasRelic<RelicId::OMAMORI>()
+        ? std::min(6,std::max(0,bc.player.maxHp-initialMaxHp)) : 0;
     return 100.0*(revivalValue(bc) + std::min(futureHeal,hp.maxHp-hp.curHp)
         + EXTRA_PER_MAX_HP*std::max(0,bc.player.maxHp-initialMaxHp)
+        // Implant's relic reward must not earn Feed's growth premium.
+        - (EXTRA_PER_MAX_HP+search::BattleScumSearcher2::maxHpGainWeight)*curseGrowth
         + carriedRelicValue(bc) - deckCurseHp(bc)
         + std::max(0,goldWealth(bc)-initialGoldWealth)/GOLD_PER_HP);
 }
@@ -309,6 +330,9 @@ PYBIND11_MODULE(overlay_search, m) {
         futureHeal=recovery;
         requireThiefKill=killThieves;
         initialMaxHp=root.player.maxHp;
+        initialDeckCurseHp=deckCurseHp(root);
+        initialParasiteRisk=root.monsters.arr[0].id==MonsterId::WRITHING_MASS
+            && !root.monsters.arr[0].miscInfo && !root.player.hasRelic<RelicId::OMAMORI>();
         initialGoldWealth=goldWealth(root);
         searchGeneration=generation.load();
         finishedRounds=0;
@@ -381,11 +405,13 @@ PYBIND11_MODULE(overlay_search, m) {
             // The beam gets LOOP_BEAM_PER_SIM state transitions per MCTS simulation and wins only on the planner's own end-state value.
             constexpr long long LOOP_BEAM_PER_SIM=160;
             const bool mctsWin=predicted.outcome==Outcome::PLAYER_VICTORY;
-            const int cost=root.player.curHp-predicted.player.curHp;
+            const int cost=std::max(0,root.player.curHp-predicted.player.curHp)
+                + static_cast<int>(std::max(0.0,deckCurseHp(predicted)-initialDeckCurseHp));
             mctsValue=search::BattleScumSearcher2::evaluateEndState4r(predicted,initialMaxHp);
             // Deep (refinement) budgets: any HP loss is worth a beam; standard budgets: only a loss or a costly line.
             // Heart victory ends the run; further HP or turn improvements have no continuation value.
-            if(!macroUsed && !(heartFight && mctsWin) && (!mctsWin || cost>(simulations>=128000 ? 0 : std::max(6,root.player.maxHp*15/100)))) {
+            if(!macroUsed && !(heartFight && mctsWin) && (!mctsWin || newPermanentCurse(predicted)
+                    || cost>(simulations>=128000 ? 0 : std::max(6,root.player.maxHp*15/100)))) {
                 beamRan=true;
                 live.phase=3; live.transitionLimit=LOOP_BEAM_PER_SIM*simulations;
                 const int growth = simulations == 128000 ? growth_gate::remaining(root,allowedMask,allowGeneratedPotions) : -1;
@@ -435,6 +461,7 @@ PYBIND11_MODULE(overlay_search, m) {
         out["gained_gold"]=predicted.outcome==Outcome::PLAYER_VICTORY ? std::max(0,goldWealth(predicted)-initialGoldWealth) : 0;
         out["outcome"]=static_cast<int>(predicted.outcome);
         out["curse_hp"]=predicted.outcome==Outcome::PLAYER_VICTORY ? static_cast<int>(deckCurseHp(predicted)) : 0;
+        out["new_permanent_curse"]=predicted.outcome==Outcome::PLAYER_VICTORY && newPermanentCurse(predicted);
         out["lost_gold"]=predicted.outcome==Outcome::PLAYER_VICTORY ? escapedThiefGold(predicted) : 0;
         out["escaped_thieves"]=escapedThieves(predicted);
         out["value"]=search::BattleScumSearcher2::evaluateEndState4r(predicted,initialMaxHp);

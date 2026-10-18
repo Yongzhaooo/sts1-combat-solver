@@ -46,11 +46,18 @@ jobs:
       - run: python tools/check_distill2_artifact.py
       - run: python overlay/check_async_reports.py
       - run: python overlay/check_debug_export.py
+      - run: python overlay/check_worker_policy.py
+      - run: python tools/check_release_assets.py
       - run: python overlay/check_run_log.py
       - run: python overlay/check_incense.py
       - run: python tools/build_solver_runtime.py
+      - run: python overlay/check_worker_policy.py --native
       - run: python tools/check_search_boundary.py
       - run: python tools/check_plan_reduction.py
+      - name: Replay recorded combat exam witnesses
+        run: python tools/check_combat_exam.py
+      - name: Check combat exam search quality
+        run: python tools/check_combat_exam.py --search
       - run: python tools/check_potion_policy.py --native-root .
       - run: python tools/check_search_progress.py
       - run: python tools/check_snapshot_import.py

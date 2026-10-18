@@ -4,6 +4,10 @@
 
 QQ 交流群：**232459269**。欢迎交流使用经验、反馈问题。
 
+F6 导出的 JSON 默认包含每次观察到的商店访问：进入时与最后观察到的金币、按顺序排列且带 UUID 的牌组、遗物、药水，以及删牌选牌和确认状态。手动和自动游玩都会记录，记录随游戏存档保存。旧存档无法补回过去的商店；尚未离开的商店标为 `current`。
+
+ModTheSpire 的 `STS1CombatSolver/config.properties` 中，`searchWorkers=0` 表示自动并发：使用可用逻辑 CPU 数的一半，最多 8 路，并尽量留出至少 2 个逻辑 CPU 的余量。可改为 `1` 到 `32` 后重启游戏，实际值仍受这个 CPU 余量限制。搜索子进程在系统支持时降低优先级。并发用于同时比较独立的用药分支，不会加速单条无药搜索，也不改变搜索算法、预算或采集端配置。游戏出现卡顿时可调低此值，实际采用的并发上限会写入后台回复。
+
 ## 致谢与来源
 
 感谢 [gamerpuppy/sts_lightspeed](https://github.com/gamerpuppy/sts_lightspeed) 提供 C++ 战斗模拟与搜索基础、[destire-mio/sts-ironclad-agent](https://github.com/destire-mio/sts-ironclad-agent) 提供改写的 `combat4r` 和 Python 绑定，以及 [ForgottenArbiter/CommunicationMod](https://github.com/ForgottenArbiter/CommunicationMod) 提供游戏通信桥。锁定版本和许可证见[第三方声明](THIRD_PARTY_NOTICES.md)。

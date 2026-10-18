@@ -29,6 +29,7 @@ class LiveSearch:
         self.battle = None
         self.mapper = None
         self.pending_multi = None
+        self.pending_single = None
         self.plans = 0
         self.planned_roots = set()
 
@@ -38,6 +39,7 @@ class LiveSearch:
         self.battle = None
         self.mapper = None
         self.pending_multi = None
+        self.pending_single = None
         errors = validate(view, require_oracle=True)
         if errors:
             raise ValueError("original RNG export incomplete: " + repr(errors))
@@ -83,6 +85,8 @@ class LiveSearch:
         if self.confirmation(view):
             if "confirm" not in available:
                 raise ValueError("original selection still pending after native resolution")
+            if self.pending_single is not None:
+                self.pending_single = (*self.pending_single[:-1], True)
             return None, "confirm"
         action = self.sts.SearchAction.from_bits(self.actions[0] & 0xffffffff)
         if not action.is_valid(self.battle):
@@ -102,6 +106,10 @@ class LiveSearch:
                         raise ValueError("generated selection candidate differs from the predicted card")
                     return action, f"choose {index}"
                 uuid = self._selection_uuid(info["source_pile"], index, options)
+                if game["screen_type"] == "HAND_SELECT":
+                    self.pending_single = (self.mapper, self._picker_context(game), uuid,
+                        self.comparator.original_card(options[self._option_index(options, uuid)]),
+                        sorted(card["uuid"] for card in options if card["uuid"] != uuid), False)
                 return action, f"choose {self._option_index(options, uuid)}"
             if action.action_type != self.sts.SearchActionType.MULTI_CARD_SELECT:
                 raise ValueError("unsupported native selection action")
@@ -183,8 +191,31 @@ class LiveSearch:
         return comparison
 
     def confirmation(self, view):
+        pending = self.pending_single
+        game = view['game']
+        if pending is not None:
+            mapper, context, uuid, card, remaining, confirming = pending
+            selected = game.get('screen_state', {}).get('selected', [])
+            if mapper is not self.mapper or game['screen_type'] != 'HAND_SELECT' or not selected:
+                self.pending_single = None
+            else:
+                if confirming:
+                    raise ValueError('original selection confirmation has not settled')
+                if (context != self._picker_context(game) or len(selected) != 1
+                        or selected[0].get('uuid') != uuid
+                        or self.comparator.original_card(selected[0]) != card
+                        or sorted(c['uuid'] for c in game['screen_state']['hand']) != remaining):
+                    raise ValueError('original selected card or picker context differs from the planned selection')
+                return True
         return (self.battle is not None and self.pending_multi is None and
                 view['game']['screen_type'] in ('HAND_SELECT','GRID') and
                 'confirm' in view['available_commands'] and
                 (self.battle.input_state == self.sts.InputState.PLAYER_NORMAL or
                  self.battle.outcome != self.sts.Outcome.UNDECIDED))
+
+    @staticmethod
+    def _picker_context(game):
+        combat = game['combat_state']
+        return (combat['turn'], combat.get('cards_played_this_turn'),
+                combat.get('card_in_play', {}).get('uuid'),
+                json.dumps(game.get('solver_selection', {}).get('current_action'), sort_keys=True))

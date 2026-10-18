@@ -52,6 +52,14 @@ def main():
                 while reply.get('status') == 'progress':
                     reply = replies.get(timeout=30)
                 assert reply.get('id') == 3 and reply.get('status') == 'ready' and reply.get('command'), reply
+                assert reply.get('search_workers', 0) >= 1 and reply.get('search_priority') in ('below_normal', 'unchanged'), reply
+                first_plan = reply
+                for workers in (1, 4):
+                    limited = send({'id': 'workers-' + str(workers), 'op': 'solve', 'state': state,
+                                    'budget': 2000, 'search_workers': workers})
+                    assert limited['status'] == 'ready' and 1 <= limited['search_workers'] <= workers, limited
+                    for key in ('outcome', 'hp', 'loss', 'command', 'route', 'remaining'):
+                        assert limited.get(key) == first_plan.get(key), (workers, key)
                 divergent = json.loads(json.dumps(state))
                 divergent['game_state']['current_hp'] -= 7
                 divergent['game_state']['combat_state']['player']['current_hp'] -= 7

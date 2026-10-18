@@ -1,0 +1,767 @@
+{
+  "game": {
+    "screen_type": "HAND_SELECT",
+    "screen_state": {
+      "max_cards": 1,
+      "can_pick_zero": false,
+      "selected": [
+        {
+          "exhausts": false,
+          "damage": 0,
+          "cost": -2,
+          "base_block": -1,
+          "base_cost": -2,
+          "free_to_play_once": false,
+          "base_magic_number": 2,
+          "type": "STATUS",
+          "ethereal": false,
+          "uuid": "ef026d7c-0071-4327-b311-82c8a0912d7c",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "NONE",
+          "is_playable": false,
+          "block": 0,
+          "id": "Burn",
+          "magic_number": 2,
+          "rarity": "COMMON",
+          "misc": 0
+        }
+      ],
+      "hand": [
+        {
+          "exhausts": false,
+          "damage": 0,
+          "cost": 1,
+          "base_block": -1,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": 2,
+          "type": "POWER",
+          "ethereal": false,
+          "uuid": "4230d3fe-9d75-4d17-977e-d00318db3923",
+          "upgrades": 1,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "block": 0,
+          "id": "Evolve",
+          "magic_number": 2,
+          "rarity": "UNCOMMON",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": 0,
+          "cost": -2,
+          "base_block": -1,
+          "base_cost": -2,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "STATUS",
+          "ethereal": true,
+          "uuid": "eb7f0429-9694-4154-a328-b441f38a082a",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "NONE",
+          "is_playable": false,
+          "block": 0,
+          "id": "Dazed",
+          "magic_number": -1,
+          "rarity": "COMMON",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": 0,
+          "cost": -2,
+          "base_block": -1,
+          "base_cost": -2,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "STATUS",
+          "ethereal": false,
+          "uuid": "28a8c86e-b8b4-4a02-bd57-d8af1c0d04fc",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "NONE",
+          "is_playable": false,
+          "block": 0,
+          "id": "Wound",
+          "magic_number": -1,
+          "rarity": "COMMON",
+          "misc": 0
+        }
+      ]
+    },
+    "combat_state": {
+      "discard_pile": [
+        {
+          "exhausts": false,
+          "damage": 10,
+          "cost": 0,
+          "base_block": -1,
+          "base_cost": 0,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "ATTACK",
+          "ethereal": false,
+          "uuid": "c07b43bc-84e7-4df8-8056-97e050d886a7",
+          "upgrades": 1,
+          "cost_modified_for_turn": false,
+          "base_damage": 10,
+          "has_target": true,
+          "target": "ENEMY",
+          "is_playable": true,
+          "block": -1,
+          "id": "Body Slam",
+          "magic_number": -1,
+          "rarity": "COMMON",
+          "misc": 0
+        },
+        {
+          "exhausts": true,
+          "damage": -1,
+          "cost": 2,
+          "base_block": -1,
+          "base_cost": 2,
+          "free_to_play_once": false,
+          "base_magic_number": 3,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "5cd4b335-fdc4-485b-a5ab-3296bc32e957",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "NONE",
+          "is_playable": true,
+          "block": -1,
+          "id": "Metamorphosis",
+          "magic_number": 3,
+          "rarity": "RARE",
+          "misc": 0
+        },
+        {
+          "exhausts": true,
+          "damage": -1,
+          "cost": 0,
+          "base_block": -1,
+          "base_cost": 0,
+          "free_to_play_once": false,
+          "base_magic_number": 5,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "1e465654-d81d-42af-a9b7-78f082362fbd",
+          "upgrades": 1,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "block": -1,
+          "id": "Offering",
+          "magic_number": 5,
+          "rarity": "RARE",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": -1,
+          "cost": 0,
+          "base_block": -1,
+          "base_cost": 0,
+          "free_to_play_once": false,
+          "base_magic_number": 3,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "2f2165bf-b2a0-49c0-935c-777379bcd212",
+          "upgrades": 1,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "block": -1,
+          "id": "Bloodletting",
+          "magic_number": 3,
+          "rarity": "UNCOMMON",
+          "misc": 0
+        },
+        {
+          "exhausts": true,
+          "damage": -1,
+          "cost": 2,
+          "base_block": -1,
+          "base_cost": 2,
+          "free_to_play_once": false,
+          "base_magic_number": 5,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "f07dc29a-9951-403a-b6e7-4317f1641561",
+          "upgrades": 1,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "ALL_ENEMY",
+          "is_playable": true,
+          "block": -1,
+          "id": "Shockwave",
+          "magic_number": 5,
+          "rarity": "UNCOMMON",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": -1,
+          "cost": 1,
+          "base_block": 11,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "39d70d61-b1ca-47df-bb6b-5a7e0957777d",
+          "upgrades": 1,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "block": 11,
+          "id": "Shrug It Off",
+          "magic_number": -1,
+          "rarity": "COMMON",
+          "misc": 0
+        }
+      ],
+      "exhaust_pile": [
+        {
+          "exhausts": false,
+          "damage": -1,
+          "cost": -2,
+          "base_block": -1,
+          "base_cost": -2,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "CURSE",
+          "ethereal": true,
+          "uuid": "c83be04f-4b07-45ea-a4b8-91afe6530950",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "NONE",
+          "is_playable": false,
+          "block": -1,
+          "id": "AscendersBane",
+          "magic_number": -1,
+          "rarity": "SPECIAL",
+          "misc": 0
+        }
+      ],
+      "frame_delta_seconds": 0.021257646,
+      "facing_monster_index": 0,
+      "card_draw_per_turn": 5,
+      "monsters": [
+        {
+          "is_gone": false,
+          "internal": {},
+          "move_hits": 1,
+          "move_base_damage": 45,
+          "last_move_id": 3,
+          "half_dead": false,
+          "move_adjusted_damage": 69,
+          "max_hp": 800,
+          "intent": "ATTACK",
+          "move_history": [
+            3,
+            2
+          ],
+          "second_last_move_id": -1,
+          "move_id": 2,
+          "name": "腐化之心",
+          "current_hp": 790,
+          "block": 0,
+          "id": "CorruptHeart",
+          "powers": [
+            {
+              "amount": 2,
+              "name": "死亡律动",
+              "id": "BeatOfDeath"
+            },
+            {
+              "amount": 1,
+              "name": "力量",
+              "id": "Strength"
+            },
+            {
+              "amount": 200,
+              "name": "坚不可摧",
+              "id": "Invincible",
+              "misc": 200
+            }
+          ]
+        }
+      ],
+      "turn": 2,
+      "energy_per_turn": 4,
+      "skills_played_this_turn": 1,
+      "draw_pile": [
+        {
+          "exhausts": false,
+          "damage": 10,
+          "cost": 1,
+          "base_block": -1,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": 2,
+          "type": "ATTACK",
+          "ethereal": false,
+          "uuid": "b5f8fb16-8646-4659-b9dd-6f874fb707c3",
+          "upgrades": 1,
+          "cost_modified_for_turn": false,
+          "base_damage": 10,
+          "has_target": true,
+          "target": "ENEMY",
+          "is_playable": true,
+          "block": -1,
+          "id": "Pommel Strike",
+          "magic_number": 2,
+          "rarity": "COMMON",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": -1,
+          "cost": -2,
+          "base_block": -1,
+          "base_cost": -2,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "STATUS",
+          "ethereal": true,
+          "uuid": "eb803a89-b3a2-4f42-b9c0-aae77157fe4c",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "NONE",
+          "is_playable": false,
+          "block": -1,
+          "id": "Void",
+          "magic_number": -1,
+          "rarity": "COMMON",
+          "misc": 0
+        },
+        {
+          "exhausts": true,
+          "damage": -1,
+          "cost": 1,
+          "base_block": -1,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "STATUS",
+          "ethereal": false,
+          "uuid": "7b0048f5-48c7-42c7-85df-538148a003fd",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "block": -1,
+          "id": "Slimed",
+          "magic_number": -1,
+          "rarity": "COMMON",
+          "misc": 0
+        }
+      ],
+      "end_turn_shuffle": {
+        "mode": "basemod_seeded",
+        "shared_rng_initialized": true,
+        "shared_seed48": 138437173627068
+      },
+      "card_in_play": {
+        "exhausts": false,
+        "damage": 0,
+        "cost": 1,
+        "base_block": -1,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": 3,
+        "type": "SKILL",
+        "ethereal": false,
+        "uuid": "77bcacbe-c196-41ed-ab1c-2e8eb452027c",
+        "upgrades": 1,
+        "cost_modified_for_turn": false,
+        "base_damage": -1,
+        "has_target": false,
+        "target": "NONE",
+        "is_playable": true,
+        "block": 0,
+        "id": "Burning Pact",
+        "magic_number": 3,
+        "rarity": "UNCOMMON",
+        "misc": 0
+      },
+      "cards_played_this_turn": 1,
+      "cards_discarded_this_turn": 0,
+      "relic_combat_state": {},
+      "times_damaged": 0,
+      "is_bloodied": false,
+      "attacks_played_this_turn": 0,
+      "energy_wasted": 5,
+      "rngs": {
+        "potion": {
+          "seed1": "12150932536034378311",
+          "counter": 126,
+          "seed0": "5388421595452619058"
+        },
+        "card_random": {
+          "seed1": "4812940615755391183",
+          "counter": 12,
+          "seed0": "6213964706365716497"
+        },
+        "ai": {
+          "seed1": "4698923505783847915",
+          "counter": 3,
+          "seed0": "14096038807850383703"
+        },
+        "monster_hp": {
+          "seed1": "5739835088422885112",
+          "counter": 1,
+          "seed0": "9183422272205348723"
+        },
+        "shuffle": {
+          "seed1": "5739835088422885112",
+          "counter": 1,
+          "seed0": "9183422272205348723"
+        },
+        "misc": {
+          "seed1": "9183422272205348723",
+          "counter": 0,
+          "seed0": "6711714589457884310"
+        }
+      },
+      "cards_drawn": 11,
+      "limbo": [
+        {
+          "exhausts": false,
+          "damage": -1,
+          "cost": 1,
+          "base_block": -1,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": 3,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "77bcacbe-c196-41ed-ab1c-2e8eb452027c",
+          "upgrades": 1,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "NONE",
+          "is_playable": true,
+          "block": -1,
+          "id": "Burning Pact",
+          "magic_number": 3,
+          "rarity": "UNCOMMON",
+          "misc": 0
+        }
+      ],
+      "hand": [
+        {
+          "exhausts": false,
+          "damage": 0,
+          "cost": 1,
+          "base_block": -1,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": 2,
+          "type": "POWER",
+          "ethereal": false,
+          "uuid": "4230d3fe-9d75-4d17-977e-d00318db3923",
+          "upgrades": 1,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "block": 0,
+          "id": "Evolve",
+          "magic_number": 2,
+          "rarity": "UNCOMMON",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": 0,
+          "cost": -2,
+          "base_block": -1,
+          "base_cost": -2,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "STATUS",
+          "ethereal": true,
+          "uuid": "eb7f0429-9694-4154-a328-b441f38a082a",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "NONE",
+          "is_playable": false,
+          "block": 0,
+          "id": "Dazed",
+          "magic_number": -1,
+          "rarity": "COMMON",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": 0,
+          "cost": -2,
+          "base_block": -1,
+          "base_cost": -2,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "STATUS",
+          "ethereal": false,
+          "uuid": "28a8c86e-b8b4-4a02-bd57-d8af1c0d04fc",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "NONE",
+          "is_playable": false,
+          "block": 0,
+          "id": "Wound",
+          "magic_number": -1,
+          "rarity": "COMMON",
+          "misc": 0
+        }
+      ],
+      "player": {
+        "orbs": [],
+        "current_hp": 75,
+        "block": 0,
+        "max_hp": 75,
+        "powers": [
+          {
+            "amount": 2,
+            "just_applied": false,
+            "name": "易伤",
+            "id": "Vulnerable"
+          },
+          {
+            "amount": 0,
+            "name": "复制",
+            "id": "DuplicationPower"
+          },
+          {
+            "amount": 2,
+            "just_applied": false,
+            "name": "虚弱",
+            "id": "Weakened"
+          }
+        ],
+        "energy": 3
+      }
+    },
+    "solver_selection": {
+      "pending_actions": [
+        {
+          "amount": 3,
+          "class_full": "com.megacrit.cardcrawl.actions.common.DrawCardAction",
+          "source": {
+            "kind": "player"
+          },
+          "class": "DrawCardAction",
+          "target": {
+            "kind": "player"
+          }
+        },
+        {
+          "amount": 0,
+          "class_full": "com.megacrit.cardcrawl.actions.common.RemoveSpecificPowerAction",
+          "source": {
+            "kind": "player"
+          },
+          "class": "RemoveSpecificPowerAction",
+          "target": {
+            "kind": "player"
+          }
+        },
+        {
+          "amount": 1,
+          "exhaustCard": false,
+          "returnToHand": false,
+          "targetCard": {
+            "exhausts": false,
+            "damage": 0,
+            "base_cost": 1,
+            "free_to_play_once": false,
+            "base_magic_number": 3,
+            "type": "SKILL",
+            "uuid": "77bcacbe-c196-41ed-ab1c-2e8eb452027c",
+            "upgrades": 1,
+            "cost_modified_for_turn": false,
+            "dont_trigger_on_use": false,
+            "base_damage": -1,
+            "has_target": false,
+            "block": 0,
+            "id": "Burning Pact",
+            "magic_number": 3,
+            "purge_on_use": false,
+            "misc": 0,
+            "cost": 1,
+            "base_block": -1,
+            "return_to_hand": false,
+            "ethereal": false,
+            "target": "NONE",
+            "is_playable": true,
+            "name": "燃烧契约+",
+            "rarity": "UNCOMMON"
+          },
+          "class_full": "com.megacrit.cardcrawl.actions.utility.UseCardAction",
+          "class": "UseCardAction",
+          "reboundCard": false,
+          "target": {
+            "kind": "player"
+          }
+        }
+      ],
+      "queued_cards": [
+        "77bcacbe-c196-41ed-ab1c-2e8eb452027c"
+      ],
+      "current_action": {
+        "amount": 1,
+        "class_full": "com.megacrit.cardcrawl.actions.common.ExhaustAction",
+        "class": "ExhaustAction"
+      }
+    },
+    "relics": [
+      {
+        "id": "Burning Blood",
+        "counter": -1
+      },
+      {
+        "id": "Question Card",
+        "counter": -1
+      },
+      {
+        "id": "Turnip",
+        "counter": -1
+      },
+      {
+        "id": "Pandora's Box",
+        "counter": -1
+      },
+      {
+        "id": "Red Mask",
+        "counter": -1
+      },
+      {
+        "id": "InkBottle",
+        "counter": 1
+      },
+      {
+        "id": "Anchor",
+        "counter": -1
+      },
+      {
+        "id": "PreservedInsect",
+        "counter": -1
+      },
+      {
+        "id": "TheAbacus",
+        "counter": -1
+      },
+      {
+        "id": "Philosopher's Stone",
+        "counter": -1
+      },
+      {
+        "id": "StrikeDummy",
+        "counter": -1
+      },
+      {
+        "id": "Lantern",
+        "counter": -1
+      },
+      {
+        "id": "Mummified Hand",
+        "counter": -1
+      }
+    ],
+    "potions": [
+      {
+        "requires_target": false,
+        "can_use": false,
+        "can_discard": false,
+        "name": "药水栏",
+        "id": "Potion Slot"
+      },
+      {
+        "requires_target": false,
+        "can_use": false,
+        "can_discard": false,
+        "name": "药水栏",
+        "id": "Potion Slot"
+      }
+    ],
+    "class": "IRONCLAD",
+    "seed": -6689138250223367359,
+    "floor": 56,
+    "ascension_level": 20,
+    "gold": 79,
+    "act": 4
+  },
+  "available_commands": [
+    "confirm",
+    "key",
+    "click",
+    "wait",
+    "state"
+  ],
+  "rng": {
+    "aiRng": {
+      "seed0": 14096038807850383703,
+      "seed1": 4698923505783847915,
+      "counter": 3
+    },
+    "cardRandomRng": {
+      "seed0": 6213964706365716497,
+      "seed1": 4812940615755391183,
+      "counter": 12
+    },
+    "miscRng": {
+      "seed0": 6711714589457884310,
+      "seed1": 9183422272205348723,
+      "counter": 0
+    },
+    "monsterHpRng": {
+      "seed0": 9183422272205348723,
+      "seed1": 5739835088422885112,
+      "counter": 1
+    },
+    "potionRng": {
+      "seed0": 5388421595452619058,
+      "seed1": 12150932536034378311,
+      "counter": 126
+    },
+    "shuffleRng": {
+      "seed0": 9183422272205348723,
+      "seed1": 5739835088422885112,
+      "counter": 1
+    }
+  }
+}

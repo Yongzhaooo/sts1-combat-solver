@@ -123,6 +123,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private boolean runAutoEnabled = true;
     private boolean bossFastFinishEnabled; // Settings: stop searching a Boss once a potion-free win is found
     private int smokeProbeBudget=12000, smokeLossThreshold=15; // Mod config: raw combat HP loss, strict less-than threshold
+    private int searchWorkers; // 0: auto; applied only by the Mod backend.
     private boolean feedModeEnabled; // Mod config: max HP gained by Feed counts twice in the plan value
     private boolean routeMarks = true; // Mod config: draw the planned route on the map
     private AbstractPlayer runAutoPlayer;
@@ -236,6 +237,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("feedMode", "false");
             defaults.setProperty("smokeProbeBudget", "12000");
             defaults.setProperty("smokeLossThreshold", "15");
+            defaults.setProperty("searchWorkers", "0");
             defaults.setProperty("testMode", "false");
             defaults.setProperty("routeMarks", "true");
             defaults.setProperty("autoPotionRewards", "true");
@@ -252,6 +254,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             feedModeEnabled = config.getBool("feedMode");
             smokeProbeBudget = Math.max(1,Math.min(128000,config.getInt("smokeProbeBudget")));
             smokeLossThreshold = Math.max(0,config.getInt("smokeLossThreshold"));
+            try { searchWorkers = Math.max(0, Math.min(32, config.getInt("searchWorkers"))); }
+            catch (NumberFormatException invalid) { searchWorkers = 0; }
+            config.setInt("searchWorkers", searchWorkers);
+            config.save();
             TestRecorder.enabled = config.getBool("testMode");
             routeMarks = config.getBool("routeMarks");
             autoPotionRewards = config.getBool("autoPotionRewards");
@@ -270,6 +276,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         initFont();
         registerConfigPanel();
         TestRecorder.subscribe();
+        ShopRecorder.subscribe();
         Thread warmup = new Thread(() -> {
             List<String> rngMods = RngMods.loaded();
             if (!rngMods.isEmpty()) {
@@ -891,6 +898,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         request.addProperty("id", ++serial);
         request.addProperty("op", op);
         request.addProperty("budget", budgets[budgetIndex]);
+        request.addProperty("search_workers", searchWorkers);
         if (!op.equals("cancel")) searchTimeoutMillis = SearchStatus.timeoutMillis(budgets[budgetIndex]);
         if (op.equals("choose")) request.addProperty("branch", chosenBranch);
         if (op.equals("solve")) request.addProperty("progress", true);
@@ -1012,6 +1020,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             if (AbstractDungeon.player != null) request.addProperty("seed", Long.toString(Settings.seed));
             request.add("metadata", DecisionContext.metadata());
             request.add("recent_battles", TestRecorder.recentBattles());
+            request.add("shop_history", ShopRecorder.snapshot());
             writer.write(gson.toJson(request)); writer.newLine(); writer.flush();
             debugMessageError = false;
             debugMessage = I18n.t("正在导出记录…");
