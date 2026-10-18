@@ -96,6 +96,19 @@ public class TestRecorder implements OnStartBattleSubscriber, PostBattleSubscrib
             ms.add(v);
         }
         o.add("monsters", ms);
+        // Defect state: the same fields CommunicationMod exports to the solver, so a
+        // recorded battle can be replayed against the engine without the game.
+        JsonArray orbs = new JsonArray();
+        for (com.megacrit.cardcrawl.orbs.AbstractOrb orb : p.orbs) {
+            JsonObject v = new JsonObject();
+            v.addProperty("id", orb.ID);              // null for an empty slot
+            v.addProperty("passive", orb.passiveAmount);
+            v.addProperty("evoke", orb.evokeAmount);
+            orbs.add(v);
+        }
+        o.add("orbs", orbs);
+        o.addProperty("orb_slots", p.maxOrbs);
+        o.addProperty("focus", p.hasPower("Focus") ? p.getPower("Focus").amount : 0);
         o.addProperty("solver_driving", SolverMod.solverDriving());
         return o;
     }
