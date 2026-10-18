@@ -854,6 +854,18 @@ namespace sts {
             case CardId::RECURSION:
                 return upgraded ? 0 : 1;
 
+            case CardId::DUALCAST:
+            case CardId::WHITE_NOISE:
+            case CardId::ZAP:
+                return upgraded ? 0 : 1;
+
+            case CardId::CONSUME:
+            case CardId::DOOM_AND_GLOOM:
+            case CardId::ELECTRODYNAMICS:
+            case CardId::HYPERBEAM:
+            case CardId::RAINBOW:
+                return 2;
+
             case CardId::FUSION:
                 return upgraded ? 1 : 2;
 

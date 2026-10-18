@@ -105,5 +105,17 @@ assert sts.BattleContext.from_snapshot(orbed, seed).player.orbs == [
     {'id': 'LIGHTNING', 'evoke_bonus': 0, 'dark_counter': 0},
     {'id': 'DARK', 'evoke_bonus': 0, 'dark_counter': 18}]
 
+# Defect cardIDs that differ from the engine enum name (the game's class names:
+# Gash is Claw, Redo is Recursion, Steam is Steam Barrier, Undo is Equilibrium,
+# Lockon is Bullseye, Steam Power is Overclock, Conserve Battery is Charge
+# Battery, and the basics use the _B suffix).
+from steam.steam_mcts import card_snapshot
+for internal, enum in (('Strike_B', 'STRIKE_BLUE'), ('Defend_B', 'DEFEND_BLUE'),
+                       ('Conserve Battery', 'CHARGE_BATTERY'), ('Gash', 'CLAW'),
+                       ('Lockon', 'BULLSEYE'), ('Redo', 'RECURSION'),
+                       ('Steam', 'STEAM_BARRIER'), ('Steam Power', 'OVERCLOCK'),
+                       ('Undo', 'EQUILIBRIUM')):
+    assert card_snapshot({'id': internal})['id'] == int(sts.card_id_from_name(enum)), internal
+
 print('PASS: snapshot character, stance, orb slots, orbs, mantra and retain import; '
       'unknown or unsupported values are refused')

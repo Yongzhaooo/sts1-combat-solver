@@ -22,8 +22,8 @@ namespace {
     }
 
     // Creates the card in the empty hand and plays it at index 0.
-    void playCard(BattleContext &battle, CardId id) {
-        battle.cards.createTempCardInHand(CardInstance(id));
+    void playCard(BattleContext &battle, CardId id, int upgrades = 0) {
+        battle.cards.createTempCardInHand(CardInstance(id, upgrades > 0));
         // Play the card just added; Echo Form copies can leave earlier slots occupied.
         const int idx = battle.cards.cardsInHand - 1;
         search::Action play(search::ActionType::CARD, idx, 0);
@@ -919,6 +919,27 @@ int main() {
             check(hp - bc.monsters.arr[0].curHp == 18 + 6 * amount,
                   "Echo Form should double exactly the first amount cards");
         }
+    }
+
+    {
+        // Costs checked against the jar: five cards cost 2, and Dualcast, White
+        // Noise and Zap drop to 0 on upgrade (upgradeBaseCost(0)). Zap+ still
+        // channels a plain Lightning orb - its upgrade never touches evoke.
+        check(CardInstance(CardId::CONSUME).cost == 2, "Consume should cost 2");
+        check(CardInstance(CardId::DOOM_AND_GLOOM).cost == 2, "Doom and Gloom should cost 2");
+        check(CardInstance(CardId::ELECTRODYNAMICS).cost == 2, "Electrodynamics should cost 2");
+        check(CardInstance(CardId::HYPERBEAM).cost == 2, "Hyperbeam should cost 2");
+        check(CardInstance(CardId::RAINBOW).cost == 2, "Rainbow should cost 2");
+        check(CardInstance(CardId::DUALCAST, true).cost == 0, "Dualcast+ should cost 0");
+        check(CardInstance(CardId::WHITE_NOISE, true).cost == 0, "White Noise+ should cost 0");
+        check(CardInstance(CardId::ZAP, true).cost == 0, "Zap+ should cost 0");
+
+        BattleContext bc = freshBattle();
+        bc.player.orbs.clear();
+        playCard(bc, CardId::ZAP, 1);
+        check(bc.player.orbs.size() == 1 && bc.player.orbs[0].type == Orb::LIGHTNING,
+              "Zap+ should channel one Lightning orb");
+        check(bc.player.orbs[0].evokeBonus == 0, "Zap+ should not add an evoke bonus");
     }
 
     std::cout << "Defect card behaviors hold\n";

@@ -32,9 +32,9 @@ namespace sts {
         const bool up = c.isUpgraded();
         switch (c.getId()) {
             case CardId::ZAP:
-                // Zap.java: channel one Lightning orb; the upgraded card adds +3 to
-                // the channeled orb's evoke value.
-                bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING, up ? 3 : 0));
+                // Zap.java: channel one Lightning orb. The upgrade only calls
+                // upgradeBaseCost(0); the orb keeps its plain 8 evoke.
+                bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
                 return true;
 
             case CardId::DUALCAST:
