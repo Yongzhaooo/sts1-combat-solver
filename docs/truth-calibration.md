@@ -101,10 +101,11 @@ rng                   13 个种子随机数流的计数（Random.counter）：
 - `character`：游戏的职业名 `IRONCLAD`、`THE_SILENT`、`DEFECT`、`WATCHER`，缺省为 `IRONCLAD`；其他值会被拒绝。
 - `player.stance`：`NEUTRAL`、`CALM`、`WRATH` 或 `DIVINITY`。
 - `player.mantra`：非负整数；快照的 `powers` 里也有 Mantra 时两者必须相等。
-- `player.orb_slots`：整数。`player.orbs`：宝珠列表。模拟器还没有宝珠状态，非空列表会被拒绝，而不是被忽略。
+- `player.orb_slots`：整数，原版上限 10；更大的 mod 栏位拒绝导入。
+- `player.orbs`：宝珠列表，长度等于栏位数，空栏的 `id` 为 null。每项 `{id, passive, evoke}`：`id` 是 CommunicationMod 的宝珠名（`Lightning`、`Frost`、`Dark`、`Plasma`，也接受引擎枚举名），`passive` 和 `evoke` 是游戏里已算过 Focus 的数值。导入时按 `evoke - 基础激发值 - Focus` 反推卡牌给的激发加成（如 Zap+ 的 +3）；黑暗珠的累计伤害存在 `evoke` 里。声明了 `orb_slots` 却没有 `orbs`、宝珠数超过栏位、或激发值低于基础值与 Focus 之和，都会被拒绝。
 - 牌堆里的牌可带 `retain`（布尔，单次保留位）。
 
-Focus 仍写在 `powers` 里。Mod 目前不导出这些字段，生产端现在只写 `character`；快照里宝珠和姿态的单项格式等 M2、M3 导出时再定。
+Focus 仍写在 `powers` 里。宝珠由 CommunicationMod 导出，生产端（`steam_mcts.build_snapshot`）原样透传；姿态和真言的单项格式等 M2 再定。
 
 原生夹具使用同一份 `observation` 格式：一个战斗开始的观测加后续动作和检查点。M0 只让快照导入器接受可选的职业字段（见上）；让导入器直接读 `observation` 格式是后续步骤，尚未排期，届时协作者就不需要实现 Mod 的导出。
 

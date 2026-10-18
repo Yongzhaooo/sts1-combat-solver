@@ -313,6 +313,14 @@ def card_snapshot(card):
     return result
 
 
+def orb_snapshot(orb):
+    """CommunicationMod's orb entry. A null id marks an empty slot; it is kept so
+    the list length stays the slot count."""
+    return {"id": orb.get("id"),
+            "passive": int(orb.get("passive_amount") or 0),
+            "evoke": int(orb.get("evoke_amount") or 0)}
+
+
 def power_snapshot(power, owner):
     helper = sts.player_status_id_from_name if owner == "player" else sts.monster_status_id_from_name
     identifier = power.get("id") or power.get("name")
@@ -561,8 +569,9 @@ def build_snapshot(game_state, counters=None):
         relics.append({"id": sts.relic_id_from_name(identifier),
                        "counter": int(counter if counter is not None else -1)})
     snapshot = {
-        # Optional: the importer reads Ironclad when absent. Orbs, stance, mantra and retain are
-        # likewise optional and are only added once the Mod exports them.
+        # Optional: the importer reads Ironclad when absent. Stance, mantra and retain are
+        # likewise optional and are only added once the Mod exports them. Orbs come from
+        # CommunicationMod and are always present.
         **({"character": game_state["class"]} if game_state.get("class") else {}),
         "seed": int(game_state.get("seed") or 0),
         "floor": int(game_state.get("floor") or 0),
@@ -585,6 +594,9 @@ def build_snapshot(game_state, counters=None):
             "card_draw_per_turn": int(combat.get("card_draw_per_turn", 5 - int(any(p.get("id")=="Draw Reduction" for p in player_powers)))) ,
             "powers": [power_snapshot(power, "player") for power in player_powers
                        if (power.get("id") or power.get("name")) != "Berserk"],
+            # CommunicationMod always exports the orb list, empty slots included.
+            "orb_slots": len(player.get("orbs") or []),
+            "orbs": [orb_snapshot(orb) for orb in player.get("orbs") or []],
         },
         "hand": [card_snapshot(card) for card in combat.get("hand") or []],
         "draw_pile": [card_snapshot(card) for card in combat.get("draw_pile") or []],

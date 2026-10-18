@@ -52,7 +52,33 @@ for stance in ('NEUTRAL', 'CALM', 'WRATH', 'DIVINITY'):
 assert refused(lambda v: v['player'].update(stance='wrath'))
 assert load(lambda v: v['player'].update(orb_slots=3)).orb_slots == 3
 assert load(lambda v: v['player'].update(orbs=[])).orb_slots == 0
-assert refused(lambda v: v['player'].update(orbs=[{'id': 'Lightning', 'passive': 3, 'evoke': 8}])), 'orbs are not simulated yet'
+
+# Orbs: CommunicationMod exports every slot, a null id for an empty one, with the
+# focus-applied passive and evoke amounts. The importer derives the card-granted
+# evoke bonus from the evoke amount and keeps Dark's accumulated counter.
+lightning = {'id': 'Lightning', 'passive': 3, 'evoke': 8}
+frost = {'id': 'Frost', 'passive': 2, 'evoke': 5}
+dark = {'id': 'Dark', 'passive': 6, 'evoke': 12}
+plasma = {'id': 'Plasma', 'passive': 1, 'evoke': 2}
+empty = {'id': None, 'passive': 0, 'evoke': 0}
+assert load(lambda v: v['player'].update(orbs=[lightning], orb_slots=3)).orbs == [
+    {'id': 'LIGHTNING', 'evoke_bonus': 0, 'dark_counter': 0}]
+assert load(lambda v: v['player'].update(orbs=[{'id': 'Lightning', 'passive': 3, 'evoke': 11}], orb_slots=3)).orbs == [
+    {'id': 'LIGHTNING', 'evoke_bonus': 3, 'dark_counter': 0}], 'Zap+ adds 3 to the evoke amount'
+assert load(lambda v: v['player'].update(orbs=[frost, dark, plasma, empty], orb_slots=4)).orbs == [
+    {'id': 'FROST', 'evoke_bonus': 0, 'dark_counter': 0},
+    {'id': 'DARK', 'evoke_bonus': 0, 'dark_counter': 12},
+    {'id': 'FUSION', 'evoke_bonus': 0, 'dark_counter': 0}]
+assert load(lambda v: v['player'].update(orbs=[empty, empty], orb_slots=2)).orbs == []
+assert load(lambda v: (v['player']['powers'].append({'id': int(sts.PlayerStatus.FOCUS), 'amount': 2}),
+                       v['player'].update(orbs=[{'id': 'Lightning', 'passive': 5, 'evoke': 13}], orb_slots=3))).orbs == [
+    {'id': 'LIGHTNING', 'evoke_bonus': 3, 'dark_counter': 0}], 'focus is part of the exported evoke amount'
+assert refused(lambda v: v['player'].update(orbs=[{'id': 'Lightning', 'passive': 3, 'evoke': 7}], orb_slots=3)), \
+    'an evoke amount below base plus focus must not import'
+assert refused(lambda v: v['player'].update(orbs=[{'id': 'Nope', 'passive': 1, 'evoke': 1}], orb_slots=3))
+assert refused(lambda v: v['player'].update(orbs=[lightning, frost], orb_slots=1))
+assert load(lambda v: (v['player'].update(orbs=[lightning, frost]), v['player'].pop('orb_slots'))).orb_slots == 2
+
 mantra = sts.PlayerStatus.MANTRA
 assert load(lambda v: v['player'].update(mantra=4)).get_status(mantra) == 4
 assert refused(lambda v: v['player'].update(mantra=-1))
@@ -65,4 +91,19 @@ assert not any(card.retain for card in battle.hand)
 retained = copy.deepcopy(snapshot)
 retained['hand'][0]['retain'] = True
 assert sts.BattleContext.from_snapshot(retained, seed).hand[0].retain
-print('PASS: snapshot character, stance, orb slots, mantra and retain import; unknown or unsupported values are refused')
+# End to end: CommunicationMod's orb list survives the Python producer and the importer.
+with_orbs = copy.deepcopy(game)
+with_orbs['combat_state']['player']['orbs'] = [
+    {'id': 'Lightning', 'passive_amount': 3, 'evoke_amount': 8},
+    {'id': None, 'passive_amount': 0, 'evoke_amount': 0},
+    {'id': 'Dark', 'passive_amount': 6, 'evoke_amount': 18},
+]
+orbed = s.comparator.bridge.build_snapshot(with_orbs)
+assert orbed['player']['orb_slots'] == 3
+assert [orb['id'] for orb in orbed['player']['orbs']] == ['Lightning', None, 'Dark']
+assert sts.BattleContext.from_snapshot(orbed, seed).player.orbs == [
+    {'id': 'LIGHTNING', 'evoke_bonus': 0, 'dark_counter': 0},
+    {'id': 'DARK', 'evoke_bonus': 0, 'dark_counter': 18}]
+
+print('PASS: snapshot character, stance, orb slots, orbs, mantra and retain import; '
+      'unknown or unsupported values are refused')

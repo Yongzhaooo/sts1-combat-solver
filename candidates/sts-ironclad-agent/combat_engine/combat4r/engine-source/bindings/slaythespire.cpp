@@ -308,9 +308,49 @@ namespace {
                                             " range (modded slot counts are not supported yet)");
             bc.player.orbSlots = static_cast<std::int8_t>(orbSlots);
         }
-        // The simulator has no orb state yet, so a snapshot with orbs must not import as if it had none.
-        if (player.contains("orbs") && py::len(player["orbs"]) != 0)
-            throw std::invalid_argument("snapshot orbs are not supported by the simulator yet");
+        // Orbs: CommunicationMod exports every slot, using a null id for an empty
+        // one, with the focus-applied passive/evoke amounts. The simulator stores
+        // only filled orbs and derives the card-granted evoke bonus from the
+        // exported evoke amount; Dark keeps its accumulated damage in evokeAmount.
+        if (!player.contains("orbs")) {
+            if (player.contains("orb_slots") && py::cast<int>(player["orb_slots"]) != 0)
+                throw std::invalid_argument("snapshot declares orb slots but no orbs");
+        } else {
+            const auto orbs = py::cast<py::list>(player["orbs"]);
+            if (!player.contains("orb_slots"))
+                bc.player.orbSlots = static_cast<std::int8_t>(py::len(orbs));
+            for (const auto item : orbs) {
+                const auto orb = py::cast<py::dict>(item);
+                py::object id = orb["id"];
+                if (id.is_none()) continue;  // empty slot
+                const auto name = py::cast<std::string>(id);
+                Orb type;
+                if (name == "Lightning" || name == "LIGHTNING") type = Orb::LIGHTNING;
+                else if (name == "Frost" || name == "FROST") type = Orb::FROST;
+                else if (name == "Dark" || name == "DARK") type = Orb::DARK;
+                else if (name == "Plasma" || name == "FUSION") type = Orb::FUSION;
+                else throw std::invalid_argument("unknown snapshot orb id: " + name);
+                if (!orb.contains("evoke"))
+                    throw std::invalid_argument("snapshot orb " + name + " is missing its evoke amount");
+                const int evoke = py::cast<int>(orb["evoke"]);
+                std::int8_t evokeBonus = 0;
+                std::int16_t darkCounter = 0;
+                if (type == Orb::DARK) {
+                    darkCounter = static_cast<std::int16_t>(evoke);
+                } else if (type != Orb::FUSION) {
+                    // evokeAmount = base + focus + card bonus (Zap+ adds 3).
+                    const int baseEvoke = type == Orb::LIGHTNING ? 8 : 5;
+                    const int bonus = evoke - baseEvoke - bc.player.focus;
+                    if (bonus < 0)
+                        throw std::invalid_argument("snapshot orb " + name +
+                            " evoke amount disagrees with the exported Focus");
+                    evokeBonus = static_cast<std::int8_t>(bonus);
+                }
+                bc.player.orbs.push_back(Player::OrbState{type, evokeBonus, darkCounter});
+            }
+            if (static_cast<int>(bc.player.orbs.size()) > bc.player.orbSlots)
+                throw std::invalid_argument("snapshot has more orbs than orb slots");
+        }
         if (player.contains("mantra")) {
             const int mantra = py::cast<int>(player["mantra"]);
             if (mantra < 0) throw std::invalid_argument("snapshot mantra is negative");
@@ -1587,6 +1627,18 @@ PYBIND11_MODULE(slaythespire, m) {
             return std::string(names[static_cast<int>(p.stance)]);
         })
         .def_readonly("orb_slots", &Player::orbSlots)
+        .def_property_readonly("orbs", [](const Player &p) {
+            static const char *const names[] = {"EMPTY", "DARK", "FROST", "FUSION", "LIGHTNING"};
+            pybind11::list result;
+            for (const auto &orb : p.orbs) {
+                pybind11::dict item;
+                item["id"] = std::string(names[static_cast<int>(orb.type)]);
+                item["evoke_bonus"] = static_cast<int>(orb.evokeBonus);
+                item["dark_counter"] = static_cast<int>(orb.darkCounter);
+                result.append(item);
+            }
+            return result;
+        })
         .def_property_readonly("bombs", [](const Player &p) {
             // Legacy aggregate view; instances remain the authoritative state.
             std::vector<int> totals(3, 0);
