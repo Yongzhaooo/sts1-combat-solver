@@ -77,6 +77,9 @@ void BattleContext::init(const GameContext &gc, MonsterEncounter encounterToInit
     }
 
     player.cardDrawPerTurn = 5;
+    if (player.cc == CharacterClass::DEFECT) {
+        player.orbSlots = 3; // Defect.maxOrbs; imported snapshots carry their own value.
+    }
     if (gc.hasRelic(R::SNECKO_EYE)) {
         player.cardDrawPerTurn += 2;
     }

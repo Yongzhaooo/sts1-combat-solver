@@ -328,7 +328,78 @@ Action Actions::MonsterStartTurnAction() {
 
 Action Actions::TriggerEndOfTurnOrbsAction() {
     return {[] (BattleContext &bc) {
-        // todo
+        // End-of-turn passives trigger left to right and never consume the orb.
+        for (int i = 0; i < bc.player.orbs.size(); ++i) {
+            const auto &orb = bc.player.orbs[i];
+            switch (orb.type) {
+                case Orb::LIGHTNING: {
+                    // LightningOrb.onEndOfTurn: deal 3 (+focus) to a random enemy.
+                    const int damage = 3 + bc.player.focus;
+                    if (damage > 0) {
+                        const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                        if (target >= 0) {
+                            bc.addToBot(Actions::AttackEnemy(target, damage));
+                        }
+                    }
+                    break;
+                }
+                case Orb::FROST: {
+                    // FrostOrb.onEndOfTurn: gain 2 (+focus) block.
+                    const int block = 2 + bc.player.focus;
+                    if (block > 0) {
+                        bc.addToBot(Actions::GainBlock(block));
+                    }
+                    break;
+                }
+                default:
+                    // TODO(defect M3): dark and plasma end-of-turn settlement stay
+                    // unimplemented until their cards and values are covered.
+                    break;
+            }
+        }
+    }};
+}
+
+Action Actions::ChannelOrb(Orb orb, std::int8_t evokeBonus) {
+    return {[=] (BattleContext &bc) {
+        bc.player.channelOrb(orb, evokeBonus);
+    }};
+}
+
+Action Actions::EvokeOrbAction(int orbIdx, int times) {
+    return {[=] (BattleContext &bc) {
+        if (orbIdx < 0 || orbIdx >= bc.player.orbs.size()) {
+            return;
+        }
+        const auto orb = bc.player.orbs[orbIdx];
+        for (int i = 0; i < times; ++i) {
+            switch (orb.type) {
+                case Orb::LIGHTNING: {
+                    // LightningOrb.onEvoke: deal 5 (+focus +bonus) to a random enemy.
+                    const int damage = 5 + bc.player.focus + orb.evokeBonus;
+                    if (damage > 0) {
+                        const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                        if (target >= 0) {
+                            bc.addToBot(Actions::AttackEnemy(target, damage));
+                        }
+                    }
+                    break;
+                }
+                case Orb::FROST: {
+                    // FrostOrb.onEvoke: gain 5 (+focus) block.
+                    const int block = 5 + bc.player.focus;
+                    if (block > 0) {
+                        bc.addToBot(Actions::GainBlock(block));
+                    }
+                    break;
+                }
+                default:
+                    // TODO(defect M3): dark and plasma evoke settlement stay unimplemented.
+                    break;
+            }
+        }
+        // Evoking consumes the orb, after all triggered instances resolve.
+        bc.player.orbs.remove(orbIdx);
     }};
 }
 

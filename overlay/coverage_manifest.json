@@ -206,11 +206,8 @@
       },
       "starter": {
         "total": 4,
-        "implemented": 2,
-        "missing": [
-          "DUALCAST",
-          "ZAP"
-        ]
+        "implemented": 4,
+        "missing": []
       },
       "generated": {
         "total": 0,
@@ -423,7 +420,6 @@
     "Doom and Gloom": "DOOM_AND_GLOOM",
     "Doppelganger": "DOPPELGANGER",
     "Double Energy": "DOUBLE_ENERGY",
-    "Dualcast": "DUALCAST",
     "Echo Form": "ECHO_FORM",
     "Electrodynamics": "ELECTRODYNAMICS",
     "EmptyBody": "EMPTY_BODY",
@@ -571,8 +567,7 @@
     "WindmillStrike": "WINDMILL_STRIKE",
     "Wish": "WISH",
     "Worship": "WORSHIP",
-    "WreathOfFlame": "WREATH_OF_FLAME",
-    "Zap": "ZAP"
+    "WreathOfFlame": "WREATH_OF_FLAME"
   },
   "missing_relics": {
     "GoldenEye": "GOLDEN_EYE",

@@ -48,6 +48,15 @@ namespace sts {
 
         Stance stance = Stance::NEUTRAL;
         int8_t orbSlots = 0;
+        // Defect orb bar. Only orb identity plus a per-orb evoke bonus (e.g. upgraded Zap's
+        // +3) is stored; passive/evoke values are computed from the orb type, focus and this
+        // bonus at settlement time (same pattern as stance effects).
+        // Inline storage is copied with each independent MCTS battle state.
+        struct OrbState {
+            Orb type = Orb::EMPTY;
+            std::int8_t evokeBonus = 0;
+        };
+        fixed_list<OrbState, 10> orbs;
 
         // for spire spear/shield
         std::int8_t lastTargetedMonster = 1;
@@ -163,7 +172,7 @@ namespace sts {
         void useEnergy(int amount);
         void gainEnergy(int amount);
         void increaseOrbSlots(int amount);
-        void channelOrb(Orb orb);
+        void channelOrb(Orb orb, std::int8_t evokeBonus = 0);
         [[nodiscard]] bool hasEmptyOrb() const;
 
         void applyEndOfTurnPowers(BattleContext &bc);

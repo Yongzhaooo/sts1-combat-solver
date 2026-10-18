@@ -19,7 +19,7 @@ int main() {
         {CharacterClass::SILENT, CardId::NEUTRALIZE},   // attack
         {CharacterClass::SILENT, CardId::SURVIVOR},     // skill
         {CharacterClass::SILENT, CardId::ACCURACY},     // power
-        {CharacterClass::DEFECT, CardId::ZAP},
+        {CharacterClass::DEFECT, CardId::COLD_SNAP}, // skill; ZAP became implemented in defect/m3a
         {CharacterClass::DEFECT, CardId::BALL_LIGHTNING},
         {CharacterClass::WATCHER, CardId::ERUPTION},
         {CharacterClass::WATCHER, CardId::VIGILANCE},

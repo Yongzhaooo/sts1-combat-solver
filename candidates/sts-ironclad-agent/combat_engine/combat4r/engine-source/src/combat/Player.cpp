@@ -178,15 +178,19 @@ void Player::gainEnergy(int amount) {
 }
 
 void Player::increaseOrbSlots(int amount) {
-    // todo
+    orbSlots = static_cast<int8_t>(orbSlots + amount);
 }
 
-void Player::channelOrb(Orb orb) {
-    // todo
+void Player::channelOrb(Orb orb, std::int8_t evokeBonus) {
+    // A full bar pushes out the leftmost orb; the new orb always lands at the right end.
+    if (!hasEmptyOrb()) {
+        orbs.remove(0);
+    }
+    orbs.push_back(OrbState{orb, evokeBonus});
 }
 
 bool Player::hasEmptyOrb() const {
-    return false;
+    return orbs.size() < orbSlots;
 }
 
 void Player::removeDebuffs() {

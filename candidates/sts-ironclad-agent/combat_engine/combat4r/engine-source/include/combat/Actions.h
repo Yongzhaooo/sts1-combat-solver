@@ -151,6 +151,8 @@ namespace sts {
         static Action OnAfterCardUsed(); // called UseCardAction in game
         static Action EssenceOfDarkness(int darkOrbsPerSlot); // handle sacred bark
         static Action IncreaseOrbSlots(int count);
+        static Action ChannelOrb(Orb orb, std::int8_t evokeBonus = 0);
+        static Action EvokeOrbAction(int orbIdx, int times = 1);
 
         static Action SuicideAction(int monsterIdx, bool triggerRelics);
 
