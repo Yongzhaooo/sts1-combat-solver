@@ -129,12 +129,10 @@
     "DEFECT": {
       "reward_pool": {
         "total": 71,
-        "implemented": 63,
+        "implemented": 65,
         "missing": [
-          "BULLSEYE",
           "GENETIC_ALGORITHM",
           "HOLOGRAM",
-          "REBOOT",
           "RECYCLE",
           "SCRAPE",
           "SEEK",
@@ -300,7 +298,6 @@
     "BowlingBash": "BOWLING_BASH",
     "Brilliance": "BRILLIANCE",
     "Bullet Time": "BULLET_TIME",
-    "Lockon": "BULLSEYE",
     "Burst": "BURST",
     "Calculated Gamble": "CALCULATED_GAMBLE",
     "Caltrops": "CALTROPS",
@@ -396,7 +393,6 @@
     "Quick Slash": "QUICK_SLASH",
     "Ragnarok": "RAGNAROK",
     "ReachHeaven": "REACH_HEAVEN",
-    "Reboot": "REBOOT",
     "Recycle": "RECYCLE",
     "Reflex": "REFLEX",
     "Riddle With Holes": "RIDDLE_WITH_HOLES",

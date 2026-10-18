@@ -549,6 +549,31 @@ namespace sts {
                 bc.addToBot(Actions::BuffPlayer<PS::HELLO_WORLD>(1));
                 return true;
 
+            case CardId::BULLSEYE:
+                // Bullseye.java: LockOnPower makes orb damage hit 50% harder.
+                bc.addToBot(Actions::DebuffEnemy<MS::LOCK_ON>(t, up ? 2 : 1));
+                return true;
+
+            case CardId::REBOOT: {
+                // Reboot.java: hand and discard pile shuffle together into the draw
+                // pile, then draw 4 (6). The card itself lands in the discard pile
+                // first, so it is shuffled back as well - same as the game.
+                const int draw = up ? 6 : 4;
+                bc.addToBot({[=] (BattleContext &bc) {
+                    for (int i = 0; i < bc.cards.cardsInHand; ++i) {
+                        bc.cards.discardPile.push_back(bc.cards.hand[i]);
+                    }
+                    bc.cards.cardsInHand = 0;
+                    java::Collections::shuffle(
+                            bc.cards.discardPile.begin(),
+                            bc.cards.discardPile.end(),
+                            java::Random(bc.shuffleRng.randomLong()));
+                    bc.cards.moveDiscardPileIntoToDrawPile();
+                }});
+                bc.addToBot(Actions::DrawCards(draw));
+                return true;
+            }
+
             default:
                 return false;
         }

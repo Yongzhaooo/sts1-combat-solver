@@ -802,6 +802,31 @@ int main() {
         check(bc.cards.hand[0].costForTurn == 0, "Hello World should make the card free");
     }
 
+    {
+        // Bullseye: Lock-On raises orb damage on that target by 50% (8 -> 12).
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::BULLSEYE);
+        check(bc.monsters.arr[0].hasStatus<MS::LOCK_ON>(), "Bullseye should apply Lock-On");
+        const int hp = bc.monsters.arr[0].curHp;
+        Actions::EvokeOrbAction(0).actFunc(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(hp - bc.monsters.arr[0].curHp == 12,
+              "a locked lightning evoke should deal 8 * 1.5 = 12");
+    }
+    {
+        // Reboot: hand and discard pile shuffle back, then draw 4.
+        BattleContext bc = freshBattle();
+        bc.cards.createTempCardInHand(CardInstance(CardId::STRIKE_BLUE));
+        bc.cards.createTempCardInHand(CardInstance(CardId::STRIKE_BLUE));
+        for (int i = 0; i < 3; ++i) {
+            bc.cards.discardPile.push_back(CardInstance(CardId::STRIKE_BLUE));
+        }
+        playCard(bc, CardId::REBOOT);
+        check(bc.cards.cardsInHand == 4, "Reboot should draw 4 cards from the reshuffled pile");
+    }
+
     std::cout << "Defect card behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {

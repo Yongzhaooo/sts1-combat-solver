@@ -900,6 +900,9 @@ namespace sts {
             case CardId::FORCE_FIELD:
                 return 4;
 
+            case CardId::REBOOT:
+                return 0;
+
             default:
                 return 1;
         }

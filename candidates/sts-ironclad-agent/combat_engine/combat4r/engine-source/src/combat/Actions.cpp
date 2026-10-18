@@ -408,6 +408,17 @@ Action Actions::MonsterStartTurnAction() {
 }
 
 namespace {
+    // LockOnPower: orb damage against a locked target is increased by 50%. The
+    // game applies this per target, so multi-target orb hits resolve one enemy at
+    // a time instead of through a single DamageAllEnemy action.
+    int lockOnDamage(const BattleContext &bc, int targetIdx, int damage) {
+        if (targetIdx >= 0 && targetIdx < bc.monsters.monsterCount
+                && bc.monsters.arr[targetIdx].hasStatus<MS::LOCK_ON>()) {
+            return static_cast<int>(static_cast<float>(damage) * 1.5f);
+        }
+        return damage;
+    }
+
     // DarkOrb.onEndOfTurn: the accumulated counter grows by max(0, 6 + focus).
     // Negative focus never reduces the counter (Dark.applyFocus clamps only the
     // growth rate, and never touches the accumulated value itself).
@@ -435,11 +446,15 @@ Action Actions::TriggerOrbPassiveAction(int orbIdx) {
                 const int damage = 3 + bc.player.focus;
                 if (damage > 0) {
                     if (bc.player.hasStatus<PS::ELECTRO>()) {
-                        bc.addToBot(Actions::DamageAllEnemy(damage));
+                        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                            if (!bc.monsters.arr[i].isDeadOrEscaped()) {
+                                bc.addToBot(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage)));
+                            }
+                        }
                     } else {
                         const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
                         if (target >= 0) {
-                            bc.addToBot(Actions::AttackEnemy(target, damage));
+                            bc.addToBot(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage)));
                         }
                     }
                 }
@@ -487,11 +502,15 @@ Action Actions::TriggerEndOfTurnOrbsAction() {
                     const int damage = 3 + bc.player.focus;
                     if (damage > 0) {
                         if (bc.player.hasStatus<PS::ELECTRO>()) {
-                            bc.addToBot(Actions::DamageAllEnemy(damage));
+                            for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                                if (!bc.monsters.arr[i].isDeadOrEscaped()) {
+                                    bc.addToBot(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage)));
+                                }
+                            }
                         } else {
                             const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
                             if (target >= 0) {
-                                bc.addToBot(Actions::AttackEnemy(target, damage));
+                                bc.addToBot(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage)));
                             }
                         }
                     }
@@ -531,11 +550,15 @@ namespace {
                 const int damage = 8 + bc.player.focus + orb.evokeBonus;
                 if (damage > 0) {
                     if (bc.player.hasStatus<PS::ELECTRO>()) {
-                        bc.addToTop(Actions::DamageAllEnemy(damage));
+                        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                            if (!bc.monsters.arr[i].isDeadOrEscaped()) {
+                                bc.addToTop(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage)));
+                            }
+                        }
                     } else {
                         const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
                         if (target >= 0) {
-                            bc.addToTop(Actions::AttackEnemy(target, damage));
+                            bc.addToTop(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage)));
                         }
                     }
                 }
