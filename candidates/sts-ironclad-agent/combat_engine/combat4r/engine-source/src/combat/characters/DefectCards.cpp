@@ -531,6 +531,24 @@ namespace sts {
                 bc.addToBot(Actions::AllForOneAction());
                 return true;
 
+            case CardId::AMPLIFY:
+                // Amplify.java: the next 1 (2) Power cards this turn are played
+                // twice. The copy happens in onAfterUseCard next to Duplication.
+                bc.addToBot(Actions::BuffPlayer<PS::AMPLIFY>(up ? 2 : 1));
+                return true;
+
+            case CardId::FORCE_FIELD:
+                // ForceField.java: 12 (16) block; its cost drops 1 per Power played
+                // this combat (applied in onAfterUseCard when a Power resolves).
+                bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(up ? 16 : 12)));
+                return true;
+
+            case CardId::HELLO_WORLD:
+                // HelloWorld.java: at the start of each turn add a random Common
+                // Skill, free to play. The Player start-of-turn hook does the work.
+                bc.addToBot(Actions::BuffPlayer<PS::HELLO_WORLD>(1));
+                return true;
+
             default:
                 return false;
         }

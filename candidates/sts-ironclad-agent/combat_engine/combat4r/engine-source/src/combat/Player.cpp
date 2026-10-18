@@ -747,8 +747,12 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 removeStatus<PS::FLAME_BARRIER>();
                 break;
 
-            case PS::HELLO_WORLD: // todo
-                removeStatus<PS::HELLO_WORLD>();
+            case PS::HELLO_WORLD:
+                // HelloWorldPower.atStartOfTurn: one random Common Skill, free this
+                // turn, per stack. It is a permanent power, not a one-shot.
+                for (int i = 0; i < pair.second; ++i) {
+                    bc.addToBot(Actions::CreateRandomCommonSkillInHandAction());
+                }
                 break;
 
             case PS::INFINITE_BLADES:

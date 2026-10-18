@@ -20,7 +20,7 @@ int main() {
         {CharacterClass::SILENT, CardId::SURVIVOR},     // skill
         {CharacterClass::SILENT, CardId::ACCURACY},     // power
         {CharacterClass::DEFECT, CardId::HOLOGRAM}, // skill; ZAP (m3a) and the M3b commons became implemented
-        {CharacterClass::DEFECT, CardId::FORCE_FIELD}, // skill; STREAMLINE became implemented with the block/energy batch
+        {CharacterClass::DEFECT, CardId::HOLOGRAM}, // skill; FORCE_FIELD became implemented with the powers batch
         {CharacterClass::WATCHER, CardId::ERUPTION},
         {CharacterClass::WATCHER, CardId::VIGILANCE},
         {CharacterClass::WATCHER, CardId::DEVA_FORM},

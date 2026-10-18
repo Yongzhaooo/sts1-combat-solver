@@ -129,13 +129,10 @@
     "DEFECT": {
       "reward_pool": {
         "total": 71,
-        "implemented": 60,
+        "implemented": 63,
         "missing": [
-          "AMPLIFY",
           "BULLSEYE",
-          "FORCE_FIELD",
           "GENETIC_ALGORITHM",
-          "HELLO_WORLD",
           "HOLOGRAM",
           "REBOOT",
           "RECYCLE",
@@ -289,7 +286,6 @@
     "Venomology": "ALCHEMIZE",
     "All Out Attack": "ALL_OUT_ATTACK",
     "Alpha": "ALPHA",
-    "Amplify": "AMPLIFY",
     "A Thousand Cuts": "A_THOUSAND_CUTS",
     "Backflip": "BACKFLIP",
     "Backstab": "BACKSTAB",
@@ -357,7 +353,6 @@
     "FlyingSleeves": "FLYING_SLEEVES",
     "FollowUp": "FOLLOW_UP",
     "Footwork": "FOOTWORK",
-    "Force Field": "FORCE_FIELD",
     "ForeignInfluence": "FOREIGN_INFLUENCE",
     "Wireheading": "FORESIGHT",
     "Genetic Algorithm": "GENETIC_ALGORITHM",
@@ -365,7 +360,6 @@
     "Grand Finale": "GRAND_FINALE",
     "Halt": "HALT",
     "Heel Hook": "HEEL_HOOK",
-    "Hello World": "HELLO_WORLD",
     "Hologram": "HOLOGRAM",
     "Indignation": "INDIGNATION",
     "Infinite Blades": "INFINITE_BLADES",

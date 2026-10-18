@@ -897,6 +897,9 @@ namespace sts {
             case CardId::ALL_FOR_ONE:
                 return 2;
 
+            case CardId::FORCE_FIELD:
+                return 4;
+
             default:
                 return 1;
         }

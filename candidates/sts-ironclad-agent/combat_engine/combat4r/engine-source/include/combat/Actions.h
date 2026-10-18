@@ -51,6 +51,7 @@ namespace sts {
         static Action WhiteNoiseAction(); // add a random Power card, free this turn
         static Action CreateRandomCardInHandAction(CardType type); // random card of type, free this turn
         static Action AllForOneAction(); // return every 0-cost discard pile card to hand
+        static Action CreateRandomCommonSkillInHandAction(); // Hello World: random Common Skill
 
         // Per-target damage is captured when the card is used.
         static Action AttackAllEnemy(DamageMatrix damageMatrix);

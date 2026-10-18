@@ -1711,6 +1711,12 @@ void BattleContext::onUseAttackCard() {
         p.decrementStatus<PS::DUPLICATION>();
     }
 
+    // AmplifyPower: the next Power card played this turn is played twice.
+    if (!item.purgeOnUse && c.getType() == CardType::POWER && p.hasStatus<PS::AMPLIFY>()) {
+        queuePurgeCard(c, item.target);
+        p.decrementStatus<PS::AMPLIFY>();
+    }
+
     const auto echoForm = p.getStatus<PS::ECHO_FORM>();
     if (!item.purgeOnUse && echoForm) {
         // EchoFormPower: the first amount cards played each turn are played twice.
@@ -2058,6 +2064,16 @@ void BattleContext::onAfterUseCard() {
     }
 
     if (c.getType() == CardType::POWER) {
+        // ForceField.java: every Power played this combat lowers its cost by 1 in
+        // whatever pile it is sitting in.
+        auto lowerForceField = [](CardInstance &fc) {
+            if (fc.getId() == CardId::FORCE_FIELD) {
+                fc.updateCost(-1);
+            }
+        };
+        for (int i = 0; i < cards.cardsInHand; ++i) lowerForceField(cards.hand[i]);
+        for (auto &fc : cards.drawPile) lowerForceField(fc);
+        for (auto &fc : cards.discardPile) lowerForceField(fc);
         c.id = CardId::INVALID;
         return;
     }

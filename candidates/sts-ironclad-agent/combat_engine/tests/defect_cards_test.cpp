@@ -774,6 +774,34 @@ int main() {
               "All for One should leave the 2-cost cards behind (Equilibrium and itself)");
     }
 
+    {
+        // Amplify: stores stacks for the next Power card to be doubled.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::AMPLIFY);
+        check(bc.player.getStatus<PS::AMPLIFY>() == 1, "Amplify should apply one stack");
+    }
+    {
+        // Force Field: 12 block, and each Power played lowers its cost by 1.
+        BattleContext bc = freshBattle();
+        bc.cards.createTempCardInHand(CardInstance(CardId::FORCE_FIELD));
+        check(bc.cards.hand[0].cost == 4, "Force Field should start at 4 energy");
+        playCard(bc, CardId::CAPACITOR);
+        check(bc.cards.hand[0].cost == 3, "a Power play should lower Force Field cost by 1");
+    }
+    {
+        // Hello World: at turn start add a random Common Skill, free this turn.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::HELLO_WORLD);
+        check(bc.player.hasStatus<PS::HELLO_WORLD>(), "Hello World should apply its power");
+        bc.player.applyStartOfTurnPowers(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(bc.cards.cardsInHand == 1, "Hello World should add one card");
+        check(bc.cards.hand[0].getType() == CardType::SKILL, "Hello World should add a Skill");
+        check(bc.cards.hand[0].costForTurn == 0, "Hello World should make the card free");
+    }
+
     std::cout << "Defect card behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {

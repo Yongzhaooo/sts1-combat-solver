@@ -57,6 +57,18 @@ Action Actions::AllForOneAction() {
     }};
 }
 
+Action Actions::CreateRandomCommonSkillInHandAction() {
+    return {[] (BattleContext &bc) {
+        // HelloWorldPower.atStartOfTurn: a random Common Skill of the player's
+        // class, free to play this turn.
+        const auto cid = getRandomClassCardOfTypeAndRarity(
+                bc.cardRandomRng, bc.player.cc, CardType::SKILL, CardRarity::COMMON);
+        CardInstance generated = bc.createGeneratedCard(cid);
+        generated.setCostForTurn(0);
+        bc.addToTop(Actions::MakeTempCardInHand(generated));
+    }};
+}
+
 Action Actions::WhiteNoiseAction() {
     return {[] (BattleContext &bc) {
         // White Noise: a random Power card of the player's class, free this turn.
