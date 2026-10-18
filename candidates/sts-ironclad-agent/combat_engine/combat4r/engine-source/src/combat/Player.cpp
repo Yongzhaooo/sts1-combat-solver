@@ -738,7 +738,11 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 break;
 
             case PS::LOOP:
-                // todo do amount times : call orb[0].onStartOfTurn, orb[0].onEndOfTurn
+                // LoopPower: for each stack, trigger the oldest orb's passive
+                // (onStartOfTurn then onEndOfTurn, as the game calls both).
+                for (int i = 0; i < pair.second; ++i) {
+                    bc.addToBot(Actions::TriggerOrbPassiveAction(0));
+                }
                 break;
 
             case PS::MAGNETISM:

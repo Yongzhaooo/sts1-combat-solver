@@ -338,6 +338,48 @@ namespace {
     }
 }
 
+Action Actions::TriggerOrbPassiveAction(int orbIdx) {
+    return {[=] (BattleContext &bc) {
+        // LoopPower: for each stack, trigger the oldest orb's passive by calling
+        // both onStartOfTurn and onEndOfTurn (only Plasma overrides the former).
+        if (orbIdx < 0 || orbIdx >= bc.player.orbs.size()) {
+            return;
+        }
+        auto &orb = bc.player.orbs[orbIdx];
+        switch (orb.type) {
+            case Orb::FUSION:
+                bc.addToBot(Actions::GainEnergy(1));
+                break;
+            case Orb::LIGHTNING: {
+                const int damage = 3 + bc.player.focus;
+                if (damage > 0) {
+                    if (bc.player.hasStatus<PS::ELECTRO>()) {
+                        bc.addToBot(Actions::DamageAllEnemy(damage));
+                    } else {
+                        const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                        if (target >= 0) {
+                            bc.addToBot(Actions::AttackEnemy(target, damage));
+                        }
+                    }
+                }
+                break;
+            }
+            case Orb::FROST: {
+                const int block = 2 + bc.player.focus;
+                if (block > 0) {
+                    bc.addToBot(Actions::GainBlock(block));
+                }
+                break;
+            }
+            case Orb::DARK:
+                growDarkOrb(bc, orb);
+                break;
+            default:
+                break;
+        }
+    }};
+}
+
 Action Actions::TriggerStartOfTurnOrbsAction() {
     return {[] (BattleContext &bc) {
         // Plasma is the only orb with a start-of-turn passive: Plasma.onStartOfTurn
@@ -359,11 +401,17 @@ Action Actions::TriggerEndOfTurnOrbsAction() {
             switch (orb.type) {
                 case Orb::LIGHTNING: {
                     // LightningOrb.onEndOfTurn: deal 3 (+focus) to a random enemy.
+                    // With Electrodynamics (ElectroPower) it hits all enemies and
+                    // consumes no target roll (Lightning checks hasPower("Electro")).
                     const int damage = 3 + bc.player.focus;
                     if (damage > 0) {
-                        const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
-                        if (target >= 0) {
-                            bc.addToBot(Actions::AttackEnemy(target, damage));
+                        if (bc.player.hasStatus<PS::ELECTRO>()) {
+                            bc.addToBot(Actions::DamageAllEnemy(damage));
+                        } else {
+                            const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                            if (target >= 0) {
+                                bc.addToBot(Actions::AttackEnemy(target, damage));
+                            }
                         }
                     }
                     break;
@@ -397,12 +445,17 @@ namespace {
     void fireEvokeEffects(BattleContext &bc, const Player::OrbState &orb) {
         switch (orb.type) {
             case Orb::LIGHTNING: {
-                // LightningOrb.onEvoke: deal 8 (+focus +bonus) to a random enemy.
+                // LightningOrb.onEvoke: deal 8 (+focus +bonus) to a random enemy, or
+                // to all enemies under Electrodynamics (no target roll in that case).
                 const int damage = 8 + bc.player.focus + orb.evokeBonus;
                 if (damage > 0) {
-                    const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
-                    if (target >= 0) {
-                        bc.addToTop(Actions::AttackEnemy(target, damage));
+                    if (bc.player.hasStatus<PS::ELECTRO>()) {
+                        bc.addToTop(Actions::DamageAllEnemy(damage));
+                    } else {
+                        const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                        if (target >= 0) {
+                            bc.addToTop(Actions::AttackEnemy(target, damage));
+                        }
                     }
                 }
                 break;

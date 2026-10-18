@@ -2787,6 +2787,18 @@ void BattleContext::triggerOnOtherCardPlayed(const CardInstance &usedCard) {
     if (thousandCuts) {
         addToBot(Actions::DamageAllEnemy(thousandCuts));
     }
+
+    // Storm/Heatsinks watch the card type (both use onUseCard in the game).
+    if (usedCard.getType() == CardType::POWER) {
+        if (const int storm = player.getStatus<PS::STORM>(); storm > 0) {
+            for (int i = 0; i < storm; ++i) {
+                addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
+            }
+        }
+        if (const int heatsinks = player.getStatus<PS::HEATSINKS>(); heatsinks > 0) {
+            addToBot(Actions::DrawCards(heatsinks));
+        }
+    }
 }
 
 DamageMatrix BattleContext::calculateCardDamageMatrix(const CardInstance &card, int baseDamage) const {

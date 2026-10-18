@@ -382,6 +382,80 @@ int main() {
         check(CardInstance(CardId::TEMPEST).doesExhaust(), "Tempest should exhaust");
     }
 
+    {
+        // Capacitor: gain 2 orb slots.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::CAPACITOR);
+        check(bc.player.orbSlots == 5, "Capacitor should gain 2 orb slots");
+    }
+    {
+        // Loop: at turn start, trigger the oldest orb's passive once per stack.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::LOOP);
+        check(bc.player.hasStatus<PS::LOOP>(), "Loop should apply the Loop power");
+        const int hp = bc.monsters.arr[0].curHp;
+        bc.player.applyStartOfTurnPowers(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(hp - bc.monsters.arr[0].curHp == 3, "Loop should trigger the lightning passive for 3");
+        check(bc.player.orbs.size() == 1, "Loop should not consume the orb");
+    }
+    {
+        // Electrodynamics: lightning hits all enemies (passive and evoke), no target roll.
+        BattleContext bc = freshBattle(MonsterEncounter::TWO_LOUSE);
+        playCard(bc, CardId::ELECTRODYNAMICS); // power + 2 lightning, bar full (3)
+        check(bc.player.hasStatus<PS::ELECTRO>(), "Electrodynamics should apply the Electro power");
+        check(bc.player.orbs.size() == 3, "Electrodynamics should channel two Lightning orbs");
+        int hp0 = bc.monsters.arr[0].curHp;
+        int hp1 = bc.monsters.arr[1].curHp;
+        Actions::TriggerEndOfTurnOrbsAction().actFunc(bc);
+        for (int i = 0; i < 16 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(hp0 - bc.monsters.arr[0].curHp == 9 && hp1 - bc.monsters.arr[1].curHp == 9,
+              "three lightning passives should hit both enemies for 9 each under Electro");
+        // The passives nearly kill the lice (13 HP), so give them headroom and
+        // clear any curl-up block before measuring the evoke damage.
+        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+            bc.monsters.arr[i].curHp = 100;
+            bc.monsters.arr[i].block = 0;
+        }
+        hp0 = bc.monsters.arr[0].curHp;
+        hp1 = bc.monsters.arr[1].curHp;
+        Actions::EvokeOrbAction(0).actFunc(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(hp0 - bc.monsters.arr[0].curHp == 8 && hp1 - bc.monsters.arr[1].curHp == 8,
+              "a lightning evoke should hit both enemies for 8 under Electro");
+    }
+    {
+        // Storm: playing a Power channels a Lightning orb (the Storm card itself does not).
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::STORM);
+        check(bc.player.orbs.size() == 1, "playing Storm itself should not trigger it");
+        playCard(bc, CardId::CAPACITOR);
+        check(bc.player.orbs.size() == 2 && bc.player.orbs.back().type == Orb::LIGHTNING,
+              "Storm should channel a Lightning orb when a Power is played");
+    }
+    {
+        // Heatsinks: playing a Power draws a card.
+        BattleContext bc = freshBattle();
+        bc.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
+        bc.cards.createTempCardInDrawPile(1, CardInstance(CardId::STRIKE_BLUE));
+        playCard(bc, CardId::HEATSINKS);
+        playCard(bc, CardId::CAPACITOR);
+        check(bc.cards.cardsInHand == 1, "Heatsinks should draw one card when a Power is played");
+    }
+    {
+        // Machine Learning: +1 card drawn per turn (persistent draw count).
+        BattleContext bc = freshBattle();
+        check(bc.player.cardDrawPerTurn == 5, "base draw should start at 5");
+        playCard(bc, CardId::MACHINE_LEARNING);
+        check(bc.player.cardDrawPerTurn == 6, "Machine Learning should add one card draw per turn");
+    }
+
     std::cout << "M3b Defect card behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {

@@ -229,6 +229,42 @@ namespace sts {
                 return true;
             }
 
+            case CardId::CAPACITOR:
+                // Capacitor.java: gain 2 (3 upgraded) orb slots.
+                bc.addToBot(Actions::IncreaseOrbSlots(up ? 3 : 2));
+                return true;
+
+            case CardId::ELECTRODYNAMICS:
+                // Electro.java: lightning orbs hit all enemies, then channel 2 (3).
+                bc.addToBot(Actions::BuffPlayer<PS::ELECTRO>(1));
+                for (int i = 0; i < (up ? 3 : 2); ++i) {
+                    bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
+                }
+                return true;
+
+            case CardId::LOOP:
+                // Loop.java: apply the Loop power; Player::applyStartOfTurnPowers
+                // triggers the oldest orb's passive per stack at turn start.
+                bc.addToBot(Actions::BuffPlayer<PS::LOOP>(1));
+                return true;
+
+            case CardId::STORM:
+                // Storm.java: whenever a Power is played, channel one Lightning orb.
+                bc.addToBot(Actions::BuffPlayer<PS::STORM>(1));
+                return true;
+
+            case CardId::HEATSINKS:
+                // Heatsinks.java: whenever a Power is played, draw 1 (2 upgraded).
+                bc.addToBot(Actions::BuffPlayer<PS::HEATSINKS>(up ? 2 : 1));
+                return true;
+
+            case CardId::MACHINE_LEARNING:
+                // MachineLearning.java applies the game's DrawPower (+1 hand size per
+                // turn). The engine tracks this through cardDrawPerTurn, which persists
+                // across turns (Snecko and Draw Reduction use the same field).
+                bc.player.cardDrawPerTurn += 1;
+                return true;
+
             default:
                 return false;
         }
