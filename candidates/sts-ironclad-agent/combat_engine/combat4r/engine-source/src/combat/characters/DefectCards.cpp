@@ -265,6 +265,128 @@ namespace sts {
                 bc.player.cardDrawPerTurn += 1;
                 return true;
 
+            case CardId::GO_FOR_THE_EYES:
+                // GoForTheEyes.java: damage first, then Weak only when the target
+                // intends to attack (Java checks getIntentBaseDmg() >= 0, which the
+                // engine exposes as Monster::isAttacking()).
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 4 : 3)));
+                bc.addToBot({[=] (BattleContext &bc) {
+                    if (t >= 0 && t < bc.monsters.monsterCount
+                        && !bc.monsters.arr[t].isDeadOrEscaped()
+                        && bc.monsters.arr[t].isAttacking()) {
+                        bc.addToBot(Actions::DebuffEnemy<MS::WEAK>(t, up ? 2 : 1));
+                    }
+                }});
+                return true;
+
+            case CardId::AUTO_SHIELDS:
+                // AutoShields.java: gains block only when the player currently has none.
+                bc.addToBot({[=] (BattleContext &bc) {
+                    if (bc.player.block == 0) {
+                        bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(up ? 15 : 11)));
+                    }
+                }});
+                return true;
+
+            case CardId::BOOT_SEQUENCE:
+                // BootSequence.java: 10 (13) block; innate and exhaust come from the
+                // shared card metadata (isCardInnate / doesCardExhaust).
+                bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(up ? 13 : 10)));
+                return true;
+
+            case CardId::CHARGE_BATTERY:
+                // ConserveBattery.java: block, then EnergizedBluePower(1) for next turn.
+                bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(up ? 10 : 7)));
+                bc.addToBot(Actions::BuffPlayer<PS::ENERGIZED>(1));
+                return true;
+
+            case CardId::DOUBLE_ENERGY:
+                // DoubleEnergy.java: DoubleEnergyAction doubles the current energy.
+                bc.addToBot(Actions::DoubleEnergy());
+                return true;
+
+            case CardId::MULTI_CAST: {
+                // MultiCast.java -> MulticastAction: evoke the oldest orb X times,
+                // consuming it once. X = energyOnUse + Chemical X (2) + upgraded (1).
+                // Energy is spent after the evokes resolve.
+                auto &item = bc.curCardQueueItem;
+                if (!item.ignoreEnergyTotal && bc.player.energy < item.energyOnUse) {
+                    item.energyOnUse = bc.player.energy;
+                }
+                const int times = item.energyOnUse + (up ? 1 : 0)
+                    + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
+                const bool useEnergy = !(item.freeToPlay || c.freeToPlayOnce);
+                bc.addToBot({[=] (BattleContext &bc) {
+                    bc.addToBot(Actions::MultiCastAction(times));
+                    if (useEnergy) {
+                        bc.addToBot({[] (BattleContext &bc) {
+                            bc.player.useEnergy(bc.player.energy);
+                        }});
+                    }
+                }});
+                return true;
+            }
+
+            case CardId::REINFORCED_BODY: {
+                // ReinforcedBody.java -> ReinforcedBodyAction: gain block X times,
+                // X = energyOnUse + Chemical X (2). Upgraded raises block 7 -> 9.
+                auto &item = bc.curCardQueueItem;
+                if (!item.ignoreEnergyTotal && bc.player.energy < item.energyOnUse) {
+                    item.energyOnUse = bc.player.energy;
+                }
+                const int times = item.energyOnUse
+                    + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
+                const bool useEnergy = !(item.freeToPlay || c.freeToPlayOnce);
+                bc.addToBot({[=] (BattleContext &bc) {
+                    const int block = bc.calculateCardBlock(up ? 9 : 7);
+                    if (useEnergy) {
+                        bc.player.useEnergy(bc.player.energy);
+                    }
+                    for (int i = 0; i < times; ++i) {
+                        bc.addToBot(Actions::GainBlock(block));
+                    }
+                }});
+                return true;
+            }
+
+            case CardId::METEOR_STRIKE:
+                // MeteorStrike.java: 24 (30) damage, then channel three Plasma orbs.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 30 : 24)));
+                for (int i = 0; i < 3; ++i) {
+                    bc.addToBot(Actions::ChannelOrb(Orb::FUSION));
+                }
+                return true;
+
+            case CardId::CORE_SURGE:
+                // CoreSurge.java: damage then one Artifact; exhaust is card metadata.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 15 : 11)));
+                bc.addToBot(Actions::BuffPlayer<PS::ARTIFACT>(1));
+                return true;
+
+            case CardId::MELTER:
+                // Melter.java: RemoveAllBlockAction resolves before the damage.
+                bc.addToBot({[=] (BattleContext &bc) {
+                    if (t >= 0 && t < bc.monsters.monsterCount) {
+                        bc.monsters.arr[t].block = 0;
+                    }
+                }});
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 14 : 10)));
+                return true;
+
+            case CardId::SUNDER:
+                // Sunder.java: damage; if this card kills the enemy, gain 3 energy.
+                bc.addToBot(Actions::SunderAction(t, bc.calculateCardDamage(c, t, up ? 32 : 24)));
+                return true;
+
+            case CardId::AGGREGATE:
+                // AggregateEnergyAction: gainEnergy(drawPile.size() / divideAmount),
+                // where divideAmount is 4 (3 upgraded).
+                bc.addToBot({[=] (BattleContext &bc) {
+                    const int per = up ? 3 : 4;
+                    bc.player.gainEnergy(static_cast<int>(bc.cards.drawPile.size()) / per);
+                }});
+                return true;
+
             default:
                 return false;
         }

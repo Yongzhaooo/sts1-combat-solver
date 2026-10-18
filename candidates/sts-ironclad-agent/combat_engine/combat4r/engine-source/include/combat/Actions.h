@@ -45,6 +45,7 @@ namespace sts {
 
         // todo, action and damage actions should clear certain actions from the queue if the player kills all enemies
         static Action AttackEnemy(int idx, int damage);
+        static Action SunderAction(int idx, int damage); // attack; +3 energy when the hit kills
 
         // Per-target damage is captured when the card is used.
         static Action AttackAllEnemy(DamageMatrix damageMatrix);
@@ -101,6 +102,8 @@ namespace sts {
 
         static Action UnnamedEndOfTurnAction();
         static Action MonsterStartTurnAction();
+        static Action DoubleEnergy(); // DoubleEnergyAction: double the current energy
+        static Action MultiCastAction(int times); // MulticastAction: evoke the oldest orb N times, consume once
         static Action TriggerStartOfTurnOrbsAction();
         static Action TriggerOrbPassiveAction(int orbIdx); // Loop: one orb's full passive
         static Action TriggerEndOfTurnOrbsAction();

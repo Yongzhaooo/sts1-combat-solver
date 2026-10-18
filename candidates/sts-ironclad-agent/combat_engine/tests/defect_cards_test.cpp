@@ -456,7 +456,125 @@ int main() {
         check(bc.player.cardDrawPerTurn == 6, "Machine Learning should add one card draw per turn");
     }
 
-    std::cout << "M3b Defect card behaviors hold\n";
+    {
+        // Go for the Eyes: 0-cost 3 damage; Weak only when the target intends to attack.
+        BattleContext bc = freshBattle();
+        const int hp = bc.monsters.arr[0].curHp;
+        const bool attacking = bc.monsters.arr[0].isAttacking();
+        playCard(bc, CardId::GO_FOR_THE_EYES);
+        check(hp - bc.monsters.arr[0].curHp == 3, "Go for the Eyes should deal 3");
+        check(bc.monsters.arr[0].getStatus<MS::WEAK>() == (attacking ? 1 : 0),
+              "Go for the Eyes should apply Weak only to an attacking enemy");
+    }
+    {
+        // Auto Shields: block only when the player has none.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::AUTO_SHIELDS);
+        check(bc.player.block == 11, "Auto Shields should grant 11 block at zero block");
+        BattleContext bc2 = freshBattle();
+        Actions::GainBlock(5).actFunc(bc2);
+        playCard(bc2, CardId::AUTO_SHIELDS);
+        check(bc2.player.block == 5, "Auto Shields should do nothing when block is held");
+    }
+    {
+        // Boot Sequence: 10 block for free; innate metadata lives in Cards.h.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::BOOT_SEQUENCE);
+        check(bc.player.block == 10, "Boot Sequence should grant 10 block");
+        check(CardInstance(CardId::BOOT_SEQUENCE).cost == 0, "Boot Sequence should cost 0");
+    }
+    {
+        // Charge Battery: block now, +1 energy next turn through ENERGIZED.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::CHARGE_BATTERY);
+        check(bc.player.block == 7, "Charge Battery should grant 7 block");
+        check(bc.player.getStatus<PS::ENERGIZED>() == 1, "Charge Battery should energize next turn");
+    }
+    {
+        // Double Energy: doubles the current energy after paying the 1 cost.
+        BattleContext bc = freshBattle();
+        bc.player.energy = 3;
+        playCard(bc, CardId::DOUBLE_ENERGY);
+        check(bc.player.energy == 4, "Double Energy should double the 2 energy left after cost");
+        check(CardInstance(CardId::DOUBLE_ENERGY, true).cost == 0, "upgraded Double Energy is free");
+    }
+    {
+        // Multi-Cast: evoke the oldest orb X times, consume it once, spend all energy.
+        BattleContext bc = freshBattle();
+        const int hp = bc.monsters.arr[0].curHp;
+        bc.player.energy = 3;
+        playCard(bc, CardId::MULTI_CAST);
+        check(bc.player.energy == 0, "Multi-Cast should spend all energy");
+        check(bc.player.orbs.empty(), "Multi-Cast should consume the evoked orb once");
+        check(hp - bc.monsters.arr[0].curHp == 24, "Multi-Cast should evoke lightning three times for 8 each");
+    }
+    {
+        // Reinforced Body: X blocks of 7 for 3 energy, then all energy is spent.
+        BattleContext bc = freshBattle();
+        bc.player.energy = 3;
+        playCard(bc, CardId::REINFORCED_BODY);
+        check(bc.player.energy == 0, "Reinforced Body should spend all energy");
+        check(bc.player.block == 21, "Reinforced Body should grant 7 block three times");
+    }
+    {
+        // Meteor Strike: 5 energy, 24 damage, then three Plasma orbs.
+        BattleContext bc = freshBattle();
+        Actions::EvokeOrbAction(0).actFunc(bc); // clear Cracked Core's lightning
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        bc.player.energy = 5;
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::METEOR_STRIKE);
+        check(hp - bc.monsters.arr[0].curHp == 24, "Meteor Strike should deal 24");
+        check(bc.player.orbs.size() == 3, "Meteor Strike should channel three orbs");
+        for (int i = 0; i < 3; ++i) {
+            check(bc.player.orbs[i].type == Orb::FUSION, "Meteor Strike should channel Plasma");
+        }
+        check(CardInstance(CardId::METEOR_STRIKE).cost == 5, "Meteor Strike should cost 5");
+    }
+    {
+        // Core Surge: 11 damage and one Artifact.
+        BattleContext bc = freshBattle();
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::CORE_SURGE);
+        check(hp - bc.monsters.arr[0].curHp == 11, "Core Surge should deal 11");
+        check(bc.player.getStatus<PS::ARTIFACT>() == 1, "Core Surge should grant 1 Artifact");
+    }
+    {
+        // Melter: strips all block before the 10 damage lands.
+        BattleContext bc = freshBattle();
+        bc.monsters.arr[0].block = 10;
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::MELTER);
+        check(bc.monsters.arr[0].block == 0, "Melter should remove all block");
+        check(hp - bc.monsters.arr[0].curHp == 10, "Melter should deal 10 through the removed block");
+    }
+    {
+        // Sunder: 3 energy, gains 3 energy back only when the hit kills.
+        BattleContext bc = freshBattle();
+        bc.monsters.arr[0].curHp = 10;
+        bc.player.energy = 3;
+        playCard(bc, CardId::SUNDER);
+        check(bc.player.energy == 3, "Sunder should refund 3 energy on a kill");
+        BattleContext bc2 = freshBattle();
+        bc2.monsters.arr[0].curHp = 200;
+        bc2.player.energy = 3;
+        playCard(bc2, CardId::SUNDER);
+        check(bc2.player.energy == 0, "Sunder should not refund energy without a kill");
+    }
+    {
+        // Aggregate: 1 energy per 4 cards in the draw pile (3 upgraded).
+        BattleContext bc = freshBattle();
+        for (int i = 0; i < 8; ++i) {
+            bc.cards.createTempCardInDrawPile(i, CardInstance(CardId::STRIKE_BLUE));
+        }
+        bc.player.energy = 1; // enough to pay the 1 cost
+        playCard(bc, CardId::AGGREGATE);
+        check(bc.player.energy == 2, "Aggregate should gain 1 energy per 4 draw pile cards");
+    }
+
+    std::cout << "Defect card behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {
         std::cout << "FAILED: " << e.what() << std::endl;

@@ -860,6 +860,19 @@ namespace sts {
             case CardId::TEMPEST:
                 return -1; // X cost
 
+            case CardId::BOOT_SEQUENCE:
+            case CardId::GO_FOR_THE_EYES:
+                return 0;
+
+            case CardId::DOUBLE_ENERGY:
+                return upgraded ? 0 : 1;
+
+            case CardId::METEOR_STRIKE:
+                return 5;
+
+            case CardId::SUNDER:
+                return 3;
+
             default:
                 return 1;
         }

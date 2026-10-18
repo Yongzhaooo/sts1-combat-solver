@@ -25,6 +25,23 @@ Action Actions::AttackEnemy(int idx, int damage) {
     }};
 }
 
+Action Actions::SunderAction(int idx, int damage) {
+    return {[=] (BattleContext &bc) {
+        if (bc.monsters.arr[idx].isDeadOrEscaped()) {
+            return;
+        }
+        const bool aliveBefore = bc.monsters.arr[idx].curHp > 0;
+        bc.monsters.arr[idx].attacked(bc, damage);
+        // The kill check must run inside the damage action. The game checks
+        // target.isDying in AttackAction; a follow-up queued action may never
+        // resolve once checkCombat changes the input state.
+        if (aliveBefore && bc.monsters.arr[idx].curHp <= 0) {
+            bc.player.gainEnergy(3);
+        }
+        bc.checkCombat();
+    }};
+}
+
 Action Actions::AttackAllEnemy(DamageMatrix damageMatrix) {
     return {[=] (BattleContext &bc) {
         for (int i = 0; i < bc.monsters.monsterCount; ++i) {
@@ -526,6 +543,28 @@ Action Actions::DarkImpulseAction() {
         for (auto &orb : bc.player.orbs) {
             if (orb.type == Orb::DARK) {
                 growDarkOrb(bc, orb);
+            }
+        }
+    }};
+}
+
+Action Actions::DoubleEnergy() {
+    return {[] (BattleContext &bc) {
+        // DoubleEnergyAction: gainEnergy(player.energy) doubles the current energy.
+        bc.player.gainEnergy(bc.player.energy);
+    }};
+}
+
+Action Actions::MultiCastAction(int times) {
+    return {[=] (BattleContext &bc) {
+        // MulticastAction: evoke the oldest orb N times. Every trigger except
+        // the last one leaves the orb in the bar (EvokeWithoutRemovingOrbAction);
+        // the final EvokeOrbAction(1) consumes it.
+        for (int i = 0; i < times && !bc.player.orbs.empty(); ++i) {
+            const auto orb = bc.player.orbs[0];
+            fireEvokeEffects(bc, orb);
+            if (i == times - 1) {
+                bc.player.orbs.remove(0);
             }
         }
     }};
