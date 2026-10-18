@@ -16,6 +16,7 @@ sys.path.insert(0, str(SIM))
 import slaythespire as sts  # noqa: E402
 
 CARD_ALIASES = {"Strike_R": "STRIKE_RED", "Defend_R": "DEFEND_RED", "Ghostly": "APPARITION",
+                "J.A.X.": "JAX",
                 # Defect cards whose game cardID differs from the engine enum name.
                 "Strike_B": "STRIKE_BLUE", "Defend_B": "DEFEND_BLUE",
                 "Conserve Battery": "CHARGE_BATTERY", "Gash": "CLAW",
