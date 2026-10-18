@@ -373,9 +373,7 @@ int main() {
             bc.actionQueue.popFront()(bc);
         }
         playCard(bc, CardId::TEMPEST);
-        // X resolves to the energy spent at play time (Whirlwind pattern). The engine
-        // does not deduct energy for X-cost cards anywhere yet, so only the orb count
-        // is asserted here.
+        check(bc.player.energy == 0, "Tempest should spend all energy (X-cost)");
         check(bc.player.orbs.size() == 3, "Tempest with 3 energy should channel three orbs");
         for (int i = 0; i < bc.player.orbs.size(); ++i) {
             check(bc.player.orbs[i].type == Orb::LIGHTNING, "Tempest should channel Lightning orbs");

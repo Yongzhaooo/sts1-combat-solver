@@ -208,16 +208,24 @@ namespace sts {
             }
 
             case CardId::TEMPEST: {
-                // Tempest.java: channel X (+1 upgraded) Lightning orbs. X resolves like
-                // other X-cost cards (Whirlwind pattern).
+                // Tempest.java: channel X (+1 upgraded) Lightning orbs. X-cost
+                // energy is spent by the card action itself (Whirlwind pattern),
+                // skipped when the card is free to play. Chemical X adds 2 to X.
                 auto &item = bc.curCardQueueItem;
                 if (!item.ignoreEnergyTotal && bc.player.energy < item.energyOnUse) {
                     item.energyOnUse = bc.player.energy;
                 }
-                const int count = item.energyOnUse + (up ? 1 : 0);
-                for (int i = 0; i < count; ++i) {
-                    bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
-                }
+                const int count = item.energyOnUse + (up ? 1 : 0)
+                    + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
+                const bool useEnergy = !(item.freeToPlay || c.freeToPlayOnce);
+                bc.addToBot({[=] (BattleContext &bc) {
+                    if (useEnergy) {
+                        bc.player.useEnergy(bc.player.energy);
+                    }
+                    for (int i = 0; i < count; ++i) {
+                        bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
+                    }
+                }});
                 return true;
             }
 
