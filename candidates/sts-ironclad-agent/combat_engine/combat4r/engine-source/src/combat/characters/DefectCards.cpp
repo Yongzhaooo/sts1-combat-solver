@@ -587,6 +587,59 @@ namespace sts {
                 bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(c.specialData)));
                 return true;
 
+            case CardId::SCRAPE:
+                // Scrape.java: damage, draw 4 (5), then discard every drawn card
+                // that costs 2 or more. Drawn cards land at the end of the hand.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 10 : 7)));
+                bc.addToBot({[=] (BattleContext &bc) {
+                    // ScrapeAction draws one card at a time and discards it right
+                    // away when its cost is 2 or more.
+                    for (int i = 0; i < (up ? 5 : 4); ++i) {
+                        if (bc.cards.drawPile.empty()) {
+                            break;
+                        }
+                        const int before = bc.cards.cardsInHand;
+                        bc.drawCards(1);
+                        const int handIdx = bc.cards.cardsInHand - 1;
+                        if (bc.cards.cardsInHand > before && bc.cards.hand[handIdx].cost >= 2) {
+                            bc.cards.moveToDiscardPile(bc.cards.hand[handIdx]);
+                            bc.cards.removeFromHandAtIdx(handIdx);
+                        }
+                    }
+                }});
+                return true;
+
+            case CardId::HOLOGRAM:
+                // Hologram.java: 3 (5) block, then return one card from the discard
+                // pile to hand. Only the base version exhausts.
+                bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(up ? 5 : 3)));
+                bc.addToBot({[=] (BattleContext &bc) {
+                    if (bc.cards.discardPile.empty()) {
+                        return;
+                    }
+                    if (bc.cards.discardPile.size() == 1) {
+                        bc.chooseDiscardToHandCard(0, false);
+                    } else {
+                        bc.openSimpleCardSelectScreen(CardSelectTask::HOLOGRAM, 1);
+                    }
+                }});
+                return true;
+
+            case CardId::RECYCLE:
+                // Recycle.java: exhaust a card from hand, gaining its cost in
+                // energy. chooseRecycleCard does the work once a card is picked.
+                bc.addToBot({[=] (BattleContext &bc) {
+                    if (bc.cards.cardsInHand == 0) {
+                        return;
+                    }
+                    if (bc.cards.cardsInHand == 1) {
+                        bc.chooseRecycleCard(0);
+                    } else {
+                        bc.openSimpleCardSelectScreen(CardSelectTask::RECYCLE, 1);
+                    }
+                }});
+                return true;
+
             default:
                 return false;
         }

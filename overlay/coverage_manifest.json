@@ -129,11 +129,8 @@
     "DEFECT": {
       "reward_pool": {
         "total": 71,
-        "implemented": 67,
+        "implemented": 70,
         "missing": [
-          "HOLOGRAM",
-          "RECYCLE",
-          "SCRAPE",
           "SEEK"
         ]
       },
@@ -354,7 +351,6 @@
     "Grand Finale": "GRAND_FINALE",
     "Halt": "HALT",
     "Heel Hook": "HEEL_HOOK",
-    "Hologram": "HOLOGRAM",
     "Indignation": "INDIGNATION",
     "Infinite Blades": "INFINITE_BLADES",
     "InnerPeace": "INNER_PEACE",
@@ -390,7 +386,6 @@
     "Quick Slash": "QUICK_SLASH",
     "Ragnarok": "RAGNAROK",
     "ReachHeaven": "REACH_HEAVEN",
-    "Recycle": "RECYCLE",
     "Reflex": "REFLEX",
     "Riddle With Holes": "RIDDLE_WITH_HOLES",
     "Adaptation": "RUSHDOWN",
@@ -398,7 +393,6 @@
     "Sanctity": "SANCTITY",
     "SandsOfTime": "SANDS_OF_TIME",
     "SashWhip": "SASH_WHIP",
-    "Scrape": "SCRAPE",
     "Scrawl": "SCRAWL",
     "Seek": "SEEK",
     "Setup": "SETUP",

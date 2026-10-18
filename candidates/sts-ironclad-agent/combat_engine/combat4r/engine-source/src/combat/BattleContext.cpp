@@ -3262,7 +3262,14 @@ void BattleContext::chooseHeadbuttCard(int discardIdx) {
 }
 
 void BattleContext::chooseRecycleCard(int handIdx) {
-    // todo
+#ifdef sts_asserts
+    assert(handIdx >= 0 && handIdx < cards.cardsInHand);
+#endif
+    // Recycle.java: exhaust the chosen card and gain its cost in energy.
+    const CardInstance chosen = cards.hand[handIdx];
+    cards.moveToExhaustPile(chosen);
+    cards.removeFromHandAtIdx(handIdx);
+    player.gainEnergy(chosen.cost);
 }
 
 void BattleContext::chooseWarcryCard(int handIdx) {

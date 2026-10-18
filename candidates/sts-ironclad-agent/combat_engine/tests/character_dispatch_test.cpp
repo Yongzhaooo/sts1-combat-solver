@@ -19,8 +19,7 @@ int main() {
         {CharacterClass::SILENT, CardId::NEUTRALIZE},   // attack
         {CharacterClass::SILENT, CardId::SURVIVOR},     // skill
         {CharacterClass::SILENT, CardId::ACCURACY},     // power
-        {CharacterClass::DEFECT, CardId::HOLOGRAM}, // skill; ZAP (m3a) and the M3b commons became implemented
-        {CharacterClass::DEFECT, CardId::HOLOGRAM}, // skill; FORCE_FIELD became implemented with the powers batch
+        {CharacterClass::DEFECT, CardId::SEEK}, // skill; HOLOGRAM became implemented with the select batch
         {CharacterClass::WATCHER, CardId::ERUPTION},
         {CharacterClass::WATCHER, CardId::VIGILANCE},
         {CharacterClass::WATCHER, CardId::DEVA_FORM},
@@ -32,6 +31,9 @@ int main() {
         battle.init(game, MonsterEncounter::CULTIST);
         battle.cards = CardManager{};
         battle.player.energy = 100;
+        // Seek is only playable with a non-empty draw pile; the stub card keeps
+        // the playability check focused on the dispatch behaviour.
+        battle.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
         battle.cards.createTempCardInHand(CardInstance(c.card));
         search::Action action(search::ActionType::CARD, 0, 0);
         check(action.isValidAction(battle), "card is not playable");

@@ -903,6 +903,9 @@ namespace sts {
             case CardId::REBOOT:
                 return 0;
 
+            case CardId::RECYCLE:
+                return upgraded ? 0 : 1;
+
             default:
                 return 1;
         }

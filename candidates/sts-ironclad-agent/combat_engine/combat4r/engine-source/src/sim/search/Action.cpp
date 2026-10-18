@@ -404,9 +404,12 @@ void executeSingleCardSelectActionHelper(BattleContext &bc, search::Action a) {
             bc.chooseWarcryCard(idx);
             break;
 
+        case CardSelectTask::RECYCLE:
+            bc.chooseRecycleCard(idx);
+            break;
+
         case CardSelectTask::MEDITATE:
         case CardSelectTask::NIGHTMARE:
-        case CardSelectTask::RECYCLE:
         case CardSelectTask::SETUP:
         case CardSelectTask::SEEK:
             // not implemented

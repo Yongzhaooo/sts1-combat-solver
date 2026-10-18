@@ -852,6 +852,35 @@ int main() {
         check(grew, "Genetic Algorithm should be in the exhaust pile");
     }
 
+    {
+        // Scrape: draws 4 and discards every drawn card costing 2 or more.
+        BattleContext bc = freshBattle();
+        bc.cards.createTempCardInDrawPile(0, CardInstance(CardId::EQUILIBRIUM)); // costs 2
+        bc.cards.createTempCardInDrawPile(1, CardInstance(CardId::STRIKE_BLUE)); // costs 1
+        playCard(bc, CardId::SCRAPE);
+        check(bc.cards.cardsInHand == 1, "Scrape should keep only the 1-cost card");
+        check(bc.cards.hand[0].getId() == CardId::STRIKE_BLUE, "the kept card should be the 1-cost one");
+    }
+    {
+        // Hologram: 3 block and a discard-pile pick; the base card exhausts.
+        BattleContext bc = freshBattle();
+        bc.cards.discardPile.push_back(CardInstance(CardId::STRIKE_BLUE));
+        bc.cards.discardPile.push_back(CardInstance(CardId::STRIKE_BLUE));
+        playCard(bc, CardId::HOLOGRAM);
+        check(bc.player.block == 3, "Hologram should grant 3 block");
+        check(bc.inputState == InputState::CARD_SELECT, "Hologram should open the discard select screen");
+        check(bc.cardSelectInfo.cardSelectTask == CardSelectTask::HOLOGRAM,
+              "Hologram should use the HOLOGRAM select task");
+    }
+    {
+        // Recycle: with a single card in hand it auto-exhausts and gains its cost.
+        BattleContext bc = freshBattle();
+        bc.cards.createTempCardInHand(CardInstance(CardId::EQUILIBRIUM)); // costs 2
+        playCard(bc, CardId::RECYCLE);
+        check(bc.player.energy == 4, "Recycle should gain the exhausted card's 2 energy");
+        check(bc.cards.cardsInHand == 0, "Recycle should leave the hand empty");
+    }
+
     std::cout << "Defect card behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {
