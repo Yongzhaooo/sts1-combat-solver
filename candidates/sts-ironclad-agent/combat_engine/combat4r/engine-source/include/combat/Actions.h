@@ -50,6 +50,7 @@ namespace sts {
         static Action RipAndTearAction(int damage, int times); // one random-target hit per time
         static Action WhiteNoiseAction(); // add a random Power card, free this turn
         static Action CreateRandomCardInHandAction(CardType type); // random card of type, free this turn
+        static Action AllForOneAction(); // return every 0-cost discard pile card to hand
 
         // Per-target damage is captured when the card is used.
         static Action AttackAllEnemy(DamageMatrix damageMatrix);

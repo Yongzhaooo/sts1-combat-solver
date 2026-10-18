@@ -20,7 +20,7 @@ int main() {
         {CharacterClass::SILENT, CardId::SURVIVOR},     // skill
         {CharacterClass::SILENT, CardId::ACCURACY},     // power
         {CharacterClass::DEFECT, CardId::HOLOGRAM}, // skill; ZAP (m3a) and the M3b commons became implemented
-        {CharacterClass::DEFECT, CardId::STREAMLINE}, // attack; BALL_LIGHTNING became implemented with the plasma batch
+        {CharacterClass::DEFECT, CardId::FORCE_FIELD}, // skill; STREAMLINE became implemented with the block/energy batch
         {CharacterClass::WATCHER, CardId::ERUPTION},
         {CharacterClass::WATCHER, CardId::VIGILANCE},
         {CharacterClass::WATCHER, CardId::DEVA_FORM},

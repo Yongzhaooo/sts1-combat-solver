@@ -129,13 +129,10 @@
     "DEFECT": {
       "reward_pool": {
         "total": 71,
-        "implemented": 54,
+        "implemented": 60,
         "missing": [
-          "ALL_FOR_ONE",
           "AMPLIFY",
           "BULLSEYE",
-          "CLAW",
-          "EQUILIBRIUM",
           "FORCE_FIELD",
           "GENETIC_ALGORITHM",
           "HELLO_WORLD",
@@ -144,10 +141,7 @@
           "RECYCLE",
           "SCRAPE",
           "SEEK",
-          "SELF_REPAIR",
-          "STATIC_DISCHARGE",
-          "STEAM_BARRIER",
-          "STREAMLINE"
+          "SELF_REPAIR"
         ]
       },
       "starter": {
@@ -293,7 +287,6 @@
     "Adrenaline": "ADRENALINE",
     "After Image": "AFTER_IMAGE",
     "Venomology": "ALCHEMIZE",
-    "All For One": "ALL_FOR_ONE",
     "All Out Attack": "ALL_OUT_ATTACK",
     "Alpha": "ALPHA",
     "Amplify": "AMPLIFY",
@@ -318,7 +311,6 @@
     "CarveReality": "CARVE_REALITY",
     "Catalyst": "CATALYST",
     "Choke": "CHOKE",
-    "Gash": "CLAW",
     "Cloak And Dagger": "CLOAK_AND_DAGGER",
     "Collect": "COLLECT",
     "Concentrate": "CONCENTRATE",
@@ -348,7 +340,6 @@
     "EmptyMind": "EMPTY_MIND",
     "Endless Agony": "ENDLESS_AGONY",
     "Envenom": "ENVENOM",
-    "Undo": "EQUILIBRIUM",
     "Eruption": "ERUPTION",
     "Escape Plan": "ESCAPE_PLAN",
     "Establishment": "ESTABLISHMENT",
@@ -433,10 +424,7 @@
     "Smite": "SMITE",
     "Underhanded Strike": "SNEAKY_STRIKE",
     "SpiritShield": "SPIRIT_SHIELD",
-    "Static Discharge": "STATIC_DISCHARGE",
-    "Steam": "STEAM_BARRIER",
     "Storm of Steel": "STORM_OF_STEEL",
-    "Streamline": "STREAMLINE",
     "Study": "STUDY",
     "Sucker Punch": "SUCKER_PUNCH",
     "Survivor": "SURVIVOR",

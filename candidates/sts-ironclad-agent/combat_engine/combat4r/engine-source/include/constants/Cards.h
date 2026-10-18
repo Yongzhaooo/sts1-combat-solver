@@ -888,6 +888,15 @@ namespace sts {
             case CardId::CREATIVE_AI:
                 return upgraded ? 2 : 3;
 
+            case CardId::CLAW:
+            case CardId::STEAM_BARRIER:
+                return 0;
+
+            case CardId::EQUILIBRIUM:
+            case CardId::STREAMLINE:
+            case CardId::ALL_FOR_ONE:
+                return 2;
+
             default:
                 return 1;
         }

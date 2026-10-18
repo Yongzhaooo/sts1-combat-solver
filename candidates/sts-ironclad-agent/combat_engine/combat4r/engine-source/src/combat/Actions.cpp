@@ -39,6 +39,24 @@ Action Actions::RipAndTearAction(int damage, int times) {
     }};
 }
 
+Action Actions::AllForOneAction() {
+    return {[] (BattleContext &bc) {
+        // AllForOneAction: every 0-cost card in the discard pile returns to hand as
+        // the same instance (no new unique id). Walking backwards keeps indices valid.
+        for (int i = static_cast<int>(bc.cards.discardPile.size()) - 1; i >= 0; --i) {
+            const auto &dc = bc.cards.discardPile[i];
+            if (dc.costForTurn != 0 && dc.cost != 0) {
+                continue;
+            }
+            if (bc.cards.cardsInHand >= CardManager::MAX_HAND_SIZE) {
+                break;
+            }
+            bc.cards.hand[bc.cards.cardsInHand++] = dc;
+            bc.cards.discardPile.erase(bc.cards.discardPile.begin() + i);
+        }
+    }};
+}
+
 Action Actions::WhiteNoiseAction() {
     return {[] (BattleContext &bc) {
         // White Noise: a random Power card of the player's class, free this turn.

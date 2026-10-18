@@ -352,6 +352,15 @@ void Player::attacked(BattleContext &bc, int enemyIdx, int calculatedDamage) {
 
         hpWasLost(bc, damage, false);
 
+        // StaticDischargePower.onAttacked: attack damage only (not poison or
+        // self-damage), one Lightning orb per stack.
+        if (calculatedDamage > 0 && hasStatus<PS::STATIC_DISCHARGE>()) {
+            const int count = getStatus<PS::STATIC_DISCHARGE>();
+            for (int i = 0; i < count; ++i) {
+                bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
+            }
+        }
+
     } else {
         lastAttackUnblockedDamage = 0;
     }

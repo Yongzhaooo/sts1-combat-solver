@@ -2048,6 +2048,15 @@ void BattleContext::onAfterUseCard() {
     bool rebound = false;
     c.freeToPlayOnce = false;
 
+    // Cards that rewrite themselves once played (the game does this in
+    // onMoveToDiscard/onUse): Streamline lowers its own cost, Steam Barrier
+    // lowers its own block, both for the rest of combat.
+    if (c.getId() == CardId::STREAMLINE) {
+        c.updateCost(-1);
+    } else if (c.getId() == CardId::STEAM_BARRIER) {
+        ++c.specialData;
+    }
+
     if (c.getType() == CardType::POWER) {
         c.id = CardId::INVALID;
         return;
@@ -2832,6 +2841,10 @@ int BattleContext::calculateCardDamage(const CardInstance &card, int targetIdx, 
 
     if (player.hasRelic<R::STRIKE_DUMMY>() && card.isStrikeCard()) {
         damage += 3;
+    }
+
+    if (card.getId() == CardId::CLAW) {
+        damage += player.clawBonus;
     }
 
     if (player.hasRelic<R::WRIST_BLADE>() && card.costForTurn == 0) {

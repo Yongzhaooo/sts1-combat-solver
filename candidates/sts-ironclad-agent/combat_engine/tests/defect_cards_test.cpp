@@ -705,6 +705,75 @@ int main() {
         check(hp - bc.monsters.arr[0].curHp == 4, "Blizzard should deal 2 per Frost channel");
     }
 
+    {
+        // Equilibrium: 13 block and the retain power.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::EQUILIBRIUM);
+        check(bc.player.block == 13, "Equilibrium should grant 13 block");
+        check(bc.player.hasStatus<PS::EQUILIBRIUM>(), "Equilibrium should apply its power");
+    }
+    {
+        // Claw: damage, then every Claw card gains 2 for the rest of combat.
+        BattleContext bc = freshBattle();
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::CLAW);
+        check(hp - bc.monsters.arr[0].curHp == 3, "Claw should deal 3 the first time");
+        check(bc.player.clawBonus == 2, "Claw should raise the shared Claw bonus by 2");
+        const int hp2 = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::CLAW);
+        check(hp2 - bc.monsters.arr[0].curHp == 5, "the second Claw should deal 3+2");
+    }
+    {
+        // Streamline: its own cost drops by 1 for the rest of combat.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::STREAMLINE);
+        bool found = false;
+        for (const auto &dc : bc.cards.discardPile) {
+            if (dc.getId() == CardId::STREAMLINE) {
+                check(dc.cost == 1, "Streamline should cost 1 after one play");
+                found = true;
+            }
+        }
+        check(found, "Streamline should be in the discard pile");
+    }
+    {
+        // Steam Barrier: 6 block, and the instance remembers one play.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::STEAM_BARRIER);
+        check(bc.player.block == 6, "Steam Barrier should grant 6 block");
+        bool found = false;
+        for (const auto &dc : bc.cards.discardPile) {
+            if (dc.getId() == CardId::STEAM_BARRIER) {
+                check(dc.specialData == 1, "Steam Barrier should count its play");
+                found = true;
+            }
+        }
+        check(found, "Steam Barrier should be in the discard pile");
+    }
+    {
+        // Static Discharge: attack damage channels a Lightning orb.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::STATIC_DISCHARGE);
+        const int before = bc.player.lightningChanneledThisCombat;
+        bc.player.attacked(bc, 0, 5);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(bc.player.lightningChanneledThisCombat == before + 1,
+              "Static Discharge should channel one Lightning orb when hit");
+    }
+    {
+        // All for One: 0-cost cards in the discard pile return to hand.
+        BattleContext bc = freshBattle();
+        bc.cards.discardPile.push_back(CardInstance(CardId::CLAW));
+        bc.cards.discardPile.push_back(CardInstance(CardId::STEAM_BARRIER));
+        bc.cards.discardPile.push_back(CardInstance(CardId::EQUILIBRIUM));
+        playCard(bc, CardId::ALL_FOR_ONE);
+        check(bc.cards.cardsInHand == 2, "All for One should return the two 0-cost cards");
+        check(bc.cards.discardPile.size() == 2,
+              "All for One should leave the 2-cost cards behind (Equilibrium and itself)");
+    }
+
     std::cout << "Defect card behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {

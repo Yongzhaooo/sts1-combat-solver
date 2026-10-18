@@ -487,6 +487,50 @@ namespace sts {
                 return true;
             }
 
+            case CardId::EQUILIBRIUM:
+                // Equilibrium.java: block, then retain this turn's hand. The
+                // end-of-turn discard path skips while PS::EQUILIBRIUM is set and
+                // consumes one stack (Player::endTurn).
+                bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(up ? 16 : 13)));
+                bc.addToBot(Actions::BuffPlayer<PS::EQUILIBRIUM>(1));
+                return true;
+
+            case CardId::CLAW:
+                // Claw.java: damage, then every Claw card gains 2 damage for the
+                // rest of combat. calculateCardDamage reads the shared bonus before
+                // this action resolves, so the current hit is not boosted.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 5 : 3)));
+                bc.addToBot({[] (BattleContext &bc) { bc.player.clawBonus += 2; }});
+                return true;
+
+            case CardId::STREAMLINE:
+                // Streamline.java: damage; onAfterUseCard lowers its own cost by 1
+                // for the rest of combat.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 20 : 15)));
+                return true;
+
+            case CardId::STEAM_BARRIER: {
+                // SteamBarrier.java: block drops by 1 for each earlier play this
+                // combat; specialData carries that count on the card instance and
+                // onAfterUseCard raises it after each play.
+                const int block = std::max(0, (up ? 8 : 6) - static_cast<int>(c.specialData));
+                bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(block)));
+                return true;
+            }
+
+            case CardId::STATIC_DISCHARGE:
+                // StaticDischargePower: channel 1 (2) Lightning whenever attack
+                // damage lands. The hook lives in Player::attacked.
+                bc.addToBot(Actions::BuffPlayer<PS::STATIC_DISCHARGE>(up ? 2 : 1));
+                return true;
+
+            case CardId::ALL_FOR_ONE:
+                // AllForOne.java: damage, then every 0-cost card in the discard
+                // pile returns to hand.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 14 : 10)));
+                bc.addToBot(Actions::AllForOneAction());
+                return true;
+
             default:
                 return false;
         }
