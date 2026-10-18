@@ -15,6 +15,6 @@ Subscribe with ModTheSpire and BaseMod. Windows and both Mac architectures inclu
 
 [源码与下载 / Source & downloads](https://github.com/Yongzhaooo/sts1-combat-solver)
 
-v0.8.0-beta.1: Improves loop play and trims redundant actions; fixes timeouts, progress display and selection/resolution issues; adds opening Smoke Bomb escape with Reaper healing, and improves Entropic Brew and White Beast Statue potion use. F6 includes ordered plays and selections for five recent fights and the current fight. Burning Pact import/reselection remains deferred. Thanks to 七月流火（七月火）, ૭٩奶油糖果, 幼猫（浪花） and 严肃研究鸡煲打法中.
+v0.8.0-beta.2: Added shop entry, exit and transaction records, plus configurable search concurrency. Fixed confirmation for consecutive selections triggered by Duplication Potion. Prefer winning routes without a new Parasite. Separate Windows and macOS downloads on GitHub. Burning Pact mid-selection import and selection changes remain deferred. Thanks to 七月流火（七月火）, ૭٩奶油糖果, 幼猫（浪花）, and 严肃研究鸡煲打法中.
 
 Silent, Defect and Watcher solvers are open for collaboration: see CONTRIBUTING.md on GitHub or write to yongzhao.derek@gmail.com.
