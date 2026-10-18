@@ -1,0 +1,1323 @@
+{
+  "format": "sts1-combat-exam-v1",
+  "id": "time-eater-rage-pommel",
+  "description": "Recorded manual Time Eater line, including Burning Pact choices and automatic Time Warp turns.",
+  "source_sha256": "b161c952ec5536723c596a758e0976e243f4bea6afe9e5a8bb66da32808d8369",
+  "oracle": "Before-step HP/energy/turn and UUID selection matched the export; after-step frames frozen from published native replay. Not independent JVM truth.",
+  "initial": {
+    "snapshot": {
+      "character": "IRONCLAD",
+      "seed": 8289285232043065215,
+      "floor": 50,
+      "ascension": 20,
+      "encounter": 54,
+      "turn": 1,
+      "frame_delta_seconds": 0.018059803,
+      "cards_played_this_turn": 1,
+      "attacks_played_this_turn": 0,
+      "skills_played_this_turn": 0,
+      "cards_discarded_this_turn": 0,
+      "times_damaged": 0,
+      "player": {
+        "gold": 286,
+        "current_hp": 80,
+        "max_hp": 80,
+        "block": 0,
+        "energy": 4,
+        "energy_per_turn": 4,
+        "card_draw_per_turn": 5,
+        "powers": [],
+        "is_bloodied": false,
+        "necronomicon_used": false,
+        "orange_pellets_mask": 0
+      },
+      "hand": [
+        {
+          "id": 47,
+          "upgrades": 1,
+          "cost": 0,
+          "misc": 0,
+          "base_cost": 0,
+          "free_to_play_once": false,
+          "exhausts": false
+        },
+        {
+          "id": 25,
+          "upgrades": 1,
+          "cost": 2,
+          "misc": 0,
+          "base_cost": 2,
+          "free_to_play_once": false,
+          "exhausts": false
+        },
+        {
+          "id": 38,
+          "upgrades": 1,
+          "cost": 0,
+          "misc": 0,
+          "base_cost": 0,
+          "free_to_play_once": false,
+          "exhausts": false
+        },
+        {
+          "id": 261,
+          "upgrades": 1,
+          "cost": 0,
+          "misc": 0,
+          "base_cost": 0,
+          "free_to_play_once": false,
+          "exhausts": false
+        },
+        {
+          "id": 42,
+          "upgrades": 1,
+          "cost": 0,
+          "misc": 0,
+          "base_cost": 0,
+          "free_to_play_once": false,
+          "exhausts": false
+        }
+      ],
+      "draw_pile": [
+        {
+          "id": 104,
+          "upgrades": 1,
+          "cost": 1,
+          "misc": 0,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "exhausts": false
+        },
+        {
+          "id": 249,
+          "upgrades": 1,
+          "cost": 1,
+          "misc": 0,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "exhausts": false
+        },
+        {
+          "id": 104,
+          "upgrades": 1,
+          "cost": 1,
+          "misc": 0,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "exhausts": false
+        },
+        {
+          "id": 150,
+          "upgrades": 1,
+          "cost": 0,
+          "misc": 0,
+          "base_cost": 0,
+          "free_to_play_once": false,
+          "exhausts": false
+        },
+        {
+          "id": 52,
+          "upgrades": 1,
+          "cost": 1,
+          "misc": 0,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "exhausts": false
+        },
+        {
+          "id": 52,
+          "upgrades": 1,
+          "cost": 1,
+          "misc": 0,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "exhausts": false
+        },
+        {
+          "id": 42,
+          "upgrades": 1,
+          "cost": 0,
+          "misc": 0,
+          "base_cost": 0,
+          "free_to_play_once": false,
+          "exhausts": false
+        },
+        {
+          "id": 15,
+          "upgrades": 0,
+          "cost": -2,
+          "misc": 0,
+          "base_cost": -2,
+          "free_to_play_once": false,
+          "exhausts": false
+        },
+        {
+          "id": 104,
+          "upgrades": 1,
+          "cost": 1,
+          "misc": 0,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "exhausts": false
+        }
+      ],
+      "discard_pile": [],
+      "exhaust_pile": [],
+      "monsters": [
+        {
+          "id": 62,
+          "current_hp": 480,
+          "max_hp": 480,
+          "block": 0,
+          "half_dead": false,
+          "is_gone": false,
+          "move": 187,
+          "last_move": 0,
+          "misc_info": 0,
+          "powers": [
+            {
+              "id": 30,
+              "amount": 0,
+              "just_applied": false
+            }
+          ]
+        }
+      ],
+      "target_map": [
+        0
+      ],
+      "relics": [
+        {
+          "id": 86,
+          "counter": -1
+        },
+        {
+          "id": 159,
+          "counter": -1
+        },
+        {
+          "id": 174,
+          "counter": -1
+        },
+        {
+          "id": 167,
+          "counter": -1
+        },
+        {
+          "id": 45,
+          "counter": -1
+        },
+        {
+          "id": 100,
+          "counter": -1
+        },
+        {
+          "id": 173,
+          "counter": -1
+        },
+        {
+          "id": 31,
+          "counter": 9
+        },
+        {
+          "id": 169,
+          "counter": -1
+        },
+        {
+          "id": 56,
+          "counter": -1
+        },
+        {
+          "id": 151,
+          "counter": -1
+        }
+      ],
+      "potions": [
+        16,
+        35,
+        16,
+        4
+      ],
+      "rngs": {
+        "ai": {
+          "seed0": 7308755691530847245,
+          "seed1": 15790975090279962847,
+          "counter": 1
+        },
+        "card_random": {
+          "seed0": 5025465194660818819,
+          "seed1": 7308755691530847245,
+          "counter": 0
+        },
+        "misc": {
+          "seed0": 5025465194660818819,
+          "seed1": 7308755691530847245,
+          "counter": 0
+        },
+        "monster_hp": {
+          "seed0": 7308755691530847245,
+          "seed1": 15790975090279962847,
+          "counter": 1
+        },
+        "potion": {
+          "seed0": 15248826673375947966,
+          "seed1": 7338874339160160953,
+          "counter": 124
+        },
+        "shuffle": {
+          "seed0": 7308755691530847245,
+          "seed1": 15790975090279962847,
+          "counter": 1
+        }
+      },
+      "end_turn_shuffle": {
+        "mode": "basemod_seeded",
+        "shared_rng_initialized": true,
+        "shared_seed48": 130793739637426
+      }
+    },
+    "potion_bark_flip": 0,
+    "search_state": {
+      "cards_drawn": 5,
+      "energy_wasted": 0,
+      "relics": [
+        86,
+        159,
+        174,
+        167,
+        45,
+        100,
+        173,
+        31,
+        169,
+        56,
+        151
+      ]
+    }
+  },
+  "witness": {
+    "steps": [
+      {
+        "bits": 0,
+        "before": [
+          80,
+          4,
+          1
+        ],
+        "after": [
+          80,
+          4,
+          1,
+          0
+        ]
+      },
+      {
+        "bits": 2,
+        "before": [
+          80,
+          4,
+          1
+        ],
+        "after": [
+          80,
+          4,
+          1,
+          0
+        ]
+      },
+      {
+        "bits": 0,
+        "before": [
+          80,
+          4,
+          1
+        ],
+        "after": [
+          80,
+          2,
+          1,
+          0
+        ]
+      },
+      {
+        "bits": 2,
+        "before": [
+          80,
+          2,
+          1
+        ],
+        "after": [
+          80,
+          1,
+          1,
+          0
+        ]
+      },
+      {
+        "bits": 1,
+        "before": [
+          80,
+          1,
+          1
+        ],
+        "after": [
+          80,
+          1,
+          1,
+          0
+        ]
+      },
+      {
+        "bits": 2147483648,
+        "before": [
+          80,
+          1,
+          1
+        ],
+        "after": [
+          73,
+          4,
+          2,
+          0
+        ]
+      },
+      {
+        "bits": 4,
+        "before": [
+          73,
+          4,
+          2
+        ],
+        "after": [
+          73,
+          4,
+          2,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          73,
+          4,
+          2
+        ],
+        "after": [
+          73,
+          3,
+          2,
+          0
+        ]
+      },
+      {
+        "bits": 1073741830,
+        "before": [
+          73,
+          3,
+          2
+        ],
+        "after": [
+          73,
+          3,
+          2,
+          0
+        ]
+      },
+      {
+        "bits": 6,
+        "before": [
+          73,
+          3,
+          2
+        ],
+        "after": [
+          73,
+          3,
+          2,
+          0
+        ]
+      },
+      {
+        "bits": 4,
+        "before": [
+          73,
+          3,
+          2
+        ],
+        "after": [
+          73,
+          2,
+          2,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          73,
+          2,
+          2
+        ],
+        "after": [
+          73,
+          1,
+          2,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          73,
+          1,
+          2
+        ],
+        "after": [
+          73,
+          0,
+          2,
+          0
+        ]
+      },
+      {
+        "bits": 1,
+        "before": [
+          73,
+          0,
+          2
+        ],
+        "after": [
+          68,
+          4,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 0,
+        "before": [
+          68,
+          4,
+          3
+        ],
+        "after": [
+          68,
+          4,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 5,
+        "before": [
+          68,
+          4,
+          3
+        ],
+        "after": [
+          68,
+          3,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 1073741826,
+        "before": [
+          68,
+          3,
+          3
+        ],
+        "after": [
+          68,
+          3,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 4,
+        "before": [
+          68,
+          3,
+          3
+        ],
+        "after": [
+          68,
+          2,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 1073741829,
+        "before": [
+          68,
+          2,
+          3
+        ],
+        "after": [
+          68,
+          2,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 1,
+        "before": [
+          68,
+          2,
+          3
+        ],
+        "after": [
+          68,
+          2,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          68,
+          2,
+          3
+        ],
+        "after": [
+          68,
+          2,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          68,
+          2,
+          3
+        ],
+        "after": [
+          68,
+          2,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          68,
+          2,
+          3
+        ],
+        "after": [
+          68,
+          1,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 4,
+        "before": [
+          68,
+          1,
+          3
+        ],
+        "after": [
+          68,
+          0,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 1073741826,
+        "before": [
+          68,
+          0,
+          3
+        ],
+        "after": [
+          68,
+          0,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 0,
+        "before": [
+          68,
+          0,
+          3
+        ],
+        "after": [
+          65,
+          3,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          65,
+          3,
+          3
+        ],
+        "after": [
+          65,
+          3,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 2,
+        "before": [
+          65,
+          3,
+          3
+        ],
+        "after": [
+          65,
+          3,
+          3,
+          0
+        ]
+      },
+      {
+        "bits": 5,
+        "before": [
+          65,
+          3,
+          3
+        ],
+        "after": [
+          64,
+          4,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          64,
+          4,
+          4
+        ],
+        "after": [
+          64,
+          3,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 1073741826,
+        "before": [
+          64,
+          3,
+          4
+        ],
+        "after": [
+          64,
+          3,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 5,
+        "before": [
+          64,
+          3,
+          4
+        ],
+        "after": [
+          64,
+          3,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 5,
+        "before": [
+          64,
+          3,
+          4
+        ],
+        "after": [
+          64,
+          3,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 4,
+        "before": [
+          64,
+          3,
+          4
+        ],
+        "after": [
+          64,
+          2,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 1073741825,
+        "before": [
+          64,
+          2,
+          4
+        ],
+        "after": [
+          64,
+          2,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 5,
+        "before": [
+          64,
+          2,
+          4
+        ],
+        "after": [
+          64,
+          2,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          64,
+          2,
+          4
+        ],
+        "after": [
+          64,
+          1,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 4,
+        "before": [
+          64,
+          1,
+          4
+        ],
+        "after": [
+          64,
+          1,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 1,
+        "before": [
+          64,
+          1,
+          4
+        ],
+        "after": [
+          64,
+          1,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          64,
+          1,
+          4
+        ],
+        "after": [
+          64,
+          1,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 1,
+        "before": [
+          64,
+          1,
+          4
+        ],
+        "after": [
+          64,
+          1,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 2,
+        "before": [
+          64,
+          1,
+          4
+        ],
+        "after": [
+          64,
+          0,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 1073741825,
+        "before": [
+          64,
+          0,
+          4
+        ],
+        "after": [
+          64,
+          0,
+          4,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          64,
+          0,
+          4
+        ],
+        "after": [
+          63,
+          4,
+          5,
+          0
+        ]
+      },
+      {
+        "bits": 2147483648,
+        "before": [
+          63,
+          4,
+          5
+        ],
+        "after": [
+          62,
+          4,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          62,
+          4,
+          6
+        ],
+        "after": [
+          62,
+          4,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 0,
+        "before": [
+          62,
+          4,
+          6
+        ],
+        "after": [
+          62,
+          4,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 5,
+        "before": [
+          62,
+          4,
+          6
+        ],
+        "after": [
+          62,
+          4,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 1,
+        "before": [
+          62,
+          4,
+          6
+        ],
+        "after": [
+          62,
+          3,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 5,
+        "before": [
+          62,
+          3,
+          6
+        ],
+        "after": [
+          62,
+          3,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 0,
+        "before": [
+          62,
+          3,
+          6
+        ],
+        "after": [
+          62,
+          3,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 2,
+        "before": [
+          62,
+          3,
+          6
+        ],
+        "after": [
+          62,
+          3,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 1,
+        "before": [
+          62,
+          3,
+          6
+        ],
+        "after": [
+          62,
+          2,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 1073741824,
+        "before": [
+          62,
+          2,
+          6
+        ],
+        "after": [
+          62,
+          2,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 2,
+        "before": [
+          62,
+          2,
+          6
+        ],
+        "after": [
+          62,
+          2,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 1,
+        "before": [
+          62,
+          2,
+          6
+        ],
+        "after": [
+          62,
+          1,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 2,
+        "before": [
+          62,
+          1,
+          6
+        ],
+        "after": [
+          62,
+          1,
+          6,
+          0
+        ]
+      },
+      {
+        "bits": 2,
+        "before": [
+          62,
+          1,
+          6
+        ],
+        "after": [
+          61,
+          4,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          61,
+          4,
+          7
+        ],
+        "after": [
+          61,
+          4,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          61,
+          4,
+          7
+        ],
+        "after": [
+          61,
+          4,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 1,
+        "before": [
+          61,
+          4,
+          7
+        ],
+        "after": [
+          61,
+          4,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 2,
+        "before": [
+          61,
+          4,
+          7
+        ],
+        "after": [
+          61,
+          3,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 2,
+        "before": [
+          61,
+          3,
+          7
+        ],
+        "after": [
+          61,
+          3,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 1,
+        "before": [
+          61,
+          3,
+          7
+        ],
+        "after": [
+          61,
+          3,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          61,
+          3,
+          7
+        ],
+        "after": [
+          61,
+          3,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 0,
+        "before": [
+          61,
+          3,
+          7
+        ],
+        "after": [
+          61,
+          2,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 1073741825,
+        "before": [
+          61,
+          2,
+          7
+        ],
+        "after": [
+          61,
+          2,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 3,
+        "before": [
+          61,
+          2,
+          7
+        ],
+        "after": [
+          61,
+          2,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 2,
+        "before": [
+          61,
+          2,
+          7
+        ],
+        "after": [
+          61,
+          2,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 1,
+        "before": [
+          61,
+          2,
+          7
+        ],
+        "after": [
+          61,
+          1,
+          7,
+          0
+        ]
+      },
+      {
+        "bits": 0,
+        "before": [
+          61,
+          1,
+          7
+        ],
+        "after": [
+          61,
+          1,
+          7,
+          1
+        ]
+      }
+    ],
+    "expected": {
+      "outcome": 1,
+      "raw_hp": 61,
+      "post_hp": 67,
+      "max_hp": 80,
+      "gold": 286,
+      "potions": [
+        16,
+        35,
+        16,
+        4
+      ],
+      "revival": [
+        0,
+        0
+      ]
+    }
+  },
+  "quality": {
+    "min_raw_hp": 61,
+    "min_post_hp": 67,
+    "min_max_hp": 80,
+    "max_hp_gain_weight": 1.0,
+    "recovery_credit": 0,
+    "incense_targets": [
+      4
+    ]
+  }
+}
