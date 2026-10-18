@@ -415,7 +415,9 @@ void Player::hpWasLost(BattleContext &bc, int amount, bool selfDamage) {
     }
 
     if (hasRelic<RelicId::EMOTION_CHIP>()) {
-        // todo
+        // EmotionChip.wasHPLost: any hp loss during combat arms the relic, so it
+        // also covers poison, self-damage and hits taken on the monster turn.
+        emotionChipPulse = true;
     }
 
     if (hasRelic<RelicId::SELF_FORMING_CLAY>()) {
@@ -653,7 +655,13 @@ void Player::applyStartOfTurnRelics(BattleContext &bc) {
     }
 
     if (hasRelic<R::EMOTION_CHIP>()) {
-        // todo if lost hp last turn addToBot(new ImpulseAction())
+        // EmotionChip.atTurnStart: ImpulseAction makes every orb run its
+        // start-of-turn and end-of-turn passive once. The relic pulses only once
+        // per hp loss, so a hit on turn N does not fire on turn N+2.
+        if (emotionChipPulse) {
+            emotionChipPulse = false;
+            bc.addToBot( Actions::ImpulseAction() );
+        }
     }
 
     if (hasRelic<R::HAPPY_FLOWER>()) {

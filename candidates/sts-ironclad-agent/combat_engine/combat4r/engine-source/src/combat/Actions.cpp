@@ -411,21 +411,16 @@ namespace {
             orb.darkCounter = static_cast<std::int16_t>(orb.darkCounter + growth);
         }
     }
-}
 
-Action Actions::TriggerOrbPassiveAction(int orbIdx) {
-    return {[=] (BattleContext &bc) {
-        // LoopPower: for each stack, trigger the oldest orb's passive by calling
-        // both onStartOfTurn and onEndOfTurn (only Plasma overrides the former).
-        if (orbIdx < 0 || orbIdx >= bc.player.orbs.size()) {
-            return;
-        }
-        auto &orb = bc.player.orbs[orbIdx];
+    // One orb's end-of-turn passive: Lightning and Frost settle, Dark grows and
+    // Plasma has none (Plasma overrides onStartOfTurn only). Shared by the
+    // end-of-turn trigger, Loop's extra trigger and Emotion Chip's ImpulseAction.
+    void triggerOrbEndOfTurnPassive(BattleContext &bc, Player::OrbState &orb) {
         switch (orb.type) {
-            case Orb::FUSION:
-                bc.addToBot(Actions::GainEnergy(1));
-                break;
             case Orb::LIGHTNING: {
+                // LightningOrb.onEndOfTurn: deal 3 (+focus) to a random enemy.
+                // With Electrodynamics (ElectroPower) it hits all enemies and
+                // consumes no target roll (Lightning checks hasPower("Electro")).
                 const int damage = 3 + bc.player.focus;
                 if (damage > 0) {
                     if (bc.player.hasStatus<PS::ELECTRO>()) {
@@ -444,6 +439,7 @@ Action Actions::TriggerOrbPassiveAction(int orbIdx) {
                 break;
             }
             case Orb::FROST: {
+                // FrostOrb.onEndOfTurn: gain 2 (+focus) block.
                 const int block = 2 + bc.player.focus;
                 if (block > 0) {
                     bc.addToBot(Actions::GainBlock(block));
@@ -451,11 +447,28 @@ Action Actions::TriggerOrbPassiveAction(int orbIdx) {
                 break;
             }
             case Orb::DARK:
+                // DarkOrb.onEndOfTurn: the counter grows; no damage, the orb stays.
                 growDarkOrb(bc, orb);
                 break;
             default:
+                // Plasma has no end-of-turn passive.
                 break;
         }
+    }
+}
+
+Action Actions::TriggerOrbPassiveAction(int orbIdx) {
+    return {[=] (BattleContext &bc) {
+        // LoopPower: for each stack, trigger the oldest orb's passive by calling
+        // both onStartOfTurn and onEndOfTurn (only Plasma overrides the former).
+        if (orbIdx < 0 || orbIdx >= bc.player.orbs.size()) {
+            return;
+        }
+        auto &orb = bc.player.orbs[orbIdx];
+        if (orb.type == Orb::FUSION) {
+            bc.addToBot(Actions::GainEnergy(1));
+        }
+        triggerOrbEndOfTurnPassive(bc, orb);
     }};
 }
 
@@ -476,45 +489,35 @@ Action Actions::TriggerEndOfTurnOrbsAction() {
     return {[] (BattleContext &bc) {
         // End-of-turn passives trigger left to right and never consume the orb.
         for (int i = 0; i < bc.player.orbs.size(); ++i) {
+            triggerOrbEndOfTurnPassive(bc, bc.player.orbs[i]);
+        }
+        // GoldPlatedCables lives inside TriggerEndOfTurnOrbsAction in the game:
+        // after the full pass it triggers orbs.get(0) - the orb evokeOrb removes
+        // first, index 0 here - one more time.
+        if (bc.player.hasRelic<R::GOLD_PLATED_CABLES>() && bc.player.orbs.size() > 0) {
+            triggerOrbEndOfTurnPassive(bc, bc.player.orbs[0]);
+        }
+    }};
+}
+
+Action Actions::ImpulseAction() {
+    return {[] (BattleContext &bc) {
+        // EmotionChip.atTurnStart queues ImpulseAction: every orb runs its
+        // onStartOfTurn and then its onEndOfTurn passive once. GoldPlatedCables
+        // adds one more full trigger to orbs.get(0).
+        for (int i = 0; i < bc.player.orbs.size(); ++i) {
             auto &orb = bc.player.orbs[i];
-            switch (orb.type) {
-                case Orb::LIGHTNING: {
-                    // LightningOrb.onEndOfTurn: deal 3 (+focus) to a random enemy.
-                    // With Electrodynamics (ElectroPower) it hits all enemies and
-                    // consumes no target roll (Lightning checks hasPower("Electro")).
-                    const int damage = 3 + bc.player.focus;
-                    if (damage > 0) {
-                        if (bc.player.hasStatus<PS::ELECTRO>()) {
-                            for (int i = 0; i < bc.monsters.monsterCount; ++i) {
-                                if (!bc.monsters.arr[i].isDeadOrEscaped()) {
-                                    bc.addToBot(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage)));
-                                }
-                            }
-                        } else {
-                            const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
-                            if (target >= 0) {
-                                bc.addToBot(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage)));
-                            }
-                        }
-                    }
-                    break;
-                }
-                case Orb::FROST: {
-                    // FrostOrb.onEndOfTurn: gain 2 (+focus) block.
-                    const int block = 2 + bc.player.focus;
-                    if (block > 0) {
-                        bc.addToBot(Actions::GainBlock(block));
-                    }
-                    break;
-                }
-                case Orb::DARK:
-                    // DarkOrb.onEndOfTurn: the counter grows; no damage, the orb stays.
-                    growDarkOrb(bc, orb);
-                    break;
-                default:
-                    // Plasma has no end-of-turn passive (Plasma.onStartOfTurn only).
-                    break;
+            if (orb.type == Orb::FUSION) {
+                bc.addToBot(Actions::GainEnergy(1));
             }
+            triggerOrbEndOfTurnPassive(bc, orb);
+        }
+        if (bc.player.hasRelic<R::GOLD_PLATED_CABLES>() && bc.player.orbs.size() > 0) {
+            auto &orb = bc.player.orbs[0];
+            if (orb.type == Orb::FUSION) {
+                bc.addToBot(Actions::GainEnergy(1));
+            }
+            triggerOrbEndOfTurnPassive(bc, orb);
         }
     }};
 }
@@ -608,12 +611,16 @@ Action Actions::ChannelOrb(Orb orb, std::int8_t evokeBonus, std::int16_t darkCou
 Action Actions::DarkImpulseAction() {
     return {[] (BattleContext &bc) {
         // DarkImpulseAction (upgraded Darkness): every Dark orb's counter grows
-        // once right now. The Cables relic's extra first-orb trigger stays a
-        // relic TODO until that relic is implemented.
+        // once right now. GoldPlatedCables then repeats the trigger for orbs.get(0)
+        // when that orb is Dark, like the other orb-trigger actions.
         for (auto &orb : bc.player.orbs) {
             if (orb.type == Orb::DARK) {
                 growDarkOrb(bc, orb);
             }
+        }
+        if (bc.player.hasRelic<R::GOLD_PLATED_CABLES>() && bc.player.orbs.size() > 0
+                && bc.player.orbs[0].type == Orb::DARK) {
+            growDarkOrb(bc, bc.player.orbs[0]);
         }
     }};
 }
@@ -1277,7 +1284,16 @@ Action Actions::UpgradeAllCardsInHand() {
 }
 
 Action Actions::EssenceOfDarkness(int darkOrbsPerSlot) {
-    return sts::Action();
+    return {[=] (BattleContext &bc) {
+        // EssenceOfDarknessAction.update: for each orb slot (player.orbs.size() in
+        // the game, which always holds maxOrbs entries including empty slots)
+        // channel this.amount Dark orbs. ChannelOrb owns the full-bar evoke.
+        for (int i = 0; i < bc.player.orbSlots; ++i) {
+            for (int j = 0; j < darkOrbsPerSlot; ++j) {
+                bc.addToTop(Actions::ChannelOrb(Orb::DARK));
+            }
+        }
+    }};
 }
 
 Action Actions::IncreaseOrbSlots(int count) {

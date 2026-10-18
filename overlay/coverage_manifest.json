@@ -144,10 +144,8 @@
       },
       "class_relics": {
         "total": 9,
-        "implemented": 8,
-        "missing": [
-          "GOLD_PLATED_CABLES"
-        ]
+        "implemented": 9,
+        "missing": []
       }
     },
     "WATCHER": {
@@ -428,7 +426,6 @@
   },
   "missing_relics": {
     "GoldenEye": "GOLDEN_EYE",
-    "Cables": "GOLD_PLATED_CABLES",
     "HoveringKite": "HOVERING_KITE",
     "Snake Skull": "SNECKO_SKULL",
     "Tingsha": "TINGSHA",

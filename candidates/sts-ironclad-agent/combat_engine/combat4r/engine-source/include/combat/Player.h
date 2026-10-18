@@ -116,6 +116,8 @@ namespace sts {
         int8_t  penNibCounter = 0;
         int8_t  sundialCounter = 0;
         bool haveUsedNecronomiconThisTurn = false;
+        // EmotionChip.wasHPLost arms the relic; atTurnStart consumes it once.
+        bool emotionChipPulse = false;
 
         int8_t  combustHpLoss = 0;
         int16_t  devaFormEnergyPerTurn = 0;
