@@ -150,6 +150,74 @@ int main() {
               "Chill should channel one Frost orb for the single enemy");
         check(bc.cards.exhaustPile.size() == 1, "Chill should exhaust");
     }
+    {
+        // Card costs corrected against the wiki and calibration fixtures.
+        check(CardInstance(CardId::BEAM_CELL).cost == 0, "Beam Cell should cost 0");
+        check(CardInstance(CardId::CHILL).cost == 0, "Chill should cost 0");
+        check(CardInstance(CardId::TURBO).cost == 0, "Turbo should cost 0");
+        check(CardInstance(CardId::GLACIER).cost == 2, "Glacier should cost 2");
+        check(CardInstance(CardId::RECURSION).cost == 1, "Recursion should cost 1");
+        check(CardInstance(CardId::RECURSION, true).cost == 0, "upgraded Recursion should cost 0");
+    }
+    {
+        // Defragment: gain Focus; focus raises orb settlement values.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::DEFRAGMENT);
+        check(bc.player.focus == 1, "Defragment should gain 1 focus");
+        const int hpBefore = bc.monsters.arr[0].curHp;
+        Actions::TriggerEndOfTurnOrbsAction().actFunc(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(hpBefore - bc.monsters.arr[0].curHp == 4,
+              "lightning passive should deal 3+1 focus damage");
+    }
+    {
+        // Consume: gain Focus, then lose one orb slot; the newest orb drops
+        // without evoking (no block gained from a dropped Frost).
+        BattleContext bc = freshBattle();
+        Actions::ChannelOrb(Orb::FROST).actFunc(bc);
+        Actions::ChannelOrb(Orb::FROST).actFunc(bc); // bar: lightning, frost, frost (full)
+        playCard(bc, CardId::CONSUME);
+        check(bc.player.orbSlots == 2, "Consume should lose one orb slot");
+        check(bc.player.orbs.size() == 2 && bc.player.orbs[0].type == Orb::LIGHTNING
+              && bc.player.orbs[1].type == Orb::FROST,
+              "Consume should drop the newest orb without evoking");
+        check(bc.player.block == 0, "dropping an orb on slot loss should not evoke");
+        check(bc.player.focus == 2, "Consume should gain 2 focus");
+    }
+    {
+        // Reprogram: lose Focus, gain Strength and Dexterity.
+        BattleContext bc = freshBattle();
+        Actions::BuffPlayer<PS::FOCUS>(1).actFunc(bc);
+        playCard(bc, CardId::REPROGRAM);
+        check(bc.player.focus == 0, "Reprogram should lose 1 focus (1 -> 0)");
+        check(bc.player.getStatus<PS::STRENGTH>() == 1, "Reprogram should gain 1 strength");
+        check(bc.player.getStatus<PS::DEXTERITY>() == 1, "Reprogram should gain 1 dexterity");
+    }
+    {
+        // Hyperbeam: 26 damage to all enemies, then lose 3 Focus. Vanilla
+        // FocusPower has canGoNegative=true, so focus can drop below zero.
+        BattleContext bc = freshBattle();
+        Actions::BuffPlayer<PS::FOCUS>(1).actFunc(bc);
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::HYPERBEAM);
+        check(hp - bc.monsters.arr[0].curHp == 26, "Hyperbeam should deal 26");
+        check(bc.player.focus == -2, "Hyperbeam should lose 3 focus below zero (1 -> -2)");
+    }
+    {
+        // Biased Cognition: gain Focus, apply BIAS; turn start drains Focus.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::BIASED_COGNITION);
+        check(bc.player.focus == 4, "Biased Cognition should gain 4 focus");
+        check(bc.player.hasStatus<PS::BIAS>(), "Biased Cognition should apply BIAS");
+        bc.player.applyStartOfTurnPowers(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(bc.player.focus == 3, "BIAS should drain 1 focus at turn start");
+        check(bc.player.hasStatus<PS::BIAS>(), "BIAS should persist across turns");
+    }
 
     std::cout << "M3b Defect card behaviors hold\n";
     return 0;

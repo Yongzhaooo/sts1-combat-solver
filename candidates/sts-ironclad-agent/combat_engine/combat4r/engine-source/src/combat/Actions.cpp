@@ -1026,7 +1026,14 @@ Action Actions::EssenceOfDarkness(int darkOrbsPerSlot) {
 }
 
 Action Actions::IncreaseOrbSlots(int count) {
-    return sts::Action();
+    return {[=] (BattleContext &bc) {
+        bc.player.increaseOrbSlots(count);
+        // Losing a slot drops the newest orb without evoking it. In the vanilla
+        // game only the full-bar channel push-out evokes; slot loss does not.
+        while (static_cast<int>(bc.player.orbs.size()) > bc.player.orbSlots) {
+            bc.player.orbs.remove(bc.player.orbs.size() - 1);
+        }
+    }};
 }
 
 Action Actions::SuicideAction(int monsterIdx, bool triggerRelics) {

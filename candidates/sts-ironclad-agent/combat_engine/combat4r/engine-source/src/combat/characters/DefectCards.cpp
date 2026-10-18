@@ -124,6 +124,38 @@ namespace sts {
                 return true;
             }
 
+            case CardId::DEFRAGMENT:
+                // Defragment.java: gain Focus.
+                bc.addToBot(Actions::BuffPlayer<PS::FOCUS>(up ? 2 : 1));
+                return true;
+
+            case CardId::CONSUME:
+                // Consume.java: gain Focus, then lose one orb slot. Slot loss
+                // drops the newest orb without evoking it.
+                bc.addToBot(Actions::BuffPlayer<PS::FOCUS>(up ? 3 : 2));
+                bc.addToBot(Actions::IncreaseOrbSlots(-1));
+                return true;
+
+            case CardId::REPROGRAM:
+                // Reprogram.java: lose Focus, gain Strength and Dexterity.
+                bc.addToBot(Actions::DecrementStatus<PS::FOCUS>(up ? 2 : 1));
+                bc.addToBot(Actions::BuffPlayer<PS::STRENGTH>(up ? 2 : 1));
+                bc.addToBot(Actions::BuffPlayer<PS::DEXTERITY>(up ? 2 : 1));
+                return true;
+
+            case CardId::HYPERBEAM:
+                // Hyperbeam.java: attack all enemies, then lose 3 Focus.
+                bc.addToBot(Actions::AttackAllEnemy(bc.calculateCardDamageMatrix(c, up ? 34 : 26)));
+                bc.addToBot(Actions::DecrementStatus<PS::FOCUS>(3));
+                return true;
+
+            case CardId::BIASED_COGNITION:
+                // BiasedCognition.java: gain Focus, then apply BIAS. The turn-start
+                // BIAS hook in Player::applyStartOfTurnPowers drains Focus per turn.
+                bc.addToBot(Actions::BuffPlayer<PS::FOCUS>(up ? 5 : 4));
+                bc.addToBot(Actions::BuffPlayer<PS::BIAS>(1));
+                return true;
+
             default:
                 return false;
         }

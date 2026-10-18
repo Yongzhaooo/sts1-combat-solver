@@ -239,6 +239,8 @@ namespace sts {
                 break;
 
             case PS::FOCUS:
+                // Vanilla FocusPower sets canGoNegative=true (desktop-1.0.jar):
+                // focus can drop below zero and orbs weaken accordingly.
                 focus -= amount;
                 updatePowerOrder(s, focus != 0);
                 break;
@@ -467,6 +469,8 @@ namespace sts {
             return;
         }
         if (s == PlayerStatus::FOCUS) {
+            // Vanilla FocusPower sets canGoNegative=true (desktop-1.0.jar): the
+            // merged amount may go negative and orbs weaken accordingly.
             focus += amount;
             updatePowerOrder(s, focus != 0);
             return;

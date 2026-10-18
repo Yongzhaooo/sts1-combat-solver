@@ -851,6 +851,9 @@ namespace sts {
             case CardId::GLACIER:
                 return 2;
 
+            case CardId::RECURSION:
+                return upgraded ? 0 : 1;
+
             default:
                 return 1;
         }
