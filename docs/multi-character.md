@@ -19,7 +19,7 @@ Last confirmed: 2026-10-15，基于分支 `fix/search-timeout-handling`（6dc1e8
 
 ### 1.2 卡牌
 
-当前数字以 `overlay/coverage_manifest.json` 为准（`python tools/coverage_manifest.py` 生成，CI 检查它是否过期）；下表是 2026-10-15 的快照，与清单一致。
+当前数字以 `overlay/coverage_manifest.json` 为准（`python tools/coverage_manifest.py` 生成，CI 检查它是否过期）；下表是 2026-10-18 的快照，与清单一致。
 
 按奖励牌池统计（脚本对 `RarityCardPool` 与三个 switch 的 `case` 取差集得到）。
 
@@ -27,7 +27,7 @@ Last confirmed: 2026-10-15，基于分支 `fix/search-timeout-handling`（6dc1e8
 | --- | --- | --- | --- | --- |
 | 铁甲战士 | 72 | 72 | 0 | 全部可用 |
 | 静默猎手 | 71 | 2 | 69 | Survivor、Neutralize 缺 |
-| 故障机器人 | 71 | 0 | 71 | Zap、Dualcast 缺 |
+| 故障机器人 | 71 | 71 | 0 | 全部可用 |
 | 观者 | 71 | 1 | 70 | Eruption、Vigilance 缺 |
 
 - 静默猎手已有的两张是 Wraith Form（`BattleContext.cpp:1538` 段）和 Piercing Wail。后者不在基础 switch 里，是 `overlay/build_native.py:89` 在构建时注入的。观者已有的是 Vault。
@@ -46,9 +46,9 @@ Last confirmed: 2026-10-15，基于分支 `fix/search-timeout-handling`（6dc1e8
 | 弃牌钩子（静默） | 只有手动弃牌时 Tactician、Reflex 的触发和本回合弃牌计数 | `BattleContext.cpp:2861`，`Player.h:102` |
 | 弃牌选择（静默） | 缺：`CHOOSE_DISCARD_CARDS` 在枚举里但无处理；Tools of the Trade 的弃牌被注释掉 | `ES/include/combat/InputState.h:21`，`Player.cpp:804-806` |
 | Accuracy | 状态在枚举里，注释 `todo implement` | `PlayerStatusEffects.h:58` |
-| 宝珠（机器人） | 只有 `orbSlots` 字段和 `Orb` 枚举。`increaseOrbSlots`、`channelOrb`、`hasEmptyOrb` 是空函数，没有宝珠数组，也没有 evoke 和被动结算 | `Player.h:50`，`Player.cpp:172-182`，`PlayerStatusEffects.h:139` |
-| 宝珠相关动作 | `IncreaseOrbSlots`、`EssenceOfDarkness` 返回空 `Action`；`TriggerEndOfTurnOrbsAction` 是 `todo` | `Actions.cpp:323-327`、`923-929` |
-| 回合开始宝珠、Loop | 注释 `todo` | `BattleContext.cpp:485-486`、`2191-2193`，`Player.cpp:709-711` |
+| 宝珠（机器人） | 已有：`OrbState` 数组（类型、激发加成、黑暗累计）、channel（满栏先激发最旧）、栏位增减、四种宝珠的被动与激发、集中可正可负 | `Player.h`、`Player.cpp` |
+| 宝珠相关动作 | `ChannelOrb`、`EvokeOrbAction`、`IncreaseOrbSlots`、`EssenceOfDarkness`、`TriggerStartOfTurnOrbsAction`、`TriggerEndOfTurnOrbsAction`、`ImpulseAction`、`DarkImpulseAction` 均已实现 | `Actions.cpp` |
+| 回合开始宝珠、Loop | 已接入：等离子在回合开始给能量；Loop 每层触发最旧珠的完整被动 | `BattleContext.cpp`、`Player.cpp` |
 | 集中 Focus | 已有字段和状态，可加减 | `Player.h:59`、`217`、`353` |
 | 姿态（观者） | `stance` 字段和 `changeStance<S>()` 只赋值；`Actions::ChangeStance` 返回空 `Action`，所有经动作切换姿态的路径都是空操作 | `Player.h:49`、`521-523`，`Actions.cpp:134-136` |
 | 姿态的伤害效果 | 已有：怒（Wrath）出伤乘 2、受伤乘 2，神（Divinity）出伤乘 3 且回合开始退出 | `BattleContext.cpp:2784-2790`、`2179-2182`，`Monster.cpp:636` |
@@ -69,14 +69,14 @@ Last confirmed: 2026-10-15，基于分支 `fix/search-timeout-handling`（6dc1e8
 | 职业 | 专属遗物（含起始） | 已有钩子 | 无钩子或依赖空实现 |
 | --- | --- | --- | --- |
 | 静默猎手 | 11 | Ring of the Snake、Ring of the Serpent、Ninja Scroll、Twisted Funnel、Wrist Blade、Paper Krane、The Specimen | Snecko Skull、Tingsha、Tough Bandages、Hovering Kite |
-| 故障机器人 | 9 | Cracked Core、Frozen Core、Data Disk、Runic Capacitor、Symbiotic Virus、Nuclear Battery、Inserter（钩子在，但全部落到空的宝珠函数上） | Gold-Plated Cables 无钩子；Emotion Chip 为 `todo` |
+| 故障机器人 | 9 | Cracked Core、Frozen Core、Data Disk、Runic Capacitor、Symbiotic Virus、Nuclear Battery、Inserter、Gold-Plated Cables、Emotion Chip | 无 |
 | 观者 | 9 | Pure Water、Holy Water（依赖不可打出的 Miracle）、Damaru、Teardrop Locket（依赖空的姿态切换）、Cloak Clasp、Duality | Golden Eye、Violet Lotus 无钩子；Melange 的预见为 `todo` |
 
 钩子位置：`BattleContext.cpp:81-83`、`116-132`、`190-193`、`274-367`、`392-454`、`1881`、`2053-2060`、`2759`，`Monster.cpp:349`、`621`，`Player.cpp:369`、`601-634`。
 
 ### 1.5 药水
 
-职业药水大多有分支：Focus Potion（`BattleContext.cpp:2367`）、Bottled Miracle（2291）、Stance Potion、Ambrosia、Essence of Darkness、Liquid Memories 等。其中 Stance Potion 和 Ambrosia、Essence of Darkness 依赖 1.3 中缺失的姿态或宝珠机制，不能算完成。
+职业药水大多有分支：Focus Potion（`BattleContext.cpp:2367`）、Bottled Miracle（2291）、Stance Potion、Ambrosia、Essence of Darkness、Liquid Memories 等。其中 Stance Potion 和 Ambrosia 仍依赖观者姿态机制；Essence of Darkness 已随 M3 宝珠系统实现。
 
 ### 1.6 规模判断
 
@@ -84,7 +84,7 @@ Last confirmed: 2026-10-15，基于分支 `fix/search-timeout-handling`（6dc1e8
 
 - 静默猎手：几乎不需要新子系统。中毒已有，缺 Shiv 打出、弃牌选择状态和 Accuracy。
 - 观者：需要姿态状态机（补齐 `ChangeStance`、平静退出、真言转神）、预见（新输入状态加搜索枚举）、Wish 和 Alpha 链，约是中等规模。
-- 故障机器人：需要完整的宝珠子系统（数组、channel 与 evoke、被动、集中、回合触发、闪电的随机目标要与 Java 的随机数消耗次序一致），外加 Loop、Echo 一类联动，是最大的一块。
+- 故障机器人：宝珠系统（数组、channel 与 evoke、被动、集中、回合触发、闪电随机目标与 Java 的随机数消耗次序一致）、全部机器人牌与职业遗物已在 M3 落地，剩余的是真值校准与职业开关。
 
 ## 2. 模拟器之外的铁甲战士假设
 
