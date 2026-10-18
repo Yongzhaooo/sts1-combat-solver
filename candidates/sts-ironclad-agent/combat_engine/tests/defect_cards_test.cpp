@@ -24,8 +24,13 @@ namespace {
     // Creates the card in the empty hand and plays it at index 0.
     void playCard(BattleContext &battle, CardId id) {
         battle.cards.createTempCardInHand(CardInstance(id));
-        search::Action play(search::ActionType::CARD, 0, 0);
-        check(play.isValidAction(battle), "card should be playable");
+        // Play the card just added; Echo Form copies can leave earlier slots occupied.
+        const int idx = battle.cards.cardsInHand - 1;
+        search::Action play(search::ActionType::CARD, idx, 0);
+        if (!play.isValidAction(battle)) {
+            throw std::runtime_error(std::string("card should be playable: ")
+                + cardEnumStrings[static_cast<int>(id)]);
+        }
         play.execute(battle);
     }
 
@@ -572,6 +577,132 @@ int main() {
         bc.player.energy = 1; // enough to pay the 1 cost
         playCard(bc, CardId::AGGREGATE);
         check(bc.player.energy == 2, "Aggregate should gain 1 energy per 4 draw pile cards");
+    }
+
+    {
+        // Skim: draw 3.
+        BattleContext bc = freshBattle();
+        for (int i = 0; i < 5; ++i) {
+            bc.cards.createTempCardInDrawPile(i, CardInstance(CardId::STRIKE_BLUE));
+        }
+        playCard(bc, CardId::SKIM);
+        check(bc.cards.cardsInHand == 3, "Skim should draw 3 cards");
+    }
+    {
+        // Overclock: draw 2, then a Burn enters the discard pile.
+        BattleContext bc = freshBattle();
+        for (int i = 0; i < 4; ++i) {
+            bc.cards.createTempCardInDrawPile(i, CardInstance(CardId::STRIKE_BLUE));
+        }
+        playCard(bc, CardId::OVERCLOCK);
+        check(bc.cards.cardsInHand == 2, "Overclock should draw 2 cards");
+        check(discardContains(bc, CardId::BURN), "Overclock should add a Burn to the discard pile");
+    }
+    {
+        // Rip and Tear: two 7-damage hits on a lone enemy.
+        BattleContext bc = freshBattle();
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::RIP_AND_TEAR);
+        check(hp - bc.monsters.arr[0].curHp == 14, "Rip and Tear should hit twice for 7");
+    }
+    {
+        // Fission: remove every orb, gaining 1 energy and 1 card per orb.
+        BattleContext bc = freshBattle();
+        Actions::ChannelOrb(Orb::FROST).actFunc(bc);
+        Actions::ChannelOrb(Orb::FROST).actFunc(bc); // bar: lightning, frost, frost
+        for (int i = 0; i < 6; ++i) {
+            bc.cards.createTempCardInDrawPile(i, CardInstance(CardId::STRIKE_BLUE));
+        }
+        bc.player.energy = 0;
+        playCard(bc, CardId::FISSION);
+        check(bc.player.orbs.empty(), "Fission should remove every orb");
+        check(bc.player.energy == 3, "Fission should gain 1 energy per orb removed");
+        check(bc.cards.cardsInHand == 3, "Fission should draw 1 card per orb removed");
+    }
+    {
+        // FTL: damage plus a draw while fewer than 3 cards were played this turn.
+        BattleContext bc = freshBattle();
+        bc.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::FTL);
+        check(hp - bc.monsters.arr[0].curHp == 5, "FTL should deal 5");
+        check(bc.cards.cardsInHand == 1, "FTL should draw a card on an early turn play");
+        BattleContext bc2 = freshBattle();
+        bc2.player.cardsPlayedThisTurn = 5;
+        bc2.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
+        playCard(bc2, CardId::FTL);
+        check(bc2.cards.cardsInHand == 0, "FTL should not draw after 4 or more cards");
+    }
+    {
+        // Buffer: one stack absorbs the next HP loss.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::BUFFER);
+        check(bc.player.getStatus<PS::BUFFER>() == 1, "Buffer should grant one stack");
+        const int hp = bc.player.curHp;
+        bc.player.damage(bc, 5);
+        check(bc.player.curHp == hp && bc.player.getStatus<PS::BUFFER>() == 0,
+              "Buffer should absorb one hit and be consumed");
+    }
+    {
+        // Echo Form applies its power; the doubling itself runs through the
+        // engine's existing cardQueue copy path (BattleContext::queuePurgeCard),
+        // which is exercised by live play rather than this per-card harness.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::ECHO_FORM);
+        check(bc.player.getStatus<PS::ECHO_FORM>() == 1, "Echo Form should apply its power");
+    }
+    {
+        // Rebound: damage plus the REBOUND power that tops the next card.
+        BattleContext bc = freshBattle();
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::REBOUND);
+        check(hp - bc.monsters.arr[0].curHp == 9, "Rebound should deal 9");
+        check(bc.player.hasStatus<PS::REBOUND>(), "Rebound should apply its power");
+    }
+    {
+        // Rupture: gains Strength whenever a card costs HP.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::RUPTURE);
+        check(bc.player.getStatus<PS::RUPTURE>() == 1, "Rupture should apply its power");
+    }
+    {
+        // White Noise: adds a random Power card that is free this turn.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::WHITE_NOISE);
+        check(bc.cards.cardsInHand == 1, "White Noise should add one card");
+        check(bc.cards.hand[0].getType() == CardType::POWER, "White Noise should add a Power card");
+        check(bc.cards.hand[0].costForTurn == 0, "White Noise should make the card free this turn");
+    }
+    {
+        // Creative AI: at turn start, add one random Power card.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::CREATIVE_AI);
+        check(bc.player.hasStatus<PS::CREATIVE_AI>(), "Creative AI should apply its power");
+        bc.player.applyStartOfTurnPowers(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(bc.cards.cardsInHand == 1 && bc.cards.hand[0].getType() == CardType::POWER,
+              "Creative AI should add a Power card at turn start");
+    }
+    {
+        // Thunder Strike: one random hit per Lightning orb channeled this combat.
+        BattleContext bc = freshBattle();
+        Actions::ChannelOrb(Orb::LIGHTNING).actFunc(bc); // Cracked Core + this = 2 total
+        check(bc.player.lightningChanneledThisCombat == 2, "lightning channel counter should track channels");
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::THUNDER_STRIKE);
+        check(hp - bc.monsters.arr[0].curHp == 14, "Thunder Strike should hit twice for 7 on a lone enemy");
+    }
+    {
+        // Blizzard: hits all enemies for 2 per Frost orb channeled this combat.
+        BattleContext bc = freshBattle();
+        Actions::ChannelOrb(Orb::FROST).actFunc(bc);
+        Actions::ChannelOrb(Orb::FROST).actFunc(bc);
+        check(bc.player.frostChanneledThisCombat == 2, "frost channel counter should track channels");
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::BLIZZARD);
+        check(hp - bc.monsters.arr[0].curHp == 4, "Blizzard should deal 2 per Frost channel");
     }
 
     std::cout << "Defect card behaviors hold\n";

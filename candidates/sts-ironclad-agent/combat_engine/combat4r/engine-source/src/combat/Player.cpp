@@ -203,6 +203,11 @@ void Player::channelOrb(Orb orb, std::int8_t evokeBonus, std::int16_t darkCounte
         darkCounter = orb == Orb::DARK ? 6 : 0;
     }
     orbs.push_back(OrbState{orb, evokeBonus, darkCounter});
+    if (orb == Orb::LIGHTNING) {
+        ++lightningChanneledThisCombat;
+    } else if (orb == Orb::FROST) {
+        ++frostChanneledThisCombat;
+    }
 }
 
 bool Player::hasEmptyOrb() const {
@@ -702,7 +707,11 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 break;
 
             case PS::CREATIVE_AI:
-//                bc.addToBot( Actions::SetState(InputState::CREATE_RANDOM_CARD_IN_HAND_POWER, pair.second) ); // todo
+                // CreativeAiPower.atStartOfTurn: add one random Power card to hand,
+                // free to play this turn (one per stack).
+                for (int i = 0; i < pair.second; ++i) {
+                    bc.addToBot(Actions::CreateRandomCardInHandAction(CardType::POWER));
+                }
                 break;
 
             case PS::ECHO_FORM:

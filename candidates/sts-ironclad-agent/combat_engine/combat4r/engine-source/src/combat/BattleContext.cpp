@@ -1713,7 +1713,10 @@ void BattleContext::onUseAttackCard() {
 
     const auto echoForm = p.getStatus<PS::ECHO_FORM>();
     if (!item.purgeOnUse && echoForm) {
-        const bool echoFormActive = player.cardsPlayedThisTurn - player.echoFormCardsDoubled <= echoForm;
+        // EchoFormPower: the first amount cards played each turn are played twice.
+        // cardsPlayedThisTurn already counts this card, matching the game's
+        // cardsPlayedThisTurn.size() <= amount check.
+        const bool echoFormActive = player.cardsPlayedThisTurn <= echoForm;
         if (echoFormActive) {
             ++player.echoFormCardsDoubled;
             queuePurgeCard(c, item.target);
@@ -1786,7 +1789,10 @@ void BattleContext::onUseSkillCard() {
 
     const auto echoForm = p.getStatus<PS::ECHO_FORM>();
     if (!item.purgeOnUse && echoForm) {
-        const bool echoFormActive = player.cardsPlayedThisTurn - player.echoFormCardsDoubled <= echoForm;
+        // EchoFormPower: the first amount cards played each turn are played twice.
+        // cardsPlayedThisTurn already counts this card, matching the game's
+        // cardsPlayedThisTurn.size() <= amount check.
+        const bool echoFormActive = player.cardsPlayedThisTurn <= echoForm;
         if (echoFormActive) {
             ++player.echoFormCardsDoubled;
             queuePurgeCard(c, item.target);
@@ -1844,7 +1850,10 @@ void BattleContext::onUsePowerCard() {
 
     const auto echoForm = p.getStatus<PS::ECHO_FORM>();
     if (!item.purgeOnUse && echoForm) {
-        const bool echoFormActive = player.cardsPlayedThisTurn - player.echoFormCardsDoubled <= echoForm;
+        // EchoFormPower: the first amount cards played each turn are played twice.
+        // cardsPlayedThisTurn already counts this card, matching the game's
+        // cardsPlayedThisTurn.size() <= amount check.
+        const bool echoFormActive = player.cardsPlayedThisTurn <= echoForm;
         if (echoFormActive) {
             ++player.echoFormCardsDoubled;
             queuePurgeCard(c, item.target);
@@ -1969,7 +1978,10 @@ void BattleContext::onUseStatusOrCurseCard() {
 
     const auto echoForm = p.getStatus<PS::ECHO_FORM>();
     if (!item.purgeOnUse && echoForm) {
-        const bool echoFormActive = player.cardsPlayedThisTurn - player.echoFormCardsDoubled <= echoForm;
+        // EchoFormPower: the first amount cards played each turn are played twice.
+        // cardsPlayedThisTurn already counts this card, matching the game's
+        // cardsPlayedThisTurn.size() <= amount check.
+        const bool echoFormActive = player.cardsPlayedThisTurn <= echoForm;
         if (echoFormActive) {
             ++player.echoFormCardsDoubled;
             queuePurgeCard(c, item.target);

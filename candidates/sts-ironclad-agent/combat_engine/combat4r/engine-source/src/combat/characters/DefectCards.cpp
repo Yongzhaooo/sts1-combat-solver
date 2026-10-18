@@ -387,6 +387,106 @@ namespace sts {
                 }});
                 return true;
 
+            case CardId::SKIM:
+                // Skim.java: draw 3 (4).
+                bc.addToBot(Actions::DrawCards(up ? 4 : 3));
+                return true;
+
+            case CardId::OVERCLOCK:
+                // Overclock.java: draw 2 (3), then a Burn enters the discard pile.
+                bc.addToBot(Actions::DrawCards(up ? 3 : 2));
+                bc.addToBot(Actions::MakeTempCardInDiscard(CardInstance(CardId::BURN), 1));
+                return true;
+
+            case CardId::RIP_AND_TEAR:
+                // RipAndTear.java: two hits, each picking its own random target.
+                bc.addToBot(Actions::RipAndTearAction(bc.calculateCardDamage(c, t, up ? 9 : 7), 2));
+                return true;
+
+            case CardId::FISSION:
+                // FissionAction: remove (evoke when upgraded) every orb, then gain
+                // one energy and draw one card per orb removed.
+                bc.addToBot(Actions::FissionAction(up));
+                return true;
+
+            case CardId::FTL:
+                // FTL.java: damage, then draw 1 when fewer than 3 cards were played
+                // this turn. The engine counts this card before dispatch, so the
+                // 1-based equivalent of size() < 3 is cardsPlayedThisTurn <= 3.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 6 : 5)));
+                bc.addToBot({[=] (BattleContext &bc) {
+                    if (bc.player.cardsPlayedThisTurn <= 3) {
+                        bc.addToBot(Actions::DrawCards(1));
+                    }
+                }});
+                return true;
+
+            case CardId::BUFFER:
+                // Buffer.java: prevent the next 1 (2) HP loss; Player::damage
+                // consumes a stack.
+                bc.addToBot(Actions::BuffPlayer<PS::BUFFER>(up ? 2 : 1));
+                return true;
+
+            case CardId::ECHO_FORM:
+                // EchoForm.java: the first card each turn is played twice. The
+                // copy itself lives in BattleContext::onAfterCardUsed; Player's
+                // start-of-turn hook resets echoFormCardsDoubled. Ethereal is
+                // card metadata.
+                bc.addToBot(Actions::BuffPlayer<PS::ECHO_FORM>(1));
+                return true;
+
+            case CardId::REBOUND:
+                // Rebound.java: damage, then the next card played goes on top of
+                // the draw pile (handled in BattleContext's card-purge path).
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 12 : 9)));
+                // ReboundPower ships with justEvoked = true, so the Rebound card
+                // itself is not topped. The engine consumes one stack per played
+                // card, so seeding two stacks encodes that skip plus the real one.
+                bc.addToBot(Actions::BuffPlayer<PS::REBOUND>(2));
+                return true;
+
+            case CardId::RUPTURE:
+                // Rupture.java: gain Strength whenever a card costs HP.
+                bc.addToBot(Actions::BuffPlayer<PS::RUPTURE>(up ? 2 : 1));
+                return true;
+
+            case CardId::WHITE_NOISE:
+                // WhiteNoise.java: add a random Power card, free to play this turn.
+                bc.addToBot(Actions::WhiteNoiseAction());
+                return true;
+
+            case CardId::CREATIVE_AI:
+                // CreativeAi.java: at the start of each turn add a random Power
+                // card; the Player start-of-turn hook does the work.
+                bc.addToBot(Actions::BuffPlayer<PS::CREATIVE_AI>(1));
+                return true;
+
+            case CardId::THUNDER_STRIKE: {
+                // ThunderStrike.java: one random-target hit per Lightning orb
+                // channeled this combat, 7 (9) damage each.
+                const int hits = bc.player.lightningChanneledThisCombat;
+                for (int i = 0; i < hits; ++i) {
+                    bc.addToBot({[=] (BattleContext &bc) {
+                        const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                        if (target >= 0) {
+                            bc.addToBot(Actions::AttackEnemy(target, up ? 9 : 7));
+                        }
+                    }});
+                }
+                return true;
+            }
+
+            case CardId::BLIZZARD: {
+                // Blizzard.java: hit all enemies for 2 (3) per Frost orb channeled
+                // this combat.
+                const int count = bc.player.frostChanneledThisCombat;
+                if (count > 0) {
+                    bc.addToBot(Actions::AttackAllEnemy(
+                        bc.calculateCardDamageMatrix(c, (up ? 3 : 2) * count)));
+                }
+                return true;
+            }
+
             default:
                 return false;
         }

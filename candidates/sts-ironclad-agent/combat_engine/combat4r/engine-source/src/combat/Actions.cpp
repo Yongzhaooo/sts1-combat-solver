@@ -25,6 +25,40 @@ Action Actions::AttackEnemy(int idx, int damage) {
     }};
 }
 
+Action Actions::RipAndTearAction(int damage, int times) {
+    return {[=] (BattleContext &bc) {
+        // NewRipAndTearAction: each hit rolls its own random target when it resolves.
+        for (int i = 0; i < times; ++i) {
+            bc.addToBot({[=] (BattleContext &bc) {
+                const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                if (target >= 0) {
+                    bc.addToBot(Actions::AttackEnemy(target, damage));
+                }
+            }});
+        }
+    }};
+}
+
+Action Actions::WhiteNoiseAction() {
+    return {[] (BattleContext &bc) {
+        // White Noise: a random Power card of the player's class, free this turn.
+        const auto cid = getTrulyRandomCardInCombat(bc.cardRandomRng, bc.player.cc, CardType::POWER);
+        CardInstance generated = bc.createGeneratedCard(cid);
+        generated.setCostForTurn(0);
+        bc.addToTop(Actions::MakeTempCardInHand(generated));
+    }};
+}
+
+Action Actions::CreateRandomCardInHandAction(CardType type) {
+    return {[=] (BattleContext &bc) {
+        // Hello World / Creative AI: random card of the given type, free this turn.
+        const auto cid = getTrulyRandomCardInCombat(bc.cardRandomRng, bc.player.cc, type);
+        CardInstance generated = bc.createGeneratedCard(cid);
+        generated.setCostForTurn(0);
+        bc.addToTop(Actions::MakeTempCardInHand(generated));
+    }};
+}
+
 Action Actions::SunderAction(int idx, int damage) {
     return {[=] (BattleContext &bc) {
         if (bc.monsters.arr[idx].isDeadOrEscaped()) {
@@ -567,6 +601,30 @@ Action Actions::MultiCastAction(int times) {
                 bc.player.orbs.remove(0);
             }
         }
+    }};
+}
+
+Action Actions::FissionAction(bool upgraded) {
+    return {[=] (BattleContext &bc) {
+        // FissionAction: the orb count is read when the action resolves, then all
+        // orbs are removed (evoked when upgraded), and that many energy/cards are
+        // granted. Queued bottom-up so removal resolves before the rewards.
+        const int count = static_cast<int>(bc.player.orbs.size());
+        if (upgraded) {
+            bc.addToBot({[] (BattleContext &bc) {
+                while (!bc.player.orbs.empty()) {
+                    const auto orb = bc.player.orbs[0];
+                    fireEvokeEffects(bc, orb);
+                    bc.player.orbs.remove(0);
+                }
+            }});
+        } else {
+            bc.addToBot({[] (BattleContext &bc) {
+                bc.player.orbs.clear();
+            }});
+        }
+        bc.addToBot(Actions::GainEnergy(count));
+        bc.addToBot(Actions::DrawCards(count));
     }};
 }
 

@@ -871,7 +871,22 @@ namespace sts {
                 return 5;
 
             case CardId::SUNDER:
+            case CardId::THUNDER_STRIKE:
                 return 3;
+
+            case CardId::OVERCLOCK:
+            case CardId::FISSION:
+            case CardId::FTL:
+                return 0;
+
+            case CardId::BUFFER:
+                return 2;
+
+            case CardId::ECHO_FORM:
+                return 3;
+
+            case CardId::CREATIVE_AI:
+                return upgraded ? 2 : 3;
 
             default:
                 return 1;

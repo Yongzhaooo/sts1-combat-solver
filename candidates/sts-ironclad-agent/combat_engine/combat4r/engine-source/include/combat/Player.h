@@ -127,6 +127,11 @@ namespace sts {
         int16_t skillsPlayedThisTurn = 0;
         std::bitset<3> orangePelletsCardTypesPlayed;
         int16_t cardsDiscardedThisTurn = 0;
+        // GameActionManager.orbsChanneledThisCombat, split by orb type. Blizzard and
+        // Thunder Strike scale with these counters; Recursion's rechannel counts too
+        // because the game re-channels the evoked orb object.
+        int16_t  lightningChanneledThisCombat = 0;
+        int16_t  frostChanneledThisCombat = 0;
 
         // currently unused
         int16_t lastAttackUnblockedDamage = 0;
