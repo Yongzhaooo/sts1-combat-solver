@@ -326,11 +326,23 @@ Action Actions::MonsterStartTurnAction() {
     }};
 }
 
+namespace {
+    // DarkOrb.onEndOfTurn: the accumulated counter grows by max(0, 6 + focus).
+    // Negative focus never reduces the counter (Dark.applyFocus clamps only the
+    // growth rate, and never touches the accumulated value itself).
+    void growDarkOrb(BattleContext &bc, Player::OrbState &orb) {
+        const int growth = 6 + bc.player.focus;
+        if (growth > 0) {
+            orb.darkCounter = static_cast<std::int16_t>(orb.darkCounter + growth);
+        }
+    }
+}
+
 Action Actions::TriggerEndOfTurnOrbsAction() {
     return {[] (BattleContext &bc) {
         // End-of-turn passives trigger left to right and never consume the orb.
         for (int i = 0; i < bc.player.orbs.size(); ++i) {
-            const auto &orb = bc.player.orbs[i];
+            auto &orb = bc.player.orbs[i];
             switch (orb.type) {
                 case Orb::LIGHTNING: {
                     // LightningOrb.onEndOfTurn: deal 3 (+focus) to a random enemy.
@@ -351,9 +363,13 @@ Action Actions::TriggerEndOfTurnOrbsAction() {
                     }
                     break;
                 }
+                case Orb::DARK:
+                    // DarkOrb.onEndOfTurn: the counter grows; no damage, the orb stays.
+                    growDarkOrb(bc, orb);
+                    break;
                 default:
-                    // TODO(defect M3): dark and plasma end-of-turn settlement stay
-                    // unimplemented until their cards and values are covered.
+                    // TODO(defect M3): plasma end-of-turn settlement stays
+                    // unimplemented until its cards and values are covered.
                     break;
             }
         }
@@ -363,16 +379,18 @@ Action Actions::TriggerEndOfTurnOrbsAction() {
 namespace {
     // Fires one orb's evoke effects without consuming it. Shared by EvokeOrbAction
     // and the full-bar push-out in ChannelOrb. The target roll for lightning
-    // happens here, when the effects are queued.
-    void fireEvokeEffects(BattleContext &bc, Orb type, std::int8_t evokeBonus) {
-        switch (type) {
+    // happens here, when the effects are queued. The game queues evoke effects
+    // with addToTop (Lightning/Frost/Dark onEvoke), so effects must resolve
+    // before anything else pending in the queue.
+    void fireEvokeEffects(BattleContext &bc, const Player::OrbState &orb) {
+        switch (orb.type) {
             case Orb::LIGHTNING: {
                 // LightningOrb.onEvoke: deal 8 (+focus +bonus) to a random enemy.
-                const int damage = 8 + bc.player.focus + evokeBonus;
+                const int damage = 8 + bc.player.focus + orb.evokeBonus;
                 if (damage > 0) {
                     const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
                     if (target >= 0) {
-                        bc.addToBot(Actions::AttackEnemy(target, damage));
+                        bc.addToTop(Actions::AttackEnemy(target, damage));
                     }
                 }
                 break;
@@ -381,18 +399,40 @@ namespace {
                 // FrostOrb.onEvoke: gain 5 (+focus) block.
                 const int block = 5 + bc.player.focus;
                 if (block > 0) {
-                    bc.addToBot(Actions::GainBlock(block));
+                    bc.addToTop(Actions::GainBlock(block));
+                }
+                break;
+            }
+            case Orb::DARK: {
+                // DarkOrb.onEvoke via DarkOrbEvokeAction: deal the accumulated
+                // counter to the lowest-HP enemy, chosen when the effect queues.
+                if (orb.darkCounter > 0) {
+                    int target = -1;
+                    int lowestHp = 0;
+                    for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                        const auto &m = bc.monsters.arr[i];
+                        if (m.isDeadOrEscaped() || m.curHp <= 0) {
+                            continue;
+                        }
+                        if (target < 0 || m.curHp < lowestHp) {
+                            target = i;
+                            lowestHp = m.curHp;
+                        }
+                    }
+                    if (target >= 0) {
+                        bc.addToTop(Actions::AttackEnemy(target, orb.darkCounter));
+                    }
                 }
                 break;
             }
             default:
-                // TODO(defect M3): dark and plasma evoke settlement stay unimplemented.
+                // TODO(defect M3): plasma evoke settlement stays unimplemented.
                 break;
         }
     }
 }
 
-Action Actions::ChannelOrb(Orb orb, std::int8_t evokeBonus) {
+Action Actions::ChannelOrb(Orb orb, std::int8_t evokeBonus, std::int16_t darkCounter) {
     return {[=] (BattleContext &bc) {
         // Vanilla rules (wiki/game): with no slots a channel does nothing and
         // never triggers the orb's evoke; with a full bar the oldest orb is
@@ -402,10 +442,23 @@ Action Actions::ChannelOrb(Orb orb, std::int8_t evokeBonus) {
         }
         if (!bc.player.hasEmptyOrb() && !bc.player.orbs.empty()) {
             const auto pushed = bc.player.orbs[0];
-            fireEvokeEffects(bc, pushed.type, pushed.evokeBonus);
+            fireEvokeEffects(bc, pushed);
             bc.player.orbs.remove(0);
         }
-        bc.player.channelOrb(orb, evokeBonus);
+        bc.player.channelOrb(orb, evokeBonus, darkCounter);
+    }};
+}
+
+Action Actions::DarkImpulseAction() {
+    return {[] (BattleContext &bc) {
+        // DarkImpulseAction (upgraded Darkness): every Dark orb's counter grows
+        // once right now. The Cables relic's extra first-orb trigger stays a
+        // relic TODO until that relic is implemented.
+        for (auto &orb : bc.player.orbs) {
+            if (orb.type == Orb::DARK) {
+                growDarkOrb(bc, orb);
+            }
+        }
     }};
 }
 
@@ -416,7 +469,7 @@ Action Actions::EvokeOrbAction(int orbIdx, int times) {
         }
         const auto orb = bc.player.orbs[orbIdx];
         for (int i = 0; i < times; ++i) {
-            fireEvokeEffects(bc, orb.type, orb.evokeBonus);
+            fireEvokeEffects(bc, orb);
         }
         // Evoking consumes the orb, after all triggered instances resolve.
         bc.player.orbs.remove(orbIdx);

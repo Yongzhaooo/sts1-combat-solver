@@ -190,14 +190,19 @@ void Player::increaseOrbSlots(int amount) {
     }
 }
 
-void Player::channelOrb(Orb orb, std::int8_t evokeBonus) {
+void Player::channelOrb(Orb orb, std::int8_t evokeBonus, std::int16_t darkCounter) {
     // Requires an open slot: the caller (Actions::ChannelOrb) owns the vanilla
     // policy of evoking the oldest orb when the bar is full, and of doing
     // nothing at all when no slots exist.
     if (!hasEmptyOrb()) {
         return;
     }
-    orbs.push_back(OrbState{orb, evokeBonus});
+    if (darkCounter < 0) {
+        // Vanilla Dark channels with an initial counter of 6 (Dark's
+        // constructor); Recursion passes the evoked orb's counter through.
+        darkCounter = orb == Orb::DARK ? 6 : 0;
+    }
+    orbs.push_back(OrbState{orb, evokeBonus, darkCounter});
 }
 
 bool Player::hasEmptyOrb() const {

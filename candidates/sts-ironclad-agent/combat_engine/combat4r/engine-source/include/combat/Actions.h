@@ -102,6 +102,7 @@ namespace sts {
         static Action UnnamedEndOfTurnAction();
         static Action MonsterStartTurnAction();
         static Action TriggerEndOfTurnOrbsAction();
+        static Action DarkImpulseAction(); // upgraded Darkness: every Dark orb grows once now
 
         static Action ExhaustTopCardInHand();
         static Action ExhaustSpecificCardInHand(int idx, std::int16_t uniqueId);
@@ -151,7 +152,7 @@ namespace sts {
         static Action OnAfterCardUsed(); // called UseCardAction in game
         static Action EssenceOfDarkness(int darkOrbsPerSlot); // handle sacred bark
         static Action IncreaseOrbSlots(int count);
-        static Action ChannelOrb(Orb orb, std::int8_t evokeBonus = 0);
+        static Action ChannelOrb(Orb orb, std::int8_t evokeBonus = 0, std::int16_t darkCounter = -1);
         static Action EvokeOrbAction(int orbIdx, int times = 1);
 
         static Action SuicideAction(int monsterIdx, bool triggerRelics);

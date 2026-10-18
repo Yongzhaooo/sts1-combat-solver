@@ -4,18 +4,20 @@
 namespace sts {
 
     namespace {
-        // Recursion.java: evoke the next (leftmost) orb, then channel a new orb of
-        // the type just evoked. The type must be read when the action resolves,
-        // not when the card is queued: earlier queued actions can change the bar.
+        // Recursion.java (RedoAction): evoke the next (leftmost) orb, then channel
+        // the very orb object just evoked. Channeling the same object preserves
+        // its per-orb state - notably a Dark orb keeps its accumulated counter.
+        // The type must be read when the action resolves, not when the card is
+        // queued: earlier queued actions can change the bar.
         Action evokeNextAndRechannel() {
             return {[] (BattleContext &bc) {
                 if (bc.player.orbs.empty()) {
                     return;
                 }
-                const auto type = bc.player.orbs[0].type;
+                const auto evoked = bc.player.orbs[0];
                 Actions::EvokeOrbAction(0).actFunc(bc);
-                if (type != Orb::EMPTY) {
-                    bc.player.channelOrb(type);
+                if (evoked.type != Orb::EMPTY) {
+                    bc.player.channelOrb(evoked.type, evoked.evokeBonus, evoked.darkCounter);
                 }
             }};
         }
@@ -154,6 +156,29 @@ namespace sts {
                 // BIAS hook in Player::applyStartOfTurnPowers drains Focus per turn.
                 bc.addToBot(Actions::BuffPlayer<PS::FOCUS>(up ? 5 : 4));
                 bc.addToBot(Actions::BuffPlayer<PS::BIAS>(1));
+                return true;
+
+            case CardId::DARKNESS:
+                // Darkness.java: channel one Dark orb; upgraded also grows every
+                // Dark orb's counter right now (DarkImpulseAction).
+                bc.addToBot(Actions::ChannelOrb(Orb::DARK));
+                if (up) {
+                    bc.addToBot(Actions::DarkImpulseAction());
+                }
+                return true;
+
+            case CardId::DOOM_AND_GLOOM:
+                // DoomAndGloom.java: attack all enemies, then channel one Dark orb.
+                bc.addToBot(Actions::AttackAllEnemy(bc.calculateCardDamageMatrix(c, up ? 14 : 10)));
+                bc.addToBot(Actions::ChannelOrb(Orb::DARK));
+                return true;
+
+            case CardId::RAINBOW:
+                // Rainbow.java: channel Lightning, Frost and Dark. Exhaust is card
+                // metadata (base only; upgraded does not exhaust).
+                bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
+                bc.addToBot(Actions::ChannelOrb(Orb::FROST));
+                bc.addToBot(Actions::ChannelOrb(Orb::DARK));
                 return true;
 
             default:

@@ -11,11 +11,11 @@ static void check(bool value, const char *why) {
 
 namespace {
     // Fresh player-turn battle vs a single Cultist, empty hand, 3 energy.
-    BattleContext freshBattle() {
+    BattleContext freshBattle(MonsterEncounter encounter = MonsterEncounter::CULTIST) {
         GameContext game(CharacterClass::DEFECT, 123, 0);
         game.regainControlAction = [](GameContext&) {};
         BattleContext battle;
-        battle.init(game, MonsterEncounter::CULTIST);
+        battle.init(game, encounter);
         battle.cards = CardManager{};
         battle.setState(InputState::PLAYER_NORMAL);
         return battle;
@@ -217,6 +217,101 @@ int main() {
         }
         check(bc.player.focus == 3, "BIAS should drain 1 focus at turn start");
         check(bc.player.hasStatus<PS::BIAS>(), "BIAS should persist across turns");
+    }
+
+    {
+        // Dark orb: channels with counter 6, grows by max(0, 6 + focus) per end
+        // of turn, and focus never resets the accumulated counter.
+        BattleContext bc = freshBattle();
+        Actions::ChannelOrb(Orb::DARK).actFunc(bc);
+        check(bc.player.orbs.back().darkCounter == 6, "Dark orb should start with counter 6");
+        Actions::TriggerEndOfTurnOrbsAction().actFunc(bc);
+        check(bc.player.orbs.back().darkCounter == 12, "Dark counter should grow by 6 at focus 0");
+        Actions::BuffPlayer<PS::FOCUS>(2).actFunc(bc);
+        Actions::TriggerEndOfTurnOrbsAction().actFunc(bc);
+        check(bc.player.orbs.back().darkCounter == 20, "Dark counter should grow by 6+2 focus");
+        check(bc.player.orbs.size() == 2, "Dark passive should not consume the orb");
+    }
+    {
+        // Dark evoke hits the lowest-HP enemy (TWO_LOUSE for two targets).
+        BattleContext bc = freshBattle(MonsterEncounter::TWO_LOUSE);
+        Actions::ChannelOrb(Orb::DARK).actFunc(bc);
+        int lowest = -1, other = -1, lowestHp = 0;
+        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+            const auto &m = bc.monsters.arr[i];
+            if (m.isDeadOrEscaped()) continue;
+            if (lowest < 0 || m.curHp < lowestHp) {
+                other = lowest;
+                lowest = i;
+                lowestHp = m.curHp;
+            } else {
+                other = i;
+            }
+        }
+        check(lowest >= 0 && other >= 0, "TWO_LOUSE should provide two alive enemies");
+        const int lowestBefore = bc.monsters.arr[lowest].curHp;
+        const int otherBefore = bc.monsters.arr[other].curHp;
+        // The bar holds Cracked Core's lightning at index 0; evoke the Dark at the end.
+        Actions::EvokeOrbAction(static_cast<int>(bc.player.orbs.size()) - 1).actFunc(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(lowestBefore - bc.monsters.arr[lowest].curHp == 6, "Dark evoke should hit the lowest-HP enemy for 6");
+        check(bc.monsters.arr[other].curHp == otherBefore, "Dark evoke should not touch the other enemy");
+        check(bc.player.orbs.size() == 1, "evoking should consume the Dark orb");
+    }
+    {
+        // Recursion preserves the Dark counter (the same orb object rechannels).
+        BattleContext bc = freshBattle();
+        Actions::ChannelOrb(Orb::DARK).actFunc(bc);          // bar: lightning, dark
+        Actions::EvokeOrbAction(0).actFunc(bc);              // clear Cracked Core's lightning
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        Actions::TriggerEndOfTurnOrbsAction().actFunc(bc); // counter 6 -> 12
+        playCard(bc, CardId::RECURSION);
+        check(bc.player.orbs.size() == 1 && bc.player.orbs[0].darkCounter == 12,
+              "Recursion should rechannel the Dark orb with its counter");
+        Actions::TriggerEndOfTurnOrbsAction().actFunc(bc);
+        check(bc.player.orbs[0].darkCounter == 18, "the rechanneled Dark orb keeps growing");
+    }
+    {
+        // Darkness: channel a Dark orb; upgraded also grows it immediately.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::DARKNESS);
+        check(bc.player.orbs.size() == 2 && bc.player.orbs.back().darkCounter == 6,
+              "Darkness should channel a Dark orb with counter 6");
+        BattleContext up2 = freshBattle();
+        up2.cards.createTempCardInHand(CardInstance(CardId::DARKNESS, true));
+        search::Action play(search::ActionType::CARD, 0, 0);
+        check(play.isValidAction(up2), "upgraded Darkness should be playable");
+        play.execute(up2);
+        check(up2.player.orbs.back().darkCounter == 12,
+              "upgraded Darkness should grow the new Dark orb immediately");
+    }
+    {
+        // Doom and Gloom: 10 damage to all enemies, then a Dark orb.
+        BattleContext bc = freshBattle();
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::DOOM_AND_GLOOM);
+        check(hp - bc.monsters.arr[0].curHp == 10, "Doom and Gloom should deal 10");
+        check(bc.player.orbs.back().type == Orb::DARK, "Doom and Gloom should channel a Dark orb");
+    }
+    {
+        // Rainbow: one orb of each of the three types; base exhausts. With only
+        // three slots the third channel fills the bar and the fourth evokes the
+        // oldest lightning (8 damage to the lone Cultist).
+        BattleContext bc = freshBattle();
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::RAINBOW);
+        check(bc.player.orbs.size() == 3, "the bar stays capped at the slot count");
+        check(bc.player.orbs[0].type == Orb::LIGHTNING && bc.player.orbs[1].type == Orb::FROST
+              && bc.player.orbs[2].type == Orb::DARK,
+              "Rainbow should channel Lightning, Frost and Dark, evoking the oldest");
+        check(hp - bc.monsters.arr[0].curHp == 8, "the pushed-out lightning should evoke for 8");
+        check(bc.cards.exhaustPile.size() == 1, "base Rainbow should exhaust");
+        check(CardInstance(CardId::RAINBOW, true).doesExhaust() == false,
+              "upgraded Rainbow should not exhaust");
     }
 
     std::cout << "M3b Defect card behaviors hold\n";
