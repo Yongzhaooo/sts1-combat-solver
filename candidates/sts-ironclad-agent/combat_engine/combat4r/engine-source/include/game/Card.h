@@ -16,8 +16,11 @@ namespace sts {
         bool upgraded = false;
 
         Card() = default;
-        Card(CardId id) : id(id), misc(id == CardId::RITUAL_DAGGER ? 15 : 0) {}
-        Card(CardId id, int upgraded) : id(id), misc(id == CardId::SEARING_BLOW ? upgraded : (id == CardId::RITUAL_DAGGER ? 15 : 0)), upgraded(upgraded > 0) {}
+        Card(CardId id) : id(id), misc(id == CardId::RITUAL_DAGGER ? 15
+                                        : (id == CardId::GENETIC_ALGORITHM ? 1 : 0)) {}
+        Card(CardId id, int upgraded) : id(id), misc(id == CardId::SEARING_BLOW ? upgraded
+                                        : (id == CardId::RITUAL_DAGGER ? 15
+                                        : (id == CardId::GENETIC_ALGORITHM ? 1 : 0))), upgraded(upgraded > 0) {}
 
         [[nodiscard]] CardId getId() const;
         [[nodiscard]] int getUpgraded() const;

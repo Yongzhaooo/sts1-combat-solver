@@ -580,6 +580,13 @@ namespace sts {
                 bc.addToBot(Actions::BuffPlayer<PS::SELF_REPAIR>(up ? 10 : 7));
                 return true;
 
+            case CardId::GENETIC_ALGORITHM:
+                // GeneticAlgorithm.java: baseBlock equals misc, so the card grants
+                // its accumulated block and then grows by 2 (3). The growth runs in
+                // onAfterUseCard and cardOnExit writes it back to the deck.
+                bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(c.specialData)));
+                return true;
+
             default:
                 return false;
         }

@@ -10,6 +10,8 @@ using namespace sts;
 
 CardInstance::CardInstance(CardId id, bool upgraded) : id(id), upgraded(upgraded) {
     if (id == CardId::RITUAL_DAGGER) specialData = 15;
+    // GeneticAlgorithm.java starts with misc = 1 and baseBlock = misc.
+    else if (id == CardId::GENETIC_ALGORITHM) specialData = 1;
     cost = getEnergyCost(id, upgraded);
     costForTurn = cost;
 }

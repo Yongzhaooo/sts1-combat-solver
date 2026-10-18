@@ -835,6 +835,23 @@ int main() {
               "Self Repair should store a 7 HP combat-end heal");
     }
 
+    {
+        // Genetic Algorithm: grants its accumulated block, then grows by 2.
+        BattleContext bc = freshBattle();
+        check(CardInstance(CardId::GENETIC_ALGORITHM).specialData == 1,
+              "Genetic Algorithm should start with 1 block");
+        playCard(bc, CardId::GENETIC_ALGORITHM);
+        check(bc.player.block == 1, "the first Genetic Algorithm should grant 1 block");
+        bool grew = false;
+        for (const auto &dc : bc.cards.exhaustPile) { // the card exhausts
+            if (dc.getId() == CardId::GENETIC_ALGORITHM) {
+                check(dc.specialData == 3, "Genetic Algorithm should grow by 2 after a play");
+                grew = true;
+            }
+        }
+        check(grew, "Genetic Algorithm should be in the exhaust pile");
+    }
+
     std::cout << "Defect card behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {

@@ -641,10 +641,10 @@ void cardOnExit(const CardInstance &c, Deck &deck) {
         deckCard.misc = c.specialData;
     }
 
-    // todo
-//    if (c.getId() == CardId::GENETIC_ALGORITHM) {
-//        deckCard.misc = c.specialData;
-//    }
+    if (c.getId() == CardId::GENETIC_ALGORITHM) {
+        // GeneticAlgorithm.java persists its block growth in the master deck's misc.
+        deckCard.misc = c.specialData;
+    }
 }
 
 void BattleContext::updateCardsOnExit(Deck &deck) const {
@@ -2066,6 +2066,9 @@ void BattleContext::onAfterUseCard() {
         c.updateCost(-1);
     } else if (c.getId() == CardId::STEAM_BARRIER) {
         ++c.specialData;
+    } else if (c.getId() == CardId::GENETIC_ALGORITHM) {
+        // GeneticAlgorithm.java: IncreaseMiscAction(uuid, misc, magicNumber).
+        c.specialData = static_cast<std::int16_t>(c.specialData + (c.isUpgraded() ? 3 : 2));
     }
 
     if (c.getType() == CardType::POWER) {

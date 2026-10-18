@@ -129,9 +129,8 @@
     "DEFECT": {
       "reward_pool": {
         "total": 71,
-        "implemented": 66,
+        "implemented": 67,
         "missing": [
-          "GENETIC_ALGORITHM",
           "HOLOGRAM",
           "RECYCLE",
           "SCRAPE",
@@ -351,7 +350,6 @@
     "Footwork": "FOOTWORK",
     "ForeignInfluence": "FOREIGN_INFLUENCE",
     "Wireheading": "FORESIGHT",
-    "Genetic Algorithm": "GENETIC_ALGORITHM",
     "Glass Knife": "GLASS_KNIFE",
     "Grand Finale": "GRAND_FINALE",
     "Halt": "HALT",
