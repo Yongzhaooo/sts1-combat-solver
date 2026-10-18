@@ -236,7 +236,7 @@ pybind11_add_module(overlay_search '''+' '.join(map(cmake_path,sources))+''')
 target_compile_options(overlay_search PRIVATE /O2 /UNDEBUG /utf-8 /EHsc /bigobj)
 target_compile_definitions(overlay_search PRIVATE COMBAT3_TARGET_POLICY=1 NOMINMAX)
 target_include_directories(overlay_search PRIVATE '''+' '.join(map(cmake_path,includes))+''')
-target_link_libraries(overlay_search PRIVATE '''+cmake_path(repo/'build/engine/Release/sts_core.lib')+''')
+target_link_libraries(overlay_search PRIVATE '''+cmake_path(repo/'build/engine/sts_core.lib')+''')
 set_target_properties(overlay_search PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE '''+cmake_path(out)+''')
 ''',encoding='utf-8')
     subprocess.run(['cmake','-S',str(out),'-B',str(out/'cmake'),'-A','x64',

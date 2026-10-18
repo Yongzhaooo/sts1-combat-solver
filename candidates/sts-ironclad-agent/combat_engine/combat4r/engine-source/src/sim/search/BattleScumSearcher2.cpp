@@ -625,6 +625,18 @@ void enumerateCardSelectActionsImpl(NodeLike &node,
             }
             break;
 
+        case CardSelectTask::HOLOGRAM:
+            setupCardOptionsHelper(node, bc.cards.discardPile.begin(), bc.cards.discardPile.end());
+            break;
+
+        case CardSelectTask::RECYCLE:
+            setupCardOptionsHelper(node, bc.cards.hand.begin(), bc.cards.hand.begin() + bc.cards.cardsInHand);
+            break;
+
+        case CardSelectTask::SEEK:
+            setupCardOptionsHelper(node, bc.cards.drawPile.begin(), bc.cards.drawPile.end());
+            break;
+
         default:
 #ifdef sts_asserts
             assert(false);

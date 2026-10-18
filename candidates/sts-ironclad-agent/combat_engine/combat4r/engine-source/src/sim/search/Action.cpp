@@ -618,6 +618,19 @@ std::vector<search::Action> search::Action::enumerateCardSelectActions(const Bat
             }
             break;
 
+        case CardSelectTask::HOLOGRAM:
+            setupCardOptionsHelper(actions, bc.cards.discardPile.begin(), bc.cards.discardPile.end());
+            break;
+
+        case CardSelectTask::RECYCLE:
+            setupCardOptionsHelper(actions, bc.cards.hand.begin(), bc.cards.hand.begin() + bc.cards.cardsInHand);
+            break;
+
+        case CardSelectTask::SEEK:
+            // One pick per action; the executor reopens the screen while picks remain.
+            setupCardOptionsHelper(actions, bc.cards.drawPile.begin(), bc.cards.drawPile.end());
+            break;
+
         default:
 #ifdef sts_asserts
             assert(false);
