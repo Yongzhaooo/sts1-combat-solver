@@ -48,6 +48,37 @@ BOSS_HEAL_POTION_LOSS = 50
 # route (later random cards are re-checked) instead of letting LiveSearch silently drop it.
 FRAME_RNG = ('/rng/card_random',)
 
+# Opt-in audit of every game/simulator state check. The checks themselves are
+# silent when they pass, so a run only proves anything if it is written down:
+# drop a file named parity-transcript.enable next to backend.log to get one
+# JSON line per solve/advance, with the first difference verbatim on failure.
+RUNTIME_DIR = Path(os.environ.get('LOCALAPPDATA', str(ROOT))) / 'STS1CombatSolver'
+PARITY_FLAG = RUNTIME_DIR / 'parity-transcript.enable'
+PARITY_LOG = RUNTIME_DIR / 'parity-transcript.jsonl'
+
+
+def record_parity(op: str, view: dict, ok: bool, detail: str = '') -> None:
+    if not PARITY_FLAG.exists():
+        return
+    game = view.get('game') or {}
+    combat = game.get('combat_state') or {}
+    player = combat.get('player') or {}
+    line = {'time': round(time.time(), 3), 'op': op, 'ok': ok, 'floor': game.get('floor'),
+            'turn': combat.get('turn'), 'hp': player.get('current_hp'),
+            'block': player.get('block'), 'energy': player.get('energy'),
+            'orbs': [orb.get('id') for orb in player.get('orbs') or []],
+            'monsters': [(m.get('id'), m.get('current_hp')) for m in combat.get('monsters') or []]}
+    if detail:
+        line['detail'] = detail[:600]
+    try:
+        # A new run starts on the first floor: keep one file per run, not per machine.
+        mode = 'w' if op == 'solve' and (game.get('floor') or 1) <= 1 else 'a'
+        RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+        with PARITY_LOG.open(mode, encoding='utf-8') as handle:
+            handle.write(json.dumps(line, ensure_ascii=False) + '\n')
+    except OSError:
+        pass
+
 
 def heart_fight(game):
     return any(m['id'] == 'CorruptHeart' for m in game['combat_state']['monsters'])
@@ -804,14 +835,20 @@ class Advisor:
         budget = request.get('budget', 8000)
         if type(budget) is not int or budget not in (2000, 8000, DEEP_BUDGET):
             raise ValueError('无效搜索预算')
-        if request['op'] == 'solve':
-            self.solve(view, budget)
-        elif request['op'] == 'advance':
-            self.advance(view, budget)
-        elif request['op'] == 'choose':
-            self.choose(view, request.get('branch'))
-        else:
-            raise ValueError('未知操作')
+        op = request['op']
+        try:
+            if op == 'solve':
+                self.solve(view, budget)
+            elif op == 'advance':
+                self.advance(view, budget)
+            elif op == 'choose':
+                self.choose(view, request.get('branch'))
+            else:
+                raise ValueError('未知操作')
+        except Exception as error:
+            record_parity(op, view, False, '%s | %s' % (fault_signature(error), error))
+            raise
+        record_parity(op, view, True)
         return self.result(view)
 
 
