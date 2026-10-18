@@ -19,7 +19,8 @@ int main() {
         {CharacterClass::SILENT, CardId::NEUTRALIZE},   // attack
         {CharacterClass::SILENT, CardId::SURVIVOR},     // skill
         {CharacterClass::SILENT, CardId::ACCURACY},     // power
-        {CharacterClass::DEFECT, CardId::SEEK}, // skill; HOLOGRAM became implemented with the select batch
+        // DEFECT: every reward and starter card is implemented now, so there is no
+        // unimplemented Defect sample left; the shared switch is still checked below.
         {CharacterClass::WATCHER, CardId::ERUPTION},
         {CharacterClass::WATCHER, CardId::VIGILANCE},
         {CharacterClass::WATCHER, CardId::DEVA_FORM},

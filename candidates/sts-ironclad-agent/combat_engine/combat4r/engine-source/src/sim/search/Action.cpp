@@ -408,10 +408,19 @@ void executeSingleCardSelectActionHelper(BattleContext &bc, search::Action a) {
             bc.chooseRecycleCard(idx);
             break;
 
+        case CardSelectTask::SEEK: {
+            bc.chooseDrawToHandCards(&idx, 1);
+            // Seek picks 1 (2) cards; reopen the screen while picks remain.
+            const int remaining = bc.cardSelectInfo.pickCount - 1;
+            if (remaining > 0 && !bc.cards.drawPile.empty()) {
+                bc.openSimpleCardSelectScreen(CardSelectTask::SEEK, remaining);
+            }
+            break;
+        }
+
         case CardSelectTask::MEDITATE:
         case CardSelectTask::NIGHTMARE:
         case CardSelectTask::SETUP:
-        case CardSelectTask::SEEK:
             // not implemented
         case CardSelectTask::INVALID:
         default:

@@ -640,6 +640,16 @@ namespace sts {
                 }});
                 return true;
 
+            case CardId::SEEK:
+                // Seek.java: pick 1 (2) cards from the draw pile into hand.
+                bc.addToBot({[=] (BattleContext &bc) {
+                    if (bc.cards.drawPile.empty()) {
+                        return;
+                    }
+                    bc.openSimpleCardSelectScreen(CardSelectTask::SEEK, up ? 2 : 1);
+                }});
+                return true;
+
             default:
                 return false;
         }

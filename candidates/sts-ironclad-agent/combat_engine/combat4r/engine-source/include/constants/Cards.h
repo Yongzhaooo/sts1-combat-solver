@@ -906,6 +906,9 @@ namespace sts {
             case CardId::RECYCLE:
                 return upgraded ? 0 : 1;
 
+            case CardId::SEEK:
+                return 0;
+
             default:
                 return 1;
         }

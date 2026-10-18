@@ -129,10 +129,8 @@
     "DEFECT": {
       "reward_pool": {
         "total": 71,
-        "implemented": 70,
-        "missing": [
-          "SEEK"
-        ]
+        "implemented": 71,
+        "missing": []
       },
       "starter": {
         "total": 4,
@@ -394,7 +392,6 @@
     "SandsOfTime": "SANDS_OF_TIME",
     "SashWhip": "SASH_WHIP",
     "Scrawl": "SCRAWL",
-    "Seek": "SEEK",
     "Setup": "SETUP",
     "Shiv": "SHIV",
     "SignatureMove": "SIGNATURE_MOVE",

@@ -881,6 +881,17 @@ int main() {
         check(bc.cards.cardsInHand == 0, "Recycle should leave the hand empty");
     }
 
+    {
+        // Seek: opens the draw-pile select screen for one card.
+        BattleContext bc = freshBattle();
+        bc.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
+        bc.cards.createTempCardInDrawPile(1, CardInstance(CardId::STRIKE_BLUE));
+        playCard(bc, CardId::SEEK);
+        check(bc.inputState == InputState::CARD_SELECT, "Seek should open the draw pile select screen");
+        check(bc.cardSelectInfo.cardSelectTask == CardSelectTask::SEEK,
+              "Seek should use the SEEK select task");
+    }
+
     std::cout << "Defect card behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {
