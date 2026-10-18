@@ -314,6 +314,76 @@ int main() {
               "upgraded Rainbow should not exhaust");
     }
 
+    {
+        // Plasma orb: +1 energy per orb at turn start, evoke +2, focus never scales it.
+        BattleContext bc = freshBattle();
+        Actions::BuffPlayer<PS::FOCUS>(3).actFunc(bc);
+        Actions::ChannelOrb(Orb::FUSION).actFunc(bc); // bar: lightning, plasma
+        bc.player.energy = 0;
+        Actions::TriggerStartOfTurnOrbsAction().actFunc(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(bc.player.energy == 1, "Plasma should gain 1 energy at turn start, focus-immune");
+        Actions::EvokeOrbAction(1).actFunc(bc); // the plasma at the open end
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(bc.player.energy == 3, "Plasma evoke should gain 2 energy");
+        check(bc.player.orbs.size() == 1, "evoking should consume the Plasma orb");
+    }
+    {
+        // Fusion: channel one Plasma orb; 2 energy (1 upgraded).
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::FUSION);
+        check(bc.player.orbs.back().type == Orb::FUSION, "Fusion should channel a Plasma orb");
+        check(CardInstance(CardId::FUSION).cost == 2, "Fusion should cost 2");
+        check(CardInstance(CardId::FUSION, true).cost == 1, "upgraded Fusion should cost 1");
+    }
+    {
+        // Ball Lightning: 7 damage and one Lightning orb (not a random orb).
+        BattleContext bc = freshBattle();
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::BALL_LIGHTNING);
+        check(hp - bc.monsters.arr[0].curHp == 7, "Ball Lightning should deal 7");
+        check(bc.player.orbs.back().type == Orb::LIGHTNING, "Ball Lightning should channel a Lightning orb");
+    }
+    {
+        // Chaos: one random orb from [Dark, Frost, Lightning]; vanilla excludes Plasma.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::CHAOS);
+        const Orb type = bc.player.orbs.back().type;
+        check(type == Orb::DARK || type == Orb::FROST || type == Orb::LIGHTNING,
+              "Chaos should never channel Plasma");
+        BattleContext up2 = freshBattle();
+        up2.cards.createTempCardInHand(CardInstance(CardId::CHAOS, true));
+        search::Action play(search::ActionType::CARD, 0, 0);
+        check(play.isValidAction(up2), "upgraded Chaos should be playable");
+        play.execute(up2);
+        check(up2.player.orbs.size() == 3, "upgraded Chaos should channel two orbs");
+        for (int i = 0; i < up2.player.orbs.size(); ++i) {
+            check(up2.player.orbs[i].type != Orb::FUSION, "upgraded Chaos never channels Plasma");
+        }
+    }
+    {
+        // Tempest: X-cost, channels X Lightning orbs and exhausts.
+        BattleContext bc = freshBattle();
+        Actions::EvokeOrbAction(0).actFunc(bc); // clear Cracked Core's lightning
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        playCard(bc, CardId::TEMPEST);
+        // X resolves to the energy spent at play time (Whirlwind pattern). The engine
+        // does not deduct energy for X-cost cards anywhere yet, so only the orb count
+        // is asserted here.
+        check(bc.player.orbs.size() == 3, "Tempest with 3 energy should channel three orbs");
+        for (int i = 0; i < bc.player.orbs.size(); ++i) {
+            check(bc.player.orbs[i].type == Orb::LIGHTNING, "Tempest should channel Lightning orbs");
+        }
+        check(CardInstance(CardId::TEMPEST).cost == -1, "Tempest should be an X-cost card");
+        check(CardInstance(CardId::TEMPEST).doesExhaust(), "Tempest should exhaust");
+    }
+
     std::cout << "M3b Defect card behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {

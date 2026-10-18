@@ -338,6 +338,19 @@ namespace {
     }
 }
 
+Action Actions::TriggerStartOfTurnOrbsAction() {
+    return {[] (BattleContext &bc) {
+        // Plasma is the only orb with a start-of-turn passive: Plasma.onStartOfTurn
+        // gains passiveAmount (1) energy per orb, queued at the bottom. Focus never
+        // changes plasma values (AbstractOrb.applyFocus skips Plasma).
+        for (int i = 0; i < bc.player.orbs.size(); ++i) {
+            if (bc.player.orbs[i].type == Orb::FUSION) {
+                bc.addToBot(Actions::GainEnergy(1));
+            }
+        }
+    }};
+}
+
 Action Actions::TriggerEndOfTurnOrbsAction() {
     return {[] (BattleContext &bc) {
         // End-of-turn passives trigger left to right and never consume the orb.
@@ -368,8 +381,7 @@ Action Actions::TriggerEndOfTurnOrbsAction() {
                     growDarkOrb(bc, orb);
                     break;
                 default:
-                    // TODO(defect M3): plasma end-of-turn settlement stays
-                    // unimplemented until its cards and values are covered.
+                    // Plasma has no end-of-turn passive (Plasma.onStartOfTurn only).
                     break;
             }
         }
@@ -403,6 +415,10 @@ namespace {
                 }
                 break;
             }
+            case Orb::FUSION:
+                // Plasma.onEvoke: gain evokeAmount (2, never scaled by focus) energy.
+                bc.addToTop(Actions::GainEnergy(2));
+                break;
             case Orb::DARK: {
                 // DarkOrb.onEvoke via DarkOrbEvokeAction: deal the accumulated
                 // counter to the lowest-HP enemy, chosen when the effect queues.

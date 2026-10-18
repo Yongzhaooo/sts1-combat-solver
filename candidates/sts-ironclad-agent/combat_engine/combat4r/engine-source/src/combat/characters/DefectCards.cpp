@@ -181,6 +181,46 @@ namespace sts {
                 bc.addToBot(Actions::ChannelOrb(Orb::DARK));
                 return true;
 
+            case CardId::FUSION:
+                // Fusion.java: channel one Plasma orb.
+                bc.addToBot(Actions::ChannelOrb(Orb::FUSION));
+                return true;
+
+            case CardId::BALL_LIGHTNING:
+                // BallLightning.java: attack, then channel magicNumber (1) Lightning orbs.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 10 : 7)));
+                for (int i = 0; i < 1; ++i) {
+                    bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
+                }
+                return true;
+
+            case CardId::CHAOS: {
+                // Chaos.java: channel one random orb, two when upgraded. The vanilla
+                // pool excludes Plasma: getRandomOrb(true) rolls cardRandomRng over
+                // [Dark, Frost, Lightning]. Both rolls happen at play time.
+                const int rolls = up ? 2 : 1;
+                for (int i = 0; i < rolls; ++i) {
+                    const int roll = bc.cardRandomRng.random(3);
+                    const Orb orb = roll == 0 ? Orb::DARK : roll == 1 ? Orb::FROST : Orb::LIGHTNING;
+                    bc.addToBot(Actions::ChannelOrb(orb));
+                }
+                return true;
+            }
+
+            case CardId::TEMPEST: {
+                // Tempest.java: channel X (+1 upgraded) Lightning orbs. X resolves like
+                // other X-cost cards (Whirlwind pattern).
+                auto &item = bc.curCardQueueItem;
+                if (!item.ignoreEnergyTotal && bc.player.energy < item.energyOnUse) {
+                    item.energyOnUse = bc.player.energy;
+                }
+                const int count = item.energyOnUse + (up ? 1 : 0);
+                for (int i = 0; i < count; ++i) {
+                    bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
+                }
+                return true;
+            }
+
             default:
                 return false;
         }

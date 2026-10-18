@@ -2237,6 +2237,7 @@ void BattleContext::afterMonsterTurns() {
     // player.applyStartOfTurnOrbs()
     //for each orb : OnStartOfTurn
     //if have relic cables: apply orb[0].OnStartOfTurn again
+    addToBot(Actions::TriggerStartOfTurnOrbsAction());
 
     if (player.hasStatus<PS::BARRICADE>()) {
 

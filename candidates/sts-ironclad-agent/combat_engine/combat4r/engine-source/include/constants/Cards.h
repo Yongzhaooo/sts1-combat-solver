@@ -854,6 +854,12 @@ namespace sts {
             case CardId::RECURSION:
                 return upgraded ? 0 : 1;
 
+            case CardId::FUSION:
+                return upgraded ? 1 : 2;
+
+            case CardId::TEMPEST:
+                return -1; // X cost
+
             default:
                 return 1;
         }

@@ -101,6 +101,7 @@ namespace sts {
 
         static Action UnnamedEndOfTurnAction();
         static Action MonsterStartTurnAction();
+        static Action TriggerStartOfTurnOrbsAction();
         static Action TriggerEndOfTurnOrbsAction();
         static Action DarkImpulseAction(); // upgraded Darkness: every Dark orb grows once now
 
