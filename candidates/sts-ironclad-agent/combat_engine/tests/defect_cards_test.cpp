@@ -892,6 +892,23 @@ int main() {
               "Seek should use the SEEK select task");
     }
 
+    {
+        // Echo Form N doubles exactly the first N cards played each turn. The
+        // engine counts the queued duplicate in cardsPlayedThisTurn, so this
+        // catches an off-by-one in the cardsPlayedThisTurn - doubled comparison.
+        for (int amount = 1; amount <= 2; ++amount) {
+            BattleContext bc = freshBattle();
+            bc.player.buff<PS::ECHO_FORM>(amount);
+            bc.player.energy = 20;
+            const int hp = bc.monsters.arr[0].curHp;
+            playCard(bc, CardId::STRIKE_BLUE);
+            playCard(bc, CardId::STRIKE_BLUE);
+            playCard(bc, CardId::STRIKE_BLUE);
+            check(hp - bc.monsters.arr[0].curHp == 18 + 6 * amount,
+                  "Echo Form should double exactly the first amount cards");
+        }
+    }
+
     std::cout << "Defect card behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {
