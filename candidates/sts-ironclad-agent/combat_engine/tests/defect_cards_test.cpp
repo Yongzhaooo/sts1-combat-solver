@@ -751,10 +751,22 @@ int main() {
         check(found, "Steam Barrier should be in the discard pile");
     }
     {
-        // Static Discharge: attack damage channels a Lightning orb.
+        // Static Discharge: attack damage channels a Lightning orb, but a hit
+        // that block absorbs completely does not (AbstractPlayer.damage runs
+        // decrementBlock before the onAttacked loop; StaticDischargePower
+        // returns when damageAmount <= 0).
         BattleContext bc = freshBattle();
         playCard(bc, CardId::STATIC_DISCHARGE);
         const int before = bc.player.lightningChanneledThisCombat;
+        bc.player.block = 20;
+        bc.player.attacked(bc, 0, 5);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(bc.player.lightningChanneledThisCombat == before,
+              "a fully blocked attack should not channel from Static Discharge");
+
+        bc.player.block = 0;
         bc.player.attacked(bc, 0, 5);
         for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
             bc.actionQueue.popFront()(bc);
