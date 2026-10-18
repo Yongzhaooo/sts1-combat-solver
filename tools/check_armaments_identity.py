@@ -9,11 +9,12 @@ import sys
 parser = argparse.ArgumentParser()
 parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
 root = parser.parse_args().root
+fixtures = Path(__file__).resolve().parents[1] / 'overlay/test'
 sys.path.insert(0, str(root / 'overlay'))
 from backend import Advisor, view_from_state
 from sim_patch.parity.adapter import ActionMapper, CoverageGap, IdentityDifference
 
-recorded = json.loads((root / 'overlay/test/armaments-picker.json').read_text(encoding='utf-8'))
+recorded = json.loads((fixtures / 'armaments-picker.json').read_text(encoding='utf-8'))
 picker = view_from_state(recorded)
 prefix = copy.deepcopy(recorded)
 game = prefix['game_state']
@@ -117,7 +118,7 @@ print('PASS: unfiltered hand picker binds a returned instance without reassignin
 
 # The capture is the real post-click frame. Only the preceding play and the
 # following second picker are reconstructed; this is not a JVM replay.
-fault = json.loads((root / 'overlay/test/burning-pact-confirmation.json').read_text(encoding='utf-8'))
+fault = json.loads((fixtures / 'burning-pact-confirmation.json').read_text(encoding='utf-8'))
 before = copy.deepcopy(fault)
 g = before['game']; combat = g['combat_state']
 combat['hand'].insert(2, g['screen_state']['selected'][0])
