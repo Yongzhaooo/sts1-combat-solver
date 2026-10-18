@@ -2448,7 +2448,7 @@ void BattleContext::drinkPotion(int idx, int target) {
 
         case Potion::EXPLOSIVE_POTION: {
             const auto damage = hasBark ? 20 : 10;
-            addToBot( Actions::DamageAllEnemy(damage) ); // todo does not having player be owner here matter?
+            addToBot( Actions::DamageAllEnemy(damage, DamageType::NORMAL) ); // todo does not having player be owner here matter?
             break;
         }
 

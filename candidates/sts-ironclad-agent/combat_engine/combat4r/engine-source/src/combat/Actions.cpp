@@ -112,11 +112,20 @@ Action Actions::DamageEnemy(int idx, int damage) {
     }};
 }
 
-Action Actions::DamageAllEnemy(int damage) { // todo this is probably broken
+Action Actions::DamageAllEnemy(int damage, DamageType type) {
     return {[=] (BattleContext &bc) {
         for (int idx = 0; idx < bc.monsters.monsterCount; idx++) {
             if (!bc.monsters.arr[idx].isDeadOrEscaped()) {
-                bc.monsters.arr[idx].damage(bc, damage); // possible should addToBot here todo
+                // ExplosivePotion builds its DamageInfo with the two-argument
+                // constructor, which is NORMAL, so it walks the same onAttacked
+                // chain as a card and spends Curl Up and friends. The Bomb and
+                // Mercury Hourglass are THORNS, which those reactions ignore, so
+                // they keep the plain damage path.
+                if (type == DamageType::NORMAL) {
+                    bc.monsters.arr[idx].attacked(bc, damage, type);
+                } else {
+                    bc.monsters.arr[idx].damage(bc, damage);
+                }
             }
         }
         bc.checkCombat();

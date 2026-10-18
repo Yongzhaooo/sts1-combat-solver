@@ -63,7 +63,8 @@ namespace sts {
         static Action DamageEnemy(int idx, int damage);
 
         // all usages of this in game have pureDamage set to true
-        static Action DamageAllEnemy(int damage); // todo maybe need to add boolean isPlayerOwner
+        static Action DamageAllEnemy(int damage,
+                                     DamageType type = DamageType::THORNS); // todo maybe need to add boolean isPlayerOwner
 
         static Action AttackPlayer(int idx, int damage);
         static Action DamagePlayer(int damage, bool selfDamage=false);

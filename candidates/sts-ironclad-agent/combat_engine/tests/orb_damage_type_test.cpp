@@ -133,6 +133,30 @@ int main() {
               "a normal hit should still grant Malleable Block");
     }
 
+    {
+        // ExplosivePotion builds a NORMAL DamageInfo, so its blast spends Curl Up
+        // and grants its Block, while The Bomb and Mercury Hourglass (THORNS) do
+        // not. All three share DamageAllEnemy in the engine.
+        BattleContext bc = freshBattle();
+        Actions::DamageAllEnemy(10, DamageType::NORMAL).actFunc(bc);
+        drain(bc);
+        check(!bc.monsters.arr[0].hasStatus<MS::CURL_UP>(),
+              "the explosive potion should spend Curl Up");
+        check(bc.monsters.arr[0].block == 6, "the blast should grant Curl Up Block");
+        // The game queues the Curl Up Block after the hit resolves, so the
+        // triggering hit is not absorbed by the Block it grants.
+        check(bc.monsters.arr[0].curHp == bc.monsters.arr[0].maxHp - 10,
+              "the triggering hit lands before the queued Block");
+
+        BattleContext bomb = freshBattle();
+        Actions::DamageAllEnemy(10).actFunc(bomb);
+        drain(bomb);
+        check(bomb.monsters.arr[0].hasStatus<MS::CURL_UP>(),
+              "the bomb's THORNS damage must leave Curl Up alone");
+        check(bomb.monsters.arr[0].curHp == bomb.monsters.arr[0].maxHp - 10,
+              "the bomb should deal its full damage");
+    }
+
     std::cout << "Orb damage type holds\n";
     } catch (const std::exception &error) {
         std::cout << error.what() << "\n";
