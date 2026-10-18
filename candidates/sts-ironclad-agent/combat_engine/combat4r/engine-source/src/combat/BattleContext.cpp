@@ -570,6 +570,11 @@ void BattleContext::updateRelicsOnExit(GameContext &g) const {
         VictoryHpRelics(g.relics).apply(g.curHp, g.maxHp, [&](int amount) {
             g.playerHeal(amount);
         });
+
+        // SelfRepairPower: heal its stack amount once the combat is won.
+        if (player.hasStatus<PS::SELF_REPAIR>()) {
+            g.playerHeal(player.getStatus<PS::SELF_REPAIR>());
+        }
     }
     for (auto &r : g.relics.relics) {
         switch (r.id) {

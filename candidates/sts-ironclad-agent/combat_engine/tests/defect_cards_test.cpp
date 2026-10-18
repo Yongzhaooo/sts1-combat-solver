@@ -827,6 +827,14 @@ int main() {
         check(bc.cards.cardsInHand == 4, "Reboot should draw 4 cards from the reshuffled pile");
     }
 
+    {
+        // Self Repair: stores the combat-end heal amount.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::SELF_REPAIR);
+        check(bc.player.getStatus<PS::SELF_REPAIR>() == 7,
+              "Self Repair should store a 7 HP combat-end heal");
+    }
+
     std::cout << "Defect card behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {

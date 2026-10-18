@@ -574,6 +574,12 @@ namespace sts {
                 return true;
             }
 
+            case CardId::SELF_REPAIR:
+                // SelfRepairPower: heal 7 (10) when the combat is won. The heal
+                // itself runs in BattleContext::updateRelicsOnExit.
+                bc.addToBot(Actions::BuffPlayer<PS::SELF_REPAIR>(up ? 10 : 7));
+                return true;
+
             default:
                 return false;
         }

@@ -129,14 +129,13 @@
     "DEFECT": {
       "reward_pool": {
         "total": 71,
-        "implemented": 65,
+        "implemented": 66,
         "missing": [
           "GENETIC_ALGORITHM",
           "HOLOGRAM",
           "RECYCLE",
           "SCRAPE",
-          "SEEK",
-          "SELF_REPAIR"
+          "SEEK"
         ]
       },
       "starter": {
@@ -404,7 +403,6 @@
     "Scrape": "SCRAPE",
     "Scrawl": "SCRAWL",
     "Seek": "SEEK",
-    "Self Repair": "SELF_REPAIR",
     "Setup": "SETUP",
     "Shiv": "SHIV",
     "SignatureMove": "SIGNATURE_MOVE",
