@@ -4,6 +4,10 @@
 
 QQ community group: **232459269**. Share your experience and report issues.
 
+F6 diagnostics include each observed shop visit's first and latest state: gold, ordered deck with card UUIDs, relics, potions, and removal selection/confirmation. Recording is automatic in manual and automatic play and follows the game save. Existing saves have no retrospective history; an in-progress visit is marked `current`.
+
+`searchWorkers=0` in ModTheSpire's `STS1CombatSolver/config.properties` selects the Mod backend's CPU limit automatically: half the available logical CPUs, at most 8, leaving at least 2 available CPUs where possible. Set `searchWorkers=1` through `32` to override it, still subject to that CPU reserve, then restart the game. The search child runs at lower priority where supported. Extra workers overlap independent potion branches; they do not speed up a single no-potion search. The search algorithm, budget and collection settings are unchanged. Reduce this setting if gameplay stutters. The effective limit is included in backend replies.
+
 ## Thanks and sources
 
 Thanks to [gamerpuppy/sts_lightspeed](https://github.com/gamerpuppy/sts_lightspeed) for the C++ combat simulator and search foundation, [destire-mio/sts-ironclad-agent](https://github.com/destire-mio/sts-ironclad-agent) for its modified `combat4r` and Python bindings, and [ForgottenArbiter/CommunicationMod](https://github.com/ForgottenArbiter/CommunicationMod) for the game communication bridge. Their pinned versions and licenses are listed in [Third-party notices](THIRD_PARTY_NOTICES.md).

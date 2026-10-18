@@ -21,6 +21,8 @@ Full autopilot uses `OutsidePacket`, `Distill2`, `RoutePlanner` and the local ru
 
 Diagnostics stay on the player's machine until the player exports and shares them. [Privacy](../PRIVACY.md) defines the data boundary. Release packages contain the Mod and a matching platform runtime; game JARs and private research sources are excluded. [Third-party notices](../THIRD_PARTY_NOTICES.md) identify bundled sources and licenses.
 
+`ShopRecorder` observes actual shop state and saves bounded `ShopHistory` data with the game save. F6 carries that history through the existing diagnostic export. It does not choose or execute transactions. `worker_policy.py` belongs to the Mod runtime and controls its search child priority and concurrent branch limit; collection profiles and the shared search budget remain separate. `package_release_assets.py` produces platform-specific GitHub ZIPs from verified Workshop content, with a matching manifest in each ZIP.
+
 ### Four-character components (proposed)
 
 - **Character registry.** One list of supported characters, read by `backend.py`, `SolverMod` and `OutsidePacket`. Today the gate is copied in three places and kept in sync by comments; a check asserts they agree until the list is shared.

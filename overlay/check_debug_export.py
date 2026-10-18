@@ -39,4 +39,10 @@ with tempfile.TemporaryDirectory() as temp:
     battle = exported['recent_battles']['completed'][0]
     assert battle['events'][0]['card_uuid'] == 'manual-card' and battle['end']['hp'] == 57
     assert battle['root'] == {'rng': {'counter': 12}}, 'history uses the same redaction boundary'
-print('PASS: single-json export, redaction, game identity preserved, no unrelated attachments')
+    shops = {'format': 'sts1-shops-v1', 'completed': [{'before': {'floor': 18, 'gold': 300,
+             'deck': [{'id': 'Strike_R', 'uuid': 'removed-card'}]},
+             'after': {'floor': 18, 'gold': 225, 'deck': []}}]}
+    shop_file = export_run(root/'missing-runs', '789', root/'Shop', shop_history=shops)
+    shop_doc = json.loads(shop_file.read_text(encoding='utf-8'))
+    assert '-F18-' in shop_file.name and shop_doc['shop_history'] == shops
+print('PASS: single-json export, battles and shops without run logging, redaction, game identity preserved')

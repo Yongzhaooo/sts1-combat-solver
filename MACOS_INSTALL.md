@@ -1,5 +1,9 @@
 # macOS / Mac 安装
 
+For a manual install, download `STS1CombatSolver-macos-v<version>.zip`. Copy its `STS1CombatSolver.jar` and both `sts1-solver-macos-*.zip` files together into the game's `mods` directory. Keep the runtime ZIPs compressed. This download includes Apple Silicon and Intel; it contains no Windows runtime.
+
+手动安装时下载 `STS1CombatSolver-macos-v<版本>.zip`，把其中的 `STS1CombatSolver.jar` 和两个 `sts1-solver-macos-*.zip` 一起放入游戏 `mods` 目录。两个后台 ZIP 保持压缩状态。这个包支持 Apple Silicon 和 Intel，不包含 Windows 后台。
+
 Subscribe to the solver, ModTheSpire and BaseMod on Steam Workshop. Choose **Play with Mods** and enable BaseMod plus STS1 Combat Solver. The v0.3.0 Workshop package includes both Apple Silicon and Intel backends and Python; no source checkout, Homebrew or Python installation is needed. macOS 11 or later is required. The game and ModTheSpire still use their own Java runtime.
 
 在 Steam 工坊订阅求解器、ModTheSpire 与 BaseMod，选择“使用模组启动”，勾选 BaseMod 和求解器。v0.3.0 工坊包自带 Apple Silicon、Intel 两套后台及 Python，无需源码、Homebrew 或另装 Python。要求 macOS 11 或更高版本；游戏与 ModTheSpire 仍使用它们自己的 Java。

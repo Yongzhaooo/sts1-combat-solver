@@ -8,6 +8,8 @@ Subscribe to the [solver item](https://steamcommunity.com/sharedfiles/filedetail
 
 ## Local package
 
+Download `STS1CombatSolver-windows-v<version>.zip`. The macOS runtime is a separate download.
+
 Close the game. Copy STS1CombatSolver.jar and the whole `sts1-solver-runtime` directory into the game's `mods` directory. Keep the runtime beside `STS1CombatSolver.jar`. Enable BaseMod and STS1 Combat Solver. Update the entire package together while the game is closed; do not mix a newer JAR with older runtime files.
 
 Your language preference persists. Logs, diagnostic exports and voluntary experience recordings live in `%LOCALAPPDATA%\STS1CombatSolver`, outside the installation directory. Keys: Enter runs one step, F10 runs this fight, F9 stops, F8 folds the panel, F7 saves the act map with the planned route as a PNG on the desktop, F6 exports diagnostics; Shift+F6 finalizes experience parts. Experience recording starts Off each launch. Nothing uploads automatically. Read PRIVACY.md before sharing files. Removing or unsubscribing from the mod leaves your local data intact; delete that folder yourself after exiting the game if you no longer need it.
@@ -23,6 +25,8 @@ If the backend is missing, verify Steam files or reinstall the complete package.
 订阅[求解器工坊条目](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)、ModTheSpire 和 BaseMod。等 Steam 下载完成后选择“使用模组启动”，在 ModTheSpire 中勾选 BaseMod 和 STS1 Combat Solver。通信桥和状态导出已合并到同一个求解器 JAR；升级时移除旧版求解器附带的独立 CommunicationMod.jar 和 SteamStateExport.jar。
 
 ## 本地包安装
+
+下载 `STS1CombatSolver-windows-v<版本>.zip`，无需下载 macOS 包。
 
 先退出游戏，将 STS1CombatSolver.jar 和完整的 `sts1-solver-runtime` 目录放到游戏的 `mods` 目录中。运行时必须与 `STS1CombatSolver.jar` 相邻。勾选 BaseMod 和 STS1 Combat Solver。更新时退出游戏并替换整套文件，不要混用新版 JAR 和旧版后台。
 
