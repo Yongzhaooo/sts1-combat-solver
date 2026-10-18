@@ -385,7 +385,7 @@ void Monster::suicideAction(BattleContext &bc) {
     }
 }
 
-void Monster::attackedUnblockedHelper(BattleContext &bc, int damage) { // todo, is this supposed to be only damage > 0 ????
+void Monster::attackedUnblockedHelper(BattleContext &bc, int damage, DamageType type) { // todo, is this supposed to be only damage > 0 ????
     if (bc.player.hasRelic<RelicId::THE_BOOT>() && damage > 0 && damage < 5) {
         damage = 5;
     }
@@ -404,11 +404,17 @@ void Monster::attackedUnblockedHelper(BattleContext &bc, int damage) { // todo, 
             setMove(MMID::SHELLED_PARASITE_STUNNED);
         }
 
-    } else if (hasStatus<MS::CURL_UP>()) {
+    } else if (hasStatus<MS::CURL_UP>() && type == DamageType::NORMAL
+               && damage > 0 && damage < curHp) {
+        // CurlUpPower.onAttacked: a killing hit, a hit blocked down to nothing
+        // and the THORNS-typed damage an orb deals all return without acting.
+        // Spending the power is what limits it to once per combat.
         bc.addToBot(Actions::MonsterGainBlock(this->idx, getStatus<MS::CURL_UP>()) );
         setHasStatus<MS::CURL_UP>(false);
 
-    } else if (hasStatus<MS::FLIGHT>() && damage > 0) {
+    } else if (hasStatus<MS::FLIGHT>() && damage > 0 && type == DamageType::NORMAL) {
+        // FlightPower.onAttacked skips HP_LOSS and THORNS, so orb damage does not
+        // spend a flight charge either.
         auto flight = getStatus<MS::FLIGHT>();
         if (flight == 1) {
             removeStatus<MS::FLIGHT>();
@@ -417,9 +423,11 @@ void Monster::attackedUnblockedHelper(BattleContext &bc, int damage) { // todo, 
             setStatus<MS::FLIGHT>(flight-1);
         }
 
-    } else if (hasStatus<MS::MALLEABLE>() || hasStatus<MS::REACTIVE>()) {
+    } else if ((hasStatus<MS::MALLEABLE>() || hasStatus<MS::REACTIVE>())
+               && type == DamageType::NORMAL) {
         // MalleablePower and ReactivePower.onAttacked require
         // damageAmount < currentHealth: a killing hit queues nothing.
+        // Malleable requires NORMAL; Reactive skips HP_LOSS and THORNS.
         const bool survives = damage < curHp;
         if (survives && hasStatus<MS::MALLEABLE>()) {
             const auto malleable = getStatus<MS::MALLEABLE>();
@@ -455,7 +463,7 @@ void Monster::attackedUnblockedHelper(BattleContext &bc, int damage) { // todo, 
     }
 }
 
-void Monster::attacked(BattleContext &bc, int damage) {
+void Monster::attacked(BattleContext &bc, int damage, DamageType type) {
     if (isDeadOrEscaped()) { // these probably shouldn't happen
         std::cerr << bc.seed << " was dead when attacked" << idx << "\n" << bc;
         assert(false);
@@ -491,7 +499,7 @@ void Monster::attacked(BattleContext &bc, int damage) {
         bc.addToTop(Actions::DamagePlayer(getStatus<MS::THORNS>()));
     }
     if (damage > 0) {
-        attackedUnblockedHelper(bc, damage);
+        attackedUnblockedHelper(bc, damage, type);
     }
 }
 

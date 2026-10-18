@@ -16,6 +16,7 @@
 #include "constants/Potions.h"
 
 #include "combat/InputState.h"
+#include "combat/Monster.h"
 #include "combat/CardSelectInfo.h"
 
 #include "combat/ActionQueue.h"
@@ -44,7 +45,10 @@ namespace sts {
 
 
         // todo, action and damage actions should clear certain actions from the queue if the player kills all enemies
-        static Action AttackEnemy(int idx, int damage);
+        // DamageType matters because the game's orb damage is typed THORNS, which
+        // monster onAttacked powers (Curl Up, Malleable, Reactive, Flight) ignore.
+        static Action AttackEnemy(int idx, int damage,
+                                   DamageType type = DamageType::NORMAL);
         static Action SunderAction(int idx, int damage); // attack; +3 energy when the hit kills
         static Action FissionAction(bool upgraded); // remove (evoke when upgraded) all orbs: +1 energy/card each
         static Action RipAndTearAction(int damage, int times); // one random-target hit per time

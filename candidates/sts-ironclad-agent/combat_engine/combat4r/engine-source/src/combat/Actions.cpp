@@ -14,13 +14,13 @@ Action Actions::SetState(InputState state) {
     }};
 }
 
-Action Actions::AttackEnemy(int idx, int damage) {
+Action Actions::AttackEnemy(int idx, int damage, DamageType type) {
     return {[=] (BattleContext &bc) {
         if (bc.monsters.arr[idx].isDeadOrEscaped()) {
             return;
         }
 
-        bc.monsters.arr[idx].attacked(bc, damage);
+        bc.monsters.arr[idx].attacked(bc, damage, type);
         bc.checkCombat();
     }};
 }
@@ -426,13 +426,13 @@ namespace {
                     if (bc.player.hasStatus<PS::ELECTRO>()) {
                         for (int i = 0; i < bc.monsters.monsterCount; ++i) {
                             if (!bc.monsters.arr[i].isDeadOrEscaped()) {
-                                bc.addToBot(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage)));
+                                bc.addToBot(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage), DamageType::THORNS));
                             }
                         }
                     } else {
                         const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
                         if (target >= 0) {
-                            bc.addToBot(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage)));
+                            bc.addToBot(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
                         }
                     }
                 }
@@ -538,13 +538,13 @@ namespace {
                     if (bc.player.hasStatus<PS::ELECTRO>()) {
                         for (int i = 0; i < bc.monsters.monsterCount; ++i) {
                             if (!bc.monsters.arr[i].isDeadOrEscaped()) {
-                                bc.addToTop(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage)));
+                                bc.addToTop(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage), DamageType::THORNS));
                             }
                         }
                     } else {
                         const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
                         if (target >= 0) {
-                            bc.addToTop(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage)));
+                            bc.addToTop(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
                         }
                     }
                 }
@@ -579,7 +579,7 @@ namespace {
                         }
                     }
                     if (target >= 0) {
-                        bc.addToTop(Actions::AttackEnemy(target, orb.darkCounter));
+                        bc.addToTop(Actions::AttackEnemy(target, orb.darkCounter, DamageType::THORNS));
                     }
                 }
                 break;

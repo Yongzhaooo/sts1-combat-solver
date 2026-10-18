@@ -146,7 +146,9 @@ patched_battle.write_text(battle,encoding='utf-8')
 # FlightPower queues ReducePowerAction at the bottom; all already queued hits
 # still see Flight. Removing it immediately overestimates Sword Boomerang damage.
 monster=(engine/'src/combat/Monster.cpp').read_text(encoding='utf-8')
-flight='''    } else if (hasStatus<MS::FLIGHT>() && damage > 0) {
+flight='''    } else if (hasStatus<MS::FLIGHT>() && damage > 0 && type == DamageType::NORMAL) {
+        // FlightPower.onAttacked skips HP_LOSS and THORNS, so orb damage does not
+        // spend a flight charge either.
         auto flight = getStatus<MS::FLIGHT>();
         if (flight == 1) {
             removeStatus<MS::FLIGHT>();
@@ -156,7 +158,7 @@ flight='''    } else if (hasStatus<MS::FLIGHT>() && damage > 0) {
         }
 '''
 assert monster.count(flight)==1,'upstream flight damage handling changed'
-monster=monster.replace(flight,'''    } else if (hasStatus<MS::FLIGHT>() && damage > 0) {
+monster=monster.replace(flight,'''    } else if (hasStatus<MS::FLIGHT>() && damage > 0 && type == DamageType::NORMAL) {
         if (damage * .5f < curHp) {
             const int target = idx;
             bc.addToBot(Action{[target](BattleContext &state) {
