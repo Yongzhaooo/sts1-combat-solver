@@ -38,6 +38,7 @@ def health(plan, game, won):
     if revivals:
         notes = ['；'.join(revivals)] + notes
     return dict(hp=post, raw_hp=raw, effective_hp=effective,
+                new_permanent_curse=bool(won and plan.get('new_permanent_curse')),
                 loss=max(0, int(game['current_hp']) - effective) + curse,
                 raw_loss=max(0, int(game['current_hp']) - raw),
                 recovery=post-raw, recovery_notes=notes, lost_gold=lost_gold,

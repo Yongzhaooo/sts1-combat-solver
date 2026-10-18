@@ -47,6 +47,17 @@ assert recommend({**game, 'solver_auto_context': {'run_auto': True}},
                  [{**baseline, 'loss': 16, 'growth_value': 99999},
                   {**escape, 'escaped': False, 'won': True, 'potion_uses': []}])['branch'] == 'potion-1'
 print('PASS: actual Python policy entry, 14/15/16 raw loss, death/incomplete/revival, manual/auto, WBS/Sozu/reward/full-slot boundaries')
+curse_branch = dict(baseline, loss=30, new_permanent_curse=True)
+clean_branch = dict(bottle, loss=79, new_permanent_curse=False)
+assert recommend(supply_game, [curse_branch, clean_branch])['branch'] == clean_branch['id']
+assert recommend(supply_game, [curse_branch])['branch'] == curse_branch['id']
+assert recommend(supply_game, [dict(curse_branch, new_permanent_curse=False), clean_branch])['branch'] == curse_branch['id']
+assert not smoke_probe_keeps(dict(outcome=1, hp=80, new_permanent_curse=True), game)
+from recovery import health
+for new in (False, True):
+    assert health(dict(hp=80, post_hp=80, max_hp=80, curse_hp=30,
+                       new_permanent_curse=new), game, True)['new_permanent_curse'] is new
+print('PASS: cross-potion recommendation prioritizes clean wins, preserves cursed rescue/sunk curses, and Smoke probe rejects a new curse')
 
 if not args.native_root:
     raise SystemExit(0)
@@ -241,3 +252,53 @@ for snap, expected, calls in [(snapshot(), 'potion-0', 2),
     assert recommend(advisor.root_game, advisor.branch_info)['branch'] == expected
 advisor.native_search = native
 print('PASS: actual backend automatic bounded probe keeps low-loss victory or immediately chooses Smoke without deep/other-potion calls')
+
+# Implant is a permanent-deck choice, including the tempting Darkstone/Feed reward.
+def parasite_plan(*, darkstone=True, omamori=False, implanted=False, rescue=False, feed=False):
+    snap = snapshot(['FEED' if feed else 'STRIKE_RED'] if not rescue else [], hp=1,
+                    enemy_hp=1, potions=(), encounter='WRITHING_MASS', draw=['FEED'])
+    snap['player']['max_hp'] = 80
+    snap['player']['energy'] = 0 if rescue else 1
+    snap['monsters'][0].update(id=engine.monster_id_from_name('WRITHING_MASS'),
+        move=engine.monster_move_id_from_name('WRITHING_MASS_WITHER' if implanted else 'WRITHING_MASS_IMPLANT'), misc_info=int(implanted))
+    snap['relics'] = [dict(id=engine.relic_id_from_name(name), data=2) for name in
+                      (['DARKSTONE_PERIAPT'] if darkstone else []) + (['OMAMORI'] if omamori else [])]
+    state = battle(snap)
+    native.resume()
+    result = native.plan(state, 512, [], 0, 0)
+    end = state.clone()
+    for bits in result['actions']:
+        native.execute(end, bits & 0xffffffff)
+    assert result['outcome'] == 1 and end.player.cur_hp > 0
+    return result
+
+clean = parasite_plan()
+assert clean['curse_hp'] == 0 and clean['max_hp'] == 80 and clean['post_hp'] == 1, clean
+assert clean['new_permanent_curse'] is False
+rescue = parasite_plan(rescue=True)
+assert rescue['curse_hp'] == 30 and rescue['max_hp'] == 89 and 1 < rescue['value'] < 2, rescue
+assert rescue['new_permanent_curse'] is True
+assert clean['value'] > rescue['value'], (clean, rescue)
+assert 2 < clean['value'] < 3
+dead_snap = snapshot([], hp=1, enemy_hp=100, potions=(), encounter='WRITHING_MASS')
+dead_snap['player']['energy'] = 0
+dead_snap['monsters'][0].update(id=engine.monster_id_from_name('WRITHING_MASS'),
+    move=engine.monster_move_id_from_name('WRITHING_MASS_STRONG_STRIKE'))
+dead = native.plan(battle(dead_snap), 1, [], 0, 0)
+assert dead['outcome'] == 2 and rescue['value'] > dead['value'], (rescue, dead)
+without_relic = parasite_plan(darkstone=False, rescue=True)
+assert without_relic['curse_hp'] == 30 and without_relic['max_hp'] == 83, without_relic
+blocked = parasite_plan(omamori=True, rescue=True)
+assert blocked['curse_hp'] == 15 and blocked['max_hp'] == 83, blocked
+assert blocked['new_permanent_curse'] is False
+sunk = parasite_plan(implanted=True, feed=True)
+ordinary = parasite_plan(darkstone=False, implanted=True, feed=True)
+assert sunk['max_hp'] == ordinary['max_hp'] == 83, (sunk, ordinary)
+assert abs(sunk['value']-ordinary['value']) < 1e-6, (sunk, ordinary)
+assert sunk['value'] > 0
+assert sunk['new_permanent_curse'] is False
+feed_win = parasite_plan(feed=True)
+assert feed_win['curse_hp'] == 0 and feed_win['max_hp'] == 83
+assert feed_win['value'] > clean['value'], (feed_win, clean)
+assert abs(sunk['value']-parasite_plan(implanted=True)['value']-1200) < 1e-6
+print('PASS: 1-HP clean victory outranks Darkstone/Feed curse rewards, cursed rescue survives, Omamori blocks permanent curse, sunk Implant preserves later Feed')

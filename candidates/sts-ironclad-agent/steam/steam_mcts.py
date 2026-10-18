@@ -549,6 +549,17 @@ def build_snapshot(game_state, counters=None):
     berserk_energy = sum(int(power.get("amount") or 0) for power in player_powers
                          if (power.get("id") or power.get("name")) == "Berserk")
     counters = counters or {}
+    relics = []
+    for relic in game_state.get("relics") or []:
+        identifier = relic.get("id") or relic.get("name")
+        counter = relic.get("counter")
+        if identifier == "Omamori":
+            if type(counter) is not int or not 0 <= counter <= 2:
+                raise ValueError("Omamori requires remaining charges in 0-2")
+            if counter == 0:
+                continue  # The combat bit means an available curse block, not ownership.
+        relics.append({"id": sts.relic_id_from_name(identifier),
+                       "counter": int(counter if counter is not None else -1)})
     snapshot = {
         # Optional: the importer reads Ironclad when absent. Orbs, stance, mantra and retain are
         # likewise optional and are only added once the Mod exports them.
@@ -581,9 +592,7 @@ def build_snapshot(game_state, counters=None):
         "exhaust_pile": [card_snapshot(card) for card in combat.get("exhaust_pile") or []],
         "monsters": monsters,
         "target_map": target_map,
-        "relics": [{"id": sts.relic_id_from_name(relic.get("id") or relic.get("name")),
-                    "counter": int(relic.get("counter") if relic.get("counter") is not None else -1)}
-                   for relic in game_state.get("relics") or []],
+        "relics": relics,
         "potions": [sts.potion_id_from_name(POTION_ALIASES.get(
             potion.get("id") or potion.get("name"), potion.get("id") or potion.get("name")))
             for potion in game_state.get("potions") or []],
@@ -746,6 +755,26 @@ def self_test():
     # Original counter -2 is a consumed tail, including snapshots imported
     # after a previous battle; it must not regain its resurrection effect.
     from copy import deepcopy
+    for charges in (0, 1, 2):
+        curse_state = deepcopy(game_state)
+        curse_state['relics'] = [{'id': 'Darkstone Periapt'}, {'id': 'Omamori', 'counter': charges}]
+        curse_state['combat_state']['monsters'] = [{
+            'id': 'WrithingMass', 'current_hp': 175, 'max_hp': 175, 'block': 0,
+            'move_id': 4, 'last_move_id': -1, 'powers': [], 'internal': {'usedMegaDebuff': False}}]
+        before = deepcopy(curse_state)
+        curse_battle = sts.BattleContext.from_snapshot(build_snapshot(curse_state), 99)
+        sts.SearchAction.from_bits(1 << 31).execute(curse_battle)
+        assert curse_battle.player.max_hp == (86 if charges == 0 else 80)
+        assert curse_state == before, 'snapshot conversion changed authority'
+    for charges in (None, -1, 3, True):
+        invalid = deepcopy(game_state)
+        invalid['relics'] = [{'id': 'Omamori', 'counter': charges}]
+        try:
+            build_snapshot(invalid)
+        except ValueError as error:
+            assert 'Omamori' in str(error)
+        else:
+            raise AssertionError('invalid Omamori charges accepted')
     for tail_counter, expected_hp in [(-1, 40), (-2, 0)]:
         tail_state = deepcopy(game_state)
         tail_state["relics"] = [{"id": "Lizard Tail", "counter": tail_counter}]
