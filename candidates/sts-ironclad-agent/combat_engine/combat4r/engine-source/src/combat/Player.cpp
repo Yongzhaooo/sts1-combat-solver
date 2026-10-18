@@ -751,7 +751,7 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 // HelloWorldPower.atStartOfTurn: one random Common Skill, free this
                 // turn, per stack. It is a permanent power, not a one-shot.
                 for (int i = 0; i < pair.second; ++i) {
-                    bc.addToBot(Actions::CreateRandomCommonSkillInHandAction());
+                    bc.addToBot(Actions::CreateRandomCardInHandAction(CardType::SKILL, true));
                 }
                 break;
 

@@ -57,32 +57,15 @@ Action Actions::AllForOneAction() {
     }};
 }
 
-Action Actions::CreateRandomCommonSkillInHandAction() {
-    return {[] (BattleContext &bc) {
-        // HelloWorldPower.atStartOfTurn: a random Common Skill of the player's
-        // class, free to play this turn.
-        const auto cid = getRandomClassCardOfTypeAndRarity(
-                bc.cardRandomRng, bc.player.cc, CardType::SKILL, CardRarity::COMMON);
-        CardInstance generated = bc.createGeneratedCard(cid);
-        generated.setCostForTurn(0);
-        bc.addToTop(Actions::MakeTempCardInHand(generated));
-    }};
-}
-
-Action Actions::WhiteNoiseAction() {
-    return {[] (BattleContext &bc) {
-        // White Noise: a random Power card of the player's class, free this turn.
-        const auto cid = getTrulyRandomCardInCombat(bc.cardRandomRng, bc.player.cc, CardType::POWER);
-        CardInstance generated = bc.createGeneratedCard(cid);
-        generated.setCostForTurn(0);
-        bc.addToTop(Actions::MakeTempCardInHand(generated));
-    }};
-}
-
-Action Actions::CreateRandomCardInHandAction(CardType type) {
+Action Actions::CreateRandomCardInHandAction(CardType type, bool commonOnly) {
     return {[=] (BattleContext &bc) {
-        // Hello World / Creative AI: random card of the given type, free this turn.
-        const auto cid = getTrulyRandomCardInCombat(bc.cardRandomRng, bc.player.cc, type);
+        // Hello World / Creative AI / White Noise all add one random card of a given
+        // type, free to play this turn; Hello World also restricts the pool to
+        // Common cards, which is the only difference between the three.
+        const auto cid = commonOnly
+                ? getRandomClassCardOfTypeAndRarity(
+                        bc.cardRandomRng, bc.player.cc, type, CardRarity::COMMON)
+                : getTrulyRandomCardInCombat(bc.cardRandomRng, bc.player.cc, type);
         CardInstance generated = bc.createGeneratedCard(cid);
         generated.setCostForTurn(0);
         bc.addToTop(Actions::MakeTempCardInHand(generated));

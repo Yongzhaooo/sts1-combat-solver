@@ -48,10 +48,10 @@ namespace sts {
         static Action SunderAction(int idx, int damage); // attack; +3 energy when the hit kills
         static Action FissionAction(bool upgraded); // remove (evoke when upgraded) all orbs: +1 energy/card each
         static Action RipAndTearAction(int damage, int times); // one random-target hit per time
-        static Action WhiteNoiseAction(); // add a random Power card, free this turn
-        static Action CreateRandomCardInHandAction(CardType type); // random card of type, free this turn
+        // Random card of the player's class, free this turn. commonOnly restricts the
+        // pool to Common cards (Hello World); otherwise any rarity is allowed.
+        static Action CreateRandomCardInHandAction(CardType type, bool commonOnly = false);
         static Action AllForOneAction(); // return every 0-cost discard pile card to hand
-        static Action CreateRandomCommonSkillInHandAction(); // Hello World: random Common Skill
 
         // Per-target damage is captured when the card is used.
         static Action AttackAllEnemy(DamageMatrix damageMatrix);
