@@ -3,22 +3,126 @@
 
 namespace sts {
 
+    namespace {
+        // Recursion.java: evoke the next (leftmost) orb, then channel a new orb of
+        // the type just evoked. The type must be read when the action resolves,
+        // not when the card is queued: earlier queued actions can change the bar.
+        Action evokeNextAndRechannel() {
+            return {[] (BattleContext &bc) {
+                if (bc.player.orbs.empty()) {
+                    return;
+                }
+                const auto type = bc.player.orbs[0].type;
+                Actions::EvokeOrbAction(0).actFunc(bc);
+                if (type != Orb::EMPTY) {
+                    bc.player.channelOrb(type);
+                }
+            }};
+        }
+    }
+
     // Defect cards. To implement one, add its case here, queue its actions exactly as the original
     // game does, and end the case with "return true;". tools/coverage_manifest.py then counts it
     // as implemented. Do not approximate: leave a card out until it can match the original.
     bool useDefectCard(BattleContext &bc) {
-        switch (bc.curCardQueueItem.card.getId()) {
+        const auto &c = bc.curCardQueueItem.card;
+        const auto t = bc.curCardQueueItem.target;
+        const bool up = c.isUpgraded();
+        switch (c.getId()) {
             case CardId::ZAP:
                 // Zap.java: channel one Lightning orb; the upgraded card adds +3 to
                 // the channeled orb's evoke value.
-                bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING,
-                    bc.curCardQueueItem.card.isUpgraded() ? 3 : 0));
+                bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING, up ? 3 : 0));
                 return true;
 
             case CardId::DUALCAST:
                 // Dualcast.java: evoke the next (leftmost) orb twice.
                 bc.addToBot(Actions::EvokeOrbAction(0, 2));
                 return true;
+
+            case CardId::COLD_SNAP:
+                // ColdSnap.java: attack, then channel one Frost orb.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 9 : 6)));
+                bc.addToBot(Actions::ChannelOrb(Orb::FROST));
+                return true;
+
+            case CardId::BEAM_CELL:
+                // BeamCell.java: attack, then apply Vulnerable.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 4 : 3)));
+                bc.addToBot(Actions::DebuffEnemy<MS::VULNERABLE>(t, up ? 2 : 1, false));
+                return true;
+
+            case CardId::COMPILE_DRIVER: {
+                // CompileDriver.java: attack, then draw one card per distinct orb
+                // type. The game computes the count in applyPowers at play time.
+                bool seen[5] = {};
+                int distinct = 0;
+                for (const auto &orb : bc.player.orbs) {
+                    if (orb.type != Orb::EMPTY && !seen[static_cast<int>(orb.type)]) {
+                        seen[static_cast<int>(orb.type)] = true;
+                        ++distinct;
+                    }
+                }
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 10 : 7)));
+                bc.addToBot(Actions::DrawCards(distinct));
+                return true;
+            }
+
+            case CardId::BARRAGE:
+                // Barrage.java: attack once per orb in the bar.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(
+                    c, t, (up ? 6 : 4) * static_cast<int>(bc.player.orbs.size()))));
+                return true;
+
+            case CardId::SWEEPING_BEAM:
+                // SweepingBeam.java: attack all enemies, then draw one card.
+                bc.addToBot(Actions::AttackAllEnemy(bc.calculateCardDamageMatrix(c, up ? 9 : 6)));
+                bc.addToBot(Actions::DrawCards(1));
+                return true;
+
+            case CardId::COOLHEADED:
+                // Coolheaded.java: channel one Frost orb, then draw.
+                bc.addToBot(Actions::ChannelOrb(Orb::FROST));
+                bc.addToBot(Actions::DrawCards(up ? 2 : 1));
+                return true;
+
+            case CardId::LEAP:
+                // Leap.java: gain block.
+                bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(up ? 12 : 9)));
+                return true;
+
+            case CardId::STACK:
+                // Stack.java: block equal to the discard pile size; upgraded adds 3.
+                bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(
+                    static_cast<int>(bc.cards.discardPile.size()) + (up ? 3 : 0))));
+                return true;
+
+            case CardId::TURBO:
+                // Turbo.java: gain energy, then add a Void to the discard pile.
+                bc.addToBot(Actions::GainEnergy(up ? 3 : 2));
+                bc.addToBot(Actions::MakeTempCardInDiscard(CardInstance(CardId::VOID)));
+                return true;
+
+            case CardId::RECURSION:
+                // Recursion.java: evoke the next (leftmost) orb, then rechannel it.
+                bc.addToBot(evokeNextAndRechannel());
+                return true;
+
+            case CardId::GLACIER:
+                // Glacier.java: gain block, then channel two Frost orbs.
+                bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(up ? 10 : 7)));
+                bc.addToBot(Actions::ChannelOrb(Orb::FROST));
+                bc.addToBot(Actions::ChannelOrb(Orb::FROST));
+                return true;
+
+            case CardId::CHILL: {
+                // Chill.java: channel one Frost orb per alive enemy.
+                const int alive = bc.monsters.getAliveCount();
+                for (int i = 0; i < alive; ++i) {
+                    bc.addToBot(Actions::ChannelOrb(Orb::FROST));
+                }
+                return true;
+            }
 
             default:
                 return false;

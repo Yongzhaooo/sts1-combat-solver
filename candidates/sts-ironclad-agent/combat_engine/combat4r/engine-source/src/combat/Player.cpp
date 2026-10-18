@@ -178,13 +178,24 @@ void Player::gainEnergy(int amount) {
 }
 
 void Player::increaseOrbSlots(int amount) {
-    orbSlots = static_cast<int8_t>(orbSlots + amount);
+    // Vanilla caps orb slots at 10 (AbstractPlayer.MAX_ORBS); slot loss (Consume)
+    // never goes below zero.
+    const int total = orbSlots + amount;
+    if (total > MAX_ORB_SLOTS) {
+        orbSlots = MAX_ORB_SLOTS;
+    } else if (total < 0) {
+        orbSlots = 0;
+    } else {
+        orbSlots = static_cast<int8_t>(total);
+    }
 }
 
 void Player::channelOrb(Orb orb, std::int8_t evokeBonus) {
-    // A full bar pushes out the leftmost orb; the new orb always lands at the right end.
+    // Requires an open slot: the caller (Actions::ChannelOrb) owns the vanilla
+    // policy of evoking the oldest orb when the bar is full, and of doing
+    // nothing at all when no slots exist.
     if (!hasEmptyOrb()) {
-        orbs.remove(0);
+        return;
     }
     orbs.push_back(OrbState{orb, evokeBonus});
 }

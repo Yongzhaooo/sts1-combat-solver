@@ -10,8 +10,9 @@ static void check(bool value, const char *why) {
     if (!value) throw std::runtime_error(why);
 }
 
-// Defect orb skeleton (M3a): starting slots, channel rules, Zap, Dualcast, and
-// lightning/frost settlement. Dark and plasma orbs stay unimplemented on purpose.
+// Defect orb skeleton: starting slots, channel rules (including the full-bar
+// evoke of the oldest orb), slot clamping, Zap, Dualcast, and lightning/frost
+// settlement. Dark and plasma orbs stay unimplemented on purpose.
 int main() {
     try {
     GameContext game(CharacterClass::DEFECT, 123, 0);
@@ -25,19 +26,46 @@ int main() {
     check(battle.player.orbs.size() == 1 && battle.player.orbs[0].type == Orb::LIGHTNING,
           "Cracked Core should channel one lightning orb at battle start");
 
-    // Channel fills empty slots left to right.
-    battle.player.channelOrb(Orb::FROST);
-    check(battle.player.orbs.size() == 2, "two channels should fill two slots");
-    check(battle.player.orbs[0].type == Orb::LIGHTNING, "first channel should be leftmost");
-    check(battle.player.orbs[1].type == Orb::FROST, "second channel should be right of it");
+    // Channel actions append after the oldest orb (index 0 holds the oldest).
+    Actions::ChannelOrb(Orb::FROST).actFunc(battle);
+    Actions::ChannelOrb(Orb::FROST).actFunc(battle);
+    check(battle.player.orbs.size() == 3, "three channels should fill the bar");
+    check(battle.player.orbs[0].type == Orb::LIGHTNING && battle.player.orbs[1].type == Orb::FROST,
+          "channeled orbs append after the oldest");
 
-    // A full bar pushes out the leftmost orb.
-    battle.player.channelOrb(Orb::LIGHTNING); // bar: lightning, frost, lightning
-    battle.player.channelOrb(Orb::LIGHTNING); // pushes out the leftmost lightning
-    check(battle.player.orbs.size() == 3, "bar is capped at slot count");
-    check(battle.player.orbs[0].type == Orb::FROST, "full bar should push out the leftmost");
+    // A full bar evokes the oldest orb (its effects fire) before the new orb lands.
+    const int cultistHp0 = battle.monsters.arr[0].curHp;
+    Actions::ChannelOrb(Orb::LIGHTNING).actFunc(battle);
+    battle.setState(InputState::EXECUTING_ACTIONS);
+    for (int i = 0; i < 8 && !battle.actionQueue.isEmpty(); ++i) {
+        battle.actionQueue.popFront()(battle);
+    }
+    check(battle.player.orbs.size() == 3, "a full bar keeps the slot count");
+    check(battle.player.orbs[0].type == Orb::FROST, "the evoked oldest orb should leave the bar");
+    check(cultistHp0 - battle.monsters.arr[0].curHp == 8,
+          "the pushed-out lightning should evoke for 8");
 
-    // Zap channels a lightning orb at the right end; upgraded adds +3 evoke bonus.
+    // Frost evoke grants 5 block and consumes the orb.
+    battle.setState(InputState::EXECUTING_ACTIONS);
+    Actions::EvokeOrbAction(0).actFunc(battle);
+    for (int i = 0; i < 8 && !battle.actionQueue.isEmpty(); ++i) {
+        battle.actionQueue.popFront()(battle);
+    }
+    check(battle.player.block == 5, "frost evoke should grant 5 block");
+    check(battle.player.orbs.size() == 2, "evoking should consume the orb");
+
+    // End-of-turn passives settle left to right and never consume orbs.
+    const int cultistHp1 = battle.monsters.arr[0].curHp;
+    Actions::TriggerEndOfTurnOrbsAction().actFunc(battle);
+    for (int i = 0; i < 16 && !battle.actionQueue.isEmpty(); ++i) {
+        battle.actionQueue.popFront()(battle);
+    }
+    check(battle.player.block == 7, "frost passive should grant 2 block");
+    check(cultistHp1 - battle.monsters.arr[0].curHp == 3, "lightning passive should deal 3");
+    check(battle.player.orbs.size() == 2, "end-of-turn passives should not consume orbs");
+
+    // Zap channels a plain lightning orb into the open slot.
+    battle.setState(InputState::PLAYER_NORMAL);
     battle.cards.createTempCardInHand(CardInstance(CardId::ZAP));
     search::Action zap(search::ActionType::CARD, 0, 0);
     check(zap.isValidAction(battle), "Zap should be playable");
@@ -45,39 +73,44 @@ int main() {
     check(battle.player.orbs.size() == 3 && battle.player.orbs.back().type == Orb::LIGHTNING
           && battle.player.orbs.back().evokeBonus == 0, "Zap should channel a plain lightning orb");
 
-    // Frost evoke grants 5 block; lightning evoke deals 5 to a random enemy.
-    battle.player.channelOrb(Orb::FROST); // pushes out the leftmost frost
-    Actions::EvokeOrbAction(battle.player.orbs.size() - 1).actFunc(battle);
-    // Settle only what evoke queued; a full executeActions run would reach turn end.
-    battle.setState(InputState::EXECUTING_ACTIONS);
-    for (int i = 0; i < 8 && !battle.actionQueue.isEmpty(); ++i) {
-        battle.actionQueue.popFront()(battle);
-    }
-    check(battle.player.block == 5, "frost evoke should grant 5 block");
-    check(battle.player.orbs.size() == 2, "evoking should consume the orb");
-
-    // End-of-turn passives settle from the reserved hook and never consume orbs.
-    battle.player.channelOrb(Orb::LIGHTNING); // bar: lightning, lightning, lightning
-    const int orbCount = battle.player.orbs.size();
-    const int cultistHp = battle.monsters.arr[0].curHp;
-    Actions::TriggerEndOfTurnOrbsAction().actFunc(battle);
-    for (int i = 0; i < 16 && !battle.actionQueue.isEmpty(); ++i) {
-        battle.actionQueue.popFront()(battle);
-    }
-    check(cultistHp - battle.monsters.arr[0].curHp == 3 * orbCount,
-          "each lightning passive should deal 3");
-    check(battle.player.orbs.size() == orbCount, "end-of-turn passives should not consume orbs");
-
-    // Dualcast evokes the leftmost orb twice, consuming it once.
-    battle.setState(InputState::PLAYER_NORMAL); // card actions require the player-turn state
-    battle.player.channelOrb(Orb::LIGHTNING); // bar: lightning, lightning, lightning
-    const int hpBefore = battle.monsters.arr[0].curHp;
+    // Dualcast evokes the oldest orb twice and consumes it once. Here the oldest
+    // is a Frost orb: two evokes grant 10 block and deal no damage.
+    battle.setState(InputState::PLAYER_NORMAL);
+    const int cultistHp2 = battle.monsters.arr[0].curHp;
     battle.cards.createTempCardInHand(CardInstance(CardId::DUALCAST));
     search::Action dual(search::ActionType::CARD, 0, 0);
     check(dual.isValidAction(battle), "Dualcast should be playable");
     dual.execute(battle);
     check(battle.player.orbs.size() == 2, "Dualcast should consume one orb for two evokes");
-    check(hpBefore - battle.monsters.arr[0].curHp >= 5, "dualcast lightning should damage the enemy");
+    check(battle.player.orbs[0].type == Orb::LIGHTNING, "Dualcast should evoke the oldest orb");
+    check(battle.player.block == 17, "two frost evokes should grant 10 more block");
+    check(cultistHp2 == battle.monsters.arr[0].curHp, "frost evokes should deal no damage");
+
+    // A second Dualcast on a lightning orb reproduces the fixture pattern 8+8=16.
+    battle.setState(InputState::PLAYER_NORMAL);
+    const int cultistHpDc2 = battle.monsters.arr[0].curHp;
+    battle.cards.createTempCardInHand(CardInstance(CardId::DUALCAST));
+    search::Action dual2(search::ActionType::CARD, 0, 0);
+    check(dual2.isValidAction(battle), "second Dualcast should be playable");
+    dual2.execute(battle);
+    check(battle.player.orbs.size() == 1, "the second Dualcast should consume its orb");
+    check(cultistHpDc2 - battle.monsters.arr[0].curHp == 16, "Dualcast lightning evokes should deal 16");
+
+    // Vanilla clamps orb slots at 10 and never below 0.
+    battle.player.increaseOrbSlots(999);
+    check(battle.player.orbSlots == 10, "orb slots should clamp at the vanilla cap of 10");
+    battle.player.increaseOrbSlots(-999);
+    check(battle.player.orbSlots == 0, "orb slots should never go below zero");
+
+    // With no slots a channel does nothing and never triggers the orb's evoke.
+    // The bar still holds one lightning orb from the second Dualcast.
+    const int cultistHp3 = battle.monsters.arr[0].curHp;
+    Actions::ChannelOrb(Orb::LIGHTNING).actFunc(battle);
+    check(battle.player.orbs.size() == 1, "channeling without slots should do nothing");
+
+    // With no slots there is no push-out evoke either: no damage was rolled.
+    check(battle.monsters.arr[0].curHp == cultistHp3,
+         "channeling without slots should not evoke anything");
 
     std::cout << "orb slots, channel rules, Zap, Dualcast and lightning/frost settlement hold\n";
     return 0;

@@ -52,11 +52,21 @@ namespace sts {
         // +3) is stored; passive/evoke values are computed from the orb type, focus and this
         // bonus at settlement time (same pattern as stance effects).
         // Inline storage is copied with each independent MCTS battle state.
+        //
+        // Vanilla caps orb slots at 10 (AbstractPlayer.MAX_ORBS); increaseOrbSlots
+        // clamps to MAX_ORB_SLOTS. Mods can raise the cap (some go far beyond 10),
+        // so the storage capacity is a separate constant: raising support for a
+        // larger cap is a two-constant change. Past roughly 64 slots the per-state
+        // copy cost of inline storage in MCTS demands a storage redesign instead
+        // of a bigger constant; snapshot import rejects out-of-range slot counts
+        // until that exists.
+        static constexpr int MAX_ORB_SLOTS = 10;
+        static constexpr int ORB_STORAGE_CAPACITY = 16;
         struct OrbState {
             Orb type = Orb::EMPTY;
             std::int8_t evokeBonus = 0;
         };
-        fixed_list<OrbState, 10> orbs;
+        fixed_list<OrbState, ORB_STORAGE_CAPACITY> orbs;
 
         // for spire spear/shield
         std::int8_t lastTargetedMonster = 1;

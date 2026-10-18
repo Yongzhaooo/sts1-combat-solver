@@ -298,7 +298,16 @@ namespace {
             else if (stance == "DIVINITY") bc.player.stance = Stance::DIVINITY;
             else throw std::invalid_argument("unknown snapshot stance: " + stance);
         }
-        if (player.contains("orb_slots")) bc.player.orbSlots = static_cast<std::int8_t>(py::cast<int>(player["orb_slots"]));
+        if (player.contains("orb_slots")) {
+            const int orbSlots = py::cast<int>(player["orb_slots"]);
+            if (orbSlots < 0 || orbSlots > Player::MAX_ORB_SLOTS)
+                // Vanilla caps slots at 10. Mods raising the cap are unsupported
+                // until orb storage is reworked; reject instead of truncating.
+                throw std::invalid_argument("snapshot orb_slots " + std::to_string(orbSlots) +
+                                            " outside the vanilla 0.." + std::to_string(Player::MAX_ORB_SLOTS) +
+                                            " range (modded slot counts are not supported yet)");
+            bc.player.orbSlots = static_cast<std::int8_t>(orbSlots);
+        }
         // The simulator has no orb state yet, so a snapshot with orbs must not import as if it had none.
         if (player.contains("orbs") && py::len(player["orbs"]) != 0)
             throw std::invalid_argument("snapshot orbs are not supported by the simulator yet");

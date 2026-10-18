@@ -360,8 +360,51 @@ Action Actions::TriggerEndOfTurnOrbsAction() {
     }};
 }
 
+namespace {
+    // Fires one orb's evoke effects without consuming it. Shared by EvokeOrbAction
+    // and the full-bar push-out in ChannelOrb. The target roll for lightning
+    // happens here, when the effects are queued.
+    void fireEvokeEffects(BattleContext &bc, Orb type, std::int8_t evokeBonus) {
+        switch (type) {
+            case Orb::LIGHTNING: {
+                // LightningOrb.onEvoke: deal 8 (+focus +bonus) to a random enemy.
+                const int damage = 8 + bc.player.focus + evokeBonus;
+                if (damage > 0) {
+                    const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                    if (target >= 0) {
+                        bc.addToBot(Actions::AttackEnemy(target, damage));
+                    }
+                }
+                break;
+            }
+            case Orb::FROST: {
+                // FrostOrb.onEvoke: gain 5 (+focus) block.
+                const int block = 5 + bc.player.focus;
+                if (block > 0) {
+                    bc.addToBot(Actions::GainBlock(block));
+                }
+                break;
+            }
+            default:
+                // TODO(defect M3): dark and plasma evoke settlement stay unimplemented.
+                break;
+        }
+    }
+}
+
 Action Actions::ChannelOrb(Orb orb, std::int8_t evokeBonus) {
     return {[=] (BattleContext &bc) {
+        // Vanilla rules (wiki/game): with no slots a channel does nothing and
+        // never triggers the orb's evoke; with a full bar the oldest orb is
+        // evoked first (its effects fire), then the new orb takes the open end.
+        if (bc.player.orbSlots <= 0) {
+            return;
+        }
+        if (!bc.player.hasEmptyOrb() && !bc.player.orbs.empty()) {
+            const auto pushed = bc.player.orbs[0];
+            fireEvokeEffects(bc, pushed.type, pushed.evokeBonus);
+            bc.player.orbs.remove(0);
+        }
         bc.player.channelOrb(orb, evokeBonus);
     }};
 }
@@ -373,30 +416,7 @@ Action Actions::EvokeOrbAction(int orbIdx, int times) {
         }
         const auto orb = bc.player.orbs[orbIdx];
         for (int i = 0; i < times; ++i) {
-            switch (orb.type) {
-                case Orb::LIGHTNING: {
-                    // LightningOrb.onEvoke: deal 5 (+focus +bonus) to a random enemy.
-                    const int damage = 5 + bc.player.focus + orb.evokeBonus;
-                    if (damage > 0) {
-                        const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
-                        if (target >= 0) {
-                            bc.addToBot(Actions::AttackEnemy(target, damage));
-                        }
-                    }
-                    break;
-                }
-                case Orb::FROST: {
-                    // FrostOrb.onEvoke: gain 5 (+focus) block.
-                    const int block = 5 + bc.player.focus;
-                    if (block > 0) {
-                        bc.addToBot(Actions::GainBlock(block));
-                    }
-                    break;
-                }
-                default:
-                    // TODO(defect M3): dark and plasma evoke settlement stay unimplemented.
-                    break;
-            }
+            fireEvokeEffects(bc, orb.type, orb.evokeBonus);
         }
         // Evoking consumes the orb, after all triggered instances resolve.
         bc.player.orbs.remove(orbIdx);
