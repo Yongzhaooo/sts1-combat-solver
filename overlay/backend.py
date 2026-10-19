@@ -1124,5 +1124,45 @@ def serve(runs_dir=None):
         reports.close()
 
 
+# ---- Headless collection executor tiers (pi_base v2.8). Every variable unset leaves the
+# desktop behaviour unchanged. Acts 1-3 divide each native plan() budget by
+# STS_ACT13_BUDGET_DIVISOR, overridable per room type with STS_ACT13_ROOM_DIVISORS (JSON);
+# act 4 is never divided. STS_NN_PRIOR_WEIGHTS enables the learned move-ordering prior in
+# acts 1-3, limited to the room types in STS_NN_PRIOR_ROOMS when that is set.
+_ACT13_DIVISOR = int(os.environ.get('STS_ACT13_BUDGET_DIVISOR', '1'))
+_ACT13_ROOM_DIVISORS = {k: int(v) for k, v in json.loads(os.environ.get('STS_ACT13_ROOM_DIVISORS') or '{}').items()}
+_NN_WEIGHTS = os.environ.get('STS_NN_PRIOR_WEIGHTS', '')
+_NN_ROOMS = {r for r in os.environ.get('STS_NN_PRIOR_ROOMS', '').split(',') if r}
+if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS:
+    _act13_divisor = [1]
+    _NN_CONFIG = json.loads(os.environ['STS_NN_PRIOR_CONFIG']) if _NN_WEIGHTS else None
+
+    def _tier_install(native):
+        if getattr(native, '_act13_original_plan', None) is None:
+            original = native.plan
+            native._act13_original_plan = original
+            native.plan = lambda root, simulations, *args: original(root, max(1, simulations // _act13_divisor[0]), *args)
+        if _NN_WEIGHTS and not getattr(native, '_nn_loaded', False):
+            native.nn_load(_NN_WEIGHTS)
+            native._nn_loaded = True
+
+    def _tier_wrap(method):
+        def run(self, view, *args):
+            native = sys.modules['overlay_search']
+            _tier_install(native)
+            act = int(view['game'].get('act', 4))
+            room = (view['game'].get('solver_auto_context') or {}).get('room', '')
+            _act13_divisor[0] = _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if act <= 3 else 1
+            if _NN_WEIGHTS:
+                c = _NN_CONFIG
+                native.nn_config(act <= 3 and (not _NN_ROOMS or room in _NN_ROOMS), c['widen_c'], c['widen_alpha'],
+                                 c['min_width'], c['prior_weight'], c['rank_tau'], c['leaf_greedy'])
+            return method(self, view, *args)
+        return run
+
+    Advisor.solve = _tier_wrap(Advisor.solve)
+    Advisor.advance = _tier_wrap(Advisor.advance)
+
+
 if __name__ == '__main__':
     serve()
