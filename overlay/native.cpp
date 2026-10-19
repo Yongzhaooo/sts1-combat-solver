@@ -243,6 +243,7 @@ static bool overlaySameVictory(const BattleContext &a, const BattleContext &b) {
 }
 
 #include "growth_gate.h"
+#include "sim/search/nn_prior.h"
 #include "loop_beam.h"
 #include "smoke_opening.h"
 static bool overlayBeamTick() {
@@ -296,6 +297,34 @@ PYBIND11_MODULE(overlay_search, m) {
         search::Action action(bits);
         if(!action.isValidAction(battle))throw std::invalid_argument("invalid predicted action");
         action.execute(battle);
+    });
+    m.def("nn_load", [](const std::string &path) { nn_prior::load(path); });
+    m.def("nn_config", [](bool enabled, double widenC, double widenAlpha, int minWidth,
+                          double priorWeight, double rankTau, double leafGreedy) {
+        auto &c = nn_prior::config();
+        c.enabled = enabled; c.widenC = widenC; c.widenAlpha = widenAlpha; c.minWidth = minWidth;
+        c.priorWeight = priorWeight; c.rankTau = rankTau; c.leafGreedy = leafGreedy;
+    });
+    // Candidate edges exactly as tree expansion enumerates them, with their features.
+    m.def("nn_candidates", [](const BattleContext &bc) {
+        search::BattleScumSearcher2 searcher(bc);
+        searcher.enumerateActionsForNode(searcher.root, bc);
+        py::list bits, dense, cards, potions;
+        nn_prior::Encoded e;
+        nn_prior::encodeState(bc, e.dense);
+        for (auto &edge : searcher.root.edges) {
+            nn_prior::encodeAction(bc, edge.action, e);
+            bits.append(edge.action.bits);
+            dense.append(std::vector<float>(e.dense, e.dense + nn_prior::DENSE));
+            cards.append(e.card);
+            potions.append(e.potion);
+        }
+        return py::make_tuple(bits, dense, cards, potions);
+    });
+    m.def("nn_logits", [](const BattleContext &bc, const std::vector<std::uint32_t> &bits) {
+        std::vector<search::Action> actions;
+        for (auto b : bits) actions.emplace_back(b);
+        return nn_prior::logits(bc, actions);
     });
     m.def("plan", [](const BattleContext &root, int simulations, const std::vector<int> &slots, int recovery, int index, bool killThieves, bool generatedPotions, bool bossFast, bool smokeOpening, bool bounded, int lossThreshold) {
         if(root.outcome != Outcome::UNDECIDED || root.player.curHp <= 0)

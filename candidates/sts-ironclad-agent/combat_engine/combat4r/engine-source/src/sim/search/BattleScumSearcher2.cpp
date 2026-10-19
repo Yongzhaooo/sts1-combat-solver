@@ -11,6 +11,8 @@
 #include <stdexcept>
 #include <type_traits>
 
+#include <numeric>
+#include "sim/search/nn_prior.h"
 using namespace sts;
 
 std::int64_t simulationIdx = 0; // for debugging
@@ -137,6 +139,18 @@ void search::BattleScumSearcher2::search(int64_t simulations) {
     }
 }
 
+// Research: learned ordering of a freshly expanded node's edges (children carry no statistics yet).
+static void nnOrderEdges(search::BattleScumSearcher2::Node &node, const BattleContext &bc) {
+    std::vector<search::Action> actions;
+    actions.reserve(node.edges.size());
+    for (auto &edge : node.edges) actions.push_back(edge.action);
+    const auto z = nn_prior::logits(bc, actions);
+    std::vector<int> order(actions.size());
+    std::iota(order.begin(), order.end(), 0);
+    std::stable_sort(order.begin(), order.end(), [&](int a, int b) { return z[a] > z[b]; });
+    for (std::size_t i = 0; i < order.size(); ++i) node.edges[i].action = actions[order[i]];
+}
+
 void search::BattleScumSearcher2::step() {
     searchStack = {&root};
     actionStack.clear();
@@ -198,6 +212,7 @@ void search::BattleScumSearcher2::step() {
     }
     ++simulationIdx;
     enumerateActionsForNode(leaf, state);
+    if (nn_prior::config().enabled && leaf.edges.size() > 1) nnOrderEdges(leaf, state);
     auto &edge = leaf.edges[selectFirstActionForLeafNode(leaf)];
     edge.action.execute(state);
     actionStack.push_back(edge.action);
@@ -267,6 +282,31 @@ int search::BattleScumSearcher2::selectBestEdgeToSearch(const search::BattleScum
     if (cur.edges.size() == 1) {
         return 0;
     }
+    if (nn_prior::config().enabled) {
+        const auto &cfg = nn_prior::config();
+        const int limit = nn_prior::allowedChildren(cur.simulationCount, static_cast<int>(cur.edges.size()));
+        for (int i = 0; i < limit; ++i) {
+            if (cur.edges[i].node.simulationCount == 0) return i;
+        }
+        const double parentLog = std::log(cur.simulationCount + 1);
+        const double parentSqrt = std::sqrt(static_cast<double>(cur.simulationCount));
+        const double evalRange = bestActionValue - minActionValue;
+        const bool usableRange = std::isfinite(evalRange) && evalRange > 0.0;
+        int bestEdge = 0;
+        double bestEdgeValue = -std::numeric_limits<double>::infinity();
+        for (int i = 0; i < limit; ++i) {
+            const auto &child = cur.edges[i].node;
+            const double quality = usableRange ? (child.evaluationSum - minActionValue) / evalRange : 0.0;
+            const double exploration = explorationParameter * std::sqrt(parentLog / child.simulationCount);
+            const double prior = cfg.priorWeight * nn_prior::rankWeight(i) * parentSqrt / (1.0 + child.simulationCount);
+            const double value = quality + exploration + prior;
+            if (value > bestEdgeValue) {
+                bestEdge = i;
+                bestEdgeValue = value;
+            }
+        }
+        return bestEdge;
+    }
 
     // An unvisited edge has infinite priority; preserve the original tie order.
     for (int i = 0; i < static_cast<int>(cur.edges.size()); ++i) {
@@ -295,6 +335,18 @@ int search::BattleScumSearcher2::selectBestEdgeToSearch(const search::BattleScum
 }
 
 int search::BattleScumSearcher2::selectFirstActionForLeafNode(const search::BattleScumSearcher2::Node &leafNode) {
+    if (nn_prior::config().enabled && leafNode.edges.size() > 1 &&
+            std::uniform_real_distribution<double>(0.0, 1.0)(randGen) < nn_prior::config().leafGreedy) {
+        const int k = nn_prior::allowedChildren(0, static_cast<int>(leafNode.edges.size()));
+        double total = 0;
+        for (int i = 0; i < k; ++i) total += nn_prior::rankWeight(i);
+        double u = std::uniform_real_distribution<double>(0.0, total)(randGen);
+        for (int i = 0; i < k; ++i) {
+            u -= nn_prior::rankWeight(i);
+            if (u <= 0) return i;
+        }
+        return k - 1;
+    }
     auto dist = std::uniform_int_distribution<int>(0, static_cast<int>(leafNode.edges.size())-1);
     return dist(randGen);
 }
