@@ -234,4 +234,19 @@ assert s.confirmation(fault), 'ordinary resolved hand picker still needs confirm
 grid = copy.deepcopy(fault)
 grid['game']['screen_type'] = 'GRID'
 assert s.confirmation(grid), 'ordinary resolved grid picker still needs confirmation'
-print('PASS: duplicated Burning Pact confirm boundary, next picker UUIDs, nine rejection boundaries and legacy confirms')
+# Player report 5933456809487229145 F46: the plan's last action was a Burning Pact
+# pick (Charon's Ashes finished the fight natively). The open Java picker still
+# needs its confirm; reporting the route complete left the game waiting.
+s.actions = deque()
+advisor.plan = dict(actions=[int(second.bits)], outcome=int(s.sts.Outcome.PLAYER_VICTORY),
+                    hp=50, post_hp=50, max_hp=100, seconds=0, simulations=0)
+advisor.root, advisor.branch_info = s.battle.clone(), []
+advisor.root_game = dict(fault['game'], current_hp=int(s.battle.player.cur_hp))  # fixture omits run HP
+last = advisor.result(fault)
+assert last['status'] == 'ready' and last['command'] == 'confirm' and last['remaining'] == 0, last.get('status')
+advisor.advance(fault, 8000)  # the confirm frame itself: no plan action left to execute
+s.pending_single = None
+closed = copy.deepcopy(fault)
+closed['game']['screen_type'], closed['game']['screen_state'] = 'NONE', {}
+assert advisor.result(closed)['status'] == 'complete'
+print('PASS: duplicated Burning Pact confirm boundary, next picker UUIDs, nine rejection boundaries, legacy and final-action confirms')
