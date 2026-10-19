@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 #include <memory>
 #include <numeric>
 #include <sstream>
@@ -218,6 +219,10 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
     };
     auto stop = [&]() { return stats.transitions >= cap || cancelled(); };
     std::vector<Node> frontier{{std::make_shared<BattleContext>(root), nullptr, 0}};
+    // Only a per-turn damage cap (Invincible: the Heart) makes a loop worthless before the turn ends; elsewhere the
+    // per-turn quota below stays off and the search is unchanged.
+    bool damageCap = false;
+    for (int i = 0; i < root.monsters.monsterCount; ++i) damageCap |= root.monsters.arr[i].hasStatus<MS::INVINCIBLE>();
     // The transition cap bounds a pass; 256 actions did not reach the end of long loop fights (Awakened One, 320+300 HP).
     for (int depth = 0; depth < 4096 && !frontier.empty() && !stop(); ++depth) {
         std::vector<Node> candidates;
@@ -225,6 +230,18 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
         // in turn on one index order (as below), and lane L only ever picks among its first (L+1)*width distinct buckets, so
         // keeping those, in arrival order, leaves the final selection unchanged.
         const std::size_t compactAt = 12 * std::size_t(width) + 64;
+        // Lane scores compare states of different turns: one that just ended its turn has zero block against the next
+        // attack and always ranks below another loop in the old turn. With an unbounded loop past the Heart's damage cap
+        // every kept state then stays in that turn until its HP runs out. So under a damage cap each later turn also keeps
+        // its own leaders, ranked on lane 0 against states of the same turn only.
+        auto byTurn = [&]() {
+            std::map<int, std::vector<std::size_t>> groups;
+            for (std::size_t i = 0; i < candidates.size(); ++i) groups[candidates[i].state->turn].push_back(i);
+            for (auto &group : groups)
+                std::stable_sort(group.second.begin(), group.second.end(),
+                                 [&](auto x, auto y) { return candidates[x].scores[0] > candidates[y].scores[0]; });
+            return groups;
+        };
         auto compact = [&]() {
             std::vector<std::size_t> order(candidates.size());
             std::iota(order.begin(), order.end(), 0);
@@ -234,6 +251,15 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                 std::unordered_set<std::string> seen;
                 for (std::size_t k = 0; k < order.size() && seen.size() < std::size_t(lane + 1) * width; ++k)
                     if (seen.insert(bucketKey(candidates[order[k]])).second) keep[order[k]] = 1;
+            }
+            // Each turn's leaders for the per-turn quota below. Later candidates only add turns, so the final quota is no
+            // larger; keeping more would let stalling lines over many turns refill the layer past compactAt.
+            auto groups = damageCap ? byTurn() : decltype(byTurn()){};
+            const std::size_t quota = std::max<std::size_t>(1, width / std::max<std::size_t>(1, groups.size() - 1));
+            for (auto &group : groups) {
+                std::unordered_set<std::string> seen;
+                for (std::size_t k = 0; k < group.second.size() && seen.size() < quota; ++k)
+                    if (seen.insert(bucketKey(candidates[group.second[k]])).second) keep[group.second[k]] = 1;
             }
             std::vector<Node> kept;
             for (std::size_t i = 0; i < candidates.size(); ++i) if (keep[i]) kept.push_back(std::move(candidates[i]));
@@ -307,6 +333,16 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                 auto &n = candidates[order[k]];
                 if (buckets.insert(bucketKey(n)).second) { next.push_back(n); ++kept; }
             }
+        }
+        if (damageCap && !candidates.empty()) {
+            auto groups = byTurn();
+            groups.erase(groups.begin());  // the earliest turn is the one the lanes above already favour
+            const int quota = groups.empty() ? 0 : std::max(1, width / int(groups.size()));
+            for (auto &group : groups)
+                for (std::size_t k = 0, kept = 0; k < group.second.size() && kept < std::size_t(quota); ++k) {
+                    auto &n = candidates[group.second[k]];
+                    if (buckets.insert(bucketKey(n)).second) { next.push_back(n); ++kept; }
+                }
         }
         frontier = std::move(next);
         stats.layers = std::max(stats.layers, depth + 1);
