@@ -77,17 +77,20 @@ class LiveSearch:
                 "start_selection": (json.loads(json.dumps(selection,default=int)) if selection else None), "base_simulations": self.simulations}
 
     def next_action(self, view):
-        if not self.actions or self.battle is None:
+        if self.battle is None:
             raise ValueError("no active plan; import and plan before executing")
         game, available = view["game"], view["available_commands"]
         # A Java hand picker may need confirmation after the native selection
-        # has resolved. This is a UI acknowledgement, not another search action.
+        # has resolved. This is a UI acknowledgement, not another search action,
+        # and it is still owed when that selection was the plan's last action.
         if self.confirmation(view):
             if "confirm" not in available:
                 raise ValueError("original selection still pending after native resolution")
             if self.pending_single is not None:
                 self.pending_single = (*self.pending_single[:-1], True)
             return None, "confirm"
+        if not self.actions:
+            raise ValueError("no active plan; import and plan before executing")
         action = self.sts.SearchAction.from_bits(self.actions[0] & 0xffffffff)
         if not action.is_valid(self.battle):
             raise RuntimeError("saved plan action is invalid in its own prediction")
