@@ -1089,8 +1089,8 @@ Action Actions::EnlightenmentAction(bool upgraded) {
             if (c.costForTurn > 1) {
                 c.costForTurn = 1;
             }
+            // Java EnlightenmentAction lowers only cost here; a turn cost of 0 (Corruption) stays 0.
             if (upgraded && c.cost > 1) {
-                c.costForTurn = 1;
                 c.cost = 1;
             }
         }
