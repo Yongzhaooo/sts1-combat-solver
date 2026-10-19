@@ -1,0 +1,2193 @@
+{
+ "format": "sts1-combat-exam-v1",
+ "id": "heart-loop-turn-quota",
+ "description": "Synthetic Heart fight (seed and RNG streams generated, no player run data): a 6-card Body Slam / Deep Breath / Shrug It Off / Bloodletting loop must keep ending turns under the 200-damage cap. Before the per-turn beam quota every kept state looped in one turn until HP ran out.",
+ "source_sha256": null,
+ "oracle": "native planner witness; mechanism from player report F56 (2026-10-19)",
+ "initial": {
+  "snapshot": {
+   "character": "IRONCLAD",
+   "seed": 7960778426191620467,
+   "floor": 56,
+   "ascension": 20,
+   "encounter": 57,
+   "turn": 1,
+   "frame_delta_seconds": 0.020570563,
+   "cards_played_this_turn": 0,
+   "attacks_played_this_turn": 0,
+   "skills_played_this_turn": 0,
+   "cards_discarded_this_turn": 0,
+   "times_damaged": 0,
+   "player": {
+    "gold": 0,
+    "current_hp": 88,
+    "max_hp": 103,
+    "block": 0,
+    "energy": 3,
+    "energy_per_turn": 3,
+    "card_draw_per_turn": 5,
+    "powers": [
+     {
+      "id": 83,
+      "amount": 1,
+      "just_applied": false
+     }
+    ],
+    "centennial_puzzle_used": false,
+    "is_bloodied": false,
+    "necronomicon_used": false,
+    "orange_pellets_mask": 0
+   },
+   "hand": [
+    {
+     "id": 42,
+     "upgrades": 1,
+     "cost": 0,
+     "misc": 0,
+     "base_cost": 0,
+     "free_to_play_once": false,
+     "exhausts": false
+    },
+    {
+     "id": 100,
+     "upgrades": 1,
+     "cost": 0,
+     "misc": 0,
+     "base_cost": 0,
+     "free_to_play_once": false,
+     "exhausts": false
+    },
+    {
+     "id": 301,
+     "upgrades": 1,
+     "cost": 1,
+     "misc": 0,
+     "base_cost": 1,
+     "free_to_play_once": false,
+     "exhausts": false
+    },
+    {
+     "id": 38,
+     "upgrades": 1,
+     "cost": 0,
+     "misc": 0,
+     "base_cost": 0,
+     "free_to_play_once": false,
+     "exhausts": false
+    },
+    {
+     "id": 345,
+     "upgrades": 1,
+     "cost": 1,
+     "misc": 0,
+     "base_cost": 1,
+     "free_to_play_once": false,
+     "exhausts": false
+    },
+    {
+     "id": 52,
+     "upgrades": 1,
+     "cost": 1,
+     "misc": 0,
+     "base_cost": 1,
+     "free_to_play_once": false,
+     "exhausts": false
+    }
+   ],
+   "draw_pile": [],
+   "discard_pile": [],
+   "exhaust_pile": [],
+   "monsters": [
+    {
+     "id": 13,
+     "current_hp": 797,
+     "max_hp": 800,
+     "block": 0,
+     "half_dead": false,
+     "is_gone": false,
+     "move": 46,
+     "last_move": 0,
+     "misc_info": 0,
+     "powers": [
+      {
+       "id": 15,
+       "amount": 2,
+       "just_applied": false
+      },
+      {
+       "id": 12,
+       "amount": 1,
+       "just_applied": false
+      },
+      {
+       "id": 31,
+       "amount": 197,
+       "just_applied": false,
+       "misc": 200
+      }
+     ]
+    }
+   ],
+   "target_map": [
+    0
+   ],
+   "relics": [
+    {
+     "id": 86,
+     "counter": -1
+    },
+    {
+     "id": 141,
+     "counter": -1
+    },
+    {
+     "id": 40,
+     "counter": -1
+    },
+    {
+     "id": 160,
+     "counter": -1
+    },
+    {
+     "id": 113,
+     "counter": -1
+    },
+    {
+     "id": 58,
+     "counter": -1
+    },
+    {
+     "id": 91,
+     "counter": -1
+    },
+    {
+     "id": 8,
+     "counter": -1
+    },
+    {
+     "id": 78,
+     "counter": -1
+    },
+    {
+     "id": 166,
+     "counter": -1
+    },
+    {
+     "id": 133,
+     "counter": -1
+    },
+    {
+     "id": 177,
+     "counter": 2
+    },
+    {
+     "id": 89,
+     "counter": -1
+    },
+    {
+     "id": 76,
+     "counter": -1
+    },
+    {
+     "id": 87,
+     "counter": -1
+    },
+    {
+     "id": 99,
+     "counter": -1
+    },
+    {
+     "id": 169,
+     "counter": -1
+    },
+    {
+     "id": 1,
+     "counter": -1
+    }
+   ],
+   "potions": [
+    22,
+    42
+   ],
+   "rngs": {
+    "potion": {
+     "seed0": 15662305406710239867,
+     "seed1": 1689441204489037471,
+     "counter": 0
+    },
+    "card_random": {
+     "seed0": 6660334802794327005,
+     "seed1": 3119042104763040036,
+     "counter": 0
+    },
+    "ai": {
+     "seed0": 14922715847065110393,
+     "seed1": 15750464385269855119,
+     "counter": 0
+    },
+    "monster_hp": {
+     "seed0": 4640892725076559865,
+     "seed1": 3914746131789064238,
+     "counter": 0
+    },
+    "shuffle": {
+     "seed0": 659184109953178577,
+     "seed1": 12566774096673229136,
+     "counter": 0
+    },
+    "misc": {
+     "seed0": 18441556806163220353,
+     "seed1": 11777717384603786643,
+     "counter": 0
+    }
+   },
+   "end_turn_shuffle": {
+    "mode": "basemod_seeded",
+    "shared_rng_initialized": true,
+    "shared_seed48": 226213322719305
+   }
+  },
+  "potion_bark_flip": 0,
+  "search_state": {
+   "cards_drawn": 5,
+   "energy_wasted": 0,
+   "relics": [
+    86,
+    141,
+    40,
+    160,
+    113,
+    58,
+    91,
+    8,
+    78,
+    166,
+    133,
+    177,
+    89,
+    76,
+    87,
+    99,
+    169,
+    1
+   ]
+  }
+ },
+ "witness": {
+  "steps": [
+   {
+    "bits": 2,
+    "before": [
+     88,
+     3,
+     1
+    ],
+    "after": [
+     88,
+     2,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 0,
+    "before": [
+     88,
+     2,
+     1
+    ],
+    "after": [
+     88,
+     2,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 0,
+    "before": [
+     88,
+     2,
+     1
+    ],
+    "after": [
+     88,
+     2,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 4,
+    "before": [
+     88,
+     2,
+     1
+    ],
+    "after": [
+     88,
+     1,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     88,
+     1,
+     1
+    ],
+    "after": [
+     88,
+     1,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     88,
+     1,
+     1
+    ],
+    "after": [
+     88,
+     1,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     88,
+     1,
+     1
+    ],
+    "after": [
+     88,
+     0,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     88,
+     0,
+     1
+    ],
+    "after": [
+     88,
+     0,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     88,
+     0,
+     1
+    ],
+    "after": [
+     88,
+     0,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     88,
+     0,
+     1
+    ],
+    "after": [
+     88,
+     0,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 0,
+    "before": [
+     88,
+     0,
+     1
+    ],
+    "after": [
+     85,
+     3,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     85,
+     3,
+     1
+    ],
+    "after": [
+     85,
+     2,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     85,
+     2,
+     1
+    ],
+    "after": [
+     85,
+     2,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     85,
+     2,
+     1
+    ],
+    "after": [
+     85,
+     2,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     85,
+     2,
+     1
+    ],
+    "after": [
+     85,
+     1,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     85,
+     1,
+     1
+    ],
+    "after": [
+     85,
+     1,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     85,
+     1,
+     1
+    ],
+    "after": [
+     85,
+     1,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 4,
+    "before": [
+     85,
+     1,
+     1
+    ],
+    "after": [
+     85,
+     0,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     85,
+     0,
+     1
+    ],
+    "after": [
+     85,
+     0,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     85,
+     0,
+     1
+    ],
+    "after": [
+     85,
+     0,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     85,
+     0,
+     1
+    ],
+    "after": [
+     85,
+     0,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     85,
+     0,
+     1
+    ],
+    "after": [
+     82,
+     3,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     82,
+     3,
+     1
+    ],
+    "after": [
+     82,
+     2,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 1073741824,
+    "before": [
+     82,
+     2,
+     1
+    ],
+    "after": [
+     82,
+     2,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     82,
+     2,
+     1
+    ],
+    "after": [
+     82,
+     2,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     82,
+     2,
+     1
+    ],
+    "after": [
+     82,
+     2,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     82,
+     2,
+     1
+    ],
+    "after": [
+     82,
+     2,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 0,
+    "before": [
+     82,
+     2,
+     1
+    ],
+    "after": [
+     82,
+     1,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     82,
+     1,
+     1
+    ],
+    "after": [
+     82,
+     1,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     82,
+     1,
+     1
+    ],
+    "after": [
+     82,
+     1,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     82,
+     1,
+     1
+    ],
+    "after": [
+     82,
+     0,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     82,
+     0,
+     1
+    ],
+    "after": [
+     82,
+     0,
+     1,
+     0
+    ]
+   },
+   {
+    "bits": 2147483648,
+    "before": [
+     82,
+     0,
+     1
+    ],
+    "after": [
+     82,
+     2,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     82,
+     2,
+     2
+    ],
+    "after": [
+     82,
+     1,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     82,
+     1,
+     2
+    ],
+    "after": [
+     82,
+     1,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     82,
+     1,
+     2
+    ],
+    "after": [
+     82,
+     1,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 8,
+    "before": [
+     82,
+     1,
+     2
+    ],
+    "after": [
+     82,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     82,
+     0,
+     2
+    ],
+    "after": [
+     82,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     82,
+     0,
+     2
+    ],
+    "after": [
+     82,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 0,
+    "before": [
+     82,
+     0,
+     2
+    ],
+    "after": [
+     79,
+     3,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     79,
+     3,
+     2
+    ],
+    "after": [
+     79,
+     2,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     79,
+     2,
+     2
+    ],
+    "after": [
+     79,
+     2,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 8,
+    "before": [
+     79,
+     2,
+     2
+    ],
+    "after": [
+     79,
+     1,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 8,
+    "before": [
+     79,
+     1,
+     2
+    ],
+    "after": [
+     79,
+     1,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 8,
+    "before": [
+     79,
+     1,
+     2
+    ],
+    "after": [
+     79,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     79,
+     0,
+     2
+    ],
+    "after": [
+     79,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     79,
+     0,
+     2
+    ],
+    "after": [
+     79,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     79,
+     0,
+     2
+    ],
+    "after": [
+     76,
+     3,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     76,
+     3,
+     2
+    ],
+    "after": [
+     76,
+     2,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     76,
+     2,
+     2
+    ],
+    "after": [
+     76,
+     2,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 8,
+    "before": [
+     76,
+     2,
+     2
+    ],
+    "after": [
+     76,
+     1,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 8,
+    "before": [
+     76,
+     1,
+     2
+    ],
+    "after": [
+     76,
+     1,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 8,
+    "before": [
+     76,
+     1,
+     2
+    ],
+    "after": [
+     76,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     76,
+     0,
+     2
+    ],
+    "after": [
+     76,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     76,
+     0,
+     2
+    ],
+    "after": [
+     76,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     76,
+     0,
+     2
+    ],
+    "after": [
+     73,
+     3,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     73,
+     3,
+     2
+    ],
+    "after": [
+     73,
+     2,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     73,
+     2,
+     2
+    ],
+    "after": [
+     73,
+     2,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 8,
+    "before": [
+     73,
+     2,
+     2
+    ],
+    "after": [
+     73,
+     1,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 8,
+    "before": [
+     73,
+     1,
+     2
+    ],
+    "after": [
+     73,
+     1,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 8,
+    "before": [
+     73,
+     1,
+     2
+    ],
+    "after": [
+     73,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     73,
+     0,
+     2
+    ],
+    "after": [
+     73,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     73,
+     0,
+     2
+    ],
+    "after": [
+     73,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     73,
+     0,
+     2
+    ],
+    "after": [
+     70,
+     3,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     70,
+     3,
+     2
+    ],
+    "after": [
+     70,
+     2,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     70,
+     2,
+     2
+    ],
+    "after": [
+     70,
+     2,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     70,
+     2,
+     2
+    ],
+    "after": [
+     70,
+     1,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 8,
+    "before": [
+     70,
+     1,
+     2
+    ],
+    "after": [
+     70,
+     1,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 8,
+    "before": [
+     70,
+     1,
+     2
+    ],
+    "after": [
+     70,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     70,
+     0,
+     2
+    ],
+    "after": [
+     70,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     70,
+     0,
+     2
+    ],
+    "after": [
+     70,
+     0,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     70,
+     0,
+     2
+    ],
+    "after": [
+     67,
+     3,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 7,
+    "before": [
+     67,
+     3,
+     2
+    ],
+    "after": [
+     67,
+     3,
+     2,
+     0
+    ]
+   },
+   {
+    "bits": 2147483648,
+    "before": [
+     67,
+     3,
+     2
+    ],
+    "after": [
+     67,
+     3,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     67,
+     3,
+     3
+    ],
+    "after": [
+     67,
+     2,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     67,
+     2,
+     3
+    ],
+    "after": [
+     67,
+     2,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     67,
+     2,
+     3
+    ],
+    "after": [
+     67,
+     1,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     67,
+     1,
+     3
+    ],
+    "after": [
+     67,
+     1,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 6,
+    "before": [
+     67,
+     1,
+     3
+    ],
+    "after": [
+     67,
+     0,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     67,
+     0,
+     3
+    ],
+    "after": [
+     67,
+     0,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 5,
+    "before": [
+     67,
+     0,
+     3
+    ],
+    "after": [
+     67,
+     0,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     67,
+     0,
+     3
+    ],
+    "after": [
+     64,
+     3,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 5,
+    "before": [
+     64,
+     3,
+     3
+    ],
+    "after": [
+     64,
+     2,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 4,
+    "before": [
+     64,
+     2,
+     3
+    ],
+    "after": [
+     64,
+     2,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 4,
+    "before": [
+     64,
+     2,
+     3
+    ],
+    "after": [
+     64,
+     2,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 5,
+    "before": [
+     64,
+     2,
+     3
+    ],
+    "after": [
+     64,
+     1,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 5,
+    "before": [
+     64,
+     1,
+     3
+    ],
+    "after": [
+     64,
+     1,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 0,
+    "before": [
+     64,
+     1,
+     3
+    ],
+    "after": [
+     64,
+     0,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 1073741824,
+    "before": [
+     64,
+     0,
+     3
+    ],
+    "after": [
+     64,
+     0,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 4,
+    "before": [
+     64,
+     0,
+     3
+    ],
+    "after": [
+     64,
+     0,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     64,
+     0,
+     3
+    ],
+    "after": [
+     61,
+     3,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     61,
+     3,
+     3
+    ],
+    "after": [
+     61,
+     2,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     61,
+     2,
+     3
+    ],
+    "after": [
+     61,
+     2,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     61,
+     2,
+     3
+    ],
+    "after": [
+     61,
+     1,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     61,
+     1,
+     3
+    ],
+    "after": [
+     61,
+     1,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     61,
+     1,
+     3
+    ],
+    "after": [
+     61,
+     0,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 1073741824,
+    "before": [
+     61,
+     0,
+     3
+    ],
+    "after": [
+     61,
+     0,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 4,
+    "before": [
+     61,
+     0,
+     3
+    ],
+    "after": [
+     61,
+     0,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     61,
+     0,
+     3
+    ],
+    "after": [
+     58,
+     3,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     58,
+     3,
+     3
+    ],
+    "after": [
+     58,
+     2,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     58,
+     2,
+     3
+    ],
+    "after": [
+     58,
+     1,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 1073741824,
+    "before": [
+     58,
+     1,
+     3
+    ],
+    "after": [
+     58,
+     1,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     58,
+     1,
+     3
+    ],
+    "after": [
+     58,
+     1,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     58,
+     1,
+     3
+    ],
+    "after": [
+     58,
+     0,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     58,
+     0,
+     3
+    ],
+    "after": [
+     58,
+     0,
+     3,
+     0
+    ]
+   },
+   {
+    "bits": 2147483648,
+    "before": [
+     58,
+     0,
+     3
+    ],
+    "after": [
+     56,
+     3,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 4,
+    "before": [
+     56,
+     3,
+     4
+    ],
+    "after": [
+     56,
+     2,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     56,
+     2,
+     4
+    ],
+    "after": [
+     56,
+     2,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 0,
+    "before": [
+     56,
+     2,
+     4
+    ],
+    "after": [
+     56,
+     2,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     56,
+     2,
+     4
+    ],
+    "after": [
+     56,
+     1,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     56,
+     1,
+     4
+    ],
+    "after": [
+     56,
+     1,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     56,
+     1,
+     4
+    ],
+    "after": [
+     56,
+     1,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     56,
+     1,
+     4
+    ],
+    "after": [
+     56,
+     0,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     56,
+     0,
+     4
+    ],
+    "after": [
+     56,
+     0,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     56,
+     0,
+     4
+    ],
+    "after": [
+     56,
+     0,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 0,
+    "before": [
+     56,
+     0,
+     4
+    ],
+    "after": [
+     53,
+     3,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     53,
+     3,
+     4
+    ],
+    "after": [
+     53,
+     2,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     53,
+     2,
+     4
+    ],
+    "after": [
+     53,
+     2,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     53,
+     2,
+     4
+    ],
+    "after": [
+     53,
+     2,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     53,
+     2,
+     4
+    ],
+    "after": [
+     50,
+     5,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     50,
+     5,
+     4
+    ],
+    "after": [
+     50,
+     4,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     50,
+     4,
+     4
+    ],
+    "after": [
+     50,
+     4,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 0,
+    "before": [
+     50,
+     4,
+     4
+    ],
+    "after": [
+     50,
+     3,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 0,
+    "before": [
+     50,
+     3,
+     4
+    ],
+    "after": [
+     50,
+     3,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     50,
+     3,
+     4
+    ],
+    "after": [
+     50,
+     2,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 1,
+    "before": [
+     50,
+     2,
+     4
+    ],
+    "after": [
+     50,
+     2,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     50,
+     2,
+     4
+    ],
+    "after": [
+     50,
+     2,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 3,
+    "before": [
+     50,
+     2,
+     4
+    ],
+    "after": [
+     50,
+     1,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     50,
+     1,
+     4
+    ],
+    "after": [
+     50,
+     1,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     50,
+     1,
+     4
+    ],
+    "after": [
+     50,
+     1,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     50,
+     1,
+     4
+    ],
+    "after": [
+     50,
+     0,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     50,
+     0,
+     4
+    ],
+    "after": [
+     50,
+     0,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     50,
+     0,
+     4
+    ],
+    "after": [
+     50,
+     0,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2,
+    "before": [
+     50,
+     0,
+     4
+    ],
+    "after": [
+     50,
+     0,
+     4,
+     0
+    ]
+   },
+   {
+    "bits": 2147483648,
+    "before": [
+     50,
+     0,
+     4
+    ],
+    "after": [
+     50,
+     3,
+     5,
+     1
+    ]
+   }
+  ],
+  "expected": {
+   "outcome": 1,
+   "raw_hp": 50,
+   "post_hp": 68,
+   "max_hp": 103,
+   "gold": 0,
+   "potions": [
+    22,
+    42
+   ],
+   "revival": [
+    0,
+    0
+   ]
+  }
+ },
+ "quality": {
+  "min_raw_hp": 30,
+  "min_post_hp": 30,
+  "min_max_hp": 103,
+  "max_hp_gain_weight": 1.0,
+  "recovery_credit": 0,
+  "incense_targets": []
+ }
+}
