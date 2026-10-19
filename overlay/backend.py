@@ -203,6 +203,7 @@ class Advisor:
         if type(reroll) is not bool:
             raise ValueError('无效的 Discovery 随机规则')
         self.native_search.set_discovery_reroll(reroll)
+        self.native_search.set_discovery_frames(view['game'].get('solver_discovery_frames') is True)
         # Feed mode (mod setting): max HP gained in this combat counts twice in the plan value.
         self.native_search.set_max_hp_gain_weight(2.0 if view['game'].get('solver_auto_context', {}).get('feed_mode') is True else 1.0)
         self.native_search.set_incense_targets(incense_targets(view['game']))

@@ -25,6 +25,7 @@ thread_local int smokeLossThreshold=15;
 thread_local Random originalPotionRng;
 // Set under the GIL before any search starts; searches only read them.
 bool discoveryReroll=true;
+bool discoveryFrames=false;  // headless truth: vanilla per-frame Discovery regeneration instead of the live single one
 unsigned incenseTargets=0;  // bit c: ending the fight with Incense Burner counter c is worth one Intangible
 std::map<std::string,std::vector<CardId>> actualPools;
 // Live counters per branch index, read by the progress reporter while plans run.
@@ -54,6 +55,7 @@ bool overlaySearchTick(long long done, int roundBestHp) {
 bool overlayInterrupted() { return stopRequested.load() || searchGeneration!=generation.load(); }
 bool overlayFastReady() { return fastReady; }
 bool overlayDiscoveryReroll() { return discoveryReroll; }
+bool overlayDiscoveryFrames() { return discoveryFrames; }
 const std::vector<CardId> *overlayCardPool(CardType type) {
     const char *name=type==CardType::ATTACK?"ATTACK":type==CardType::SKILL?"SKILL":
         type==CardType::POWER?"POWER":type==CardType::STATUS?"COLORLESS":"ALL";
@@ -286,6 +288,7 @@ PYBIND11_MODULE(overlay_search, m) {
     m.def("revival_value", &revivalValue);
     m.def("carried_relic_value", [](const BattleContext &bc) { return carriedRelicValue(bc); });
     m.def("set_discovery_reroll", [](bool value) { discoveryReroll=value; });
+    m.def("set_discovery_frames", [](bool value) { discoveryFrames=value; });
     m.def("set_max_hp_gain_weight", [](double weight) { search::BattleScumSearcher2::maxHpGainWeight=weight; });
     m.def("set_incense_targets", [](const std::vector<int> &counters) {
         unsigned mask=0;

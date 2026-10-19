@@ -28,3 +28,20 @@ for dt in (1 / 144, 1 / 60, 0.1, 1 / 6, 2.0):  # 2.0: x10 SuperFastMode during a
     draws[dt] = battle.rng_states['card_random']['counter'] - before
 assert len(set(draws.values())) == 1 and 0 < draws[1 / 60] < 10, draws
 print('PASS: Discovery post-pick RNG independent of frame time / SuperFastMode')
+
+# Headless truth (no picker pause): vanilla DiscoveryAction.update regenerates on every frame
+# of its 0.25 s window, 15 times at 1/60 s.
+advisor.native_search.set_discovery_frames(True)
+try:
+    view = copy.deepcopy(base)
+    view['game']['combat_state']['frame_delta_seconds'] = 1 / 60
+    battle = s.comparator.import_battle(view, require_search_state=True)
+    use = ActionMapper(s.comparator, battle, view).action('potion use 0', view, battle)
+    advisor.native_search.execute(battle, int(use.bits))
+    before = battle.rng_states['card_random']['counter']
+    advisor.native_search.execute(battle, int(sts.SearchAction(sts.SearchActionType.SINGLE_CARD_SELECT, 0).bits))
+    frames = battle.rng_states['card_random']['counter'] - before
+finally:
+    advisor.native_search.set_discovery_frames(False)
+assert frames == 15 * draws[1 / 60], (frames, draws[1 / 60])
+print('PASS: headless Discovery regenerates once per frame (15 at 1/60 s)')
