@@ -917,6 +917,8 @@ void BattleContext::playCardQueueItem(CardQueueItem playItem) {
         // hooks. The card has already left the draw pile, so no hand removal is
         // needed here.
         item.triggerOnUse = false;
+        // UseCardAction exhausts on card.exhaust even with dontTriggerOnUseCard (Distilled Chaos into Velvet Choker).
+        item.exhaustOnUse |= c.doesExhaust();
         addToBot(Actions::OnAfterCardUsed());
     }
 }
