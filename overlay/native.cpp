@@ -25,6 +25,7 @@ thread_local int smokeLossThreshold=15;
 thread_local Random originalPotionRng;
 // Set under the GIL before any search starts; searches only read them.
 bool discoveryReroll=true;
+long long rescuePerSim=160;  // small-loop rescue beam transitions per MCTS simulation (set_rescue_per_sim)
 bool discoveryFrames=false;  // headless truth: vanilla per-frame Discovery regeneration instead of the live single one
 unsigned incenseTargets=0;  // bit c: ending the fight with Incense Burner counter c is worth one Intangible
 std::map<std::string,std::vector<CardId>> actualPools;
@@ -289,6 +290,7 @@ PYBIND11_MODULE(overlay_search, m) {
     m.def("carried_relic_value", [](const BattleContext &bc) { return carriedRelicValue(bc); });
     m.def("set_discovery_reroll", [](bool value) { discoveryReroll=value; });
     m.def("set_discovery_frames", [](bool value) { discoveryFrames=value; });
+    m.def("set_rescue_per_sim", [](long long value) { rescuePerSim=value; });
     m.def("set_max_hp_gain_weight", [](double weight) { search::BattleScumSearcher2::maxHpGainWeight=weight; });
     m.def("set_incense_targets", [](const std::vector<int> &counters) {
         unsigned mask=0;
@@ -441,8 +443,8 @@ PYBIND11_MODULE(overlay_search, m) {
                 result=combat_search::playoutReusing(predicted,simulations,4.0,false,false,true,true,true);
             }
             // Small-loop rescue: only when the MCTS line loses or costs a lot of HP (formed simple loops are found faster by MCTS).
-            // The beam gets LOOP_BEAM_PER_SIM state transitions per MCTS simulation and wins only on the planner's own end-state value.
-            constexpr long long LOOP_BEAM_PER_SIM=160;
+            // The beam gets rescuePerSim state transitions per MCTS simulation and wins only on the planner's own end-state value.
+            const long long LOOP_BEAM_PER_SIM=rescuePerSim;
             const bool mctsWin=predicted.outcome==Outcome::PLAYER_VICTORY;
             const int cost=std::max(0,root.player.curHp-predicted.player.curHp)
                 + static_cast<int>(std::max(0.0,deckCurseHp(predicted)-initialDeckCurseHp));

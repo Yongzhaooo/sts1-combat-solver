@@ -1139,7 +1139,9 @@ _ACT13_DIVISOR = int(_tier('STS_ACT13_BUDGET_DIVISOR', '1'))
 _ACT13_ROOM_DIVISORS = {k: int(v) for k, v in json.loads(_tier('STS_ACT13_ROOM_DIVISORS') or '{}').items()}
 _NN_WEIGHTS = str(_TIERS_FILE.parent / _tier('STS_NN_PRIOR_WEIGHTS')) if _tier('STS_NN_PRIOR_WEIGHTS') else ''
 _NN_ROOMS = {r for r in _tier('STS_NN_PRIOR_ROOMS').split(',') if r}
-if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS:
+# STS_RESCUE_PER_SIM: small-loop rescue beam transitions per simulation in acts 1-3 (native default 160 elsewhere).
+_RESCUE_PER_SIM = int(_tier('STS_RESCUE_PER_SIM') or 0)
+if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_PER_SIM:
     _act13_divisor = [1]
     _NN_CONFIG = json.loads(_tier('STS_NN_PRIOR_CONFIG')) if _NN_WEIGHTS else None
 
@@ -1159,6 +1161,8 @@ if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS:
             act = int(view['game'].get('act', 4))
             room = (view['game'].get('solver_auto_context') or {}).get('room', '')
             _act13_divisor[0] = _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if act <= 3 else 1
+            if _RESCUE_PER_SIM:
+                native.set_rescue_per_sim(_RESCUE_PER_SIM if act <= 3 else 160)
             if _NN_WEIGHTS:
                 c = _NN_CONFIG
                 native.nn_config(act <= 3 and (not _NN_ROOMS or room in _NN_ROOMS), c['widen_c'], c['widen_alpha'],
