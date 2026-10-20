@@ -1147,7 +1147,8 @@ if _tier('STS_RESCUE_PER_SIM'):
 _RESCUE_DEFAULT = (160, 160, 2048, False)
 _RESCUE_ARGS = (_RESCUE.get('per_sim', 160), _RESCUE.get('per_sim_nogate', _RESCUE.get('per_sim', 160)),
                 _RESCUE.get('max_width', 2048), bool(_RESCUE.get('plateau', False)))
-if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != _RESCUE_DEFAULT:
+_BEAM_ONLY = int(_tier('STS_BEAM_ONLY') or 0)   # experiment: beam alone, transitions per simulation, every act
+if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != _RESCUE_DEFAULT or _BEAM_ONLY:
     _act13_divisor = [1]
     _NN_CONFIG = json.loads(_tier('STS_NN_PRIOR_CONFIG')) if _NN_WEIGHTS else None
 
@@ -1167,6 +1168,8 @@ if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != 
             act = int(view['game'].get('act', 4))
             room = (view['game'].get('solver_auto_context') or {}).get('room', '')
             _act13_divisor[0] = _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if act <= 3 else 1
+            if _BEAM_ONLY:
+                native.set_beam_only(_BEAM_ONLY)
             if _RESCUE_ARGS != _RESCUE_DEFAULT:
                 native.set_rescue(*(_RESCUE_ARGS if act <= 3 else _RESCUE_DEFAULT))
             if _NN_WEIGHTS:

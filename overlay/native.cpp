@@ -27,6 +27,8 @@ thread_local Random originalPotionRng;
 bool discoveryReroll=true;
 // Small-loop rescue beam transitions per MCTS simulation, for fights the loop gate admits and for the others (set_rescue).
 long long rescuePerSim=160, rescuePerSimNoGate=160;
+// Experiment (set_beam_only): > 0 skips MCTS and gives the rescue portfolio this many transitions per simulation.
+long long beamOnlyPerSim=0;
 bool discoveryFrames=false;  // headless truth: vanilla per-frame Discovery regeneration instead of the live single one
 unsigned incenseTargets=0;  // bit c: ending the fight with Incense Burner counter c is worth one Intangible
 std::map<std::string,std::vector<CardId>> actualPools;
@@ -292,6 +294,7 @@ PYBIND11_MODULE(overlay_search, m) {
     m.def("set_discovery_reroll", [](bool value) { discoveryReroll=value; });
     m.def("set_discovery_frames", [](bool value) { discoveryFrames=value; });
     m.def("set_rescue_per_sim", [](long long value) { rescuePerSim=rescuePerSimNoGate=value; });
+    m.def("set_beam_only", [](long long perSim) { beamOnlyPerSim=perSim; });
     m.def("set_rescue", [](long long perSim, long long perSimNoGate, int maxWidth, bool plateau) {
         rescuePerSim=perSim; rescuePerSimNoGate=perSimNoGate; loop_beam::rescueMaxWidth=maxWidth; loop_beam::rescuePlateau=plateau;
     });
@@ -442,6 +445,17 @@ PYBIND11_MODULE(overlay_search, m) {
                 predicted=*quick.state; result.actions=quick.actions; result.bestHp=predicted.player.curHp;
                 macroUsed=beamUsed=true;
                 fastReady=heartFight;
+            } else if (beamOnlyPerSim > 0) {
+                // Beam alone with the whole budget; a tenth-budget MCTS only supplies a line when the beam finds no win.
+                beamRan=true;
+                live.phase=3; live.transitionLimit=beamOnlyPerSim*simulations;
+                auto best=loop_beam::portfolio(root,beamOnlyPerSim*simulations,value,cancelled,std::move(quick),loop_beam::stats);
+                if(best.found) {
+                    predicted=*best.state; result.actions=best.actions; result.bestHp=predicted.player.curHp; beamUsed=true;
+                } else {
+                    live.phase=1;
+                    result=combat_search::playoutReusing(predicted,std::max(1,simulations/10),4.0,false,false,true,true,true);
+                }
             } else {
                 live.transitions=loop_beam::stats.transitions; live.phase=1;
                 result=combat_search::playoutReusing(predicted,simulations,4.0,false,false,true,true,true);
@@ -455,7 +469,7 @@ PYBIND11_MODULE(overlay_search, m) {
             mctsValue=search::BattleScumSearcher2::evaluateEndState4r(predicted,initialMaxHp);
             // Deep (refinement) budgets: any HP loss is worth a beam; standard budgets: only a loss or a costly line.
             // Heart victory ends the run; further HP or turn improvements have no continuation value.
-            if(!macroUsed && !(heartFight && mctsWin) && (!mctsWin || newPermanentCurse(predicted)
+            if(!macroUsed && beamOnlyPerSim<=0 && !(heartFight && mctsWin) && (!mctsWin || newPermanentCurse(predicted)
                     || cost>(simulations>=128000 ? 0 : std::max(6,root.player.maxHp*15/100)))) {
                 beamRan=true;
                 live.phase=3; live.transitionLimit=LOOP_BEAM_PER_SIM*simulations;
