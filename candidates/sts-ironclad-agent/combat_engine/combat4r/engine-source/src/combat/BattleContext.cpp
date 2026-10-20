@@ -99,6 +99,7 @@ void BattleContext::initRelics(const GameContext &gc, int extraOpeningDraw) {
     player.relicBits1 = gc.relics.relicBits1;
     player.cardUseRelics.clear();
     player.hpLossDrawRelics.clear();
+    player.endTurnBotRelics.clear();
 
     fixed_list<RelicId, 4> atBattleStartPreDraw;
     fixed_list<RelicId, 8> atBattleStart;
@@ -113,6 +114,7 @@ void BattleContext::initRelics(const GameContext &gc, int extraOpeningDraw) {
     for (const auto &r : gc.relics.relics) {
         player.updateCardUseRelic(r.id, true);
         player.updateHpLossDrawRelic(r.id, true);
+        player.updateEndTurnBotRelic(r.id, true);
         switch (r.id) {
 
             case R::HOLY_WATER:
@@ -2090,18 +2092,10 @@ void BattleContext::callEndOfTurnActions() {
 
     // ********************* Player Relics OnPlayerEndTurn *********************
 
-    if (player.hasRelic<R::CLOAK_CLASP>()) {
-        addToBot( Actions::GainBlock(cards.cardsInHand) );
-    }
-
     if (player.hasRelic<R::FROZEN_CORE>()) {
         if (player.hasEmptyOrb()) {
             player.channelOrb(Orb::FROST);
         }
-    }
-
-    if (player.hasRelic<R::NILRYS_CODEX>()) {
-        addToBot(Actions::CodexAction());
     }
 
     if (player.hasRelic<R::ORICHALCUM>()) {
@@ -2110,8 +2104,13 @@ void BattleContext::callEndOfTurnActions() {
         }
     }
 
-    if (player.hasRelic<R::STONE_CALENDAR>()) {
-        if (turn == 6) {
+    // Bottom-queued relic actions keep Java relic order: a Codex pick before or after Stone Calendar's damage.
+    for (const auto relic : player.endTurnBotRelics) {
+        if (relic == R::CLOAK_CLASP) {
+            addToBot( Actions::GainBlock(cards.cardsInHand) );
+        } else if (relic == R::NILRYS_CODEX) {
+            addToBot(Actions::CodexAction());
+        } else if (relic == R::STONE_CALENDAR && turn == 6) {
             addToBot(Actions::DamageAllEnemy(52));
         }
     }

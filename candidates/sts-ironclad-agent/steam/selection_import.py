@@ -130,6 +130,9 @@ def start_selection(comparator, view):
             queue.append(dict(kind='red_skull'))
         elif kind == 'GamblingChipAction':
             queue.append(dict(kind='gamble'))
+        elif kind == 'UpgradeRandomCardAction':
+            # Warped Tongs (atTurnStartPostDraw), queued behind a battle-start Toolbox pick.
+            queue.append(dict(kind='upgrade_random'))
         elif kind == 'MakeTempCardInDrawPileAction':
             c = a['cardToMake']
             queue.append(dict(kind='make_draw', card=comparator.sts.CardId(comparator.bridge.card_snapshot(c)['id']),

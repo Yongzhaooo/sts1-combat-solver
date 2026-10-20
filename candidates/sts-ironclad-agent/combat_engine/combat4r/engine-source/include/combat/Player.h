@@ -81,6 +81,9 @@ namespace sts {
         // These two HP-loss callbacks push draws to the top in relic order.
         fixed_list<RelicId, 2> hpLossDrawRelics;
         void updateHpLossDrawRelic(RelicId relic, bool present);
+        // onPlayerEndTurn relics that queue to the bottom, in acquisition order (Java relic list order).
+        fixed_list<RelicId, 3> endTurnBotRelics;
+        void updateEndTurnBotRelic(RelicId relic, bool present);
 
         // special info
         int8_t  happyFlowerCounter = 0;
@@ -496,6 +499,7 @@ namespace sts {
     void Player::setHasRelic(bool value) {
         updateCardUseRelic(r, value);
         updateHpLossDrawRelic(r, value);
+        updateEndTurnBotRelic(r, value);
         if (value) {
             if ((int) r < 64) {
                 relicBits0 |= 1ULL << (int)r;

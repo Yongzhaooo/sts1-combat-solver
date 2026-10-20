@@ -400,6 +400,7 @@ namespace {
                 const int id = py::cast<int>(relic["id"]);
                 bc.player.updateCardUseRelic(static_cast<RelicId>(id), true);
                 bc.player.updateHpLossDrawRelic(static_cast<RelicId>(id), true);
+                bc.player.updateEndTurnBotRelic(static_cast<RelicId>(id), true);
                 if (id < 64) bc.player.relicBits0 |= 1ULL << id;
                 else if (id < 128) bc.player.relicBits1 |= 1ULL << (id - 64);
                 if (static_cast<RelicId>(id) == RelicId::LIZARD_TAIL) {

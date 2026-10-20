@@ -92,6 +92,7 @@ PYBIND11_MODULE(live_combat_search, m) {
                 }
             }});
             else if(kind=="gamble")b.addToBot(Actions::GambleAction());
+            else if(kind=="upgrade_random")b.addToBot(Actions::UpgradeRandomCardAction());
             else if(kind=="finish_headbutt") {
                 // Damage and on-use effects already happened in Java. Resume only
                 // UseCardAction's after-use callbacks and destination movement.
