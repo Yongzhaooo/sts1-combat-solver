@@ -1134,8 +1134,9 @@ def serve(runs_dir=None):
         reports.close()
 
 
-# ---- Headless collection executor tiers (pi_base v2.8). Every variable unset leaves the
-# desktop behaviour unchanged. Acts 1-3 divide each native plan() budget by
+# ---- Executor tiers (pi_base v2.8), shared by headless stages and the desktop mod, which ships
+# headless_tiers.json too. Without the file and with every variable unset nothing below applies.
+# Acts 1-3 divide each native plan() budget by
 # STS_ACT13_BUDGET_DIVISOR, overridable per room type with STS_ACT13_ROOM_DIVISORS (JSON);
 # act 4 is never divided. STS_NN_PRIOR_WEIGHTS enables the learned move-ordering prior in
 # acts 1-3, limited to the room types in STS_NN_PRIOR_ROOMS when that is set.
@@ -1154,6 +1155,9 @@ _RESCUE = json.loads(_tier('STS_RESCUE_ACT13') or '{}')
 if _tier('STS_RESCUE_PER_SIM'):
     _RESCUE.update(per_sim=int(_tier('STS_RESCUE_PER_SIM')), per_sim_nogate=int(_tier('STS_RESCUE_PER_SIM')))
 _RESCUE_DEFAULT = (160, 160, 2048, False)
+# Desktop low-performance mode (solver_auto_context.low_performance): every fight in every act gets 1/20 of the
+# budget, the prior in every room and a 40-transition rescue beam (the r40 arm of the v2.8 rescue pricing).
+_LOW_DIVISOR, _LOW_RESCUE = 20, (40, 40, 2048, False)
 _RESCUE_ARGS = (_RESCUE.get('per_sim', 160), _RESCUE.get('per_sim_nogate', _RESCUE.get('per_sim', 160)),
                 _RESCUE.get('max_width', 2048), bool(_RESCUE.get('plateau', False)))
 # STS_ELITE_DEEP_GATE: model JSON (relative to this directory) that lets acts 1-3 elites skip the standard
@@ -1184,15 +1188,17 @@ if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != 
             native = sys.modules['overlay_search']
             _tier_install(native)
             act = int(view['game'].get('act', 4))
-            room = (view['game'].get('solver_auto_context') or {}).get('room', '')
-            _act13_divisor[0] = _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if act <= 3 else 1
+            context = view['game'].get('solver_auto_context') or {}
+            room = context.get('room', '')
+            low = context.get('low_performance') is True
+            _act13_divisor[0] = _LOW_DIVISOR if low else _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if act <= 3 else 1
             if _BEAM_ONLY or _BEAM_ONLY_ROOMS:
                 native.set_beam_only((_BEAM_ONLY_ROOMS.get(room, 0) if act <= 3 else 0) or _BEAM_ONLY)
-            if _RESCUE_ARGS != _RESCUE_DEFAULT:
-                native.set_rescue(*(_RESCUE_ARGS if act <= 3 else _RESCUE_DEFAULT))
+            # Set every call: a previous low-performance call must not leave its beam behind.
+            native.set_rescue(*(_LOW_RESCUE if low else _RESCUE_ARGS if act <= 3 else _RESCUE_DEFAULT))
             if _NN_WEIGHTS:
                 c = _NN_CONFIG
-                native.nn_config(act <= 3 and (not _NN_ROOMS or room in _NN_ROOMS), c['widen_c'], c['widen_alpha'],
+                native.nn_config(low or act <= 3 and (not _NN_ROOMS or room in _NN_ROOMS), c['widen_c'], c['widen_alpha'],
                                  c['min_width'], c['prior_weight'], c['rank_tau'], c['leaf_greedy'])
             return method(self, view, *args)
         return run

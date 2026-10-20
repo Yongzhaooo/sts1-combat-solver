@@ -130,11 +130,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private String autoReason = "";
     private PotionRewards.Advice rewardPotionAdvice;
     private PotionRewards.Pending rewardPotionPending;
-    private int budgetIndex = 1, scroll, startingTurn;
+    private int scroll, startingTurn;
     private int executedTurn;
     private String executedCommand = "";
-    private final int[] budgets = {2000, 8000, 128000};
-    private final String[] budgetNames = {"快速", "标准", "深入"};
+    // Every request asks for the standard budget; the backend tiers it per act and room (low-performance mode: 1/20).
+    private static final int BUDGET = 8000;
+    private boolean lowPerformance;
     private String status = I18n.t("等待进入战斗"), error = "";
     // Compact combat panel: summary card left, five route rows right, then actions and toggles.
     private static final float PANEL_WIDTH = 640;
@@ -235,6 +236,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("brightEyeMode", "false"); // beyond-SL display hints are opt-in; no policy reads them
             defaults.setProperty("bossFastFinish", "false"); // new key: every player starts with the standard Boss search
             defaults.setProperty("feedMode", "false");
+            defaults.setProperty("lowPerformance", "false");
             defaults.setProperty("smokeProbeBudget", "12000");
             defaults.setProperty("smokeLossThreshold", "15");
             defaults.setProperty("searchWorkers", "0");
@@ -252,6 +254,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             Foresight.brightEyeMode = config.getBool("brightEyeMode");
             bossFastFinishEnabled = config.getBool("bossFastFinish");
             feedModeEnabled = config.getBool("feedMode");
+            lowPerformance = config.getBool("lowPerformance");
             smokeProbeBudget = Math.max(1,Math.min(128000,config.getInt("smokeProbeBudget")));
             smokeLossThreshold = Math.max(0,config.getInt("smokeLossThreshold"));
             try { searchWorkers = Math.max(0, Math.min(32, config.getInt("searchWorkers"))); }
@@ -504,6 +507,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             AbstractDungeon.bossList==null?0:AbstractDungeon.bossList.size(),
             AbstractDungeon.player!=null && AbstractDungeon.player.hasRelic("Mark of the Bloom")));
         out.addProperty("feed_mode",feedModeEnabled);
+        out.addProperty("low_performance",lowPerformance);
         out.addProperty("run_auto",runAuto);
         out.addProperty("smoke_probe_budget",smokeProbeBudget);
         out.addProperty("smoke_loss_threshold",smokeLossThreshold);
@@ -897,9 +901,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         JsonObject request = new JsonObject();
         request.addProperty("id", ++serial);
         request.addProperty("op", op);
-        request.addProperty("budget", budgets[budgetIndex]);
+        request.addProperty("budget", BUDGET);
         request.addProperty("search_workers", searchWorkers);
-        if (!op.equals("cancel")) searchTimeoutMillis = SearchStatus.timeoutMillis(budgets[budgetIndex]);
+        if (!op.equals("cancel")) searchTimeoutMillis = SearchStatus.timeoutMillis(BUDGET);
         if (op.equals("choose")) request.addProperty("branch", chosenBranch);
         if (op.equals("solve")) request.addProperty("progress", true);
         if (!op.equals("cancel")) {
@@ -1584,7 +1588,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 float spacing=(w-24)/(canCreditRest()?3:2);
                 if ((lx-16)%spacing < spacing-8) {
                     int toggle=(int)((lx-16)/spacing);
-                    if (toggle==0) { budgetIndex=(budgetIndex+1)%3; recalculate(); }
+                    if (toggle==0) { lowPerformance=!lowPerformance; saveSetting("lowPerformance", lowPerformance); recalculate(); }
                     else if (toggle==1) togglePotionRewards();
                     else { nextRest=!nextRest; recalculate(); }
                 }
@@ -1786,14 +1790,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 :i==3&&outsideMode!=2&&(runAuto||auto)?accent:i==2&&result==null?muted:Color.WHITE);
         }
         List<String> toggles=new ArrayList<>(Arrays.asList(
-            I18n.t("搜索预算：")+I18n.t(budgetNames[budgetIndex]),
+            I18n.t("低性能模式：")+I18n.t(lowPerformance?"开":"关"),
             I18n.t("自动换药：")+I18n.t(autoPotionRewards?"开":"关")));
         if(canCreditRest())toggles.add(I18n.t("羽毛回血：")+I18n.t(nextRest?"是":"仅必经火堆"));
         float spacing=(w-24)/toggles.size();
         for(int i=0;i<toggles.size();i++) {
             box(sb,16+i*spacing,TOGGLES_TOP,spacing-8,28,surface);
             label(sb,toggles.get(i),24+i*spacing,TOGGLES_TOP+5,spacing-24,.8f,
-                i==1?(autoPotionRewards?accent:muted):accent);
+                i==0?(lowPerformance?accent:muted):i==1?(autoPotionRewards?accent:muted):accent);
         }
         sb.setColor(Color.WHITE);
         cursorOnTop(sb);

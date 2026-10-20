@@ -67,6 +67,7 @@ jobs:
       - run: python tools/check_corruption_snecko.py
       - run: python tools/check_backend_protocol.py
       - run: python tools/check_loop_gate.py
+      - run: python tools/check_executor_tiers.py
   macos-package:
     strategy:
       fail-fast: false

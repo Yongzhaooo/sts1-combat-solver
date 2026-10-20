@@ -1,0 +1,48 @@
+"""Check the shipped pi_base v2.8 executor tiers and the desktop low-performance mode.
+
+A recording stand-in for overlay_search receives the calls the backend tier wrapper makes for each act, room
+and mode; the file must load without environment overrides, as it does in the mod.
+"""
+import json
+import os
+from pathlib import Path
+import sys
+import types
+
+root = Path(__file__).resolve().parents[1]
+for key in [k for k in os.environ if k.startswith(('STS_ACT13', 'STS_NN_PRIOR', 'STS_RESCUE', 'STS_BEAM_ONLY', 'STS_ELITE'))]:
+    del os.environ[key]
+sys.path.insert(0, str(root / 'overlay'))
+import backend
+
+tiers = json.loads((root / 'overlay/headless_tiers.json').read_text(encoding='utf-8'))
+assert tiers['STS_ACT13_BUDGET_DIVISOR'] == '10' and tiers['STS_NN_PRIOR_ROOMS'] == 'MonsterRoom,EventRoom'
+assert json.loads(tiers['STS_ACT13_ROOM_DIVISORS']) == {'MonsterRoomElite': 2, 'MonsterRoomBoss': 4}
+assert backend._ELITE_DEEP_GATE is not None and Path(backend._NN_WEIGHTS).is_file()
+
+calls = {}
+native = types.SimpleNamespace(
+    plan=lambda root, simulations, *args: simulations,
+    nn_load=lambda path: calls.__setitem__('loaded', path),
+    set_rescue=lambda *args: calls.__setitem__('rescue', args),
+    nn_config=lambda enabled, *args: calls.__setitem__('prior', enabled))
+sys.modules['overlay_search'] = native
+solve = backend._tier_wrap(lambda self, view, budget: native.plan(None, budget))
+
+full, low = (160, 160, 2048, False), (40, 40, 2048, False)
+cases = [  # act, room, low-performance mode -> simulations of 8000, rescue beam, prior
+    (1, 'MonsterRoom', False, 800, full, True),
+    (2, 'EventRoom', False, 800, full, True),
+    (3, 'MonsterRoomElite', False, 4000, full, False),
+    (3, 'MonsterRoomBoss', False, 2000, full, False),
+    (4, 'MonsterRoomBoss', False, 8000, full, False),
+    (1, 'MonsterRoomElite', True, 400, low, True),
+    (4, 'MonsterRoomBoss', True, 400, low, True),
+    (4, 'MonsterRoomBoss', False, 8000, full, False),  # leaving the mode restores the beam and the prior
+]
+for act, room, mode, simulations, rescue, prior in cases:
+    view = {'game': {'act': act, 'solver_auto_context': {'room': room, 'low_performance': mode}}}
+    got = (solve(None, view, 8000), calls['rescue'], calls['prior'])
+    assert got == (simulations, rescue, prior), (act, room, mode, got)
+assert calls['loaded'] == backend._NN_WEIGHTS
+print('PASS: v2.8 tiers per act and room; low-performance 1/20, prior everywhere, rescue 40; mode reset')

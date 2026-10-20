@@ -3,7 +3,9 @@
 # Collection consumers can ship the search core without the Mod protocol or policy.
 SEARCH_FILES = ('solver_search.py', 'plan_reduction.py', 'recovery.py')
 MOD_FILES = ('backend.py', 'auto_policy.py', 'diagnostics.py', 'coverage_manifest.json',
-             'search_status.py', 'worker_policy.py', 'resources/search_contract.json', 'deep_gate.py')
+             'search_status.py', 'worker_policy.py', 'resources/search_contract.json', 'deep_gate.py',
+             # pi_base v2.8 executor tiers: per-act/room budgets, move prior, elite deep gate
+             'headless_tiers.json', 'elite_deep_gate.json', 'nn/scorer-v2.bin')
 OVERLAY_FILES = SEARCH_FILES + MOD_FILES + ('runtime_files.py',)
 
 REPO = 'candidates/sts-ironclad-agent'
