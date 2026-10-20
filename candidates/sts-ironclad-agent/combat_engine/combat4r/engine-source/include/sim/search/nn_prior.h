@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -44,7 +45,8 @@ inline Model &model() { static Model m; return m; }
 inline Config &config() { static Config c; return c; }
 
 inline void load(const std::string &path) {
-    std::ifstream in(path, std::ios::binary);
+    // UTF-8 path: a narrow std::string opens through the ANSI code page on Windows and fails on CJK paths.
+    std::ifstream in(std::filesystem::u8path(path), std::ios::binary);
     if (!in) throw std::runtime_error("nn_prior: cannot open " + path);
     std::int32_t header[6];
     in.read(reinterpret_cast<char *>(header), sizeof(header));
