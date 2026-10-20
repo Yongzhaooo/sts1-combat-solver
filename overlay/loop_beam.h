@@ -37,6 +37,9 @@ struct Stats {
     int layers = 0, passes = 0, macroAttempts = 0, macroCycles = 0;
 };
 thread_local Stats stats;
+// Rescue portfolio limits (set_rescue): widest pass, and stop after a pass of width >= 128 that improved nothing.
+inline int rescueMaxWidth = 2048;
+inline bool rescuePlateau = false;
 
 inline std::shared_ptr<const Path> append(const Node &node, search::Action action) {
     auto path = std::make_shared<Path>(Path{node.path, action.bits});
@@ -359,7 +362,7 @@ Best portfolio(const BattleContext &root, long long cap, Value value, Cancel can
     };
     bool plateau128 = false, plateau512 = false;
     for (int width : {32, 128, 512, 2048}) {
-        if (stats.transitions >= cap || cancelled()) break;
+        if (stats.transitions >= cap || cancelled() || width > rescueMaxWidth) break;
         const auto *before = available();
         const double beforeValue = before ? value(*before) : -1e300;
         if (width == 2048 && mctsEnd) {
@@ -382,6 +385,7 @@ Best portfolio(const BattleContext &root, long long cap, Value value, Cancel can
         const bool plateau = after && value(*after) <= beforeValue;
         if (width == 128) plateau128 = plateau;
         if (width == 512) plateau512 = plateau;
+        if (rescuePlateau && width >= 128 && (!after || (before && value(*after) <= beforeValue))) break;
         ++stats.passes;
         if (best.found && best.state->player.curHp >= root.player.curHp) break;
     }

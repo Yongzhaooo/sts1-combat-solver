@@ -1139,9 +1139,15 @@ _ACT13_DIVISOR = int(_tier('STS_ACT13_BUDGET_DIVISOR', '1'))
 _ACT13_ROOM_DIVISORS = {k: int(v) for k, v in json.loads(_tier('STS_ACT13_ROOM_DIVISORS') or '{}').items()}
 _NN_WEIGHTS = str(_TIERS_FILE.parent / _tier('STS_NN_PRIOR_WEIGHTS')) if _tier('STS_NN_PRIOR_WEIGHTS') else ''
 _NN_ROOMS = {r for r in _tier('STS_NN_PRIOR_ROOMS').split(',') if r}
-# STS_RESCUE_PER_SIM: small-loop rescue beam transitions per simulation in acts 1-3 (native default 160 elsewhere).
-_RESCUE_PER_SIM = int(_tier('STS_RESCUE_PER_SIM') or 0)
-if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_PER_SIM:
+# Small-loop rescue beam in acts 1-3 (act 4 keeps the native defaults): STS_RESCUE_ACT13 is JSON with per_sim,
+# per_sim_nogate (fights the loop gate rejects), max_width and plateau; STS_RESCUE_PER_SIM sets both per_sim values.
+_RESCUE = json.loads(_tier('STS_RESCUE_ACT13') or '{}')
+if _tier('STS_RESCUE_PER_SIM'):
+    _RESCUE.update(per_sim=int(_tier('STS_RESCUE_PER_SIM')), per_sim_nogate=int(_tier('STS_RESCUE_PER_SIM')))
+_RESCUE_DEFAULT = (160, 160, 2048, False)
+_RESCUE_ARGS = (_RESCUE.get('per_sim', 160), _RESCUE.get('per_sim_nogate', _RESCUE.get('per_sim', 160)),
+                _RESCUE.get('max_width', 2048), bool(_RESCUE.get('plateau', False)))
+if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != _RESCUE_DEFAULT:
     _act13_divisor = [1]
     _NN_CONFIG = json.loads(_tier('STS_NN_PRIOR_CONFIG')) if _NN_WEIGHTS else None
 
@@ -1161,8 +1167,8 @@ if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_PER_SIM:
             act = int(view['game'].get('act', 4))
             room = (view['game'].get('solver_auto_context') or {}).get('room', '')
             _act13_divisor[0] = _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if act <= 3 else 1
-            if _RESCUE_PER_SIM:
-                native.set_rescue_per_sim(_RESCUE_PER_SIM if act <= 3 else 160)
+            if _RESCUE_ARGS != _RESCUE_DEFAULT:
+                native.set_rescue(*(_RESCUE_ARGS if act <= 3 else _RESCUE_DEFAULT))
             if _NN_WEIGHTS:
                 c = _NN_CONFIG
                 native.nn_config(act <= 3 and (not _NN_ROOMS or room in _NN_ROOMS), c['widen_c'], c['widen_alpha'],
