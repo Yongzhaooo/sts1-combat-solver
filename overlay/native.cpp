@@ -466,8 +466,8 @@ PYBIND11_MODULE(overlay_search, m) {
                 }
                 if(const char *log=std::getenv("LOOP_BEAM_LOG")) {      // diagnostic only
                     if(FILE *f=std::fopen(log,"a")) {
-                        std::fprintf(f,"{\"t\":%.3f,\"turn\":%d,\"hp0\":%d,\"sims\":%d,\"mcts_win\":%d,\"mcts_hp\":%d,\"mcts_value\":%.3f,\"beam_found\":%d,\"beam_hp\":%d,\"beam_value\":%.3f,\"used\":%d,\"transitions\":%lld,\"layers\":%d,\"passes\":%d}\n",
-                            std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count(),root.turn,root.player.curHp,simulations,int(mctsWin),mctsHp,mctsValue,int(best.found),best.found?best.state->player.curHp:-1,
+                        std::fprintf(f,"{\"tid\":%zu,\"t\":%.3f,\"turn\":%d,\"hp0\":%d,\"sims\":%d,\"mcts_win\":%d,\"mcts_hp\":%d,\"mcts_value\":%.3f,\"beam_found\":%d,\"beam_hp\":%d,\"beam_value\":%.3f,\"used\":%d,\"transitions\":%lld,\"layers\":%d,\"passes\":%d}\n",
+                            std::hash<std::thread::id>{}(std::this_thread::get_id()),std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count(),root.turn,root.player.curHp,simulations,int(mctsWin),mctsHp,mctsValue,int(best.found),best.found?best.state->player.curHp:-1,
                             best.found?best.value:0.0,int(beamUsed),loop_beam::stats.transitions,loop_beam::stats.layers,loop_beam::stats.passes);
                         std::fclose(f);
                     }

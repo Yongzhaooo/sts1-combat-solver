@@ -13,6 +13,7 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <unordered_set>
 #include <vector>
 #include "loop_gate.h"
@@ -371,6 +372,12 @@ Best portfolio(const BattleContext &root, long long cap, Value value, Cancel can
             if (skip) break;
         }
         pass(root, width, cap, value, cancelled, best, macros);
+        if (const char *log = std::getenv("LOOP_BEAM_LOG")) if (FILE *f = std::fopen(log, "a")) {   // diagnostic only
+            std::fprintf(f, "{\"kind\":\"pass\",\"tid\":%zu,\"width\":%d,\"transitions\":%lld,\"cap\":%lld,\"hp0\":%d,\"found\":%d,\"hp\":%d,\"value\":%.17g}\n",
+                std::hash<std::thread::id>{}(std::this_thread::get_id()), width, stats.transitions, cap, root.player.curHp,
+                int(best.found), best.found ? best.state->player.curHp : -1, best.found ? best.value : 0.0);
+            std::fclose(f);
+        }
         const auto *after = available();
         const bool plateau = after && value(*after) <= beforeValue;
         if (width == 128) plateau128 = plateau;
