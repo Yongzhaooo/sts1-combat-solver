@@ -25,6 +25,11 @@ thread_local int smokeLossThreshold=15;
 thread_local Random originalPotionRng;
 // Set under the GIL before any search starts; searches only read them.
 bool discoveryReroll=true;
+// Small-loop rescue beam transitions per MCTS simulation, for fights the loop gate admits and for the others (set_rescue).
+long long rescuePerSim=160, rescuePerSimNoGate=160;
+// Experiment (set_beam_only): > 0 skips MCTS and gives the rescue portfolio this many transitions per simulation.
+long long beamOnlyPerSim=0;
+bool discoveryFrames=false;  // headless truth: vanilla per-frame Discovery regeneration instead of the live single one
 unsigned incenseTargets=0;  // bit c: ending the fight with Incense Burner counter c is worth one Intangible
 std::map<std::string,std::vector<CardId>> actualPools;
 // Live counters per branch index, read by the progress reporter while plans run.
@@ -54,6 +59,7 @@ bool overlaySearchTick(long long done, int roundBestHp) {
 bool overlayInterrupted() { return stopRequested.load() || searchGeneration!=generation.load(); }
 bool overlayFastReady() { return fastReady; }
 bool overlayDiscoveryReroll() { return discoveryReroll; }
+bool overlayDiscoveryFrames() { return discoveryFrames; }
 const std::vector<CardId> *overlayCardPool(CardType type) {
     const char *name=type==CardType::ATTACK?"ATTACK":type==CardType::SKILL?"SKILL":
         type==CardType::POWER?"POWER":type==CardType::STATUS?"COLORLESS":"ALL";
@@ -243,6 +249,7 @@ static bool overlaySameVictory(const BattleContext &a, const BattleContext &b) {
 }
 
 #include "growth_gate.h"
+#include "sim/search/nn_prior.h"
 #include "loop_beam.h"
 #include "smoke_opening.h"
 static bool overlayBeamTick() {
@@ -285,6 +292,12 @@ PYBIND11_MODULE(overlay_search, m) {
     m.def("revival_value", &revivalValue);
     m.def("carried_relic_value", [](const BattleContext &bc) { return carriedRelicValue(bc); });
     m.def("set_discovery_reroll", [](bool value) { discoveryReroll=value; });
+    m.def("set_discovery_frames", [](bool value) { discoveryFrames=value; });
+    m.def("set_rescue_per_sim", [](long long value) { rescuePerSim=rescuePerSimNoGate=value; });
+    m.def("set_beam_only", [](long long perSim) { beamOnlyPerSim=perSim; });
+    m.def("set_rescue", [](long long perSim, long long perSimNoGate, int maxWidth, bool plateau) {
+        rescuePerSim=perSim; rescuePerSimNoGate=perSimNoGate; loop_beam::rescueMaxWidth=maxWidth; loop_beam::rescuePlateau=plateau;
+    });
     m.def("set_max_hp_gain_weight", [](double weight) { search::BattleScumSearcher2::maxHpGainWeight=weight; });
     m.def("set_incense_targets", [](const std::vector<int> &counters) {
         unsigned mask=0;
@@ -303,6 +316,34 @@ PYBIND11_MODULE(overlay_search, m) {
         search::Action action(bits);
         if(!action.isValidAction(battle))throw std::invalid_argument("invalid predicted action");
         action.execute(battle);
+    });
+    m.def("nn_load", [](const std::string &path) { nn_prior::load(path); });
+    m.def("nn_config", [](bool enabled, double widenC, double widenAlpha, int minWidth,
+                          double priorWeight, double rankTau, double leafGreedy) {
+        auto &c = nn_prior::config();
+        c.enabled = enabled; c.widenC = widenC; c.widenAlpha = widenAlpha; c.minWidth = minWidth;
+        c.priorWeight = priorWeight; c.rankTau = rankTau; c.leafGreedy = leafGreedy;
+    });
+    // Candidate edges exactly as tree expansion enumerates them, with their features.
+    m.def("nn_candidates", [](const BattleContext &bc) {
+        search::BattleScumSearcher2 searcher(bc);
+        searcher.enumerateActionsForNode(searcher.root, bc);
+        py::list bits, dense, cards, potions;
+        nn_prior::Encoded e;
+        nn_prior::encodeState(bc, e.dense);
+        for (auto &edge : searcher.root.edges) {
+            nn_prior::encodeAction(bc, edge.action, e);
+            bits.append(edge.action.bits);
+            dense.append(std::vector<float>(e.dense, e.dense + nn_prior::DENSE));
+            cards.append(e.card);
+            potions.append(e.potion);
+        }
+        return py::make_tuple(bits, dense, cards, potions);
+    });
+    m.def("nn_logits", [](const BattleContext &bc, const std::vector<std::uint32_t> &bits) {
+        std::vector<search::Action> actions;
+        for (auto b : bits) actions.emplace_back(b);
+        return nn_prior::logits(bc, actions);
     });
     m.def("plan", [](const BattleContext &root, int simulations, const std::vector<int> &slots, int recovery, int index, bool killThieves, bool generatedPotions, bool bossFast, bool smokeOpening, bool bounded, int lossThreshold) {
         if(root.outcome != Outcome::UNDECIDED || root.player.curHp <= 0)
@@ -404,20 +445,31 @@ PYBIND11_MODULE(overlay_search, m) {
                 predicted=*quick.state; result.actions=quick.actions; result.bestHp=predicted.player.curHp;
                 macroUsed=beamUsed=true;
                 fastReady=heartFight;
+            } else if (beamOnlyPerSim > 0) {
+                // Beam alone with the whole budget; a tenth-budget MCTS only supplies a line when the beam finds no win.
+                beamRan=true;
+                live.phase=3; live.transitionLimit=beamOnlyPerSim*simulations;
+                auto best=loop_beam::portfolio(root,beamOnlyPerSim*simulations,value,cancelled,std::move(quick),loop_beam::stats);
+                if(best.found) {
+                    predicted=*best.state; result.actions=best.actions; result.bestHp=predicted.player.curHp; beamUsed=true;
+                } else {
+                    live.phase=1;
+                    result=combat_search::playoutReusing(predicted,std::max(1,simulations/10),4.0,false,false,true,true,true);
+                }
             } else {
                 live.transitions=loop_beam::stats.transitions; live.phase=1;
                 result=combat_search::playoutReusing(predicted,simulations,4.0,false,false,true,true,true);
             }
             // Small-loop rescue: only when the MCTS line loses or costs a lot of HP (formed simple loops are found faster by MCTS).
-            // The beam gets LOOP_BEAM_PER_SIM state transitions per MCTS simulation and wins only on the planner's own end-state value.
-            constexpr long long LOOP_BEAM_PER_SIM=160;
+            // The beam gets rescuePerSim state transitions per MCTS simulation and wins only on the planner's own end-state value.
+            const long long LOOP_BEAM_PER_SIM=loop_beam::cyclePotential(root) ? rescuePerSim : rescuePerSimNoGate;
             const bool mctsWin=predicted.outcome==Outcome::PLAYER_VICTORY;
             const int cost=std::max(0,root.player.curHp-predicted.player.curHp)
                 + static_cast<int>(std::max(0.0,deckCurseHp(predicted)-initialDeckCurseHp));
             mctsValue=search::BattleScumSearcher2::evaluateEndState4r(predicted,initialMaxHp);
             // Deep (refinement) budgets: any HP loss is worth a beam; standard budgets: only a loss or a costly line.
             // Heart victory ends the run; further HP or turn improvements have no continuation value.
-            if(!macroUsed && !(heartFight && mctsWin) && (!mctsWin || newPermanentCurse(predicted)
+            if(!macroUsed && beamOnlyPerSim<=0 && !(heartFight && mctsWin) && (!mctsWin || newPermanentCurse(predicted)
                     || cost>(simulations>=128000 ? 0 : std::max(6,root.player.maxHp*15/100)))) {
                 beamRan=true;
                 live.phase=3; live.transitionLimit=LOOP_BEAM_PER_SIM*simulations;
@@ -432,8 +484,8 @@ PYBIND11_MODULE(overlay_search, m) {
                 }
                 if(const char *log=std::getenv("LOOP_BEAM_LOG")) {      // diagnostic only
                     if(FILE *f=std::fopen(log,"a")) {
-                        std::fprintf(f,"{\"t\":%.3f,\"turn\":%d,\"hp0\":%d,\"sims\":%d,\"mcts_win\":%d,\"mcts_hp\":%d,\"mcts_value\":%.3f,\"beam_found\":%d,\"beam_hp\":%d,\"beam_value\":%.3f,\"used\":%d,\"transitions\":%lld,\"layers\":%d,\"passes\":%d}\n",
-                            std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count(),root.turn,root.player.curHp,simulations,int(mctsWin),mctsHp,mctsValue,int(best.found),best.found?best.state->player.curHp:-1,
+                        std::fprintf(f,"{\"tid\":%zu,\"t\":%.3f,\"turn\":%d,\"hp0\":%d,\"sims\":%d,\"mcts_win\":%d,\"mcts_hp\":%d,\"mcts_value\":%.3f,\"beam_found\":%d,\"beam_hp\":%d,\"beam_value\":%.3f,\"used\":%d,\"transitions\":%lld,\"layers\":%d,\"passes\":%d}\n",
+                            std::hash<std::thread::id>{}(std::this_thread::get_id()),std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count(),root.turn,root.player.curHp,simulations,int(mctsWin),mctsHp,mctsValue,int(best.found),best.found?best.state->player.curHp:-1,
                             best.found?best.value:0.0,int(beamUsed),loop_beam::stats.transitions,loop_beam::stats.layers,loop_beam::stats.passes);
                         std::fclose(f);
                     }

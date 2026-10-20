@@ -76,15 +76,24 @@ intangible='''    if (monster.hasStatus<MS::INTANGIBLE>()) {
     }'''
 assert battle.count(intangible)==1,'upstream intangible calculation changed'
 battle=battle.replace(intangible,intangible.replace('std::max','std::min'),1)
-battle=battle.replace('using namespace sts;', 'using namespace sts;\nextern bool overlayDiscoveryReroll();',1)
+battle=battle.replace('using namespace sts;', 'using namespace sts;\nextern bool overlayDiscoveryReroll();\nextern bool overlayDiscoveryFrames();',1)
 begin=battle.index('    if (cardSelectInfo.discoveryFrameRng) {',battle.index('void BattleContext::chooseDiscoveryCard'))
 end=battle.index('    CardInstance c = createGeneratedCard(id);',begin)
 battle=battle[:begin]+'''    // DiscoveryAction.update() generates choices every frame until its 0.25 s run out. In the
     // live game SelectionTimingPatch spends that time while the picker is open and
     // DiscoveryRetrieved ends the action on retrieval, so exactly one post-pick generation
     // happens at any frame time, including SuperFastMode's multiplied delta.
-    if (cardSelectInfo.discoveryFrameRng && overlayDiscoveryReroll())
-        generateDiscoveryCards(cardRandomRng, player.cc, cardSelectInfo.discoveryType);
+    // Headless truth has no picker pause: every update of the 0.25 s window regenerates.
+    if (cardSelectInfo.discoveryFrameRng && overlayDiscoveryReroll()) {
+        if (overlayDiscoveryFrames()) {
+            if (!(actionFrameDelta >= 0.000125f && actionFrameDelta <= 1.0f))
+                throw std::invalid_argument("Discovery replay requires a finite frame interval in [0.000125, 1] seconds");
+            for (float duration = 0.25f - actionFrameDelta; duration >= 0.0f; duration -= actionFrameDelta)
+                generateDiscoveryCards(cardRandomRng, player.cc, cardSelectInfo.discoveryType);
+        } else {
+            generateDiscoveryCards(cardRandomRng, player.cc, cardSelectInfo.discoveryType);
+        }
+    }
 '''+battle[end:]
 patched_battle=out/'BattleContext.cpp'
 marker='        case CardId::DARK_SHACKLES:'
