@@ -1155,9 +1155,9 @@ _RESCUE = json.loads(_tier('STS_RESCUE_ACT13') or '{}')
 if _tier('STS_RESCUE_PER_SIM'):
     _RESCUE.update(per_sim=int(_tier('STS_RESCUE_PER_SIM')), per_sim_nogate=int(_tier('STS_RESCUE_PER_SIM')))
 _RESCUE_DEFAULT = (160, 160, 2048, False)
-# Desktop low-performance mode (solver_auto_context.low_performance): every fight in every act gets 1/20 of the
+# Desktop high-speed mode (solver_auto_context.high_speed): every fight in every act gets 1/20 of the
 # budget, the prior in every room and a 40-transition rescue beam (the r40 arm of the v2.8 rescue pricing).
-_LOW_DIVISOR, _LOW_RESCUE = 20, (40, 40, 2048, False)
+_FAST_DIVISOR, _FAST_RESCUE = 20, (40, 40, 2048, False)
 _RESCUE_ARGS = (_RESCUE.get('per_sim', 160), _RESCUE.get('per_sim_nogate', _RESCUE.get('per_sim', 160)),
                 _RESCUE.get('max_width', 2048), bool(_RESCUE.get('plateau', False)))
 # STS_ELITE_DEEP_GATE: model JSON (relative to this directory) that lets acts 1-3 elites skip the standard
@@ -1190,15 +1190,15 @@ if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != 
             act = int(view['game'].get('act', 4))
             context = view['game'].get('solver_auto_context') or {}
             room = context.get('room', '')
-            low = context.get('low_performance') is True
-            _act13_divisor[0] = _LOW_DIVISOR if low else _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if act <= 3 else 1
+            fast = context.get('high_speed') is True
+            _act13_divisor[0] = _FAST_DIVISOR if fast else _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if act <= 3 else 1
             if _BEAM_ONLY or _BEAM_ONLY_ROOMS:
                 native.set_beam_only((_BEAM_ONLY_ROOMS.get(room, 0) if act <= 3 else 0) or _BEAM_ONLY)
-            # Set every call: a previous low-performance call must not leave its beam behind.
-            native.set_rescue(*(_LOW_RESCUE if low else _RESCUE_ARGS if act <= 3 else _RESCUE_DEFAULT))
+            # Set every call: a previous high-speed call must not leave its beam behind.
+            native.set_rescue(*(_FAST_RESCUE if fast else _RESCUE_ARGS if act <= 3 else _RESCUE_DEFAULT))
             if _NN_WEIGHTS:
                 c = _NN_CONFIG
-                native.nn_config(low or act <= 3 and (not _NN_ROOMS or room in _NN_ROOMS), c['widen_c'], c['widen_alpha'],
+                native.nn_config(fast or act <= 3 and (not _NN_ROOMS or room in _NN_ROOMS), c['widen_c'], c['widen_alpha'],
                                  c['min_width'], c['prior_weight'], c['rank_tau'], c['leaf_greedy'])
             return method(self, view, *args)
         return run

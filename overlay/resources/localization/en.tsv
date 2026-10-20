@@ -72,7 +72,8 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 换药未能提交弃药|Potion discard could not be submitted
 推荐行动顺序 · 点击执行整条路线|Suggested actions · click to play route
 搜索过程 · 已完成路线可点击执行|Search progress · click a completed route
-低性能模式：|Low-performance mode: 
+高速模式：|High-speed mode: 
+高速模式：搜索量 1/20，胜率和省血下降|High-speed: 1/20 search, lower win rate & HP
 星盘|Astrolabe
 是|Yes
 未胜|No win
