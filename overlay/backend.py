@@ -1147,8 +1147,8 @@ if _tier('STS_RESCUE_PER_SIM'):
 _RESCUE_DEFAULT = (160, 160, 2048, False)
 _RESCUE_ARGS = (_RESCUE.get('per_sim', 160), _RESCUE.get('per_sim_nogate', _RESCUE.get('per_sim', 160)),
                 _RESCUE.get('max_width', 2048), bool(_RESCUE.get('plateau', False)))
-# Beam alone (no MCTS), transitions per simulation, every act: STS_BEAM_ONLY for all rooms, STS_BEAM_ONLY_ROOMS (JSON)
-# per room type, e.g. {"MonsterRoomBoss": 160} (MCTS for ordinary fights, the beam for bosses).
+# Beam alone (no MCTS), transitions per simulation: STS_BEAM_ONLY for all rooms in every act, STS_BEAM_ONLY_ROOMS (JSON)
+# per room type in acts 1-3 only, e.g. {"MonsterRoomBoss": 160} (the Heart keeps MCTS: the beam alone cost more there).
 _BEAM_ONLY = int(_tier('STS_BEAM_ONLY') or 0)
 _BEAM_ONLY_ROOMS = {k: int(v) for k, v in json.loads(_tier('STS_BEAM_ONLY_ROOMS') or '{}').items()}
 if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != _RESCUE_DEFAULT or _BEAM_ONLY or _BEAM_ONLY_ROOMS:
@@ -1172,7 +1172,7 @@ if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != 
             room = (view['game'].get('solver_auto_context') or {}).get('room', '')
             _act13_divisor[0] = _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if act <= 3 else 1
             if _BEAM_ONLY or _BEAM_ONLY_ROOMS:
-                native.set_beam_only(_BEAM_ONLY_ROOMS.get(room, _BEAM_ONLY))
+                native.set_beam_only((_BEAM_ONLY_ROOMS.get(room, 0) if act <= 3 else 0) or _BEAM_ONLY)
             if _RESCUE_ARGS != _RESCUE_DEFAULT:
                 native.set_rescue(*(_RESCUE_ARGS if act <= 3 else _RESCUE_DEFAULT))
             if _NN_WEIGHTS:
