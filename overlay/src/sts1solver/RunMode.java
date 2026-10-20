@@ -37,6 +37,18 @@ enum RunMode {
     /** Non-combat decisions are made without the player: only the pilot. */
     static boolean outsideAutomatic(RunMode mode) { return mode == PILOT; }
 
+    /**
+     * Agent play (AGENT_PLAY.md): the choice index an agent's command "<decision> <index>" confirms, or -1 when the
+     * command names another decision or no listed choice. Agent mode is Manual outside with automatic fights.
+     */
+    static int agentChoice(String command, long decision, int choices) {
+        String[] parts = command.trim().split("\\s+");
+        if (decision <= 0 || parts.length != 2 || !parts[0].equals(Long.toString(decision)) || !parts[1].matches("\\d{1,4}"))
+            return -1;
+        int index = Integer.parseInt(parts[1]);
+        return index < choices ? index : -1;
+    }
+
     /** F9 and the Stop button. */
     static RunMode stop(RunMode current) {
         return MANUAL;
