@@ -49,15 +49,20 @@ public class BundledRuntimeCheck {
             p.setProperty("runtime", "bundled");
             p.setProperty("log", data.resolve("backend.log").toString());
             System.setProperty("os.name", "Mac OS X");
-            for (String cpu : new String[]{"aarch64", "arm64", "amd64", "x86_64"}) {
+            for (String cpu : new String[]{"aarch64", "arm64"}) {
                 System.setProperty("os.arch", cpu);
-                Path file = temp.resolve("sts1-solver-macos-" + BackendRuntime.macArchitecture(cpu) + ".zip");
+                Path file = temp.resolve("sts1-solver-macos-" + BackendRuntime.macArchitecture(cpu, () -> false) + ".zip");
                 zip(file, "python/bin/python3", "overlay/backend.py");
                 ProcessBuilder process = BackendRuntime.process(p);
                 require(process.command().get(0).endsWith("python3"), "bundled Mac routing");
                 require(!process.environment().containsKey("PYTHONHOME"), "clean Python environment");
             }
-            try { BackendRuntime.macArchitecture("ppc"); throw new AssertionError("unknown CPU accepted"); }
+            require("arm64".equals(BackendRuntime.macArchitecture("x86_64", () -> true)), "Rosetta JVM uses arm64");
+            for (String cpu : new String[]{"x86_64", "amd64"}) {
+                try { BackendRuntime.macArchitecture(cpu, () -> false); throw new AssertionError("Intel Mac accepted"); }
+                catch (IOException expected) { require(expected.getMessage().contains("Apple Silicon"), "Intel Mac message"); }
+            }
+            try { BackendRuntime.macArchitecture("ppc", () -> true); throw new AssertionError("unknown CPU accepted"); }
             catch (IOException expected) { }
             System.setProperty("os.name", "Windows 11");
             Path runtime = temp.resolve("sts1-solver-runtime");
@@ -66,7 +71,7 @@ public class BundledRuntimeCheck {
             Files.createFile(runtime.resolve("python/python.exe"));
             Files.createFile(runtime.resolve("overlay/backend.py"));
             require(BackendRuntime.process(p).directory().toPath().equals(runtime), "Windows bundle unchanged");
-            System.out.println("PASS: Windows/Mac bundle selection, Rosetta routing, cache/update, permissions, invalid archives");
+            System.out.println("PASS: Windows/Mac bundle selection, Rosetta to arm64, Intel Mac refused, cache/update, permissions, invalid archives");
         } finally {
             System.setProperty("os.name", os);
             System.setProperty("os.arch", arch);

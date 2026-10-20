@@ -75,8 +75,6 @@ jobs:
         include:
           - os: macos-14
             arch: arm64
-          - os: macos-15-intel
-            arch: x86_64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -100,6 +98,10 @@ jobs:
       - run: python tools/build_solver_runtime.py
       - run: python tools/package_macos_runtime.py --python-root build/cpython/python --output build/sts1-solver-macos-${{ matrix.arch }}.zip
       - run: python tools/check_macos_bundle.py build/sts1-solver-macos-${{ matrix.arch }}.zip
+      - name: Rosetta JVM can start the arm64 backend
+        run: |
+          arch -x86_64 /bin/sh -c 'test "$(sysctl -n sysctl.proc_translated)" = 1 && test "$(/usr/sbin/sysctl -n hw.optional.arm64)" = 1'
+          arch -x86_64 /bin/sh -c 'build/cpython/python/bin/python3 -c "import platform; assert platform.machine() == \"arm64\", platform.machine()"'
       - uses: actions/upload-artifact@v4
         with:
           name: sts1-solver-macos-${{ matrix.arch }}

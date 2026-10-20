@@ -5,6 +5,7 @@ import com.evacipated.cardcrawl.modthespire.ModInfo;
 import java.io.*;
 import java.nio.file.*;
 import java.util.Properties;
+import java.util.function.BooleanSupplier;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.zip.ZipEntry;
@@ -66,7 +67,7 @@ final class BackendRuntime {
         if (directory == null) throw new IOException("Solver is missing from the loaded mod list");
         Path runtime = directory.resolve("sts1-solver-runtime");
         if (mac) {
-            String arch = macArchitecture(System.getProperty("os.arch"));
+            String arch = macArchitecture(System.getProperty("os.arch"), BackendRuntime::appleSilicon);
             runtime = unpack(directory.resolve("sts1-solver-macos-" + arch + ".zip"), dataDirectory(properties));
         }
         Path python = runtime.resolve(mac ? "python/bin/python3" : "python/python.exe");
@@ -83,11 +84,27 @@ final class BackendRuntime {
         return process;
     }
 
-    static String macArchitecture(String arch) throws IOException {
+    static String macArchitecture(String arch, BooleanSupplier appleSilicon) throws IOException {
         if ("aarch64".equals(arch) || "arm64".equals(arch)) return "arm64";
-        // An Intel JVM under Rosetta uses the Intel bundle, independently of the physical CPU.
-        if ("x86_64".equals(arch) || "amd64".equals(arch)) return "x86_64";
-        throw new IOException("Unsupported macOS architecture: " + arch);
+        // The game's Intel JVM under Rosetta can still start the arm64-only backend natively.
+        if (("x86_64".equals(arch) || "amd64".equals(arch)) && appleSilicon.getAsBoolean()) return "arm64";
+        throw new IOException("Only Apple Silicon Macs are supported (os.arch " + arch
+            + "); v0.8.0-beta.3 is the last version for Intel Macs");
+    }
+
+    static boolean appleSilicon() {
+        try {
+            Process sysctl = new ProcessBuilder("/usr/sbin/sysctl", "-n", "hw.optional.arm64").redirectErrorStream(true).start();
+            try (BufferedReader output = new BufferedReader(new InputStreamReader(sysctl.getInputStream()))) {
+                String line = output.readLine();
+                return sysctl.waitFor() == 0 && line != null && "1".equals(line.trim());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     static Path unpack(Path archive, Path data) throws IOException {
