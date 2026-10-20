@@ -137,6 +137,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private static final int BUDGET = 8000;
     private boolean highSpeed;
     private long highSpeedWarnedAt;
+    /** Agent play (AGENT_PLAY.md): outside choices come from a file an external agent writes; fights run automatically. */
+    private boolean agentBridge;
+    private long agentDecision;
+    private OutsidePacket agentPacket;
+    private String agentError = "", agentWritten = "";
+    private Path agentDirectory;
     private String status = I18n.t("等待进入战斗"), error = "";
     // Compact combat panel: summary card left, five route rows right, then actions and toggles.
     private static final float PANEL_WIDTH = 640;
@@ -238,6 +244,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("bossFastFinish", "false"); // new key: every player starts with the standard Boss search
             defaults.setProperty("feedMode", "false");
             defaults.setProperty("highSpeed", "false");
+            defaults.setProperty("agentBridge", "false");
             defaults.setProperty("smokeProbeBudget", "12000");
             defaults.setProperty("smokeLossThreshold", "15");
             defaults.setProperty("searchWorkers", "0");
@@ -256,6 +263,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             bossFastFinishEnabled = config.getBool("bossFastFinish");
             feedModeEnabled = config.getBool("feedMode");
             highSpeed = config.getBool("highSpeed");
+            agentBridge = config.getBool("agentBridge");
             smokeProbeBudget = Math.max(1,Math.min(128000,config.getInt("smokeProbeBudget")));
             smokeLossThreshold = Math.max(0,config.getInt("smokeLossThreshold"));
             try { searchWorkers = Math.max(0, Math.min(32, config.getInt("searchWorkers"))); }
@@ -623,6 +631,82 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         auto=combat(); paused=false; decisionDirty=true;
     }
 
+    /** Step mode for outside choices, which the agent confirms, plus automatic fights. F9 hands both back to the player. */
+    private void startAgentMode() {
+        chooseOutsideMode(1);
+        runAuto=true; runAutoPlayer=AbstractDungeon.player;
+        auto=combat(); paused=false; decisionDirty=true;
+        outsideNotice=I18n.t("Agent 模式：局外由 agent 决定，战斗自动执行 · F9 接管");
+    }
+
+    /**
+     * Writes agent/decision.json whenever the outside choice or the run status changes, and applies
+     * agent/command.txt: "<decision> <index>" confirms one listed choice, "resume" re-enters agent mode.
+     * The confirmed choice goes through the same checks as a click on the panel.
+     */
+    private void syncAgent() {
+        try {
+            if(agentDirectory==null)agentDirectory=Files.createDirectories(notesDirectory("agent"));
+            Path command=agentDirectory.resolve("command.txt");
+            if(Files.exists(command)) {
+                String text=new String(Files.readAllBytes(command),StandardCharsets.UTF_8).trim();
+                Files.delete(command);
+                int index=agentPending()?RunMode.agentChoice(text,agentDecision,outsidePacket.choices.size()):-1;
+                if(text.equals("resume") && inSupportedRun()) { startAgentMode(); agentError=""; }
+                else if(index>=0) { outsideChosen=index; outsideConfirm=true; agentError=""; }
+                else agentError="ignored command (stale decision or invalid index): "+text;
+            }
+            boolean pending=agentPending();
+            if(pending && outsidePacket!=agentPacket) { agentPacket=outsidePacket; agentDecision++; }
+            String phase=!inSupportedRun()?"no_run":AbstractDungeon.player.isDead?"dead":combat()?"combat":pending?"choose":"waiting";
+            boolean agentMode=outsideMode==1 && runAuto;
+            String key=(pending?agentDecision:0)+"|"+phase+"|"+agentMode+"|"+outsideNotice+"|"+agentError+"|"+rngWarning;
+            if(key.equals(agentWritten))return; // the full packet is rebuilt only when this summary changes
+            JsonObject out=new JsonObject();
+            out.addProperty("decision",pending?agentDecision:0);
+            out.addProperty("agent_mode",agentMode);
+            out.addProperty("phase",phase);
+            out.addProperty("notice",outsideNotice);
+            out.addProperty("error",agentError);
+            JsonArray warnings=new JsonArray();  // what the settings page shows, for an agent that cannot see the panel
+            if(Loader.isModLoaded("SaveStateMod") || Loader.isModLoaded("undothespire") || Loader.isModLoaded("undobutton"))
+                warnings.add(I18n.t("检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用"));
+            if(!rngWarning.isEmpty())warnings.add(rngWarning);
+            out.add("mod_warnings",warnings);
+            if(pending) {
+                JsonObject game=new JsonObject();
+                for(String field:new String[]{"class","ascension_level","act","floor","current_hp","max_hp","gold","act_boss",
+                        "room_type","screen_type","screen_state","deck","relics","potions","keys","map"})
+                    if(outsidePacket.game.has(field))game.add(field,outsidePacket.game.get(field));
+                out.add("game",game);
+                out.add("visible",outsidePacket.visible);
+                JsonArray choices=new JsonArray();
+                for(int i=0;i<outsidePacket.choices.size();i++) {
+                    JsonObject choice=new JsonObject();
+                    choice.addProperty("index",i);
+                    choice.addProperty("label",outsidePacket.choices.get(i).label);
+                    choice.addProperty("solver_score",outsideScores.scores[i]);
+                    choices.add(choice);
+                }
+                out.add("choices",choices);
+                out.addProperty("solver_pick",outsideScores.best);
+                if(outsidePacket.ruleNote!=null)out.addProperty("solver_rule",outsidePacket.ruleNote);
+            }
+            Path temp=agentDirectory.resolve("decision.json.tmp");
+            Files.write(temp,gson.toJson(out).getBytes(StandardCharsets.UTF_8));
+            Files.move(temp,agentDirectory.resolve("decision.json"),StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);
+            agentWritten=key;
+            if(error.startsWith(I18n.t("Agent 通道读写失败：")))error="";
+        } catch(IOException failure) {
+            // Retried next frame: on Windows the replace fails while the agent holds the file open.
+            error=I18n.t("Agent 通道读写失败：")+failure.getMessage();
+        }
+    }
+
+    private boolean agentPending() {
+        return outsideMode==1 && outsidePacket!=null && outsideScores!=null && !outsideConfirm && !combat();
+    }
+
     /**
      * The original game keeps a skipped card reward listed and lets the merchant be reopened;
      * remember both per floor so the pilot moves on instead of looping.
@@ -648,6 +732,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             outsidePacket=null; outsideStatePacket=null; outsideScores=null; outsideAwaiting=false;
             outsidePilotRun=false; outsideFailed=false;
             outsideNotice=I18n.t("新一局：选【人工逐步】每步确认，【战斗全自动】只自动打战斗，或【AI全自动】完全托管");
+            if(agentBridge)startAgentMode();
         }
         if(outsidePrompt) return;
         if(outsideMode==0 || combat() || AbstractDungeon.player.isDead || rewardPotionPending!=null) return;
@@ -1189,6 +1274,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         wasCombat = inCombat;
         if(!inCombat && outsideMode!=0)updatePotionRewards();
         updateOutside();
+        if(agentBridge)syncAgent();
         updateRoute();
         updateDeckChanges();
         if (!inCombat) {

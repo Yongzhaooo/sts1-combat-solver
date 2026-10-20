@@ -22,6 +22,14 @@ public final class ModeCheck {
         require(RunMode.of(0, true) == RunMode.COMBAT_AUTO, "combat auto");
         require(RunMode.values().length == 3, "exactly three modes");
 
+        // Agent commands: "<decision> <index>" for the current decision only.
+        require(RunMode.agentChoice("7 2", 7, 3) == 2, "agent picks a listed choice");
+        require(RunMode.agentChoice(" 7   0\n", 7, 3) == 0, "agent command whitespace");
+        require(RunMode.agentChoice("6 2", 7, 3) == -1, "stale decision refused");
+        require(RunMode.agentChoice("7 3", 7, 3) == -1, "index past the list refused");
+        require(RunMode.agentChoice("7 -1", 7, 3) == -1 && RunMode.agentChoice("7 x", 7, 3) == -1, "malformed index refused");
+        require(RunMode.agentChoice("7", 7, 3) == -1 && RunMode.agentChoice("0 0", 0, 3) == -1, "no decision pending");
+
         // Manual waits for the player in combat and outside; Combat auto only fights alone; the pilot does both.
         require(!RunMode.combatAutomatic(RunMode.MANUAL) && !RunMode.outsideAutomatic(RunMode.MANUAL), "manual waits for every step");
         require(RunMode.combatAutomatic(RunMode.COMBAT_AUTO) && !RunMode.outsideAutomatic(RunMode.COMBAT_AUTO), "combat auto: fights only");

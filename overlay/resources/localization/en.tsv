@@ -388,3 +388,5 @@ Boss 快速收尾：找到不交药的胜利路线就停止搜索|Boss fast fini
 次 · 循环展开 |; loop transitions:
 步|steps
 次|simulations
+Agent 模式：局外由 agent 决定，战斗自动执行 · F9 接管|Agent mode: an agent makes outside choices; fights run automatically · F9 takes over
+Agent 通道读写失败：|Agent channel read/write failed: 

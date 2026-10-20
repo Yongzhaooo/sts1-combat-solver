@@ -42,7 +42,7 @@ final class OutsidePacket {
     private String page = "";
     final List<Choice> choices = new ArrayList<>();
     private final Distill2 model;
-    private final JsonObject game, visible;
+    final JsonObject game, visible;  // SolverMod.syncAgent publishes both
     private final JsonArray availableCommands;
     private final Map<Integer, JsonObject> nodes = new HashMap<>();
     private int flameX = -1, flameY = -1;
