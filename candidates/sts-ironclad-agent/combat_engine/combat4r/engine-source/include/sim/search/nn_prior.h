@@ -11,7 +11,9 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#ifdef _WIN32
 #include <filesystem>
+#endif
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -45,8 +47,11 @@ inline Model &model() { static Model m; return m; }
 inline Config &config() { static Config c; return c; }
 
 inline void load(const std::string &path) {
-    // UTF-8 path: a narrow std::string opens through the ANSI code page on Windows and fails on CJK paths.
+#ifdef _WIN32  // a narrow std::string opens through the ANSI code page and fails on CJK paths
     std::ifstream in(std::filesystem::u8path(path), std::ios::binary);
+#else  // POSIX paths are UTF-8 bytes; std::filesystem needs macOS 10.15+
+    std::ifstream in(path, std::ios::binary);
+#endif
     if (!in) throw std::runtime_error("nn_prior: cannot open " + path);
     std::int32_t header[6];
     in.read(reinterpret_cast<char *>(header), sizeof(header));
