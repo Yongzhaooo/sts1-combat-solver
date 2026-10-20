@@ -14,11 +14,13 @@ Thanks to [gamerpuppy/sts_lightspeed](https://github.com/gamerpuppy/sts_lightspe
 
 For ideas, [hotwords123/StS2.RandomForeseer](https://github.com/hotwords123/StS2.RandomForeseer) informed the copy-and-restore approach to RNG foresight. We also studied [Torch1230/CombatSolver](https://github.com/Torch1230/CombatSolver) for its mirror simulation and action-verification design. These are *Slay the Spire 2* references; their code is not included here.
 
+Special thanks to 七月流火（猫火） for long-term testing and feedback. Playing by hand with the solver, 七月流火（猫火） recently reached a streak of about 80 wins (SL-equivalent) and is close to 100.
+
 ![Ironclad dreaming of the Spire front line](assets/ironclad-hospital-meme.jpg)
 
 ## What it does
 
-A local combat advisor and optional executor for *Slay the Spire 1*. It searches Ironclad and colorless-card combat, compares potion lines, and checks executed actions against the game state. By default you choose cards, paths, shops, rest sites, and events; the optional full autopilot (below) uses route rules and a network for other decisions. Search has a finite budget and does not guarantee an optimal line or perfect simulation. Mods that change combat rules may create unsupported states (`SaveStateMod` and `Undo` / `undothespire` alter native discovery card generation, rewrite action queues, or desynchronize RNG state counters, and are not compatible).
+A local combat advisor and optional executor for *Slay the Spire 1*. It searches Ironclad and colorless-card combat, compares potion lines, and checks executed actions against the game state. By default you choose cards, paths, shops, rest sites, and events; the optional full autopilot (below) uses route rules and a network for other decisions. Search has a finite budget and does not guarantee an optimal line or perfect simulation. 七月流火（猫火）'s play shows it still trails top human players on some special lines, such as ordering cards for Burning Pact, Snecko Eye, and small loops it sometimes fails to find. Mods that change combat rules may create unsupported states (`SaveStateMod` and `Undo` / `undothespire` alter native discovery card generation, rewrite action queues, or desynchronize RNG state counters, and are not compatible).
 
 The panel supports English and Chinese. Optional seeded foresight previews events, encounters, and transforms using hidden RNG information beyond ordinary visible play. Its Glowing Eye setting (off by default) controls the map rooms ahead, event-fight rewards and what each Neow blessing would give; Neow's four offers are shown as the game shows them, and other event previews are not gated by it. The [potion score table](POTION_POLICY.zh-CN.md) explains reward swaps and combat use.
 
@@ -31,7 +33,7 @@ The product contract is described here; component boundaries and the proposed de
 
 ## Full autopilot (early)
 
-> **This is an early training result and its play is not good yet.** On a small dataset it wins roughly 59%–81% of A20 runs. Known weaknesses: it upgrades too rarely, its deckbuilding lacks a plan, and it walks into early elites at full HP. Treat it as an experiment, not a reliable winner.
+> **This is an early training result and its play is not good yet.** In the training environment it wins about 73% of A20 three-key Heart runs over 2,400+ seeds (about 71% with the faster v0.9 search). Known weaknesses: it upgrades too rarely, its deckbuilding lacks a plan, and it walks into early elites at full HP. Treat it as an experiment, not a reliable winner.
 
 - **Three modes, chosen per run:** When an Ironclad run starts, the solver asks which to use. **AI autopilot** climbs and fights; **Combat auto** runs every fight automatically while you make all other decisions; **Manual (step by step)** covers fights and everything outside them: the solver and the network suggest, and each step waits for `Enter` or a click. AI autopilot is off by default; press `F9` or click Stop at any time to return to Manual. Hide the suggestions card with its x to play outside combat without suggestions.
 - **What it decides:** Neow, card rewards, campfires, shops, events, chests and boss relics are scored by a small network, with candidates and scores shown on the panel. Combat uses the existing solver. The network runs inside Java and needs no extra install.
