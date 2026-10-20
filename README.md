@@ -33,7 +33,7 @@ The product contract is described here; component boundaries and the proposed de
 
 ## Full autopilot (early)
 
-> **This is an early training result and its play is not good yet.** In the training environment it wins about 73% of A20 three-key Heart runs over 2,400+ seeds (about 71% with the faster v0.9 search). Known weaknesses: it upgrades too rarely, its deckbuilding lacks a plan, and it walks into early elites at full HP. Treat it as an experiment, not a reliable winner.
+> **This is an early training result and its play is not good yet.** In the training environment it wins 73.1% of 2,442 A20 three-key Heart runs (71.0% of 1,014 runs with the faster v0.9 search). Known weaknesses: it upgrades too rarely, its deckbuilding lacks a plan, and it walks into early elites at full HP. Treat it as an experiment, not a reliable winner.
 
 - **Three modes, chosen per run:** When an Ironclad run starts, the solver asks which to use. **AI autopilot** climbs and fights; **Combat auto** runs every fight automatically while you make all other decisions; **Manual (step by step)** covers fights and everything outside them: the solver and the network suggest, and each step waits for `Enter` or a click. AI autopilot is off by default; press `F9` or click Stop at any time to return to Manual. Hide the suggestions card with its x to play outside combat without suggestions.
 - **What it decides:** Neow, card rewards, campfires, shops, events, chests and boss relics are scored by a small network, with candidates and scores shown on the panel. Combat uses the existing solver. The network runs inside Java and needs no extra install.
