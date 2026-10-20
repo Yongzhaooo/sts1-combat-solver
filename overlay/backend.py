@@ -179,6 +179,7 @@ class Advisor:
         self.interrupt = threading.Event()
         self.manual_choice = False
         self.max_workers = worker_limit()
+        self.deep_gate = None
 
     def phase(self, name):
         if hasattr(self, 'on_phase'):
@@ -190,9 +191,10 @@ class Advisor:
     def search_plan(self, root, budget, slots, credit, index, kill_thieves, generated, initial_plan=None):
         return search_plan(self.native_search, root, budget, slots, credit, index,
                            kill_thieves, generated, game=self.root_game,
-                           interrupt=self.interrupt, initial_plan=initial_plan)
+                           interrupt=self.interrupt, initial_plan=initial_plan, deep_gate=self.deep_gate)
 
     def solve(self, view, budget):
+        self.deep_gate = None
         self.phase('导入战斗状态')
         from sim_patch.parity.adapter import ActionMapper
         s = self.search
@@ -298,11 +300,14 @@ class Advisor:
         # MULTI_POTION_LOSS effective HP loss.
         fast_boss = view['game'].get('solver_auto_context', {}).get('boss_fast_finish') is True
         initial_plan = None
+        initial_seconds = None
         clean_regular = False
         if budget == 8000 and not fast_boss and potions and not smoke_slots:
             self.searching = [(0, 'no-potion', '不用药')]
             try:
+                initial_seconds = time.monotonic()
                 initial_plan = dict(self.native_search.plan(self.root, budget, [], credit, 0, False, False))
+                initial_seconds = time.monotonic() - initial_seconds
             except BaseException:
                 self.native_search.cancel()
                 self.searching = []
@@ -311,6 +316,10 @@ class Advisor:
                              and health(initial_plan, self.root_game, True)['loss'] == 0
                              and not initial_plan.get('used_tail') and not initial_plan.get('used_fairy')
                              and not toolbox_selection(view['game']))
+        if (_ELITE_DEEP_GATE is not None and self.root_game.get('act', 4) <= 3
+                and self.root_game.get('solver_auto_context', {}).get('room') == 'MonsterRoomElite'):
+            self.deep_gate = _ELITE_DEEP_GATE.bind(self.root_game, initial_plan, initial_seconds,
+                                                   len(potions) - len(smoke_slots))
         stages = [[()]] if fast_boss or (clean_regular and not brew_order) else [[()] + [(slot,) for slot, _ in potions]]
         strength_slots = [slot for slot, _ in potions
                           if view['game']['potions'][slot]['id'] in ('Strength Potion', 'FlexPotion')]
@@ -1147,6 +1156,12 @@ if _tier('STS_RESCUE_PER_SIM'):
 _RESCUE_DEFAULT = (160, 160, 2048, False)
 _RESCUE_ARGS = (_RESCUE.get('per_sim', 160), _RESCUE.get('per_sim_nogate', _RESCUE.get('per_sim', 160)),
                 _RESCUE.get('max_width', 2048), bool(_RESCUE.get('plateau', False)))
+# STS_ELITE_DEEP_GATE: model JSON (relative to this directory) that lets acts 1-3 elites skip the standard
+# search's deep refinement when it is predicted to buy little HP per second; see deep_gate.py.
+_ELITE_DEEP_GATE = None
+if _tier('STS_ELITE_DEEP_GATE'):
+    from deep_gate import DeepGate
+    _ELITE_DEEP_GATE = DeepGate(str(_TIERS_FILE.parent / _tier('STS_ELITE_DEEP_GATE')))
 # Beam alone (no MCTS), transitions per simulation: STS_BEAM_ONLY for all rooms in every act, STS_BEAM_ONLY_ROOMS (JSON)
 # per room type in acts 1-3 only, e.g. {"MonsterRoomBoss": 160} (the Heart keeps MCTS: the beam alone cost more there).
 _BEAM_ONLY = int(_tier('STS_BEAM_ONLY') or 0)
