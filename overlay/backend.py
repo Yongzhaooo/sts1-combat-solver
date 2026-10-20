@@ -1130,13 +1130,18 @@ def serve(runs_dir=None):
 # STS_ACT13_BUDGET_DIVISOR, overridable per room type with STS_ACT13_ROOM_DIVISORS (JSON);
 # act 4 is never divided. STS_NN_PRIOR_WEIGHTS enables the learned move-ordering prior in
 # acts 1-3, limited to the room types in STS_NN_PRIOR_ROOMS when that is set.
-_ACT13_DIVISOR = int(os.environ.get('STS_ACT13_BUDGET_DIVISOR', '1'))
-_ACT13_ROOM_DIVISORS = {k: int(v) for k, v in json.loads(os.environ.get('STS_ACT13_ROOM_DIVISORS') or '{}').items()}
-_NN_WEIGHTS = os.environ.get('STS_NN_PRIOR_WEIGHTS', '')
-_NN_ROOMS = {r for r in os.environ.get('STS_NN_PRIOR_ROOMS', '').split(',') if r}
+# A frozen headless stage ships headless_tiers.json beside this file with its defaults; a set
+# variable (even empty) overrides the file, and relative weight paths resolve from this directory.
+_TIERS_FILE = Path(__file__).with_name('headless_tiers.json')
+_TIERS = json.loads(_TIERS_FILE.read_text(encoding='utf-8')) if _TIERS_FILE.exists() else {}
+_tier = lambda key, default='': os.environ.get(key, _TIERS.get(key, default))
+_ACT13_DIVISOR = int(_tier('STS_ACT13_BUDGET_DIVISOR', '1'))
+_ACT13_ROOM_DIVISORS = {k: int(v) for k, v in json.loads(_tier('STS_ACT13_ROOM_DIVISORS') or '{}').items()}
+_NN_WEIGHTS = str(_TIERS_FILE.parent / _tier('STS_NN_PRIOR_WEIGHTS')) if _tier('STS_NN_PRIOR_WEIGHTS') else ''
+_NN_ROOMS = {r for r in _tier('STS_NN_PRIOR_ROOMS').split(',') if r}
 if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS:
     _act13_divisor = [1]
-    _NN_CONFIG = json.loads(os.environ['STS_NN_PRIOR_CONFIG']) if _NN_WEIGHTS else None
+    _NN_CONFIG = json.loads(_tier('STS_NN_PRIOR_CONFIG')) if _NN_WEIGHTS else None
 
     def _tier_install(native):
         if getattr(native, '_act13_original_plan', None) is None:
