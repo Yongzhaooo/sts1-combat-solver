@@ -76,6 +76,13 @@ void Player::updateHpLossDrawRelic(RelicId relic, bool present) {
     else if (!present && found != hpLossDrawRelics.end()) hpLossDrawRelics.erase(found);
 }
 
+void Player::updateEndTurnBotRelic(RelicId relic, bool present) {
+    if (relic != RelicId::CLOAK_CLASP && relic != RelicId::NILRYS_CODEX && relic != RelicId::STONE_CALENDAR) return;
+    const auto found = std::find(endTurnBotRelics.begin(), endTurnBotRelics.end(), relic);
+    if (present && found == endTurnBotRelics.end()) endTurnBotRelics.push_back(relic);
+    else if (!present && found != endTurnBotRelics.end()) endTurnBotRelics.erase(found);
+}
+
 bool Player::hasRelicRuntime(RelicId r) const {
     if ((int) r < 64) {
         return relicBits0 & (1ULL << (int)r);

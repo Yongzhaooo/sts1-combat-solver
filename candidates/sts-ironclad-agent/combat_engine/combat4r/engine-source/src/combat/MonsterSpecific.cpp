@@ -3508,6 +3508,11 @@ void Monster::stasisAction(BattleContext &bc) {
     }
 
     cards.notifyRemoveFromCombat(stasisCard);
+    // ApplyStasisAction re-checks "draw and discard empty" on every frame of its 1 s duration: taking the last card
+    // ends the action on the next frame, before StasisPower is applied; the card stays in limbo for the combat.
+    if (cards.drawPile.empty() && cards.discardPile.empty()) {
+        return;
+    }
     cards.stasisCards[std::min(1, idx)] = stasisCard;
 
 #ifdef sts_asserts

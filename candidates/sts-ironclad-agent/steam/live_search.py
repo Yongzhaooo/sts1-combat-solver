@@ -109,7 +109,9 @@ class LiveSearch:
                         raise ValueError("generated selection candidate differs from the predicted card")
                     return action, f"choose {index}"
                 uuid = self._selection_uuid(info["source_pile"], index, options)
-                if game["screen_type"] == "HAND_SELECT":
+                # Only a pick that resolves the native selection leaves a pure UI confirmation. Forethought+
+                # (any number, pick_count 10) keeps selecting; its confirm is the plan's MULTI_CARD_SELECT.
+                if game["screen_type"] == "HAND_SELECT" and info["pick_count"] == 1:
                     self.pending_single = (self.mapper, self._picker_context(game), uuid,
                         self.comparator.original_card(options[self._option_index(options, uuid)]),
                         sorted(card["uuid"] for card in options if card["uuid"] != uuid), False)
