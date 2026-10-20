@@ -22,7 +22,7 @@ def package(content, output, version):
             raise ValueError('Unsafe manifest path')
         if hashlib.sha256((content / name).read_bytes()).hexdigest() != digest:
             raise ValueError('Manifest hash mismatch: ' + name)
-    mac = {'sts1-solver-macos-arm64.zip', 'sts1-solver-macos-x86_64.zip'}
+    mac = {'sts1-solver-macos-arm64.zip'}
     if not mac <= set(files) or 'STS1CombatSolver.jar' not in files or not any(n.startswith('sts1-solver-runtime/') for n in files):
         raise ValueError('Missing platform runtime or Mod JAR')
     output.mkdir(parents=True, exist_ok=True)
@@ -34,7 +34,7 @@ def package(content, output, version):
         selected = {n: h for n, h in files.items()
                     if (n not in mac if platform == 'windows' else not n.startswith('sts1-solver-runtime/'))}
         selected.pop('MACOS_INSTALL.md' if platform == 'windows' else 'WINDOWS_INSTALL.md', None)
-        platform_manifest = dict(manifest, platform='windows-x64' if platform == 'windows' else 'macos-arm64-x86_64',
+        platform_manifest = dict(manifest, platform='windows-x64' if platform == 'windows' else 'macos-arm64',
                                  files=selected)
         if platform == 'macos':
             platform_manifest.pop('python_archive_sha256', None)

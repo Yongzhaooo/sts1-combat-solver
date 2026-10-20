@@ -1,0 +1,8 @@
+{
+  "STS_ACT13_BUDGET_DIVISOR": "10",
+  "STS_ACT13_ROOM_DIVISORS": "{\"MonsterRoomElite\": 2, \"MonsterRoomBoss\": 4}",
+  "STS_NN_PRIOR_ROOMS": "MonsterRoom,EventRoom",
+  "STS_NN_PRIOR_WEIGHTS": "nn/scorer-v2.bin",
+  "STS_NN_PRIOR_CONFIG": "{\"widen_c\": 1.0, \"widen_alpha\": 0.5, \"min_width\": 1, \"prior_weight\": 0.0, \"rank_tau\": 1.5, \"leaf_greedy\": 0.9}",
+  "STS_ELITE_DEEP_GATE": "elite_deep_gate.json"
+}

@@ -54,7 +54,6 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 录音启动失败：|Recording failed to start: 
 快捷键保存失败：|Hotkey save failed: 
 快捷键配置读取失败：|Config load failed: 
-快速|Fast
 总等待 |Waiting 
 战士|Ironclad
 战斗引擎目前支持|Combat engine supports 
@@ -73,12 +72,12 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 换药未能提交弃药|Potion discard could not be submitted
 推荐行动顺序 · 点击执行整条路线|Suggested actions · click to play route
 搜索过程 · 已完成路线可点击执行|Search progress · click a completed route
-搜索预算：|Search budget: 
+高速模式：|High-speed mode: 
+高速模式：搜索量 1/20，胜率和省血下降|High-speed: 1/20 search, lower win rate & HP
 星盘|Astrolabe
 是|Yes
 未胜|No win
 本场：回车 / |Enter / 
-标准|Standard
 核对执行结果…|Checking action result…
 模式保存失败：|Mode save failed: 
 次 · 规划至 T| times · through T
@@ -86,7 +85,6 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 正在执行本回合|Playing turn
 正在搜索整场战斗…|Searching the full fight…
 消耗尾巴|Uses Tail
-深入|Deep
 由你构筑，由它求解战斗|Build your deck; let it solve fights
 确认战斗选牌|Confirm combat selection
 离开战斗|Fight ended

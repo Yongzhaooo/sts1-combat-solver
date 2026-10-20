@@ -43,7 +43,7 @@ The product contract is described here; component boundaries and the proposed de
 
 - [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843), or download a [v0.4.2 package](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.4.2).
 - Resize the panel with the − / + buttons on its Settings page; click the percentage to reset. The 60–160% setting persists across launches and changes only the overlay.
-- The Workshop package supports Windows 10/11 x64 and macOS 11+ (Apple Silicon and Intel). Install ModTheSpire and BaseMod separately, choose Play with Mods, and enable BaseMod plus STS1 Combat Solver. No separate Python, compiler, WSL or source checkout is needed. See [Windows installation](WINDOWS_INSTALL.md) or [Mac installation and release checks](MACOS_INSTALL.md).
+- The Workshop package supports Windows 10/11 x64 and macOS 11+ on Apple Silicon (Intel Macs are not supported from v0.9.0). Install ModTheSpire and BaseMod separately, choose Play with Mods, and enable BaseMod plus STS1 Combat Solver. No separate Python, compiler, WSL or source checkout is needed. See [Windows installation](WINDOWS_INSTALL.md) or [Mac installation and release checks](MACOS_INSTALL.md).
 - Windows, macOS and Linux source builds remain available below. Linux/Steam Deck have no bundled Workshop runtime yet.
 
 ### Native source build (Windows / macOS / Linux)
@@ -80,7 +80,7 @@ This is a **local source installation**, not a portable release: the JAR records
 
 Logs and diagnostic files live in `%LOCALAPPDATA%\STS1CombatSolver` on Windows, `~/Library/Application Support/STS1CombatSolver` on macOS, and `${XDG_STATE_HOME:-$HOME/.local/state}/STS1CombatSolver` on Linux. A relative `XDG_STATE_HOME` is ignored. Legacy WSL builds retain their configured log directory.
 
-CI covers Python 3.11 and 3.14 on Windows, macOS and Linux, plus separately built Apple Silicon and Intel portable packages. It checks native search/replay, real worker requests and cancellation, diagnostic retention/export, localization and runtime selection. Mac package checks use production Java extraction and the bundled Python in a relocated Unicode path with a minimal PATH. These checks do not prove full live-game parity. CI does not redistribute proprietary game JARs.
+CI covers Python 3.11 and 3.14 on Windows, macOS and Linux, plus the Apple Silicon portable package. It checks native search/replay, real worker requests and cancellation, diagnostic retention/export, localization and runtime selection. Mac package checks use production Java extraction and the bundled Python in a relocated Unicode path with a minimal PATH. These checks do not prove full live-game parity. CI does not redistribute proprietary game JARs.
 
 ## How to use
 

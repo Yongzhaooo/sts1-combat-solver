@@ -10,7 +10,7 @@ with tempfile.TemporaryDirectory() as tmp:
     content = root / 'content'
     content.mkdir()
     names = ('STS1CombatSolver.jar', 'sts1-solver-runtime/python/python.exe',
-             'sts1-solver-macos-arm64.zip', 'sts1-solver-macos-x86_64.zip',
+             'sts1-solver-macos-arm64.zip',
              'WINDOWS_INSTALL.md', 'MACOS_INSTALL.md', 'LICENSE')
     for name in names:
         path = content / name
@@ -30,7 +30,6 @@ with tempfile.TemporaryDirectory() as tmp:
             windows = '-windows-' in asset['zip']
             assert ('sts1-solver-runtime/python/python.exe' in bundle.namelist()) == windows
             assert ('sts1-solver-macos-arm64.zip' in bundle.namelist()) != windows
-            assert ('sts1-solver-macos-x86_64.zip' in bundle.namelist()) != windows
     (content / 'STS1CombatSolver.jar').write_bytes(b'tampered')
     try:
         package(content, root / 'bad', '0.8.0-test')

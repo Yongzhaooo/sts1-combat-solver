@@ -41,7 +41,7 @@ ModTheSpire 的 `STS1CombatSolver/config.properties` 中，`searchWorkers=0` 表
 
 - [订阅 Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)，或下载 [v0.4.2 运行包](https://github.com/Yongzhaooo/sts1-combat-solver/releases/tag/v0.4.2)。
 - 面板“设置”页的 − / + 支持 60%–160% 缩放，点击百分比恢复默认。设置会保存，只调整求解器面板，不改变游戏分辨率。
-- 工坊包支持 Windows 10/11 x64 和 macOS 11+（Apple Silicon、Intel）。另行订阅 ModTheSpire、BaseMod，选择“使用模组启动”并勾选 BaseMod 与求解器即可，无需另装 Python、编译器、WSL 或克隆源码。详见 [Windows 安装说明](WINDOWS_INSTALL.md)及 [Mac 安装与发布验证](MACOS_INSTALL.md)。
+- 工坊包支持 Windows 10/11 x64 和 Apple Silicon 的 macOS 11+（自 v0.9.0 起不再支持 Intel Mac）。另行订阅 ModTheSpire、BaseMod，选择“使用模组启动”并勾选 BaseMod 与求解器即可，无需另装 Python、编译器、WSL 或克隆源码。详见 [Windows 安装说明](WINDOWS_INSTALL.md)及 [Mac 安装与发布验证](MACOS_INSTALL.md)。
 - Windows、macOS、Linux 的本地源码构建见下文。Linux／Steam Deck 暂无随工坊分发的运行时。
 
 ### 三平台原生源码构建
@@ -78,7 +78,7 @@ py -3 -m venv .venv
 
 日志与诊断目录：Windows 为 `%LOCALAPPDATA%\STS1CombatSolver`；macOS 为 `~/Library/Application Support/STS1CombatSolver`；Linux 为 `${XDG_STATE_HOME:-$HOME/.local/state}/STS1CombatSolver`（相对的 `XDG_STATE_HOME` 会被忽略）。旧 WSL 模式继续使用原配置目录。
 
-CI 覆盖 Windows、macOS、Linux 的 Python 3.11／3.14，以及独立构建的 Apple Silicon、Intel 便携包。检查包括原生搜索／回放、真实求解请求、中断、诊断保留／导出、语言和运行时选择。Mac 包用正式 Java 解包逻辑，在中文路径和最小 PATH 下启动随包 Python。这些检查不代表原版机制完全对齐；CI 不分发专有游戏 JAR。
+CI 覆盖 Windows、macOS、Linux 的 Python 3.11／3.14，以及 Apple Silicon 便携包。检查包括原生搜索／回放、真实求解请求、中断、诊断保留／导出、语言和运行时选择。Mac 包用正式 Java 解包逻辑，在中文路径和最小 PATH 下启动随包 Python。这些检查不代表原版机制完全对齐；CI 不分发专有游戏 JAR。
 
 ## 使用教程
 

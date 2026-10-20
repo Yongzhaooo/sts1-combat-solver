@@ -179,6 +179,7 @@ class Advisor:
         self.interrupt = threading.Event()
         self.manual_choice = False
         self.max_workers = worker_limit()
+        self.deep_gate = None
 
     def phase(self, name):
         if hasattr(self, 'on_phase'):
@@ -190,9 +191,10 @@ class Advisor:
     def search_plan(self, root, budget, slots, credit, index, kill_thieves, generated, initial_plan=None):
         return search_plan(self.native_search, root, budget, slots, credit, index,
                            kill_thieves, generated, game=self.root_game,
-                           interrupt=self.interrupt, initial_plan=initial_plan)
+                           interrupt=self.interrupt, initial_plan=initial_plan, deep_gate=self.deep_gate)
 
     def solve(self, view, budget):
+        self.deep_gate = None
         self.phase('导入战斗状态')
         from sim_patch.parity.adapter import ActionMapper
         s = self.search
@@ -203,6 +205,7 @@ class Advisor:
         if type(reroll) is not bool:
             raise ValueError('无效的 Discovery 随机规则')
         self.native_search.set_discovery_reroll(reroll)
+        self.native_search.set_discovery_frames(view['game'].get('solver_discovery_frames') is True)
         # Feed mode (mod setting): max HP gained in this combat counts twice in the plan value.
         self.native_search.set_max_hp_gain_weight(2.0 if view['game'].get('solver_auto_context', {}).get('feed_mode') is True else 1.0)
         self.native_search.set_incense_targets(incense_targets(view['game']))
@@ -297,11 +300,14 @@ class Advisor:
         # MULTI_POTION_LOSS effective HP loss.
         fast_boss = view['game'].get('solver_auto_context', {}).get('boss_fast_finish') is True
         initial_plan = None
+        initial_seconds = None
         clean_regular = False
         if budget == 8000 and not fast_boss and potions and not smoke_slots:
             self.searching = [(0, 'no-potion', '不用药')]
             try:
+                initial_seconds = time.monotonic()
                 initial_plan = dict(self.native_search.plan(self.root, budget, [], credit, 0, False, False))
+                initial_seconds = time.monotonic() - initial_seconds
             except BaseException:
                 self.native_search.cancel()
                 self.searching = []
@@ -310,6 +316,10 @@ class Advisor:
                              and health(initial_plan, self.root_game, True)['loss'] == 0
                              and not initial_plan.get('used_tail') and not initial_plan.get('used_fairy')
                              and not toolbox_selection(view['game']))
+        if (_ELITE_DEEP_GATE is not None and self.root_game.get('act', 4) <= 3
+                and self.root_game.get('solver_auto_context', {}).get('room') == 'MonsterRoomElite'):
+            self.deep_gate = _ELITE_DEEP_GATE.bind(self.root_game, initial_plan, initial_seconds,
+                                                   len(potions) - len(smoke_slots))
         stages = [[()]] if fast_boss or (clean_regular and not brew_order) else [[()] + [(slot,) for slot, _ in potions]]
         strength_slots = [slot for slot, _ in potions
                           if view['game']['potions'][slot]['id'] in ('Strength Potion', 'FlexPotion')]
@@ -1122,6 +1132,79 @@ def serve(runs_dir=None):
     finally:
         stop()
         reports.close()
+
+
+# ---- Executor tiers (pi_base v2.8), shared by headless stages and the desktop mod, which ships
+# headless_tiers.json too. Without the file and with every variable unset nothing below applies.
+# Acts 1-3 divide each native plan() budget by
+# STS_ACT13_BUDGET_DIVISOR, overridable per room type with STS_ACT13_ROOM_DIVISORS (JSON);
+# act 4 is never divided. STS_NN_PRIOR_WEIGHTS enables the learned move-ordering prior in
+# acts 1-3, limited to the room types in STS_NN_PRIOR_ROOMS when that is set.
+# A frozen headless stage ships headless_tiers.json beside this file with its defaults; a set
+# variable (even empty) overrides the file, and relative weight paths resolve from this directory.
+_TIERS_FILE = Path(__file__).with_name('headless_tiers.json')
+_TIERS = json.loads(_TIERS_FILE.read_text(encoding='utf-8')) if _TIERS_FILE.exists() else {}
+_tier = lambda key, default='': os.environ.get(key, _TIERS.get(key, default))
+_ACT13_DIVISOR = int(_tier('STS_ACT13_BUDGET_DIVISOR', '1'))
+_ACT13_ROOM_DIVISORS = {k: int(v) for k, v in json.loads(_tier('STS_ACT13_ROOM_DIVISORS') or '{}').items()}
+_NN_WEIGHTS = str(_TIERS_FILE.parent / _tier('STS_NN_PRIOR_WEIGHTS')) if _tier('STS_NN_PRIOR_WEIGHTS') else ''
+_NN_ROOMS = {r for r in _tier('STS_NN_PRIOR_ROOMS').split(',') if r}
+# Small-loop rescue beam in acts 1-3 (act 4 keeps the native defaults): STS_RESCUE_ACT13 is JSON with per_sim,
+# per_sim_nogate (fights the loop gate rejects), max_width and plateau; STS_RESCUE_PER_SIM sets both per_sim values.
+_RESCUE = json.loads(_tier('STS_RESCUE_ACT13') or '{}')
+if _tier('STS_RESCUE_PER_SIM'):
+    _RESCUE.update(per_sim=int(_tier('STS_RESCUE_PER_SIM')), per_sim_nogate=int(_tier('STS_RESCUE_PER_SIM')))
+_RESCUE_DEFAULT = (160, 160, 2048, False)
+# Desktop high-speed mode (solver_auto_context.high_speed): every fight in every act gets 1/20 of the
+# budget, the prior in every room and a 40-transition rescue beam (the r40 arm of the v2.8 rescue pricing).
+_FAST_DIVISOR, _FAST_RESCUE = 20, (40, 40, 2048, False)
+_RESCUE_ARGS = (_RESCUE.get('per_sim', 160), _RESCUE.get('per_sim_nogate', _RESCUE.get('per_sim', 160)),
+                _RESCUE.get('max_width', 2048), bool(_RESCUE.get('plateau', False)))
+# STS_ELITE_DEEP_GATE: model JSON (relative to this directory) that lets acts 1-3 elites skip the standard
+# search's deep refinement when it is predicted to buy little HP per second; see deep_gate.py.
+_ELITE_DEEP_GATE = None
+if _tier('STS_ELITE_DEEP_GATE'):
+    from deep_gate import DeepGate
+    _ELITE_DEEP_GATE = DeepGate(str(_TIERS_FILE.parent / _tier('STS_ELITE_DEEP_GATE')))
+# Beam alone (no MCTS), transitions per simulation: STS_BEAM_ONLY for all rooms in every act, STS_BEAM_ONLY_ROOMS (JSON)
+# per room type in acts 1-3 only, e.g. {"MonsterRoomBoss": 160} (the Heart keeps MCTS: the beam alone cost more there).
+_BEAM_ONLY = int(_tier('STS_BEAM_ONLY') or 0)
+_BEAM_ONLY_ROOMS = {k: int(v) for k, v in json.loads(_tier('STS_BEAM_ONLY_ROOMS') or '{}').items()}
+if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != _RESCUE_DEFAULT or _BEAM_ONLY or _BEAM_ONLY_ROOMS:
+    _act13_divisor = [1]
+    _NN_CONFIG = json.loads(_tier('STS_NN_PRIOR_CONFIG')) if _NN_WEIGHTS else None
+
+    def _tier_install(native):
+        if getattr(native, '_act13_original_plan', None) is None:
+            original = native.plan
+            native._act13_original_plan = original
+            native.plan = lambda root, simulations, *args: original(root, max(1, simulations // _act13_divisor[0]), *args)
+        if _NN_WEIGHTS and not getattr(native, '_nn_loaded', False):
+            native.nn_load(_NN_WEIGHTS)
+            native._nn_loaded = True
+
+    def _tier_wrap(method):
+        def run(self, view, *args):
+            native = sys.modules['overlay_search']
+            _tier_install(native)
+            act = int(view['game'].get('act', 4))
+            context = view['game'].get('solver_auto_context') or {}
+            room = context.get('room', '')
+            fast = context.get('high_speed') is True
+            _act13_divisor[0] = _FAST_DIVISOR if fast else _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if act <= 3 else 1
+            if _BEAM_ONLY or _BEAM_ONLY_ROOMS:
+                native.set_beam_only((_BEAM_ONLY_ROOMS.get(room, 0) if act <= 3 else 0) or _BEAM_ONLY)
+            # Set every call: a previous high-speed call must not leave its beam behind.
+            native.set_rescue(*(_FAST_RESCUE if fast else _RESCUE_ARGS if act <= 3 else _RESCUE_DEFAULT))
+            if _NN_WEIGHTS:
+                c = _NN_CONFIG
+                native.nn_config(fast or act <= 3 and (not _NN_ROOMS or room in _NN_ROOMS), c['widen_c'], c['widen_alpha'],
+                                 c['min_width'], c['prior_weight'], c['rank_tau'], c['leaf_greedy'])
+            return method(self, view, *args)
+        return run
+
+    Advisor.solve = _tier_wrap(Advisor.solve)
+    Advisor.advance = _tier_wrap(Advisor.advance)
 
 
 if __name__ == '__main__':
