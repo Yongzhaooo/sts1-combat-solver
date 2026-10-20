@@ -272,6 +272,13 @@ static bool macroFinish(const BattleContext &root, const BattleContext &end) {
 }
 PYBIND11_MODULE(overlay_search, m) {
     m.def("_same_victory", &overlaySameVictory);
+    // Rule-table check for tools/check_loop_gate.py: matched family ids for (card id, upgraded) pairs and relic ids.
+    m.def("loop_families", [](const std::vector<std::pair<CardId,bool>> &cards, const std::vector<RelicId> &relics) {
+        std::vector<std::string> ids;
+        const auto mask=loop_gate::matches(cards,relics);
+        for(std::size_t i=0;i<loop_gate::families().size();++i) if(mask>>i & 1u) ids.push_back(loop_gate::families()[i].id);
+        return ids;
+    });
     m.def("revival_inventory", [](const BattleContext &bc) {
         return std::make_pair(bc.player.hasRelic<RelicId::LIZARD_TAIL>() ? 1 : 0, fairyCount(bc));
     });
@@ -471,6 +478,7 @@ PYBIND11_MODULE(overlay_search, m) {
         out["loop_beam_mcts_value"]=mctsValue;
         out["loop_macro_used"]=macroUsed;
         out["loop_macro_actions"]=loop_beam::stats.macroActions;
+        out["loop_gate"]=loop_beam::cyclePotential(root);
         return out;
     },py::arg("root"),py::arg("simulations"),py::arg("slots"),py::arg("recovery"),py::arg("index"),py::arg("kill_thieves")=false,py::arg("generated_potions")=false,py::arg("boss_fast")=false,py::arg("smoke_opening")=false,py::arg("bounded")=false,py::arg("smoke_loss_threshold")=15);
     m.def("cancel", []() { stopRequested=true; ++generation; });

@@ -632,7 +632,8 @@ class Advisor:
         # Same acceptance logic as LiveSearch, with production RNG validation in
         # view_from_state instead of the independent test-oracle requirement.
         s, action = self.search, self.pending
-        if not s.actions:
+        # action is None after a pure confirmation; the plan may already be empty then.
+        if not s.actions and action is not None:
             raise ValueError('没有可继续执行的路线')
         if action is None:
             if s.pending_multi is not None:
@@ -664,7 +665,8 @@ class Advisor:
 
     def result(self, view):
         s = self.search
-        if not s.actions:
+        # A final hand selection resolves natively but the Java picker still needs its confirm.
+        if not s.actions and not s.confirmation(view):
             return {'status': 'complete', 'message': '当前路线已执行完毕。'}
         # next_action prepares the first multi-select click and mutates its
         # transport queue. That preparation has not yet executed in the game.

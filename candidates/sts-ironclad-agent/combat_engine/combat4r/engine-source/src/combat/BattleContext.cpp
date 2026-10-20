@@ -2644,9 +2644,6 @@ void BattleContext::playTopCardInDrawPile(int monsterTargetIdx, bool exhausts) {
 
 void BattleContext::moveToHandHelper(CardInstance c) {
     if (cards.cardsInHand < 10) {
-        if (player.hasStatus<PS::CORRUPTION>() && c.getType() == CardType::SKILL) {
-            c.setCostForTurn(-9);
-        }
         cards.moveToHand(c);
     } else {
         cards.moveToDiscardPile(c);
@@ -3167,10 +3164,14 @@ void BattleContext::chooseExhaustOneCard(int handIdx) {
 
 
 void BattleContext::chooseExhumeCard(int exhaustIdx) {
-    // todo game handles corruption here
     auto c = cards.exhaustPile[exhaustIdx];
     cards.removeFromExhaustPile(exhaustIdx);
     cards.notifyAddCardToCombat(c);
+    // Of the Java actions that move a card into hand, only ExhumeAction applies Corruption;
+    // SkillFromDeckToHand and BetterDiscardPileToHand leave the turn cost alone.
+    if (cards.cardsInHand < 10 && player.hasStatus<PS::CORRUPTION>() && c.getType() == CardType::SKILL) {
+        c.setCostForTurn(-9);
+    }
 
     moveToHandHelper(c);
 }

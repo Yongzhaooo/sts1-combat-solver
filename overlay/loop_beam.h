@@ -8,12 +8,14 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 #include <memory>
 #include <numeric>
 #include <sstream>
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include "loop_gate.h"
 
 namespace loop_beam {
 struct Path {
@@ -46,22 +48,8 @@ inline std::shared_ptr<const Path> append(const Node &node, search::Action actio
     return path;
 }
 
-inline bool cyclePotential(const BattleContext &b) {
-    // shortcut: a cheap Ironclad/colorless draw gate; add other characters with their simulator coverage.
-    auto draws = [](const CardInstance &c) {
-        switch (c.id) {
-        case CardId::POMMEL_STRIKE: case CardId::DROPKICK: case CardId::SHRUG_IT_OFF:
-        case CardId::FINESSE: case CardId::FLASH_OF_STEEL: case CardId::DARK_EMBRACE:
-            return true;
-        default: return false;
-        }
-    };
-    if (b.player.hasStatus<PS::DARK_EMBRACE>()) return true;
-    for (int i = 0; i < b.cards.cardsInHand; ++i) if (draws(b.cards.hand[i])) return true;
-    for (auto &c : b.cards.drawPile) if (draws(c)) return true;
-    for (auto &c : b.cards.discardPile) if (draws(c)) return true;
-    return false;
-}
+// Root gate (layer 1): a known loop family is present (loop_gate.h). Off means no quick loop pass and no macros.
+inline bool cyclePotential(const BattleContext &b) { return loop_gate::matches(b) != 0; }
 
 inline std::vector<const Path *> cycle(const Node &node) {
     std::vector<const Path *> motif;
@@ -80,19 +68,24 @@ inline std::vector<const Path *> cycle(const Node &node) {
 }
 
 template <class Cancel, class Exit>
-Node repeatCycle(const Node &start, const std::vector<const Path *> &motif, long long cap, Cancel cancelled, Exit checkpoint) {
+Node repeatCycle(const Node &start, const std::vector<const Path *> &motif, long long cap, Cancel cancelled, Exit checkpoint,
+                 bool payHp = false) {
     Node out{std::make_shared<BattleContext>(*start.state), start.path, start.powers};
     ++stats.macroAttempts;
     int played = 0;
+    // Pseudo-infinite families (Bloodletting, Offering) trade HP for energy every circuit. They may keep going above a
+    // safety floor while each circuit still lowers the enemies' total HP; every other loop stops at its first HP loss.
+    const int floor = start.state->player.maxHp / 4;
+    auto enemyHp = [&]() { int t = 0; for (int i = 0; i < out.state->monsters.monsterCount; ++i) t += std::max(0, out.state->monsters.arr[i].curHp); return t; };
     while (played < 256) {
-        const int hp = out.state->player.curHp, energy = out.state->player.energy;
+        const int hp = out.state->player.curHp, energy = out.state->player.energy, enemy = enemyHp();
         const auto beforeShuffle = out.state->shuffleRng.counter;
         for (auto p : motif) {
             auto &b = *out.state;
             if (stats.transitions >= cap || cancelled() || played >= 256
                     || b.loopCount >= BattleContext::ACTION_EXECUTION_LIMIT
                     || b.outcome != Outcome::UNDECIDED || b.inputState != InputState::PLAYER_NORMAL
-                    || b.turn != start.state->turn || b.player.curHp < hp
+                    || b.turn != start.state->turn || (payHp ? b.player.curHp <= floor : b.player.curHp < hp)
                     || b.player.hasStatus<PS::NO_DRAW>()) return out;
             int source = -1;
             for (int i = 0; i < b.cards.cardsInHand; ++i)
@@ -112,7 +105,9 @@ Node repeatCycle(const Node &start, const std::vector<const Path *> &motif, long
         }
         ++stats.macroCycles;
         // Replaying one circuit is evidence of a candidate, not proof of an infinite loop.
-        if (out.state->player.curHp < hp || out.state->shuffleRng.counter == beforeShuffle) return out;
+        if ((payHp ? out.state->player.curHp <= floor || (out.state->player.curHp < hp && enemyHp() >= enemy)
+                   : out.state->player.curHp < hp)
+                || out.state->shuffleRng.counter == beforeShuffle) return out;
         // Finite cycles may spend energy; preserve each exit before trying another legal circuit.
         if (out.state->player.energy < energy)
             checkpoint(Node{std::make_shared<BattleContext>(*out.state), out.path, out.powers});
@@ -218,6 +213,11 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
     };
     auto stop = [&]() { return stats.transitions >= cap || cancelled(); };
     std::vector<Node> frontier{{std::make_shared<BattleContext>(root), nullptr, 0}};
+    // Only a per-turn damage cap (Invincible: the Heart) makes a loop worthless before the turn ends; elsewhere the
+    // per-turn quota below stays off and the search is unchanged.
+    const bool payHp = loop_gate::pseudo(loop_gate::matches(root));
+    bool damageCap = false;
+    for (int i = 0; i < root.monsters.monsterCount; ++i) damageCap |= root.monsters.arr[i].hasStatus<MS::INVINCIBLE>();
     // The transition cap bounds a pass; 256 actions did not reach the end of long loop fights (Awakened One, 320+300 HP).
     for (int depth = 0; depth < 4096 && !frontier.empty() && !stop(); ++depth) {
         std::vector<Node> candidates;
@@ -225,6 +225,18 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
         // in turn on one index order (as below), and lane L only ever picks among its first (L+1)*width distinct buckets, so
         // keeping those, in arrival order, leaves the final selection unchanged.
         const std::size_t compactAt = 12 * std::size_t(width) + 64;
+        // Lane scores compare states of different turns: one that just ended its turn has zero block against the next
+        // attack and always ranks below another loop in the old turn. With an unbounded loop past the Heart's damage cap
+        // every kept state then stays in that turn until its HP runs out. So under a damage cap each later turn also keeps
+        // its own leaders, ranked on lane 0 against states of the same turn only.
+        auto byTurn = [&]() {
+            std::map<int, std::vector<std::size_t>> groups;
+            for (std::size_t i = 0; i < candidates.size(); ++i) groups[candidates[i].state->turn].push_back(i);
+            for (auto &group : groups)
+                std::stable_sort(group.second.begin(), group.second.end(),
+                                 [&](auto x, auto y) { return candidates[x].scores[0] > candidates[y].scores[0]; });
+            return groups;
+        };
         auto compact = [&]() {
             std::vector<std::size_t> order(candidates.size());
             std::iota(order.begin(), order.end(), 0);
@@ -235,6 +247,15 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                 for (std::size_t k = 0; k < order.size() && seen.size() < std::size_t(lane + 1) * width; ++k)
                     if (seen.insert(bucketKey(candidates[order[k]])).second) keep[order[k]] = 1;
             }
+            // Each turn's leaders for the per-turn quota below. Later candidates only add turns, so the final quota is no
+            // larger; keeping more would let stalling lines over many turns refill the layer past compactAt.
+            auto groups = damageCap ? byTurn() : decltype(byTurn()){};
+            const std::size_t quota = std::max<std::size_t>(1, width / std::max<std::size_t>(1, groups.size() - 1));
+            for (auto &group : groups) {
+                std::unordered_set<std::string> seen;
+                for (std::size_t k = 0; k < group.second.size() && seen.size() < quota; ++k)
+                    if (seen.insert(bucketKey(candidates[group.second[k]])).second) keep[group.second[k]] = 1;
+            }
             std::vector<Node> kept;
             for (std::size_t i = 0; i < candidates.size(); ++i) if (keep[i]) kept.push_back(std::move(candidates[i]));
             candidates.swap(kept);
@@ -242,7 +263,8 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
         for (auto &parent : frontier) {
             if (macros && !stop() && !parent.state->player.hasStatus<PS::NO_DRAW>()) {
                 auto motif = cycle(parent);
-                if (!motif.empty()) {
+                // Layer 2: repeat only from states whose loop cards fit the hand or can still be thinned.
+                if (!motif.empty() && loop_gate::runnable(*parent.state)) {
                     auto checkpoint = [&](Node child) {
                         auto &b = *child.state;
                         if (b.outcome == Outcome::UNDECIDED && b.player.curHp > 0
@@ -253,7 +275,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                             if (candidates.size() > compactAt) compact();
                         }
                     };
-                    auto child = repeatCycle(parent, motif, cap, cancelled, checkpoint);
+                    auto child = repeatCycle(parent, motif, cap, cancelled, checkpoint, payHp);
                     auto &b = *child.state;
                     if (b.outcome == Outcome::PLAYER_VICTORY && b.player.curHp > 0) {
                         double v = value(b);
@@ -307,6 +329,16 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                 auto &n = candidates[order[k]];
                 if (buckets.insert(bucketKey(n)).second) { next.push_back(n); ++kept; }
             }
+        }
+        if (damageCap && !candidates.empty()) {
+            auto groups = byTurn();
+            groups.erase(groups.begin());  // the earliest turn is the one the lanes above already favour
+            const int quota = groups.empty() ? 0 : std::max(1, width / int(groups.size()));
+            for (auto &group : groups)
+                for (std::size_t k = 0, kept = 0; k < group.second.size() && kept < std::size_t(quota); ++k) {
+                    auto &n = candidates[group.second[k]];
+                    if (buckets.insert(bucketKey(n)).second) { next.push_back(n); ++kept; }
+                }
         }
         frontier = std::move(next);
         stats.layers = std::max(stats.layers, depth + 1);
