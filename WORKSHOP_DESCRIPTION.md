@@ -15,6 +15,6 @@ Subscribe with ModTheSpire and BaseMod. Windows and both Mac architectures inclu
 
 [源码与下载 / Source & downloads](https://github.com/Yongzhaooo/sts1-combat-solver)
 
-v0.8.0-beta.2: Added shop entry, exit and transaction records, plus configurable search concurrency. Fixed confirmation for consecutive selections triggered by Duplication Potion. Prefer winning routes without a new Parasite. Separate Windows and macOS downloads on GitHub. Burning Pact mid-selection import and selection changes remain deferred. Thanks to 七月流火（七月火）, ૭٩奶油糖果, 幼猫（浪花）, and 严肃研究鸡煲打法中.
+v0.8.0-beta.3: Fixed autoplay stopping at the card picker when a hand selection such as Burning Pact is the route's last step. In the Heart fight the search no longer keeps looping past the 200-damage cap until it runs out of HP, so it can find wins that need to end the turn. Corruption costs for Enlightenment+ and Secret Technique now match the game. Some Heart fights that rely on retries and Gambler's Brew may still be judged lost. Burning Pact mid-selection import and selection changes remain deferred. Thanks to 七月流火（七月火）.
 
 Silent, Defect and Watcher solvers are open for collaboration: see CONTRIBUTING.md on GitHub or write to yongzhao.derek@gmail.com.
