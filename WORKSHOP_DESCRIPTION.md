@@ -7,7 +7,7 @@ You build the deck and pick the path; it fights. Step, turn and automatic execut
 
 - Automatic potion use in fights and post-combat potion swaps.
 - Plans around relic counters (Happy Flower, Incense Burner, Pen Nib and more) and Hand of Greed and Feed kills.
-- Search effort is set by act and room. On older PCs, High-speed mode on the panel searches 1/20 as much: faster, with a lower win rate and more HP lost.
+- Search effort is set by act and room. On older PCs, High-speed mode on the panel searches 1/20 as much: faster, with a lower win rate and more HP lost; Streak mode keeps the full search in acts 1-3: slower.
 
 **Full autopilot (early):** choose Manual, Combat auto or AI autopilot when a run starts; F9 returns to Manual. The autopilot's network and reviewed rules win 73.1% of 2,442 A20 three-key Heart runs in training (71.0% of 1,014 with v0.9 search); it upgrades too rarely and lacks a deckbuilding plan.
 
@@ -17,7 +17,7 @@ Subscribe with ModTheSpire and BaseMod. Windows x64 and Apple Silicon Macs; Inte
 
 [源码与下载 / Source & downloads](https://github.com/Yongzhaooo/sts1-combat-solver)
 
-v0.9.1: Better potion use. After the act 1 and 2 Bosses and the last act 3 Boss, the next act heals 75% of missing HP, so those fights count a quarter of HP lost; when a potion-free win costs at most 50 HP, no potion lines are searched, keeping valuable bottles. Swift, Gambler's Brew, Distilled Chaos, Heart of Iron and Cultist potions are worth more: drunk less casually in fights and preferred as rewards. Fixed: Gambler's Brew was priced as an ordinary potion in fights.
+v0.9.2: New Streak mode searches acts 1-3 without budget cuts: slower, steadier. Relic counters are held harder: Incense Burner on its target counter counts 30 HP; when the next fight can be an elite, Happy Flower, Sundial, Nunchaku, Pen Nib and Ink Bottle counters count double, and triple before a Boss; Happy Flower prefers to stop at 2. A hallway or elite win that misses Feed is searched again with twice the budget. Fixed: the Smoke Bomb opening escaped fights it could win with little HP lost; potions that change nothing are no longer drunk; several combat simulation mismatches (Time Eater, Unceasing Top, Medical Kit and Blue Candle, Red Skull with Pen Nib).
 
 Special thanks to 七月流火（猫火） for long-term testing and feedback.
 
