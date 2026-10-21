@@ -1198,13 +1198,24 @@ _BEAM_ONLY = int(_tier('STS_BEAM_ONLY') or 0)
 _BEAM_ONLY_ROOMS = {k: int(v) for k, v in json.loads(_tier('STS_BEAM_ONLY_ROOMS') or '{}').items()}
 if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != _RESCUE_DEFAULT or _BEAM_ONLY or _BEAM_ONLY_ROOMS:
     _act13_divisor = [1]
+    # Feed escalation (default, user 2026-10-21): a divided non-Boss plan that wins without Feed's max HP is searched
+    # once more at 2x its divided budget (natural roots: Feed 199 -> 210 of 250, CPU 1.37x, no win lost).
+    _FEED_ESCALATE = 2
+    _feed_stake = [None]   # root max HP while Feed is in the piles of a non-Boss fight, else None
     _NN_CONFIG = json.loads(_tier('STS_NN_PRIOR_CONFIG')) if _NN_WEIGHTS else None
 
     def _tier_install(native):
         if getattr(native, '_act13_original_plan', None) is None:
             original = native.plan
             native._act13_original_plan = original
-            native.plan = lambda root, simulations, *args: original(root, max(1, simulations // _act13_divisor[0]), *args)
+            def plan(root, simulations, *args):
+                divided = max(1, simulations // _act13_divisor[0])
+                out = original(root, divided, *args)
+                if (_feed_stake[0] is not None and divided < simulations and out['outcome'] == 1
+                        and out['max_hp'] <= _feed_stake[0]):
+                    out = original(root, min(simulations, divided * _FEED_ESCALATE), *args)
+                return out
+            native.plan = plan
         if _NN_WEIGHTS and not getattr(native, '_nn_loaded', False):
             native.nn_load(_NN_WEIGHTS)
             native._nn_loaded = True
@@ -1218,6 +1229,10 @@ if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != 
             room = context.get('room', '')
             fast = context.get('high_speed') is True
             _act13_divisor[0] = _FAST_DIVISOR if fast else _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if act <= 3 else 1
+            cs = view['game'].get('combat_state') or {}
+            feed = room != 'MonsterRoomBoss' and any(c['id'] == 'Feed' for k in ('hand', 'draw_pile', 'discard_pile')
+                                                      for c in cs.get(k) or [])
+            _feed_stake[0] = cs['player']['max_hp'] if feed else None
             if _BEAM_ONLY or _BEAM_ONLY_ROOMS:
                 native.set_beam_only((_BEAM_ONLY_ROOMS.get(room, 0) if act <= 3 else 0) or _BEAM_ONLY)
             # Set every call: a previous high-speed call must not leave its beam behind.
