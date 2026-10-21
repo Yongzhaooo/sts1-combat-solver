@@ -81,6 +81,7 @@ namespace {
         if (src.contains("base_cost")) card.cost = py::cast<int>(src["base_cost"]);
         if (src.contains("free_to_play_once")) card.freeToPlayOnce = py::cast<bool>(src["free_to_play_once"]);
         if (src.contains("retain")) card.retain = py::cast<bool>(src["retain"]);
+        if (src.contains("exhausts")) card.exhaust = py::cast<bool>(src["exhausts"]);
         return card;
     }
 

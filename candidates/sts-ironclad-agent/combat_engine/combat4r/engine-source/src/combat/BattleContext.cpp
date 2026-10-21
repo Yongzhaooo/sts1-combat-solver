@@ -1986,11 +1986,13 @@ void BattleContext::onUseStatusOrCurseCard() {
         if (p.hasRelic<R::BLUE_CANDLE>()) {
             addToBot( Actions::PlayerLoseHp(1, true) );
             item.exhaustOnUse = true;
+            c.exhaust = true; // BlueCandle.onUseCard sets card.exhaust like Medical Kit
         }
 
     } else if (c.getType() == CardType::STATUS) {
         if (p.hasRelic<R::MEDICAL_KIT>()) {
             item.exhaustOnUse = true;
+            c.exhaust = true; // MedicalKit.onUseCard: card.exhaust = true stays on a copy Strange Spoon saves
         }
     }
 
