@@ -418,6 +418,20 @@ class ActionMapper:
                         candidates = [card for unique, card in simulated.items()
                                       if unique not in reserved
                                       and self.c.original_card(original) == self.c.simulator_card(card)]
+                        if not candidates:
+                            # StasisPower.onDeath returns its card by MakeTempCardInHandAction(card, false, true): a
+                            # same-UUID copy the truth export lists under a new iid while the native card keeps its id.
+                            # Take over only a native hand card whose bound identity left the view. Cards Armaments
+                            # holds out are not upgradeable, so none equals an upgrade candidate.
+                            present = {card["uuid"] for key in PILES for card in combat.get(key, [])}
+                            present |= {card["uuid"] for card in combat.get("limbo") or []}
+                            if combat.get("card_in_play"):
+                                present.add(combat["card_in_play"]["uuid"])
+                            live = {unique for key, unique in self.uuids.items() if key in present}
+                            stale = {unique for key, unique in self.uuids.items() if key not in present}
+                            stale -= live | set(updates.values())
+                            candidates = [card for unique, card in simulated.items() if unique in stale
+                                          and self.c.original_card(original) == self.c.simulator_card(card)]
                         # Every candidate equals the original's projection, which holds each native card field but
                         # unique_id (retain is never set in production), so any choice gives the same state; take the
                         # first unreserved one in hand order (Dual Wield copies under Duplication).

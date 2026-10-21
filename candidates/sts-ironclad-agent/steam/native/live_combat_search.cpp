@@ -3,6 +3,7 @@
 // after the corresponding command has executed in the original game.
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <algorithm>
 #include <combat_search_reuse.h>
 
 namespace py = pybind11;
@@ -87,7 +88,11 @@ PYBIND11_MODULE(live_combat_search, m) {
                 auto &p=next.player;
                 // RedSkull$1 adds Strength directly and sets its private flag.
                 if (!p.redSkullActive && p.isBloodied) {
+                    const bool had=p.strength!=0;
                     p.buff<PS::STRENGTH>(3);
+                    // AbstractCreature.addPower appends a new power without Collections.sort; atDamageGive follows that list.
+                    if(!had)std::stable_partition(p.powerOrder.begin(),p.powerOrder.end(),
+                        [](const Player::PowerRef &power){return power.status!=PS::STRENGTH;});
                     p.redSkullActive=true;
                 }
             }});

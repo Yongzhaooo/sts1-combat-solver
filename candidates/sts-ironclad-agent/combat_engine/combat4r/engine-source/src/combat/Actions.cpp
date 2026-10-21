@@ -271,6 +271,12 @@ Action Actions::DiscardNoTriggerCard() {
     return {[](BattleContext &bc) {
         const auto &c = bc.curCardQueueItem.card;
         bc.cards.notifyRemoveFromHand(c);
+        // UseCardAction without use triggers still exhausts on card.exhaust (a Burn the Medical Kit marked earlier),
+        // after Strange Spoon's roll.
+        if (c.doesExhaust() && !(bc.player.hasRelic<R::STRANGE_SPOON>() && bc.cardRandomRng.randomBoolean())) {
+            bc.triggerAndMoveToExhaustPile(c);
+            return;
+        }
         bc.cards.moveToDiscardPile(c);
     }};
 }
@@ -907,7 +913,8 @@ Action Actions::WarcryAction() {
 Action Actions::TimeEaterPlayCardQueueItem(const CardQueueItem &x) {
     return {[=] (BattleContext &bc) {
         auto item = x;
-        item.exhaustOnUse |= bc.curCardQueueItem.card.doesExhaust();
+        // Java UseCardAction: the cleared card's own exhaust / exhaustOnUseOnce, not the card whose use ended the turn.
+        item.exhaustOnUse |= item.card.doesExhaust();
         item.triggerOnUse = false;
         bc.curCardQueueItem = item;
         bc.onAfterUseCard();

@@ -68,7 +68,7 @@ bool CardInstance::isStrikeCard() const {
 }
 
 bool CardInstance::doesExhaust() const {
-    return doesCardExhaust(id, upgraded);
+    return exhaust || doesCardExhaust(id, upgraded);
 }
 
 bool CardInstance::hasSelfRetain() const {
