@@ -569,6 +569,25 @@ class Advisor:
                 self.branch_info.append({'id': branch_id, 'name': name, 'available': False,
                                          'message': '本轮搜索未找到使用路线'})
                 return
+            from plan_reduction import drop_potions
+            won = plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
+            idle = drop_potions(self.root, plan['actions']) if uses and won and not generated_uses and not smoke else None
+            if idle is not None:
+                # The bottles changed nothing: the same victory is a no-potion line (each kept bottle is worth 4 HP of value).
+                line = dict(plan, actions=idle, value=plan['value'] + 400 * len(uses),
+                            empty_potion_slots=plan.get('empty_potion_slots', 0) - len(uses))
+                current = self.branches.get('no-potion')
+                if current is None or line['value'] > current['value']:
+                    self.branches['no-potion'] = line
+                    if self.selected_branch == 'no-potion' or current is None:
+                        self.selected_branch, self.plan = 'no-potion', line
+                    row = self.branch_summary('no-potion', '不主动用药', line, view)
+                    self.branch_info = [row if b['id'] == 'no-potion' else b for b in self.branch_info]
+                    if current is None:
+                        self.branch_info.insert(0, row)
+                self.branch_info.append({'id': branch_id, 'name': name, 'available': False,
+                                         'message': '药水不改变结果，已并入不用药路线'})
+                return
             if uses:
                 plan['potion_use'] = uses[0]
             plan['potion_uses'] = uses
