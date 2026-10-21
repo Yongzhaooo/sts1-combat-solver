@@ -44,4 +44,7 @@ with ThreadPoolExecutor(max_workers=1) as pool:
 assert seen & {'cycle', 'beam'} and max(transitions, default=0) >= 256, (seen, transitions[-5:])
 a.branch_info = [dict(id='no-potion', available=True)]
 assert a.progress()[0]['phase'] == 'ready'
+assert a.progress()[0]['used_fairy'] == 0 and not a.progress()[0]['used_tail']
+a.branch_info = [dict(id='no-potion', available=True, used_fairy=1, used_tail=False)]
+assert a.progress()[0]['used_fairy'] == 1, 'a finished route must report its Fairy revival'
 print('PASS: live search stages and changing beam transitions, accepted readiness and cancellation', sorted(seen))

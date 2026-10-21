@@ -1408,8 +1408,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                         ? count(row.get("transitions").getAsLong())+I18n.t("步") : count(row.get("simulations").getAsLong())+I18n.t("次"))
                     +" · "+I18n.backend(row.get("name").getAsString());
                 boolean ready=row.has("ready") && row.get("ready").getAsBoolean();
+                String revival=ready?revivalWarning(row):"";
+                if(!revival.isEmpty()) line=revival+" · "+line;
                 if(ready) canvas.button(sb,ROUTE_LEFT,BODY_TOP+i*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE); // finished routes can be clicked
-                canvas.label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+i*BODY_ROW,textWidth,.85f,ready?ACCENT:MUTED);
+                canvas.label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+i*BODY_ROW,textWidth,.85f,!revival.isEmpty()?DANGER:ready?ACCENT:MUTED);
             }
         } else if (!foresight.isEmpty()) {
             scroll=Math.max(0,Math.min(scroll,Math.max(0,foresight.size()-BODY_ROWS)));
