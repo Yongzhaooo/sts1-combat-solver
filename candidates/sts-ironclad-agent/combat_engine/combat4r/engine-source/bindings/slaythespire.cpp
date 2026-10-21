@@ -81,7 +81,9 @@ namespace {
         if (src.contains("base_cost")) card.cost = py::cast<int>(src["base_cost"]);
         if (src.contains("free_to_play_once")) card.freeToPlayOnce = py::cast<bool>(src["free_to_play_once"]);
         if (src.contains("retain")) card.retain = py::cast<bool>(src["retain"]);
-        if (src.contains("exhausts")) card.exhaust = py::cast<bool>(src["exhausts"]);
+        // Only the in-combat mark (Medical Kit, Blue Candle): a definition-exhaust copied here would survive a native
+        // upgrade that clears it in Java (Armaments on Limit Break, train-r5 1349201160215636823 combat 27).
+        if (src.contains("exhausts")) card.exhaust = py::cast<bool>(src["exhausts"]) && !doesCardExhaust(id, upgrades > 0);
         return card;
     }
 
