@@ -319,8 +319,9 @@ class Advisor:
                              and health(initial_plan, self.root_game, True)['loss'] <= quiet_loss
                              and not initial_plan.get('used_tail') and not initial_plan.get('used_fairy')
                              and not toolbox_selection(view['game']))
-        if (_ELITE_DEEP_GATE is not None and self.root_game.get('act', 4) <= 3
-                and self.root_game.get('solver_auto_context', {}).get('room') == 'MonsterRoomElite'):
+        context = self.root_game.get('solver_auto_context', {})
+        if (_ELITE_DEEP_GATE is not None and self.root_game.get('act', 4) <= 3 and context.get('room') == 'MonsterRoomElite'
+                and context.get('streak_mode') is not True):
             self.deep_gate = _ELITE_DEEP_GATE.bind(self.root_game, initial_plan, initial_seconds,
                                                    len(potions) - len(smoke_slots))
         stages = [[()]] if fast_boss or (clean_regular and not brew_order) else [[()] + [(slot,) for slot, _ in potions]]
@@ -1160,6 +1161,8 @@ if _tier('STS_RESCUE_PER_SIM'):
 _RESCUE_DEFAULT = (160, 160, 2048, False)
 # Desktop high-speed mode (solver_auto_context.high_speed): every fight in every act gets 1/20 of the
 # budget, the prior in every room and a 40-transition rescue beam (the r40 arm of the v2.8 rescue pricing).
+# Desktop streak mode (solver_auto_context.streak_mode, never with high speed): acts 1-3 search like act 4, with
+# no divisor, prior, beam-only room, acts 1-3 rescue setting or elite deep gate.
 _FAST_DIVISOR, _FAST_RESCUE = 20, (40, 40, 2048, False)
 _RESCUE_ARGS = (_RESCUE.get('per_sim', 160), _RESCUE.get('per_sim_nogate', _RESCUE.get('per_sim', 160)),
                 _RESCUE.get('max_width', 2048), bool(_RESCUE.get('plateau', False)))
@@ -1194,14 +1197,15 @@ if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != 
             context = view['game'].get('solver_auto_context') or {}
             room = context.get('room', '')
             fast = context.get('high_speed') is True
-            _act13_divisor[0] = _FAST_DIVISOR if fast else _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if act <= 3 else 1
+            tiered = act <= 3 and context.get('streak_mode') is not True   # streak mode: every act like act 4
+            _act13_divisor[0] = _FAST_DIVISOR if fast else _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if tiered else 1
             if _BEAM_ONLY or _BEAM_ONLY_ROOMS:
-                native.set_beam_only((_BEAM_ONLY_ROOMS.get(room, 0) if act <= 3 else 0) or _BEAM_ONLY)
+                native.set_beam_only((_BEAM_ONLY_ROOMS.get(room, 0) if tiered else 0) or _BEAM_ONLY)
             # Set every call: a previous high-speed call must not leave its beam behind.
-            native.set_rescue(*(_FAST_RESCUE if fast else _RESCUE_ARGS if act <= 3 else _RESCUE_DEFAULT))
+            native.set_rescue(*(_FAST_RESCUE if fast else _RESCUE_ARGS if tiered else _RESCUE_DEFAULT))
             if _NN_WEIGHTS:
                 c = _NN_CONFIG
-                native.nn_config(fast or act <= 3 and (not _NN_ROOMS or room in _NN_ROOMS), c['widen_c'], c['widen_alpha'],
+                native.nn_config(fast or tiered and (not _NN_ROOMS or room in _NN_ROOMS), c['widen_c'], c['widen_alpha'],
                                  c['min_width'], c['prior_weight'], c['rank_tau'], c['leaf_greedy'])
             return method(self, view, *args)
         return run

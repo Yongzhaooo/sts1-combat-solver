@@ -133,9 +133,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private int scroll, startingTurn;
     private int executedTurn;
     private String executedCommand = "";
-    // Every request asks for the standard budget; the backend tiers it per act and room (low-performance mode: 1/20).
+    // Every request asks for the standard budget; the backend tiers it per act and room (low-performance mode: 1/20,
+    // streak mode: no acts 1-3 tiers).
     private static final int BUDGET = 8000;
-    private boolean highSpeed;
+    private boolean highSpeed, streakMode;
     private long highSpeedWarnedAt;
     /** Agent play (AGENT_PLAY.md): outside choices come from a file an external agent writes; fights run automatically. */
     private boolean agentBridge;
@@ -244,6 +245,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("bossFastFinish", "false"); // new key: every player starts with the standard Boss search
             defaults.setProperty("feedMode", "false");
             defaults.setProperty("highSpeed", "false");
+            defaults.setProperty("streakMode", "false");
             defaults.setProperty("agentBridge", "false");
             defaults.setProperty("smokeProbeBudget", "12000");
             defaults.setProperty("smokeLossThreshold", "15");
@@ -263,6 +265,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             bossFastFinishEnabled = config.getBool("bossFastFinish");
             feedModeEnabled = config.getBool("feedMode");
             highSpeed = config.getBool("highSpeed");
+            streakMode = config.getBool("streakMode") && !highSpeed;
             agentBridge = config.getBool("agentBridge");
             smokeProbeBudget = Math.max(1,Math.min(128000,config.getInt("smokeProbeBudget")));
             smokeLossThreshold = Math.max(0,config.getInt("smokeLossThreshold"));
@@ -519,6 +522,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         out.addProperty("boss_fast_finish",bossFastFinishEnabled && bossHeal);
         out.addProperty("feed_mode",feedModeEnabled);
         out.addProperty("high_speed",highSpeed);
+        out.addProperty("streak_mode",streakMode);
         out.addProperty("run_auto",runAuto);
         out.addProperty("smoke_probe_budget",smokeProbeBudget);
         out.addProperty("smoke_loss_threshold",smokeLossThreshold);
@@ -1678,8 +1682,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 if ((lx-16)%spacing < spacing-8) {
                     int toggle=(int)((lx-16)/spacing);
                     if (toggle==0) {
-                        highSpeed=!highSpeed; saveSetting("highSpeed", highSpeed); recalculate();
-                        highSpeedWarnedAt=highSpeed?System.currentTimeMillis():0;
+                        boolean fast=highSpeed;   // standard -> high speed -> streak -> standard
+                        highSpeed=!highSpeed && !streakMode; streakMode=fast;
+                        saveSetting("highSpeed", highSpeed); saveSetting("streakMode", streakMode); recalculate();
+                        highSpeedWarnedAt=highSpeed || streakMode?System.currentTimeMillis():0;
                     }
                     else if (toggle==1) togglePotionRewards();
                     else { nextRest=!nextRest; recalculate(); }
@@ -1867,8 +1873,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         box(sb,w-118,8,64,28,settingsOpen?accent:surface);
         label(sb,I18n.t(settingsOpen?"返回":"设置"),w-108,12,48,.85f,settingsOpen?background:accent);
         String revivalWarning = result == null ? "" : revivalWarning(result);
-        if (revivalWarning.isEmpty() && highSpeed && System.currentTimeMillis()-highSpeedWarnedAt < 8000)
-            revivalWarning = I18n.t("高速模式：搜索量 1/20，胜率和省血下降");
+        if (revivalWarning.isEmpty() && (highSpeed || streakMode) && System.currentTimeMillis()-highSpeedWarnedAt < 8000)
+            revivalWarning = I18n.t(highSpeed?"高速模式：搜索量 1/20，胜率和省血下降":"连胜模式：前三幕不降预算，搜索更慢");
         label(sb,revivalWarning.isEmpty()?status:revivalWarning,16,48,ROUTE_LEFT-28,.85f,
             revivalWarning.isEmpty() && error.isEmpty()?muted:danger);
         String note=researchRecording?voiceNotes.status():debugMessage;
@@ -1884,14 +1890,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 :i==3&&outsideMode!=2&&(runAuto||auto)?accent:i==2&&result==null?muted:Color.WHITE);
         }
         List<String> toggles=new ArrayList<>(Arrays.asList(
-            I18n.t("高速模式：")+I18n.t(highSpeed?"开":"关"),
+            I18n.t("搜索：")+I18n.t(highSpeed?"高速":streakMode?"连胜":"标准"),
             I18n.t("自动换药：")+I18n.t(autoPotionRewards?"开":"关")));
         if(canCreditRest())toggles.add(I18n.t("羽毛回血：")+I18n.t(nextRest?"是":"仅必经火堆"));
         float spacing=(w-24)/toggles.size();
         for(int i=0;i<toggles.size();i++) {
             box(sb,16+i*spacing,TOGGLES_TOP,spacing-8,28,surface);
             label(sb,toggles.get(i),24+i*spacing,TOGGLES_TOP+5,spacing-24,.8f,
-                i==0?(highSpeed?danger:muted):i==1?(autoPotionRewards?accent:muted):accent);
+                i==0?(highSpeed?danger:streakMode?accent:muted):i==1?(autoPotionRewards?accent:muted):accent);
         }
         sb.setColor(Color.WHITE);
         cursorOnTop(sb);

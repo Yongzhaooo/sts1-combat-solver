@@ -1,4 +1,4 @@
-"""Check the shipped pi_base v2.8 executor tiers and the desktop high-speed mode.
+"""Check the shipped pi_base v2.8 executor tiers and the desktop high-speed and streak modes.
 
 A recording stand-in for overlay_search receives the calls the backend tier wrapper makes for each act, room
 and mode; the file must load without environment overrides, as it does in the mod.
@@ -30,7 +30,7 @@ sys.modules['overlay_search'] = native
 solve = backend._tier_wrap(lambda self, view, budget: native.plan(None, budget))
 
 full, fast = (160, 160, 2048, False), (40, 40, 2048, False)
-cases = [  # act, room, high-speed mode -> simulations of 8000, rescue beam, prior
+cases = [  # act, room, mode (True: high speed, 'streak') -> simulations of 8000, rescue beam, prior
     (1, 'MonsterRoom', False, 800, full, True),
     (2, 'EventRoom', False, 800, full, True),
     (3, 'MonsterRoomElite', False, 4000, full, False),
@@ -39,10 +39,14 @@ cases = [  # act, room, high-speed mode -> simulations of 8000, rescue beam, pri
     (1, 'MonsterRoomElite', True, 400, fast, True),
     (4, 'MonsterRoomBoss', True, 400, fast, True),
     (4, 'MonsterRoomBoss', False, 8000, full, False),  # leaving the mode restores the beam and the prior
+    (1, 'MonsterRoom', 'streak', 8000, full, False),
+    (3, 'MonsterRoomBoss', 'streak', 8000, full, False),
+    (2, 'EventRoom', False, 800, full, True),  # leaving streak mode restores the tiers
 ]
 for act, room, mode, simulations, rescue, prior in cases:
-    view = {'game': {'act': act, 'solver_auto_context': {'room': room, 'high_speed': mode}}}
+    view = {'game': {'act': act, 'solver_auto_context': {'room': room, 'high_speed': mode is True,
+                                                          'streak_mode': mode == 'streak'}}}
     got = (solve(None, view, 8000), calls['rescue'], calls['prior'])
     assert got == (simulations, rescue, prior), (act, room, mode, got)
 assert calls['loaded'] == backend._NN_WEIGHTS
-print('PASS: v2.8 tiers per act and room; high-speed 1/20, prior everywhere, rescue 40; mode reset')
+print('PASS: v2.8 tiers per act and room; high-speed 1/20, prior everywhere, rescue 40; streak untiered; mode reset')
