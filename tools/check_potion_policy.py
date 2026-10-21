@@ -59,6 +59,31 @@ for new in (False, True):
                        new_permanent_curse=new), game, True)['new_permanent_curse'] is new
 print('PASS: cross-potion recommendation prioritizes clean wins, preserves cursed rescue/sunk curses, and Smoke probe rejects a new curse')
 
+boss = {**supply_game, 'ascension_level': 20, 'solver_auto_context': {'room': 'MonsterRoomBoss', 'boss_heal': True,
+        'deck': [{'id': 'Strike_R', 'cost': 1, 'base_damage': 6}]}}
+fifty = dict(baseline, loss=50)
+block_bottle = {**bottle, 'id': 'potion-1', 'potion_uses': [{'slot': 1}]}
+boss_potions = {**boss, 'potions': [{'id': 'Strength Potion'}, {'id': 'Block Potion'}]}
+assert recommend({**supply_game, 'solver_auto_context': {'room': 'MonsterRoomBoss'}}, [fifty, bottle])['branch'] == 'potion-0'
+assert recommend(boss, [fifty, dict(bottle, loss=20)])['branch'] == 'no-potion'  # saving 30 counts 7.5, under a strong bottle's 10
+assert recommend(boss, [fifty, bottle])['branch'] == 'potion-0'  # saving 50 counts 12.5
+assert recommend(boss_potions, [fifty, block_bottle])['branch'] == 'potion-1'  # an ordinary bottle still buys 50 HP
+assert recommend(boss_potions, [dict(baseline, loss=16), block_bottle])['branch'] == 'no-potion'
+assert recommend({**boss, 'ascension_level': 4}, [dict(baseline, loss=79), bottle])['branch'] == 'no-potion'
+assert recommend(boss, [bottle])['branch'] == 'potion-0'  # no potion-free win: survival first
+assert '1/4' in recommend(boss, [fifty, dict(bottle, loss=20)])['reason']
+print('PASS: healing Boss counts a quarter of HP loss (none below A5)')
+
+deck_game = {**supply_game, 'solver_auto_context': {'potion_drop_probability': .4,
+             'deck': [{'id': 'Strike_R', 'cost': 1, 'base_damage': 6}]}}
+for top in ('GamblersBrew', 'Swift Potion', 'DistilledChaos', 'HeartOfIron', 'CultistPotion'):
+    held = {**deck_game, 'potions': [{'id': top}, {'id': 'Strength Potion'}]}
+    assert recommend(held, [dict(baseline, loss=12), bottle])['branch'] == 'no-potion', top  # premium price 15
+    assert recommend(held, [dict(baseline, loss=16), bottle])['branch'] == 'potion-0', top
+strength = {**deck_game, 'potions': [{'id': 'Strength Potion'}]}
+assert recommend(strength, [dict(baseline, loss=12), bottle])['branch'] == 'potion-0'  # ordinary strong price 10
+print('PASS: hand-access and long-fight bottles (Gambler Brew by its game id) cost 15 HP, other strong bottles 10')
+
 if not args.native_root:
     raise SystemExit(0)
 from backend import Advisor

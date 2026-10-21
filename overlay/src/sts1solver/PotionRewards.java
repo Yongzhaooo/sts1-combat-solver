@@ -62,9 +62,9 @@ final class PotionRewards {
             case "Strength Potion": return 18+2*hits;
             case "Dexterity Potion": return 24;
             case "Energy Potion": return 20;
-            case "Swift Potion": return 34;
-            case "GamblersBrew": return 34;
-            case "DistilledChaos": return 36;
+            case "Swift Potion": return 42;
+            case "GamblersBrew": return 42;
+            case "DistilledChaos": return 45;
             case "FearPotion": return 24;
             case "Weak Potion": return 22;
             case "Ancient Potion": return game.has("act") && game.get("act").getAsInt()==2?26:12;
@@ -80,11 +80,11 @@ final class PotionRewards {
             case "BloodPotion": return hasRelic(game,"Mark of the Bloom")?0:32;
             case "Fruit Juice": return 60;
             case "FairyPotion": return hasRelic(game,"Mark of the Bloom")?0:70;
-            case "CultistPotion": return 34;
+            case "CultistPotion": return 42;
             case "EntropicBrew": return 40;
             case "SneckoOil": return 22;
             case "GhostInAJar": return 60;
-            case "HeartOfIron": return 36;
+            case "HeartOfIron": return 42;
             case "ElixirPotion": return 18;
             case "SmokeBomb": return 12;
             case "BlessingOfTheForge": return 9;
@@ -117,7 +117,7 @@ final class PotionRewards {
         if(hasCeiling(game))return 0;
         int draw=0, options=0;
         for(String id:ids) {
-            if(Arrays.asList("Swift Potion","GamblersBrew").contains(id))draw++;
+            if(Arrays.asList("Swift Potion","GamblersBrew","DistilledChaos").contains(id))draw++;
             if(Arrays.asList("PowerPotion","SkillPotion","AttackPotion","ColorlessPotion",
                     "EntropicBrew","SneckoOil","CultistPotion","Strength Potion").contains(id))options++;
         }

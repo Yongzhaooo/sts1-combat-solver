@@ -111,10 +111,15 @@ def recommend(game, branches):
     if clean:
         winners = clean
     baseline = min((b for b in winners if not b.get('potion_uses')), key=lambda b: b['loss'], default=None)
-    strong = {'GhostInAJar', 'DuplicationPotion', 'CultistPotion',
-              'Swift Potion', "Gambler's Brew", 'DistilledChaos',
+    # Hand access and long-fight scaling: kept above the other strong bottles.
+    premium = {'Swift Potion', 'GamblersBrew', 'DistilledChaos', 'HeartOfIron', 'CultistPotion'}
+    strong = premium | {'GhostInAJar', 'DuplicationPotion',
               'Dexterity Potion', 'Strength Potion', 'PowerPotion',
               'SkillPotion', 'AttackPotion', 'ColorlessPotion', 'EntropicBrew', 'SneckoOil'}
+
+    # The next act heals 75% of missing HP after this Boss (A5+; full below), so only the rest counts.
+    hp_weight = (.25 if game.get('ascension_level', 20) >= 5 else 0) if context.get('boss_heal') is True else 1
+    heal_note = {1: '', .25: '；首领战后回血，战损按 1/4 计', 0: '；首领战后回满血，战损不计'}[hp_weight]
 
     def price(branch):
         total = 0
@@ -130,28 +135,30 @@ def recommend(game, branches):
             # A consumed bottle creates a real slot. A guaranteed refill lowers its
             # reserve cost even when the deck screen recommends keeping that type.
             free_slot = branch.get('empty_potion_slots', 0) > 0
+            top = potion in premium
             if guaranteed and free_slot:
-                total += 5 if valuable else 3
+                total += 8 if top else 5 if valuable else 3
             elif reserve:
-                total += 20
+                total += 25 if top else 20
             elif supply and full and free_slot:
-                total += 5 if valuable else 3
+                total += 8 if top else 5 if valuable else 3
             else:
-                total += 10 if valuable else 5
+                total += 15 if top else 10 if valuable else 5
         return total
 
     def score(b):
         # A winning line consuming a revival is not equivalent to preserving it.
-        return b['loss'] + price(b) + (game.get('max_hp', 80) + 20) * (bool(b.get('used_tail')) + b.get('used_fairy', 0))
+        return b['loss'] * hp_weight + price(b) + (game.get('max_hp', 80) + 20) * (bool(b.get('used_tail')) + b.get('used_fairy', 0))
 
     chosen = min(winners, key=lambda b: (score(b), b['loss'], len(b.get('potion_uses', []))))
     saved = round(baseline['loss'] - chosen['loss'], 1) if baseline else None
     if chosen.get('potion_uses'):
         reason = '无药未找到胜线，优先保命' if baseline is None else f'省 {saved:g} 血；用药门槛 {price(chosen)}'
+        if baseline is not None: reason += heal_note
         if guaranteed and chosen.get('empty_potion_slots', 0) > 0: reason += '；白兽雕像，合法用药腾槽后可接战后药水'
         elif supply and full and chosen.get('empty_potion_slots', 0) > 0: reason += '；满栏且掉药概率高'
     else:
-        reason = '保留药水；收益未超过用药/保留价值'
+        reason = '保留药水；收益未超过用药/保留价值' + heal_note
     if chosen.get('used_tail') or chosen.get('used_fairy'):
         reason = '保命路线：消耗' + ('尾巴 ' if chosen.get('used_tail') else '') + (
             f"小精灵×{chosen['used_fairy']}" if chosen.get('used_fairy') else '')

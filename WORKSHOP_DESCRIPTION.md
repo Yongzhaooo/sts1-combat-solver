@@ -17,6 +17,8 @@ Subscribe with ModTheSpire and BaseMod. Windows x64 and Apple Silicon Macs; Inte
 
 [源码与下载 / Source & downloads](https://github.com/Yongzhaooo/sts1-combat-solver)
 
-v0.9.0: Much faster search with a slightly lower win rate and HP saved: effort is set by act and room, and in 259 same-seed whole-run pairs it takes 0.51× the time and wins the Heart 6.2 points less often. The three presets are gone; the new High-speed mode for older PCs warns about weaker play when turned on; new agent mode (above). Macs: Apple Silicon only; Intel Macs should stay on v0.8.0-beta.3. Fixed: a Bronze Orb's last taken card, Warped Tongs and end-of-turn relic order after Toolbox, Forethought+ multi-pick confirm, exhaust of Havoc-played unplayable cards, and the shop's card removal being used up and charged after a reload (a vanilla issue). Thanks to 七月流火（猫火）, who recently reached a streak of about 80 wins (SL-equivalent) playing by hand with the solver and is close to 100.
+v0.9.1: Better potion use. After the act 1 and 2 Bosses and the last act 3 Boss, the next act heals 75% of missing HP, so those fights count a quarter of HP lost; when a potion-free win costs at most 50 HP, no potion lines are searched, keeping valuable bottles. Swift, Gambler's Brew, Distilled Chaos, Heart of Iron and Cultist potions are worth more: drunk less casually in fights and preferred as rewards. Fixed: Gambler's Brew was priced as an ordinary potion in fights.
+
+Special thanks to 七月流火（猫火） for long-term testing and feedback.
 
 Silent, Defect and Watcher solvers are open for collaboration: see CONTRIBUTING.md on GitHub or write to yongzhao.derek@gmail.com.
