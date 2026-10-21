@@ -46,7 +46,7 @@ The agent makes the decisions outside combat and the solver fights. Requires v0.
 
 ## Limits
 
-- Ironclad and colorless cards only. Search is finite and does not guarantee optimal play; 七月流火（猫火）'s play shows it still trails top players on some special lines, such as ordering cards for Burning Pact, Snecko Eye, and small loops it sometimes fails to find.
+- Ironclad and colorless cards only. Search is finite and does not guarantee optimal play; 七月流火（猫火）'s play shows it still trails top players on some special lines, such as ordering cards for Burning Pact, Snecko Oil, and small loops it sometimes fails to find.
 - Mods that change combat rules or RNG are not compatible, for example `SaveStateMod` and Undo (`undothespire`); the solver warns on its Settings page when it detects one.
 - Seeded foresight shows events, encounters and transforms beyond what normal play reveals; Glowing Eye (off by default) also covers map rooms ahead, event-fight rewards and what each Neow blessing would give.
 
