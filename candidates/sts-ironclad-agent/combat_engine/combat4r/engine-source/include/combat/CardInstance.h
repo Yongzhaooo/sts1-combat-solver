@@ -34,6 +34,7 @@ namespace sts {
         bool upgraded = false;
         bool freeToPlayOnce = false;
         bool retain = false;
+        bool exhaust = false; // Java AbstractCard.exhaust set in combat: Medical Kit marks a used status card
 
         CardInstance() = default;
         CardInstance(CardId id, bool upgraded=false);

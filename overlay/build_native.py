@@ -116,15 +116,30 @@ early_end='''    addToTopCard(CardQueueItem::endTurnItem());
     endTurnQueued = true;
 }'''
 assert battle.count(early_end)==1,'upstream early-turn-end layout changed'
-battle=battle.replace(early_end,'''    // Time Warp queues turn end while Unceasing Top can still refresh an
-    // empty hand. Resolve its draw before the end-turn card discards the hand.
-    addToBot([](BattleContext &bc) {
-        if (bc.player.hasRelic<R::UNCEASING_TOP>() && bc.cards.cardsInHand == 0
-                && !bc.turnHasEnded && !bc.player.hasStatus<PS::NO_DRAW>()) {
-            bc.addToBot(Actions::DrawCards(1));
-        }
-    });
+battle=battle.replace(early_end,'''    // Java callEndTurnEarlySequence -> releaseCard -> refreshHandLayout: Unceasing Top checks the empty hand
+    // and the empty action queue now (queued autoplay UseCardActions block it) and its draw goes ahead of
+    // Time Warp's Strength and the played card's exhaust hooks (Dead Branch, Dark Embrace).
+    if (player.hasRelic<R::UNCEASING_TOP>() && cards.cardsInHand == 0 && actionQueue.isEmpty()
+            && !turnHasEnded && !player.hasStatus<PS::NO_DRAW>()) {
+        addToBot(Actions::DrawCards(1));
+    }
 '''+early_end,1)
+end_of_turn_cards='''    // todo for cards in hand call triggerOnEndOfTurnForPlayingCard
+'''
+assert battle.count(end_of_turn_cards)==1,'upstream end-of-turn layout changed'
+battle=battle.replace(end_of_turn_cards,'''    // Java refreshes the hand once the end-turn item's actions drain, before AbstractRoom.endTurn queues
+    // ClearCardQueue and the discard: Unceasing Top draws there when a Time Warp ending found the queue busy
+    // (train-r5 5213729386368735704, 6468454909721897195). A hand still holding a Burn-type card autoplays it
+    // instead, and GameActionManager disables the Top until the turn ends (1500749541642889918).
+    if (player.hasRelic<R::UNCEASING_TOP>() && cards.cardsInHand == 0) {
+        addToBot([](BattleContext &bc) {
+            if (bc.cards.cardsInHand == 0 && !bc.player.hasStatus<PS::NO_DRAW>()) {
+                bc.addToBot(Actions::DrawCards(1));
+            }
+        });
+    }
+
+'''+end_of_turn_cards,1)
 # playCardQueueItem distinguishes playable cards with no target from rejected autoplay.
 # A rejected Clash still runs UseCardAction and Havoc exhausts it during rebirth.
 patched_battle.write_text(battle,encoding='utf-8')

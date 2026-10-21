@@ -389,6 +389,7 @@ class ActionMapper:
         self.c = comparator
         self.pending = 0
         self.uuids: dict[str, int] = {}
+        self.previous: set[str] = set()   # truth identities in the view at the last completed refresh
         self.refresh(battle, view)
 
     def refresh(self, battle, view: dict) -> None:
@@ -418,6 +419,19 @@ class ActionMapper:
                         candidates = [card for unique, card in simulated.items()
                                       if unique not in reserved
                                       and self.c.original_card(original) == self.c.simulator_card(card)]
+                        if not candidates:
+                            # StasisPower.onDeath returns its card by MakeTempCardInHandAction(card, false, true): a
+                            # same-UUID copy the truth export lists under a new iid while the native card keeps its id.
+                            # Take over only a native hand card whose bound identity was already out of the view at
+                            # the last refresh (held by Stasis), never one seen there. Cards Armaments holds out are
+                            # not upgradeable, so none equals an upgrade candidate.
+                            present = self._present(combat)
+                            live = {unique for key, unique in self.uuids.items() if key in present}
+                            stale = {unique for key, unique in self.uuids.items()
+                                     if key not in present and key not in self.previous}
+                            stale -= live | set(updates.values())
+                            candidates = [card for unique, card in simulated.items() if unique in stale
+                                          and self.c.original_card(original) == self.c.simulator_card(card)]
                         # Every candidate equals the original's projection, which holds each native card field but
                         # unique_id (retain is never set in production), so any choice gives the same state; take the
                         # first unreserved one in hand order (Dual Wield copies under Duplication).
@@ -433,6 +447,15 @@ class ActionMapper:
                     if old is not None and old != simulated.unique_id:
                         raise IdentityDifference(original["uuid"], old, simulated.unique_id)
                     self.uuids[original["uuid"]] = simulated.unique_id
+        self.previous = self._present(combat)
+
+    @staticmethod
+    def _present(combat: dict) -> set[str]:
+        present = {card["uuid"] for key in PILES for card in combat.get(key, [])}
+        present |= {card["uuid"] for card in combat.get("limbo") or []}
+        if combat.get("card_in_play"):
+            present.add(combat["card_in_play"]["uuid"])
+        return present
 
     def action(self, command: str, view: dict, battle):
         S = self.c.sts

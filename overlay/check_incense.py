@@ -1,5 +1,5 @@
 """Check the Incense Burner carry rule without a game."""
-from recovery import incense_targets
+from recovery import carry_weight, incense_targets
 
 
 def game(act=1, boss='The Guardian', last=None, room='MonsterRoom', ahead=True, heart=False):
@@ -22,4 +22,15 @@ assert incense_targets(game(act=2, boss='Automaton', room='MonsterRoomBoss')) ==
 assert incense_targets(game(act=3, last='Nemesis')) == [4]
 assert incense_targets(game(act=4)) == [4]
 assert incense_targets(game(act=4, heart=True)) == []
-print('PASS: incense targets')
+assert carry_weight(game()) == 1
+assert carry_weight(dict(game(), solver_next_fights=['monster', 'elite'])) == 2
+assert carry_weight(dict(game(), solver_next_fights=['monster', 'boss'])) == 3
+assert carry_weight(game(act=2, room='MonsterRoomBoss')) == 1
+boss1 = dict(game(act=3, room='MonsterRoomBoss'), ascension_level=20, solver_auto_context={'boss_candidates_remaining': 2})
+assert carry_weight(boss1) == 3
+boss2 = dict(boss1, solver_auto_context={'boss_candidates_remaining': 1})
+assert carry_weight(boss2) == 1
+assert carry_weight(dict(boss2, keys={'ruby': True, 'emerald': True, 'sapphire': True})) == 2
+assert carry_weight(game(act=4, room='MonsterRoomElite')) == 3
+assert carry_weight(game(act=4, heart=True)) == 1
+print('PASS: incense targets, carry weight')
