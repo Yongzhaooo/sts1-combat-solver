@@ -275,6 +275,14 @@ for snap, expected, calls in [(snapshot(), 'potion-0', 2),
     if calls == 2: assert recorded.calls[1][0][2] == [0]
     assert advisor.search.actions, 'automatic policy returned no executable action'
     assert recommend(advisor.root_game, advisor.branch_info)['branch'] == expected
+# Acts 1-3 tiers divide native.plan by 10; the probe still gets its own setting (F35 hallway escaped on a 1/10 probe).
+advisor.root = advisor.search.battle = battle(snapshot())
+advisor.search.actions.clear()
+advisor.native_search = recorded = Calls()
+recorded._act13_original_plan, recorded.plan = recorded.plan, lambda root, sims, *a: recorded._act13_original_plan(root, max(1, sims // 10), *a)
+native.resume()
+advisor.solve_smoke_opening({'game': advisor.root_game}, 0, 0, time.monotonic(), advisor.search.comparator.clone_fingerprint(advisor.root))
+assert recorded.calls[0][0][1] == 128, recorded.calls[0][0][1]
 advisor.native_search = native
 print('PASS: actual backend automatic bounded probe keeps low-loss victory or immediately chooses Smoke without deep/other-potion calls')
 

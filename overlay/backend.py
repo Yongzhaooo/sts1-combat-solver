@@ -407,8 +407,11 @@ class Advisor:
         if type(simulations) is not int or not 1 <= simulations <= DEEP_BUDGET:
             simulations = 12000
         self.searching = [(0, 'no-potion', '无药烟雾弹预检')]
+        # The probe decides whether to burn the bomb and forfeit the rewards: it runs its own budget setting, never the
+        # acts 1-3 divided one (F35 hallway: 1/10 found only a 15-loss win and escaped; undivided found 9 and kept).
+        plan = getattr(self.native_search, '_act13_original_plan', None) or self.native_search.plan
         try:
-            baseline = dict(self.native_search.plan(self.root, simulations, [], credit, 0,
+            baseline = dict(plan(self.root, simulations, [], credit, 0,
                 False, False, False, False, True, smoke_threshold(self.root_game)))
             keep = smoke_probe_keeps(baseline, self.root_game)
             if keep:
