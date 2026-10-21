@@ -85,7 +85,9 @@ bool overlayPotionAllowed(const BattleContext &bc, int slot) {
 // Run value a victory carries into later fights, in HP-equivalents (score unit = 100).
 // ponytail: hand-set weights, not fitted; replace with values estimated from paired runs.
 constexpr double EXTRA_PER_MAX_HP=2.0;   // on top of the engine's +1 and the healed current HP
-constexpr double ENERGY_HP=4.0, PEN_NIB_HP=4.0, INTANGIBLE_HP=10.0, DRAW_HP=1.5;
+// Incense Burner on target is a must-hold (user rule, 2026-10-21: at least 30 HP).
+constexpr double ENERGY_HP=4.0, PEN_NIB_HP=4.0, INTANGIBLE_HP=30.0, DRAW_HP=1.5;
+double carryWeight=1.0;  // recovery.carry_weight: the other counters count x2 before an elite, x3 before a Boss
 thread_local int initialMaxHp=0;
 thread_local double initialDeckCurseHp=0;
 thread_local bool initialParasiteRisk=false;
@@ -146,13 +148,15 @@ static double carriedRelicValue(const BattleContext &bc, bool best=false) {
     auto part=[best](int counter, int period) { return (best ? period-1 : std::max(0, counter)) / static_cast<double>(period); };
     double value=0;
     if(p.hasRelic<RelicId::NUNCHAKU>()) value+=ENERGY_HP*part(p.nunchakuCounter,10);
-    if(p.hasRelic<RelicId::HAPPY_FLOWER>()) value+=ENERGY_HP*part(p.happyFlowerCounter,3);
+    // Happy Flower at 2 gives the energy on the next fight's first turn: worth a full energy (streak players hold 2).
+    if(p.hasRelic<RelicId::HAPPY_FLOWER>()) value+=ENERGY_HP*(best || p.happyFlowerCounter==2 ? 1.0 : part(p.happyFlowerCounter,3));
     if(p.hasRelic<RelicId::SUNDIAL>()) value+=2*ENERGY_HP*part(p.sundialCounter,3);
+    if(p.hasRelic<RelicId::PEN_NIB>()) value+=PEN_NIB_HP*part(p.penNibCounter,10);
+    if(p.hasRelic<RelicId::INK_BOTTLE>()) value+=DRAW_HP*part(p.inkBottleCounter,10);
+    value*=carryWeight;
     // Targets come from recovery.incense_targets (user rule); none means the counter is worthless.
     if(p.hasRelic<RelicId::INCENSE_BURNER>() && p.incenseBurnerCounter>=0)
         value+=INTANGIBLE_HP*(best ? incenseTargets!=0 : incenseTargets>>p.incenseBurnerCounter & 1u);
-    if(p.hasRelic<RelicId::PEN_NIB>()) value+=PEN_NIB_HP*part(p.penNibCounter,10);
-    if(p.hasRelic<RelicId::INK_BOTTLE>()) value+=DRAW_HP*part(p.inkBottleCounter,10);
     return value;
 }
 static bool relicsHeld(const BattleContext &bc) { return carriedRelicValue(bc)+1e-9>=carriedRelicValue(bc,true); }
@@ -298,6 +302,7 @@ PYBIND11_MODULE(overlay_search, m) {
     m.def("set_rescue", [](long long perSim, long long perSimNoGate, int maxWidth, bool plateau) {
         rescuePerSim=perSim; rescuePerSimNoGate=perSimNoGate; loop_beam::rescueMaxWidth=maxWidth; loop_beam::rescuePlateau=plateau;
     });
+    m.def("set_carry_weight", [](double weight) { carryWeight=weight; });
     m.def("set_max_hp_gain_weight", [](double weight) { search::BattleScumSearcher2::maxHpGainWeight=weight; });
     m.def("set_incense_targets", [](const std::vector<int> &counters) {
         unsigned mask=0;

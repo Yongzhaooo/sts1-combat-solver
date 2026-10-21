@@ -89,6 +89,36 @@ def resources(b):
                 dagger=sorted((int(c.id),c.unique_id,c.special_data) for c in cards if c.id==S.CardId.RITUAL_DAGGER))
 
 
+def drop_potions(root, actions):
+    """The line without its potion uses, when it replays to the same victory apart from the bottles kept; else None.
+
+    A potion branch's own search can find a better line than the no-potion search and pass through a use that changes
+    nothing (Speed Potion right before ending a turn with no Block card); that line needs no bottle at all.
+    """
+    end, _, tokens, _, _ = replay(root, actions)
+    if end.outcome != S.Outcome.PLAYER_VICTORY:
+        return None
+    b = root.clone(); kept = []
+    for t in tokens:
+        a = S.SearchAction.from_bits(t['bits'] & 0xffffffff)
+        if a.action_type == S.SearchActionType.POTION:
+            continue
+        if b.outcome != S.Outcome.UNDECIDED:
+            return None
+        if 'uid' in t:
+            matches = [n for n, c in enumerate(b.hand) if c.unique_id == t['uid'] and int(c.id) == t['id']]
+            if len(matches) != 1:
+                return None
+            a = S.SearchAction(S.SearchActionType.CARD, matches[0], t['target'])
+        if b.turn != t['turn'] or not a.is_valid(b):
+            return None
+        N.execute(b, a.bits); kept.append(int(a.bits))
+    rest = lambda state: {k: v for k, v in resources(state).items() if k != 'potions'}
+    if len(kept) == len(actions) or b.outcome != S.Outcome.PLAYER_VICTORY or b.turn > end.turn or rest(b) != rest(end):
+        return None
+    return kept
+
+
 def reduce_blocks(root,actions):
     start=time.monotonic();original=end=replay(root,actions)[0]
     attempts=0;executions=len(actions);changes=[];i=0

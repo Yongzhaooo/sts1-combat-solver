@@ -49,8 +49,10 @@ public class RecoveryExportPatch {
                 }
             }
             __result.put("solver_last_elite",lastElite);
-            if(AbstractDungeon.getCurrMapNode()!=null)
+            if(AbstractDungeon.getCurrMapNode()!=null) {
                 __result.put("solver_elite_ahead",Foresight.eliteAhead(AbstractDungeon.map,AbstractDungeon.getCurrMapNode(),new IdentityHashMap<>()));
+                __result.put("solver_next_fights",Foresight.nextFights(AbstractDungeon.map,AbstractDungeon.getCurrMapNode()));
+            }
         } catch(RuntimeException ignored) { }
         if(AbstractDungeon.getCurrRoom()!=null && AbstractDungeon.getCurrRoom().event!=null)
             __result.put("solver_event_class",AbstractDungeon.getCurrRoom().event.getClass().getSimpleName());

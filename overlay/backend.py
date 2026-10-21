@@ -25,7 +25,7 @@ for s in (sys.stdin, sys.stdout, sys.stderr):
         except Exception:
             pass
 
-from recovery import health, future_recovery, incense_targets
+from recovery import health, future_recovery, incense_targets, carry_weight
 from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature
 from auto_policy import recommend, smoke_opening, smoke_probe_keeps, smoke_threshold
 from solver_search import DEEP_BUDGET, boss_fast_plan, finalize_plan, search_plan
@@ -211,6 +211,7 @@ class Advisor:
         # Feed mode (mod setting): max HP gained in this combat counts twice in the plan value.
         self.native_search.set_max_hp_gain_weight(2.0 if view['game'].get('solver_auto_context', {}).get('feed_mode') is True else 1.0)
         self.native_search.set_incense_targets(incense_targets(view['game']))
+        self.native_search.set_carry_weight(carry_weight(view['game']))
         self.native_search.resume()
         if self.interrupt.is_set():
             self.native_search.cancel()
@@ -408,8 +409,11 @@ class Advisor:
         if type(simulations) is not int or not 1 <= simulations <= DEEP_BUDGET:
             simulations = 12000
         self.searching = [(0, 'no-potion', '无药烟雾弹预检')]
+        # The probe decides whether to burn the bomb and forfeit the rewards: it runs its own budget setting, never the
+        # acts 1-3 divided one (F35 hallway: 1/10 found only a 15-loss win and escaped; undivided found 9 and kept).
+        plan = getattr(self.native_search, '_act13_original_plan', None) or self.native_search.plan
         try:
-            baseline = dict(self.native_search.plan(self.root, simulations, [], credit, 0,
+            baseline = dict(plan(self.root, simulations, [], credit, 0,
                 False, False, False, False, True, smoke_threshold(self.root_game)))
             keep = smoke_probe_keeps(baseline, self.root_game)
             if keep:
@@ -569,6 +573,25 @@ class Advisor:
             if not uses and not (smoke and plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)):
                 self.branch_info.append({'id': branch_id, 'name': name, 'available': False,
                                          'message': '本轮搜索未找到使用路线'})
+                return
+            from plan_reduction import drop_potions
+            won = plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
+            idle = drop_potions(self.root, plan['actions']) if uses and won and not generated_uses and not smoke else None
+            if idle is not None:
+                # The bottles changed nothing: the same victory is a no-potion line (each kept bottle is worth 4 HP of value).
+                line = dict(plan, actions=idle, value=plan['value'] + 400 * len(uses),
+                            empty_potion_slots=plan.get('empty_potion_slots', 0) - len(uses))
+                current = self.branches.get('no-potion')
+                if current is None or line['value'] > current['value']:
+                    self.branches['no-potion'] = line
+                    if self.selected_branch == 'no-potion' or current is None:
+                        self.selected_branch, self.plan = 'no-potion', line
+                    row = self.branch_summary('no-potion', '不主动用药', line, view)
+                    self.branch_info = [row if b['id'] == 'no-potion' else b for b in self.branch_info]
+                    if current is None:
+                        self.branch_info.insert(0, row)
+                self.branch_info.append({'id': branch_id, 'name': name, 'available': False,
+                                         'message': '药水不改变结果，已并入不用药路线'})
                 return
             if uses:
                 plan['potion_use'] = uses[0]
@@ -1178,13 +1201,24 @@ _BEAM_ONLY = int(_tier('STS_BEAM_ONLY') or 0)
 _BEAM_ONLY_ROOMS = {k: int(v) for k, v in json.loads(_tier('STS_BEAM_ONLY_ROOMS') or '{}').items()}
 if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != _RESCUE_DEFAULT or _BEAM_ONLY or _BEAM_ONLY_ROOMS:
     _act13_divisor = [1]
+    # Feed escalation (default, user 2026-10-21): a divided non-Boss plan that wins without Feed's max HP is searched
+    # once more at 2x its divided budget (natural roots: Feed 199 -> 210 of 250, CPU 1.37x, no win lost).
+    _FEED_ESCALATE = 2
+    _feed_stake = [None]   # root max HP while Feed is in the piles of a non-Boss fight, else None
     _NN_CONFIG = json.loads(_tier('STS_NN_PRIOR_CONFIG')) if _NN_WEIGHTS else None
 
     def _tier_install(native):
         if getattr(native, '_act13_original_plan', None) is None:
             original = native.plan
             native._act13_original_plan = original
-            native.plan = lambda root, simulations, *args: original(root, max(1, simulations // _act13_divisor[0]), *args)
+            def plan(root, simulations, *args):
+                divided = max(1, simulations // _act13_divisor[0])
+                out = original(root, divided, *args)
+                if (_feed_stake[0] is not None and divided < simulations and out['outcome'] == 1
+                        and out['max_hp'] <= _feed_stake[0]):
+                    out = original(root, min(simulations, divided * _FEED_ESCALATE), *args)
+                return out
+            native.plan = plan
         if _NN_WEIGHTS and not getattr(native, '_nn_loaded', False):
             native.nn_load(_NN_WEIGHTS)
             native._nn_loaded = True
@@ -1199,6 +1233,10 @@ if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != 
             fast = context.get('high_speed') is True
             tiered = act <= 3 and context.get('streak_mode') is not True   # streak mode: every act like act 4
             _act13_divisor[0] = _FAST_DIVISOR if fast else _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if tiered else 1
+            cs = view['game'].get('combat_state') or {}
+            feed = room != 'MonsterRoomBoss' and any(c['id'] == 'Feed' for k in ('hand', 'draw_pile', 'discard_pile')
+                                                      for c in cs.get(k) or [])
+            _feed_stake[0] = cs['player']['max_hp'] if feed else None
             if _BEAM_ONLY or _BEAM_ONLY_ROOMS:
                 native.set_beam_only((_BEAM_ONLY_ROOMS.get(room, 0) if tiered else 0) or _BEAM_ONLY)
             # Set every call: a previous high-speed call must not leave its beam behind.
