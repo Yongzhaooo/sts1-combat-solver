@@ -111,8 +111,9 @@ def recommend(game, branches):
     if clean:
         winners = clean
     baseline = min((b for b in winners if not b.get('potion_uses')), key=lambda b: b['loss'], default=None)
-    strong = {'GhostInAJar', 'DuplicationPotion', 'CultistPotion',
-              'Swift Potion', "Gambler's Brew", 'DistilledChaos',
+    # Hand access and long-fight scaling: kept above the other strong bottles.
+    premium = {'Swift Potion', 'GamblersBrew', 'DistilledChaos', 'HeartOfIron', 'CultistPotion'}
+    strong = premium | {'GhostInAJar', 'DuplicationPotion',
               'Dexterity Potion', 'Strength Potion', 'PowerPotion',
               'SkillPotion', 'AttackPotion', 'ColorlessPotion', 'EntropicBrew', 'SneckoOil'}
 
@@ -134,14 +135,15 @@ def recommend(game, branches):
             # A consumed bottle creates a real slot. A guaranteed refill lowers its
             # reserve cost even when the deck screen recommends keeping that type.
             free_slot = branch.get('empty_potion_slots', 0) > 0
+            top = potion in premium
             if guaranteed and free_slot:
-                total += 5 if valuable else 3
+                total += 8 if top else 5 if valuable else 3
             elif reserve:
-                total += 20
+                total += 25 if top else 20
             elif supply and full and free_slot:
-                total += 5 if valuable else 3
+                total += 8 if top else 5 if valuable else 3
             else:
-                total += 10 if valuable else 5
+                total += 15 if top else 10 if valuable else 5
         return total
 
     def score(b):

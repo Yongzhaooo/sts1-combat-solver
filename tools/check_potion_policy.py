@@ -74,6 +74,16 @@ assert recommend(boss, [bottle])['branch'] == 'potion-0'  # no potion-free win: 
 assert '1/4' in recommend(boss, [fifty, dict(bottle, loss=20)])['reason']
 print('PASS: healing Boss counts a quarter of HP loss (none below A5)')
 
+deck_game = {**supply_game, 'solver_auto_context': {'potion_drop_probability': .4,
+             'deck': [{'id': 'Strike_R', 'cost': 1, 'base_damage': 6}]}}
+for top in ('GamblersBrew', 'Swift Potion', 'DistilledChaos', 'HeartOfIron', 'CultistPotion'):
+    held = {**deck_game, 'potions': [{'id': top}, {'id': 'Strength Potion'}]}
+    assert recommend(held, [dict(baseline, loss=12), bottle])['branch'] == 'no-potion', top  # premium price 15
+    assert recommend(held, [dict(baseline, loss=16), bottle])['branch'] == 'potion-0', top
+strength = {**deck_game, 'potions': [{'id': 'Strength Potion'}]}
+assert recommend(strength, [dict(baseline, loss=12), bottle])['branch'] == 'potion-0'  # ordinary strong price 10
+print('PASS: hand-access and long-fight bottles (Gambler Brew by its game id) cost 15 HP, other strong bottles 10')
+
 if not args.native_root:
     raise SystemExit(0)
 from backend import Advisor

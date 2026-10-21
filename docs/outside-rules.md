@@ -394,7 +394,7 @@ Boss 遗物按手写评分强制选最高分，只有全部低于 2 分时才强
 | 满栏换药 | 强制 | 逐个尝试替换可丢弃、且价值 ≥ 0 的旧药水。收益 = 换后库存值 − 换前库存值，必须 > 2，取收益最大的方案。不可丢弃或价值未知的旧药水不会被换掉。 | PotionRewards:146-171 |  |
 | 满栏且新药水未知 | 排除 | 新药水价值为 −1 时不换，提示“未知药水：请手动比较”。 | PotionRewards:154 |  |
 | 库存值 | 数值 | 库存值 = 组合分 + 各药水 max(0, 价值) 之和。 | PotionRewards:127-131 |  |
-| 组合分 | 数值 | 牌组没有“上限”组合，且库存里同时有抽牌药（迅捷药水、赌徒特酿）和选项药（能力、技能、攻击、无色、混沌药水，异蛇之油、邪教徒药水、力量药水）时加 12，否则 0。 | PotionRewards:115-126 |  |
+| 组合分 | 数值 | 牌组没有“上限”组合，且库存里同时有抽牌药（迅捷药水、赌徒特酿、精炼混沌）和选项药（能力、技能、攻击、无色、混沌药水，异蛇之油、邪教徒药水、力量药水）时加 12，否则 0。 | PotionRewards:115-126 |  |
 | “上限”组合 | 数值 | 满足任一即算有上限：有恶魔形态或观察弱点；突破极限加燃烧或金刚杵；壁垒、巩固、全身撞击三张齐；腐化加黑暗之拥或枯木树枝；灼热攻击升级 ≥ 4 次。 | PotionRewards:101-114 |  |
 | 药水价值 | 数值 | 基础价值 ≤ 0 时原样返回，不加后期加成；否则价值 = 基础价值 + lateBonus。 | PotionRewards:23-27 |  |
 | 后期加成窗口 | 数值 | 第 3 幕 43 层及以后，或第 4 幕 55 层及以前，lateBonus 才不为 0，数值见下表。 | PotionRewards:28-45 |  |
@@ -412,9 +412,9 @@ Boss 遗物按手写评分强制选最高分，只有全部低于 2 分时才强
 | 力量药水（Strength Potion） | 18 + 2 × hits | hits 同类固醇药水：记 28 或 22 | 0 | PotionRewards:62 |  |
 | 敏捷药水（Dexterity Potion） | 24 | 无 | 0 | PotionRewards:63 |  |
 | 能量药水（Energy Potion） | 20 | 无 | 8 | PotionRewards:42、:64 |  |
-| 迅捷药水（Swift Potion） | 34 | 无 | 18 | PotionRewards:36、:65 |  |
-| 赌徒特酿（GamblersBrew） | 34 | 无 | 18 | PotionRewards:36、:66、:120 |  |
-| 精炼混沌（DistilledChaos） | 36 | 无 | 18 | PotionRewards:36、:67 |  |
+| 迅捷药水（Swift Potion） | 42 | 无 | 18 | PotionRewards:36、:65 |  |
+| 赌徒特酿（GamblersBrew） | 42 | 无 | 18 | PotionRewards:36、:66、:120 |  |
+| 精炼混沌（DistilledChaos） | 45 | 无 | 18 | PotionRewards:36、:67、:120 |  |
 | 恐惧药水（FearPotion） | 24 | 无 | 0 | PotionRewards:68 |  |
 | 虚弱药水（Weak Potion） | 22 | 无 | 14 | PotionRewards:41、:69 |  |
 | 先古药水（Ancient Potion） | 12 | 第 2 幕记 26 | 16 | PotionRewards:38、:70 |  |
@@ -430,11 +430,11 @@ Boss 遗物按手写评分强制选最高分，只有全部低于 2 分时才强
 | 鲜血药水（BloodPotion） | 32 | 有绽放印记时记 0 | 0 | PotionRewards:80 |  |
 | 果汁（Fruit Juice） | 60 | 自动换药开启时会在战斗外直接喝掉 | 0 | PotionRewards:81 |  |
 | 瓶中精灵（FairyPotion） | 70 | 有绽放印记时记 0，后期加成也不加 | 20 | PotionRewards:35、:82 |  |
-| 邪教徒药水（CultistPotion） | 34 | 无 | 18 | PotionRewards:39、:83 |  |
+| 邪教徒药水（CultistPotion） | 42 | 无 | 18 | PotionRewards:39、:83 |  |
 | 混沌药水（EntropicBrew） | 40 | 无 | 0 | PotionRewards:84 |  |
 | 异蛇之油（SneckoOil） | 22 | 无 | 0 | PotionRewards:85 |  |
 | 罐装幽灵（GhostInAJar） | 60 | 无 | 20 | PotionRewards:35、:86 |  |
-| 铁之心（HeartOfIron） | 36 | 无 | 14 | PotionRewards:41、:87 |  |
+| 铁之心（HeartOfIron） | 42 | 无 | 14 | PotionRewards:41、:87 |  |
 | 万灵药水（ElixirPotion） | 18 | 无 | 0 | PotionRewards:88 |  |
 | 烟雾弹（SmokeBomb） | 12 | 无 | 0 | PotionRewards:89 |  |
 | 熔炉的祝福（BlessingOfTheForge） | 9 | 无 | 0 | PotionRewards:90 |  |
