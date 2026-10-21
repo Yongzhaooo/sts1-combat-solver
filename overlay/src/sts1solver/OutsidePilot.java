@@ -332,7 +332,7 @@ final class OutsidePilot {
             if(i>=packet.choices.size())break;
             float top=PILOT_LIST_TOP+row*PILOT_ROW;
             boolean selected=i==chosen;
-            canvas.box(sb,16,top,PILOT_WIDTH-32,PILOT_ROW-4,selected?new Color(.17f,.29f,.32f,1):PanelCanvas.SURFACE);
+            canvas.button(sb,16,top,PILOT_WIDTH-32,PILOT_ROW-4,selected?new Color(.17f,.29f,.32f,1):PanelCanvas.SURFACE);
             canvas.label(sb,(selected?"● ":"  ")+packet.choices.get(i).label,24,top+5,PILOT_WIDTH-130,.8f,
                 selected?PanelCanvas.ACCENT:Color.WHITE);
             canvas.label(sb,String.format(java.util.Locale.ROOT,"%.3f",scores.scores[i]),
@@ -344,7 +344,7 @@ final class OutsidePilot {
             int action=Integer.parseInt(buttons[b][0]);
             boolean primary=b==0 && !(action==3 && packet==null);
             float left=16+b*(width+8);
-            canvas.box(sb,left,top,width,38,primary?PanelCanvas.ACCENT:PanelCanvas.SURFACE);
+            canvas.button(sb,left,top,width,38,primary?PanelCanvas.ACCENT:PanelCanvas.SURFACE);
             canvas.label(sb,I18n.t(buttons[b][1]),left+12,top+9,width-20,.9f,
                 primary?PanelCanvas.BACKGROUND:action==0?PanelCanvas.DANGER:action==3?PanelCanvas.MUTED:Color.WHITE);
         }

@@ -42,6 +42,7 @@
 |---|---|
 | `pilot.mode` | 局外（`OutsidePilot.mode`）：0 不给建议，1 每步给建议、玩家确认，2 AI全自动 |
 | `runAuto` | 整局的战斗都自动打（战斗全自动和 AI全自动） |
+| `heldThisFight` | 玩家用“执行一步”“执行本回合”或 F10 接管了这一场；下一场照常自动。`fightAuto()` = `runAuto` 且未接管 |
 | `auto` | 当前这场正在自动执行 |
 | `turnOnly` | 只自动执行到本回合结束 |
 | `paused` | 自动执行被暂停（F9 或出错） |
@@ -59,8 +60,8 @@
 
 1. 进入战斗或局面变化，`send("solve", capture())` 请求后台计算。
 2. 后台回复 `status: "ready"`，写进 `result`。
-3. 回复里 `needs_confirmation` 为 true 时，进入 `requestBranches()`：
-   - 战斗全自动（`runAuto` 且未暂停）调用 `chooseAutomaticBranch()`，按后台的 `auto_recommendation` 选一条；
+3. `routeChoice(result, 人工)` 为 true 时（后台要求确认，或人工逐步下有两条以上可用路线），进入 `requestBranches()`：
+   - 战斗全自动（`fightAuto()` 且未暂停）调用 `chooseAutomaticBranch()`，按后台的 `auto_recommendation` 选一条；
    - 人工逐步则把 `branchPicker` 设为 true，面板列出路线，玩家输入编号或回车（`branchKeyboard()`）。
 4. `chooseBranch(id)` 发出 `send("choose", ...)`，后台按选定路线重算。
 5. 执行：`executeStep()` 每次走一步，执行后 `send("advance", ...)` 让后台核对实际结果；`auto` 为 true 时连续执行。
@@ -88,9 +89,9 @@
 ## 改动的位置（对应产品 spec 里的提议）
 
 - **战斗全自动的“不用药”开关**：设置项照 `registerConfigPanel()` 里的写法加，用 `saveSetting` 保存；在 `chooseAutomaticBranch()` 里，开关打开时只接受 `no-potion` 路线，这条赢不了就调用 `fail(...)` 停下。判断写成 `static` 方法，在 `overlay/test/ModeCheck.java` 里加断言。
-- **人工逐步时总显示路线列表**：改面板这一侧（`requestBranches()` 的调用条件，以及 `renderCombatBody()` 里的列表），不要改后台的 `needs_confirmation`，因为战斗全自动也依赖它。
+- **人工逐步时总显示路线列表**：已完成，见 `SolverMod.routeChoice`；判断放在面板这一侧，后台的 `needs_confirmation` 不变，因为战斗全自动也依赖它。
 - **限定可用药水**：需要后台新增请求字段，并在 `backend.py` 生成用药路线时使用；属于面板和后台一起改的情况，要加 Python 检查。
-- **列表的显示格式**：`renderCombatBody()` 里 `branchPicker` 分支；面板尺寸见 `PanelSize`，改了尺寸要更新 `PanelSizeCheck`。
+- **列表的显示格式**：`renderCombatBody()` 里 `branchPicker` 分支；面板尺寸见 `PanelSize`，改了尺寸要更新 `PanelSizeCheck`。能点的框用 `canvas.button`（悬停变亮），不能点的用 `canvas.box`。
 
 ## 开发环境
 

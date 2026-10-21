@@ -53,6 +53,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private boolean decisionDirty=true;
     private boolean busy, awaitingAction, auto, turnOnly, gamblingAuto, paused, collapsed;
     private boolean runAuto;
+    private boolean heldThisFight; // Step, Execute turn or F10 took this fight over; the next fight runs automatically again
     private boolean runAfterBranch; // F10 pressed while a route choice was pending: run the fight once chosen
     private boolean autoPotionRewards = true;
     private boolean runAutoEnabled = true;
@@ -222,19 +223,19 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private void toggleAuto() {
         decisionDirty=true;
         if (!combat() || !supported()) return;
-        runAuto=false;
-        if (auto || turnOnly) { auto = turnOnly = false; status = I18n.t("自动已关闭 · 保留建议"); return; }
+        if (auto || turnOnly) { heldThisFight = true; auto = turnOnly = false; status = I18n.t("自动已关闭 · 保留建议"); return; }
+        heldThisFight = false;
         auto = true;
         turnOnly = false;
         paused = false;
         error = "";
         if (!busy && result == null && !awaitingAction) lastKey = null;
         status = I18n.t("自动执行已开启 · 仅本场战斗");
-        if (result != null && result.get("needs_confirmation").getAsBoolean() && !branchConfirmed) { runAfterBranch = true; requestBranches(); }
+        if (result != null && routeChoice(result, !fightAuto()) && !branchConfirmed) { runAfterBranch = true; requestBranches(); }
     }
 
     private void requestBranches() {
-        if (runAuto && !paused && result != null && !busy) {
+        if (fightAuto() && !paused && result != null && !busy) {
             chooseAutomaticBranch();
             return;
         }
@@ -259,7 +260,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             branchPicker=false;
             branchConfirmed=true;
             boolean manual=result.has("manual_choice") && result.get("manual_choice").getAsBoolean();
-            auto=runAuto || (autoAfterBranch(manual) && (RunMode.combatAutomatic(mode()) || runAfterBranch)); // Manual steps unless F10 asked for the run
+            auto=fightAuto() || (autoAfterBranch(manual) && (RunMode.combatAutomatic(mode()) || runAfterBranch)); // Manual steps unless F10 asked for the run
             runAfterBranch=false;
             if(manual)thiefPreference=branch;
             paused=false;
@@ -319,7 +320,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         out.addProperty("feed_mode",feedModeEnabled);
         out.addProperty("high_speed",highSpeed);
         out.addProperty("streak_mode",streakMode);
-        out.addProperty("run_auto",runAuto);
+        out.addProperty("run_auto",fightAuto());
         out.addProperty("smoke_probe_budget",smokeProbeBudget);
         out.addProperty("smoke_loss_threshold",smokeLossThreshold);
         out.addProperty("smoke_opening",smokeOpening(GameActionManager.turn,
@@ -363,6 +364,19 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private RunMode mode() { return RunMode.of(pilot.mode,runAuto); }
 
+    /** Combat automation drives this fight: on for the run and not taken over for this fight. */
+    private boolean fightAuto() { return runAuto && !heldThisFight; }
+
+    /** The player picks a route first: the backend asks, or Manual has more than one usable route. */
+    static boolean routeChoice(JsonObject result, boolean manual) {
+        if (result.get("needs_confirmation").getAsBoolean()) return true;
+        if (!manual || !result.has("branches")) return false;
+        int usable = 0;
+        for (JsonElement branch : result.getAsJsonArray("branches"))
+            if (branch.getAsJsonObject().get("available").getAsBoolean()) usable++;
+        return usable > 1;
+    }
+
     static boolean inSupportedRun() {
         return CommandExecutor.isInDungeon() && AbstractDungeon.player!=null && supported();
     }
@@ -389,7 +403,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(runAuto){runAutoEnabled=false;saveAutomation();cancel(true);return;}
         if(!CommandExecutor.isInDungeon() || AbstractDungeon.player==null || !supported())return;
         runAutoEnabled=true;saveAutomation();
-        runAuto=true;runAutoPlayer=AbstractDungeon.player;
+        runAuto=true;runAutoPlayer=AbstractDungeon.player;heldThisFight=false;
         auto=combat();turnOnly=false;paused=false;branchConfirmed=false;
         branchPicker=false;captureBranchKeys=false;branchInput="";decisionDirty=true;
         error="";autoReason=I18n.t("自动用药＋跨场战斗已开启");
@@ -421,14 +435,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         pilot.select(mode);
         if(mode==0)return;
         if(mode==1) { runAuto=false; auto=turnOnly=false; decisionDirty=true; return; } // fights wait for the player too
-        runAuto=true; runAutoPlayer=AbstractDungeon.player;
+        runAuto=true; runAutoPlayer=AbstractDungeon.player; heldThisFight=false;
         auto=combat(); paused=false; decisionDirty=true;
     }
 
     /** Step mode for outside choices, which the agent confirms, plus automatic fights. F9 hands both back to the player. */
     private void startAgentMode() {
         chooseOutsideMode(1);
-        runAuto=true; runAutoPlayer=AbstractDungeon.player;
+        runAuto=true; runAutoPlayer=AbstractDungeon.player; heldThisFight=false;
         auto=combat(); paused=false; decisionDirty=true;
         pilot.notice=I18n.t("Agent 模式：局外由 agent 决定，战斗自动执行 · F9 接管");
     }
@@ -575,7 +589,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         decisionDirty = true;
         paused = pause;
         status = pendingSearch ? I18n.t("正在停止搜索 · 保留已找到路线")
-            : pause ? (keepResult ? I18n.t("已停止 · 回车继续当前路线") : I18n.t("已停止 · 点击重新计算恢复")) : I18n.t("等待稳定局面");
+            : pause ? (keepResult ? I18n.t("已停止 · 点击路线打完本场，回车走一步") : I18n.t("已停止 · 点击重新计算恢复")) : I18n.t("等待稳定局面");
         if (keepResult && result.has("branches") && result.getAsJsonArray("branches").size()>1) {
             branchPicker=true;
             status=I18n.t("已停止 · 点击路线或输入编号后回车");
@@ -669,6 +683,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(AbstractDungeon.player!=null && AbstractDungeon.player.isDead)runAuto=false;
         if (Gdx.input.isKeyJustPressed(Input.Keys.F9)) stopAll();
         boolean inCombat = combat();
+        if(!wasCombat && inCombat) heldThisFight=false;
         if(!wasCombat && inCombat && runAuto) {
             auto=true;paused=false;branchConfirmed=false;decisionDirty=true;lastKey=null;
         }
@@ -719,10 +734,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 status = reply.has("manual_choice") && reply.get("manual_choice").getAsBoolean()
                     ? I18n.t("抢劫怪：选定路线后可开启自动战斗")
                     : reply.has("interrupted") && reply.get("interrupted").getAsBoolean()
-                    ? I18n.t("已停止 · 回车或选编号继续当前路线") : I18n.t("路线已就绪 · 等待你的操作");
+                    ? I18n.t("已停止 · 点击路线打完本场，回车走一步") : I18n.t("路线已就绪 · 等待你的操作");
                 if(reply.has("boss_fast_finish") && reply.get("boss_fast_finish").getAsBoolean())
                     status=I18n.t("Boss 已有合格无药胜线 · 固定路线，结束搜索");
-                if(runAuto && !paused && !branchConfirmed) {
+                if(fightAuto() && !paused && !branchConfirmed) {
                     chooseAutomaticBranch();
                 } else if (clickedBranch != null) {
                     String selected = clickedBranch;
@@ -750,7 +765,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                     branchPicker=true;
                     branchInput="";
                     status=I18n.t("已停止 · 点击路线或输入编号后回车");
-                } else if (reply.get("needs_confirmation").getAsBoolean() && !branchConfirmed) requestBranches();
+                } else if (routeChoice(reply, !fightAuto()) && !branchConfirmed) requestBranches();
                 decisionDirty=true;
             } else if (kind.equals("error")) fail(reply.get("message").getAsString());
             else if (kind.equals("cancelled")) { busy=false; clickedBranch=null; status=I18n.t("已停止 · 尚无可执行路线"); }
@@ -804,8 +819,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 return;
             }
             if (result != null && (auto || turnOnly)) {
-                if(runAuto && !branchConfirmed){chooseAutomaticBranch();return;}
-                if (result.get("needs_confirmation").getAsBoolean() && !branchConfirmed) {requestBranches();return;}
+                if(fightAuto() && !branchConfirmed){chooseAutomaticBranch();return;}
+                if (routeChoice(result, !fightAuto()) && !branchConfirmed) {requestBranches();return;}
                 int turn = state.getAsJsonObject("game_state").getAsJsonObject("combat_state").get("turn").getAsInt();
                 if (turnOnly && turn != startingTurn) { turnOnly = false; return; }
                 executeStep();
@@ -1054,14 +1069,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                     }
                 }
             } else if (list && result!=null) {
-                if (!auto && !turnOnly) { if (RunMode.combatAutomatic(mode())) toggleAuto(); else executeStep(); }
+                if (!auto && !turnOnly) toggleAuto(); // the whole route; Enter is one step in Manual
             } else if (!collapsed && lx >= 16 && lx < w-16 && ly >= ACTIONS_TOP && ly <= ACTIONS_TOP+36
                     && (lx-16)%ACTION_SPACING < ACTION_SPACING-8) {
                 int action=(int)((lx-16)/ACTION_SPACING);
                 if (action==0) recalculate();
-                else if (action==1) { runAuto=auto=turnOnly=false; executeStep(); }
+                else if (action==1) { heldThisFight=true; auto=turnOnly=false; executeStep(); }
                 else if (action==2) {
-                    if (result != null && ready()) { startingTurn=AbstractDungeon.actionManager.turn; turnOnly=true; runAuto=auto=false; }
+                    if (result != null && ready()) { startingTurn=AbstractDungeon.actionManager.turn; turnOnly=true; heldThisFight=true; auto=false; }
                 } else if (action==3) toggleCombatMode();
                 else if (action==4) togglePilotMode();
                 else stopAll();
@@ -1138,7 +1153,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private void toggleLanguage() {
         I18n.setLanguage("en".equals(I18n.language()) ? "zh" : "en");
         scroll = 0;
-        status = I18n.t(busy ? "正在搜索整场战斗…" : "路线已就绪 · 等待你的操作");
+        status = I18n.t(busy ? "正在搜索整场战斗…" : result != null ? "路线已就绪 · 等待你的操作" : "等待稳定局面");
         try {
             if (config != null) { config.setString("language", I18n.language()); config.save(); }
         } catch (IOException failure) { error = "Language save failed: " + failure.getMessage(); }
@@ -1207,7 +1222,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             canvas.label(sb,error.isEmpty()?status:I18n.backend(error),20,29,240,.65f,error.isEmpty()?MUTED:DANGER);
             sb.setColor(Color.WHITE); canvas.cursorOnTop(sb); return;
         }
-        canvas.box(sb,w-118,8,64,28,settingsOpen?ACCENT:SURFACE);
+        canvas.button(sb,w-118,8,64,28,settingsOpen?ACCENT:SURFACE);
         canvas.label(sb,I18n.t(settingsOpen?"返回":"设置"),w-108,12,48,.85f,settingsOpen?BACKGROUND:ACCENT);
         String revivalWarning = result == null ? "" : revivalWarning(result);
         if (revivalWarning.isEmpty() && (highSpeed || streakMode) && System.currentTimeMillis()-highSpeedWarnedAt < 8000)
@@ -1221,7 +1236,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             I18n.t(pilot.mode!=2 && (runAuto || auto)?"战斗全自动：开":"战斗全自动"),
             I18n.t(pilot.mode==2?"AI全自动：开":"AI全自动"),I18n.t("停止")};
         for(int i=0;i<labels.length;i++) {
-            canvas.box(sb,16+i*ACTION_SPACING,ACTIONS_TOP,ACTION_SPACING-8,36,i==0?ACCENT:SURFACE);
+            canvas.button(sb,16+i*ACTION_SPACING,ACTIONS_TOP,ACTION_SPACING-8,36,i==0?ACCENT:SURFACE);
             canvas.label(sb,labels[i],26+i*ACTION_SPACING,ACTIONS_TOP+8,ACTION_SPACING-28,.8f,
                 i==0?BACKGROUND:i==5?DANGER:i==4&&pilot.mode==2?ACCENT
                 :i==3&&pilot.mode!=2&&(runAuto||auto)?ACCENT:i==2&&result==null?MUTED:Color.WHITE);
@@ -1232,7 +1247,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(canCreditRest())toggles.add(I18n.t("羽毛回血：")+I18n.t(nextRest?"是":"仅必经火堆"));
         float spacing=(w-24)/toggles.size();
         for(int i=0;i<toggles.size();i++) {
-            canvas.box(sb,16+i*spacing,TOGGLES_TOP,spacing-8,28,SURFACE);
+            canvas.button(sb,16+i*spacing,TOGGLES_TOP,spacing-8,28,SURFACE);
             canvas.label(sb,toggles.get(i),24+i*spacing,TOGGLES_TOP+5,spacing-24,.8f,
                 i==0?(highSpeed?DANGER:streakMode?ACCENT:MUTED):i==1?(autoPotionRewards?ACCENT:MUTED):ACCENT);
         }
@@ -1242,7 +1257,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private void renderSettings(SpriteBatch sb, float w, String note) {
         float cw=(w-40)/2, right=24+cw;
-        for(int row=0;row<4;row++) for(int col=0;col<2;col++) canvas.box(sb,16+col*(cw+8),SETTINGS_TOP+row*SETTINGS_PITCH,cw,30,SURFACE);
+        for(int row=0;row<4;row++) for(int col=0;col<2;col++) {
+            if(row==3 && col==1) canvas.box(sb,16+col*(cw+8),SETTINGS_TOP+row*SETTINGS_PITCH,cw,30,SURFACE); // SuperFastMode: display only
+            else canvas.button(sb,16+col*(cw+8),SETTINGS_TOP+row*SETTINGS_PITCH,cw,30,SURFACE);
+        }
         float t=SETTINGS_TOP+6, p=SETTINGS_PITCH;
         canvas.label(sb,I18n.t("辉眼模式：")+I18n.t(Foresight.brightEyeMode?"开":"关"),26,t,cw-20,.85f,ACCENT);
         canvas.label(sb,"−",right+12,t-1,24,1,ACCENT);
@@ -1324,13 +1342,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         List<String> foresight=transformPreview!=null?transformPreview.lines():combat()?Collections.<String>emptyList():Foresight.lines();
         String heading=transformPreview!=null?(transformPreview.upgrade?I18n.t("星盘"):I18n.t("变化"))+I18n.t("试选 ") + transformPreview.selected.size() + "/"+transformPreview.count+I18n.t(" · 点击此处关闭")
             :Foresight.previewCount()>0?I18n.t("变化预览 · 点击此处打开试选列表")
-            :branchPicker?I18n.t("输入 0～10 后回车：[")+branchInput+"]"
+            :branchPicker?I18n.t("点击路线，或输入 0～10 后回车：[")+branchInput+"]"
             :busy&&progressRows!=null?I18n.t("搜索过程 · 已完成路线可点击执行")
             :!foresight.isEmpty()?I18n.t("随机结果预测 · 滚轮翻页")
             :result!=null && result.has("manual_choice") && result.get("manual_choice").getAsBoolean()
                 ?I18n.t("抢劫怪路线 · 可手动或自动执行")
-            :(runAuto || auto) && result!=null && result.has("branch") && !result.get("branch").getAsString().equals("no-potion")
+            :(fightAuto() || auto) && result!=null && result.has("branch") && !result.get("branch").getAsString().equals("no-potion")
                 ?I18n.t("自动战斗已采纳用药路线 · 点击或 F9 可接管")
+            :result!=null && (auto || turnOnly)?I18n.t("推荐行动顺序 · 自动执行中，F9 停止")
             :I18n.t("推荐行动顺序 · 点击执行整条路线");
         canvas.label(sb,heading,ROUTE_LEFT,48,w-ROUTE_LEFT-16,.85f,Color.WHITE);
         float rowWidth=w-ROUTE_LEFT-16, textWidth=rowWidth-16;
@@ -1339,7 +1358,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (transformPreview != null) {
             scroll=Math.max(0,Math.min(scroll,Math.max(0,foresight.size()-BODY_ROWS)));
             for (int i=scroll;i<Math.min(foresight.size(),scroll+BODY_ROWS);i++) {
-                canvas.box(sb,ROUTE_LEFT,BODY_TOP+(i-scroll)*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE);
+                canvas.button(sb,ROUTE_LEFT,BODY_TOP+(i-scroll)*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE);
                 canvas.label(sb,foresight.get(i),ROUTE_LEFT+8,BODY_TOP+5+(i-scroll)*BODY_ROW,textWidth,.85f,i<transformPreview.selected.size()?ACCENT:MUTED);
             }
             hint=I18n.t("仅试选 · 滚轮翻页 · 点击已选项撤回"); hintColor=ACCENT;
@@ -1357,12 +1376,15 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                     summary+=I18n.t(" / 金 -")+branch.get("lost_gold").getAsInt();
                 if(available && branch.has("potion_gain") && branch.get("potion_gain").getAsInt()>0)
                     summary+=I18n.t(" / 补 ")+branch.get("potion_gain").getAsInt()+I18n.t(" 药");
-                canvas.box(sb,ROUTE_LEFT,BODY_TOP+(i-scroll)*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE);
+                if(available) canvas.button(sb,ROUTE_LEFT,BODY_TOP+(i-scroll)*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE);
+                else canvas.box(sb,ROUTE_LEFT,BODY_TOP+(i-scroll)*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE);
                 canvas.label(sb,i+" "+summary+" · "+I18n.backend(branch.get("name").getAsString()),ROUTE_LEFT+8,BODY_TOP+5+(i-scroll)*BODY_ROW,
                     textWidth,.85f,!revival.isEmpty()?DANGER:available?ACCENT:MUTED);
             }
             hint=result.has("manual_choice") && result.get("manual_choice").getAsBoolean()
-                ?I18n.t("空回车：选推荐路线；选后可开自动"):I18n.t("0 / 空回车：不交药；无输入则等待");
+                ?I18n.t("空回车：选推荐路线；选后可开自动")
+                :branches.size()>0 && branches.get(0).getAsJsonObject().get("id").getAsString().equals("no-potion")
+                ?I18n.t("0 / 空回车：不交药；无输入则等待"):I18n.t("0 / 空回车：选 0 号路线；无输入则等待");
         } else if (result != null) {
             JsonArray rows=result.getAsJsonArray("route");
             scroll=Math.max(0,Math.min(scroll,Math.max(0,rows.size()-BODY_ROWS)));
@@ -1371,7 +1393,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 String label=row.get("text").getAsString();
                 if (row.has("label")) label=row.get("label").getAsString();
                 float top=BODY_TOP+(i-scroll)*BODY_ROW;
-                canvas.box(sb,ROUTE_LEFT,top,rowWidth,BODY_ROW-4,SURFACE);
+                if(!auto && !turnOnly) canvas.button(sb,ROUTE_LEFT,top,rowWidth,BODY_ROW-4,SURFACE);
+                else canvas.box(sb,ROUTE_LEFT,top,rowWidth,BODY_ROW-4,SURFACE);
                 canvas.label(sb,String.format("%02d",i+1),ROUTE_LEFT+8,top+5,28,.8f,i==0?ACCENT:MUTED);
                 canvas.label(sb,I18n.backend(label),ROUTE_LEFT+40,top+4,rowWidth-88,.9f,i==0?Color.WHITE:MUTED);
                 canvas.label(sb,"T"+row.get("turn").getAsInt(),w-56,top+5,36,.75f,MUTED);
@@ -1384,7 +1407,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                     +SearchStatus.phase(row)+" · "+(row.has("transitions") && (row.get("phase").getAsString().equals("beam") || row.get("phase").getAsString().equals("cycle"))
                         ? count(row.get("transitions").getAsLong())+I18n.t("步") : count(row.get("simulations").getAsLong())+I18n.t("次"))
                     +" · "+I18n.backend(row.get("name").getAsString());
-                canvas.label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+i*BODY_ROW,textWidth,.85f,row.has("ready") && row.get("ready").getAsBoolean()?ACCENT:MUTED);
+                boolean ready=row.has("ready") && row.get("ready").getAsBoolean();
+                if(ready) canvas.button(sb,ROUTE_LEFT,BODY_TOP+i*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE); // finished routes can be clicked
+                canvas.label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+i*BODY_ROW,textWidth,.85f,ready?ACCENT:MUTED);
             }
         } else if (!foresight.isEmpty()) {
             scroll=Math.max(0,Math.min(scroll,Math.max(0,foresight.size()-BODY_ROWS)));
@@ -1396,7 +1421,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             canvas.label(sb,I18n.t("发牌和动画结算后自动生成建议"),ROUTE_LEFT+8,BODY_TOP+10,textWidth,.85f,MUTED);
             canvas.label(sb,I18n.t("奖励牌 / 地图 / 商店始终由你操作"),ROUTE_LEFT+8,BODY_TOP+40,textWidth,.85f,MUTED);
         }
-        if(runAuto && hint.isEmpty() && result!=null && result.has("auto_recommendation")) {
+        if(hint.isEmpty() && result!=null && !busy && !auto && !turnOnly && !branchPicker && transformPreview==null)
+            hint=I18n.t(RunMode.combatAutomatic(mode())?"点击列表或回车：继续自动打完本场":"点击列表打完本场 · 回车走一步");
+        if(fightAuto() && hint.isEmpty() && result!=null && result.has("auto_recommendation")) {
             JsonObject advice=result.getAsJsonObject("auto_recommendation");
             hint=I18n.backend(autoReason)+" · "+I18n.backend(advice.getAsJsonObject("assessment").get("summary").getAsString());
             hintColor=ACCENT;

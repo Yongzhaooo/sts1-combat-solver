@@ -40,8 +40,6 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 局面已变化 · 请重新计算|State changed · recalculate
 局面已变化，等待重新计算|State changed; waiting to recalculate
 已 |Elapsed 
-已停止 · 回车或选编号继续当前路线|Stopped · Enter / number to resume route
-已停止 · 回车继续当前路线|Stopped · Enter to resume route
 已停止 · 尚无可执行路线|Stopped · no complete route yet
 已停止 · 点击路线或输入编号后回车|Stopped · click route / number + Enter
 已停止 · 点击重新计算恢复|Stopped · recalculate to resume
@@ -127,7 +125,6 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 路线已结束 · 可手动操作或重新计算|Route ended · play manually or recalculate
 跳过战斗选牌|Skip combat selection
 辉眼模式：|Foresight: 
-输入 0～10 后回车：[|Enter 0–10, then Enter: [
 选牌与路线由你决定|You choose cards and map routes
 重新计算|Recalculate
 随机结果预测 · 滚轮翻页|RNG predictions · scroll
@@ -394,3 +391,9 @@ Boss 快速收尾：找到不交药的胜利路线就停止搜索|Boss fast fini
 次|simulations
 Agent 模式：局外由 agent 决定，战斗自动执行 · F9 接管|Agent mode: an agent makes outside choices; fights run automatically · F9 takes over
 Agent 通道读写失败：|Agent channel read/write failed: 
+已停止 · 点击路线打完本场，回车走一步|Stopped · click the route to finish the fight, Enter for one step
+点击路线，或输入 0～10 后回车：[|Click a route, or type 0–10 and Enter: [
+推荐行动顺序 · 自动执行中，F9 停止|Suggested actions · running, F9 to stop
+点击列表打完本场 · 回车走一步|Click the list to finish the fight · Enter for one step
+点击列表或回车：继续自动打完本场|Click the list or Enter: finish the fight automatically
+0 / 空回车：选 0 号路线；无输入则等待|0 / Enter: route 0; waits for input

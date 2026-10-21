@@ -10,6 +10,7 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.helpers.FontHelper;
 import com.megacrit.cardcrawl.helpers.ImageMaster;
+import com.megacrit.cardcrawl.helpers.input.InputHelper;
 
 /**
  * Where the panel sits on screen, how large it is drawn, its palette and font, and the drawing primitives.
@@ -33,6 +34,7 @@ final class PanelCanvas {
     private BitmapFont uiFont;
     private FreeTypeFontGenerator fontGenerator;
     private final GlyphLayout measure = new GlyphLayout();
+    private final Color lit = new Color();
 
     float scale() {
         return PanelSize.fit(uiScale, Settings.scale, Settings.WIDTH, Settings.HEIGHT, PANEL_WIDTH, PANEL_HEIGHT);
@@ -74,6 +76,17 @@ final class PanelCanvas {
         sb.setColor(Color.WHITE);
         rounded.setColor(color);
         rounded.draw(sb,x+left*s,y-(top+height)*s,width*s,height*s);
+    }
+
+    /** The pointer is over this panel rectangle. */
+    boolean pointing(float left, float top, float width, float height) {
+        float s=scale();
+        return inside(InputHelper.mX, InputHelper.mY, x+left*s, y-(top+height)*s, width*s, height*s);
+    }
+
+    /** A clickable box: lighter while the pointer is over it. */
+    void button(SpriteBatch sb, float left, float top, float width, float height, Color color) {
+        box(sb,left,top,width,height,pointing(left,top,width,height)?lit.set(color).lerp(Color.WHITE,.12f):color);
     }
 
     void line(SpriteBatch sb, float left, float top, float width) {
