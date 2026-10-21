@@ -124,17 +124,22 @@ battle=battle.replace(early_end,'''    // Java callEndTurnEarlySequence -> relea
         addToBot(Actions::DrawCards(1));
     }
 '''+early_end,1)
-turn_ending='''        if (endTurnQueued) {
-            endTurnQueued = false;
+end_of_turn_cards='''    // todo for cards in hand call triggerOnEndOfTurnForPlayingCard
 '''
-assert battle.count(turn_ending)==1,'upstream turn-ending layout changed'
-battle=battle.replace(turn_ending,turn_ending+'''            // Java refreshes the hand once the end-turn item's actions drain, before AbstractRoom.endTurn queues
-            // ClearCardQueue and the discard: Unceasing Top draws here when a Time Warp ending found the queue busy
-            // and nothing refilled the hand since (train-r5 5213729386368735704, 6468454909721897195).
-            if (player.hasRelic<R::UNCEASING_TOP>() && cards.cardsInHand == 0 && !player.hasStatus<PS::NO_DRAW>()) {
-                addToBot(Actions::DrawCards(1));
+assert battle.count(end_of_turn_cards)==1,'upstream end-of-turn layout changed'
+battle=battle.replace(end_of_turn_cards,'''    // Java refreshes the hand once the end-turn item's actions drain, before AbstractRoom.endTurn queues
+    // ClearCardQueue and the discard: Unceasing Top draws there when a Time Warp ending found the queue busy
+    // (train-r5 5213729386368735704, 6468454909721897195). A hand still holding a Burn-type card autoplays it
+    // instead, and GameActionManager disables the Top until the turn ends (1500749541642889918).
+    if (player.hasRelic<R::UNCEASING_TOP>() && cards.cardsInHand == 0) {
+        addToBot([](BattleContext &bc) {
+            if (bc.cards.cardsInHand == 0 && !bc.player.hasStatus<PS::NO_DRAW>()) {
+                bc.addToBot(Actions::DrawCards(1));
             }
-''',1)
+        });
+    }
+
+'''+end_of_turn_cards,1)
 # playCardQueueItem distinguishes playable cards with no target from rejected autoplay.
 # A rejected Clash still runs UseCardAction and Havoc exhausts it during rebirth.
 patched_battle.write_text(battle,encoding='utf-8')
