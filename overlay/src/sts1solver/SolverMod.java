@@ -485,6 +485,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (c != null) {
             c.remove("frame_delta_seconds");
         }
+        // F9 and the automation buttons flip run_auto mid-fight; the route found so far stays valid.
+        JsonObject context = game.getAsJsonObject("solver_auto_context");
+        if (context != null) context.remove("run_auto");
         // Pickers and pending UseCardAction export the same cards again. Hover
         // previews must not invalidate a route through one of those copies.
         stripCardPreviews(game);
@@ -1044,8 +1047,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 if(row<Math.min(progressRows.size(),BODY_ROWS)) {
                     JsonObject progress=progressRows.get(row).getAsJsonObject();
                     if(progress.has("ready") && progress.get("ready").getAsBoolean() && progress.has("id")) {
+                        boolean keepAuto=runAuto; // picking a finished route is not a Stop
                         clickedBranch=progress.get("id").getAsString();
                         cancel(true);
+                        runAuto=keepAuto;
                     }
                 }
             } else if (list && result!=null) {
