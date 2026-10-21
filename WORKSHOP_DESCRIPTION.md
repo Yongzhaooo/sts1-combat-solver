@@ -19,4 +19,6 @@ Subscribe with ModTheSpire and BaseMod. Windows x64 and Apple Silicon Macs; Inte
 
 v0.9.1: Better potion use. After the act 1 and 2 Bosses and the last act 3 Boss, the next act heals 75% of missing HP, so those fights count a quarter of HP lost; when a potion-free win costs at most 50 HP, no potion lines are searched, keeping valuable bottles. Swift, Gambler's Brew, Distilled Chaos, Heart of Iron and Cultist potions are worth more: drunk less casually in fights and preferred as rewards. Fixed: Gambler's Brew was priced as an ordinary potion in fights.
 
+Special thanks to 七月流火（猫火） for long-term testing and feedback.
+
 Silent, Defect and Watcher solvers are open for collaboration: see CONTRIBUTING.md on GitHub or write to yongzhao.derek@gmail.com.
