@@ -510,11 +510,13 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         com.megacrit.cardcrawl.rooms.AbstractRoom room=AbstractDungeon.getCurrRoom();
         out.addProperty("room",room==null?"":room.getClass().getSimpleName());
         out.addProperty("boss_candidates_remaining",AbstractDungeon.bossList==null?0:AbstractDungeon.bossList.size());
-        out.addProperty("boss_fast_finish",bossFastFinish(bossFastFinishEnabled,
-            room instanceof com.megacrit.cardcrawl.rooms.MonsterRoomBoss,
+        boolean bossHeal=bossFastFinish(room instanceof com.megacrit.cardcrawl.rooms.MonsterRoomBoss,
             AbstractDungeon.actNum,AbstractDungeon.ascensionLevel,
             AbstractDungeon.bossList==null?0:AbstractDungeon.bossList.size(),
-            AbstractDungeon.player!=null && AbstractDungeon.player.hasRelic("Mark of the Bloom")));
+            AbstractDungeon.player!=null && AbstractDungeon.player.hasRelic("Mark of the Bloom"));
+        // The next act heals after this Boss (75% of missing HP from A5); auto_policy discounts HP loss for it.
+        out.addProperty("boss_heal",bossHeal);
+        out.addProperty("boss_fast_finish",bossFastFinishEnabled && bossHeal);
         out.addProperty("feed_mode",feedModeEnabled);
         out.addProperty("high_speed",highSpeed);
         out.addProperty("run_auto",runAuto);
