@@ -18,7 +18,12 @@
 
 | 位置 | 内容 |
 |---|---|
-| `overlay/src/sts1solver/SolverMod.java` | 面板绘制、按键和点击、自动执行、与后台通信。界面改动大多在这里 |
+| `overlay/src/sts1solver/SolverMod.java` | 模式切换、战斗自动执行（请求、回复、逐步执行）、按键和点击分发、战斗面板的内容。界面改动大多在这里 |
+| `overlay/src/sts1solver/PanelCanvas.java` | 面板位置、缩放、拖动、配色、字体和绘制函数（`box`、`label`、`line`） |
+| `overlay/src/sts1solver/OutsidePilot.java` | 局外：打分、AI全自动执行、人工逐步确认、地图路线，以及战斗外的小卡片 |
+| `overlay/src/sts1solver/BackendClient.java` | 后台进程和收发通道；请求内容由 `SolverMod.send` 组装 |
+| `overlay/src/sts1solver/CombatReadiness.java` | 是否在战斗中、局面是否稳定到可以读取和执行 |
+| `AgentBridge.java`、`DeckWatch.java`、`RunExports.java` | Agent 文件通道；卡组变化提示；F6/F7 导出、崩溃记录 |
 | `overlay/src/sts1solver/RunMode.java` | 三种模式（`MANUAL` 人工逐步、`COMBAT_AUTO` 战斗全自动、`PILOT` AI全自动）以及按钮切换规则，纯逻辑 |
 | `overlay/src/sts1solver/PanelSize.java`、`SearchStatus.java` | 面板尺寸、搜索超时，纯逻辑 |
 | `overlay/src/sts1solver/I18n.java`，`overlay/resources/localization/en.tsv` | 中英文切换；英文表是“中文<TAB>英文” |
@@ -27,7 +32,7 @@
 | `overlay/test/*.java` | Java 检查，`main` 里用 `require` 断言 |
 | `tools/check_*.py` | Python 检查 |
 
-`SolverMod.java` 有 2,200 多行，绘制、状态和通信都在一个类里。已经拆出去的纯逻辑（`RunMode`、`PanelSize` 和 `SolverMod` 里的 `static` 方法）都有 Java 检查。新功能照这个模式写：判断逻辑写成纯函数，放进 `RunMode` 或一个新的小类，配一个检查；`SolverMod` 里只留几行调用。
+`SolverMod` 负责把这些部分串起来：模式状态和战斗自动执行在它里面，局外、绘制、通信各在自己的类里。纯逻辑（`RunMode`、`PanelSize`、`CombatReadiness` 和 `SolverMod` 里的 `static` 方法）都有 Java 检查。新功能照这个模式写：判断逻辑写成纯函数，放进 `RunMode` 或一个新的小类，配一个检查；`SolverMod` 里只留几行调用。
 
 ## 面板状态
 
@@ -35,7 +40,7 @@
 
 | 字段 | 含义 |
 |---|---|
-| `outsideMode` | 局外：0 不给建议，1 每步给建议、玩家确认，2 AI全自动 |
+| `pilot.mode` | 局外（`OutsidePilot.mode`）：0 不给建议，1 每步给建议、玩家确认，2 AI全自动 |
 | `runAuto` | 整局的战斗都自动打（战斗全自动和 AI全自动） |
 | `auto` | 当前这场正在自动执行 |
 | `turnOnly` | 只自动执行到本回合结束 |
@@ -48,7 +53,7 @@
 | `runAfterBranch` | 玩家按了 F10，选完路线后直接打完整场 |
 | `highSpeed`、`streakMode` | 搜索档位：高速、连胜；都为 false 时是标准 |
 
-模式由 `RunMode.of(outsideMode, runAuto)` 推出来。面板上的“战斗全自动”和“AI全自动”按钮分别调用 `toggleCombatMode()` 和 `togglePilotMode()`；`stopAll()`（F9）停下并回到人工逐步。
+模式由 `RunMode.of(pilot.mode, runAuto)` 推出来。面板上的“战斗全自动”和“AI全自动”按钮分别调用 `toggleCombatMode()` 和 `togglePilotMode()`；`stopAll()`（F9）停下并回到人工逐步。
 
 一场战斗的流程：
 

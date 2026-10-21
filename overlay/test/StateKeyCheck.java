@@ -31,16 +31,16 @@ public class StateKeyCheck {
                 || screen == com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.HAND_SELECT
                 || screen == com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.GRID
                 || screen == com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.CARD_REWARD;
-            if(SolverMod.actionPausedByScreen(screen)==interactive)
+            if(CombatReadiness.actionPausedByScreen(screen)==interactive)
                 throw new AssertionError("Action timeout must pause on overlay screen " + screen);
             boolean paused = screen == com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.GRID
                 || screen == com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.CARD_REWARD;
-            if (SolverMod.waitForMonsterExit(screen,true,false,false,false,false) == paused)
+            if (CombatReadiness.waitForMonsterExit(screen,true,false,false,false,false) == paused)
                 throw new AssertionError("death gate on " + screen);
-            if (SolverMod.waitForMonsterExit(screen,false,false,false,true,false) == paused)
+            if (CombatReadiness.waitForMonsterExit(screen,false,false,false,true,false) == paused)
                 throw new AssertionError("escape gate on " + screen);
-            if (SolverMod.waitForMonsterExit(screen,true,true,false,true,true)
-                    || SolverMod.waitForMonsterExit(screen,true,false,true,false,false))
+            if (CombatReadiness.waitForMonsterExit(screen,true,true,false,true,true)
+                    || CombatReadiness.waitForMonsterExit(screen,true,false,true,false,false))
                 throw new AssertionError("finished/half-dead monster blocks " + screen);
         }
         System.out.println("PASS: picker/card previews ignored; card identity, costs and base rules retained");

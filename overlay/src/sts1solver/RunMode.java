@@ -12,7 +12,7 @@ enum RunMode {
     MANUAL, COMBAT_AUTO, PILOT;
 
     /**
-     * The mode implied by the state flags: SolverMod.outsideMode (0 no outside suggestions, 1 suggest and confirm
+     * The mode implied by the state flags: OutsidePilot.mode (0 no outside suggestions, 1 suggest and confirm
      * each step, 2 pilot) and runAuto. Manual is outsideMode 1; outsideMode 0 without runAuto is Manual with the
      * suggestions card hidden.
      */

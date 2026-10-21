@@ -1,5 +1,11 @@
 package sts1solver;
 
+import static sts1solver.CombatReadiness.combat;
+import static sts1solver.CombatReadiness.ready;
+import static sts1solver.CombatReadiness.openingSelection;
+import static sts1solver.CombatReadiness.actionPausedByScreen;
+import static sts1solver.PanelCanvas.*;
+
 import basemod.BaseMod;
 import basemod.interfaces.PostRenderSubscriber;
 import basemod.interfaces.PostUpdateSubscriber;
@@ -9,18 +15,14 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.graphics.g2d.GlyphLayout;
-import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.evacipated.cardcrawl.modthespire.Loader;
 import com.evacipated.cardcrawl.modthespire.lib.*;
 import com.google.gson.*;
 import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.actions.GameActionManager;
-import com.megacrit.cardcrawl.monsters.AbstractMonster;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
-import com.megacrit.cardcrawl.helpers.FontHelper;
 import com.megacrit.cardcrawl.helpers.ImageMaster;
 import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.helpers.input.InputAction;
@@ -29,94 +31,27 @@ import communicationmod.CommandExecutor;
 import communicationmod.GameStateConverter;
 import communicationmod.GameStateListener;
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 @SpireInitializer
 public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, PostInitializeSubscriber {
     public static SolverMod instance;
-    private final Gson gson = new Gson();
-    private final VoiceNotes voiceNotes = new VoiceNotes();
-    private final ConcurrentLinkedQueue<JsonObject> debugReplies = new ConcurrentLinkedQueue<>();
-    private boolean researchRecording;
-    private String debugMessage = "";
+    private final BackendClient backend = new BackendClient();
+    private final PanelCanvas canvas = new PanelCanvas();
+    private final OutsidePilot pilot = new OutsidePilot();
+    private final AgentBridge agent = new AgentBridge();
+    private final DeckWatch deckWatch = new DeckWatch();
+    private final RunExports exports = new RunExports();
     private volatile String rngWarning = "";
     // SuperFastMode multiplies Gdx delta; the solver no longer depends on frame time.
     // x10 is the speed long runs were played at (the author's own setting).
     static final float SUPER_FAST_TESTED = 10f;
-    private boolean debugMessageError;
-    private boolean runLog = true;
-    private final DecisionNotes decisionNotes = new DecisionNotes();
-    private String inventorySignature = "";
-    private long noteRetryAfter;
-    private AbstractPlayer notePlayer;
-
-    private Path notesDirectory(String name) throws IOException {
-        Properties properties = new Properties();
-        try (InputStream stream = getClass().getResourceAsStream("/solver.properties")) {
-            if (stream == null) throw new IOException("solver.properties missing");
-            properties.load(stream);
-        }
-        return BackendRuntime.dataDirectory(properties).resolve(name);
-    }
-
-    private void observeInventory() {
-        if (!CommandExecutor.isInDungeon() || AbstractDungeon.player == null) {
-            decisionNotes.reset(); inventorySignature = ""; notePlayer = null; return;
-        }
-        if (Foresight.capturing) return;
-        if (notePlayer != AbstractDungeon.player) {
-            decisionNotes.reset(); inventorySignature = ""; notePlayer = AbstractDungeon.player;
-        }
-        // Combat execution already has its own trace. Record outside decisions and selection screens.
-        if (AbstractDungeon.getCurrRoom() == null ||
-                (AbstractDungeon.getCurrRoom().phase == AbstractRoom.RoomPhase.COMBAT
-                && !AbstractDungeon.isScreenUp)) return;
-        if (System.currentTimeMillis() < noteRetryAfter) return;
-        try {
-            JsonObject inventory = new JsonObject();
-            inventory.addProperty("seed", Long.toString(Settings.seed));
-            inventory.addProperty("floor", AbstractDungeon.floorNum);
-            inventory.addProperty("screen", String.valueOf(AbstractDungeon.screen));
-            inventory.addProperty("gold", AbstractDungeon.player.gold);
-            JsonArray deck = new JsonArray();
-            for (AbstractCard card : AbstractDungeon.player.masterDeck.group) {
-                JsonObject item = new JsonObject();
-                item.addProperty("uuid", card.uuid.toString());
-                item.addProperty("id", card.cardID);
-                item.addProperty("name", card.name);
-                item.addProperty("upgrades", card.timesUpgraded);
-                DecisionContext.cardDetails(item, card);
-                deck.add(item);
-            }
-            inventory.add("deck", deck);
-            JsonArray potions = new JsonArray();
-            for (com.megacrit.cardcrawl.potions.AbstractPotion potion : AbstractDungeon.player.potions)
-                if (!(potion instanceof com.megacrit.cardcrawl.potions.PotionSlot)) potions.add(new JsonPrimitive(potion.ID));
-            inventory.add("potions", potions);
-            inventory.add("public_context", DecisionContext.visible());
-            inventory.add("metadata", DecisionContext.metadata());
-            String signature = inventory.toString();
-            if (signature.equals(inventorySignature)) return;
-            JsonElement state = new JsonParser().parse(GameStateConverter.getCommunicationState());
-            decisionNotes.append(notesDirectory("decision-notes"), inventory, state, DecisionContext.recovery());
-            inventorySignature = signature;
-        } catch (Exception failure) {
-            noteRetryAfter = System.currentTimeMillis() + 10000;
-            error = I18n.t("决策记录失败：") + failure.getMessage();
-            System.err.println("[STS1DecisionNotes] " + failure);
-        }
-    }
-    private final ConcurrentLinkedQueue<JsonObject> replies = new ConcurrentLinkedQueue<>();
-    private Process backend;
-    private BufferedWriter writer;
     private long serial, activeId, sentAt;
     private long searchTimeoutMillis = SearchStatus.timeoutMillis(8000);
     private JsonObject rootKey, lastKey, result;
     private boolean decisionDirty=true;
-    private boolean busy, awaitingAction, auto, turnOnly, gamblingAuto, paused, collapsed, dragging;
+    private boolean busy, awaitingAction, auto, turnOnly, gamblingAuto, paused, collapsed;
     private boolean runAuto;
     private boolean runAfterBranch; // F10 pressed while a route choice was pending: run the fight once chosen
     private boolean autoPotionRewards = true;
@@ -138,66 +73,20 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private static final int BUDGET = 8000;
     private boolean highSpeed, streakMode;
     private long highSpeedWarnedAt;
-    /** Agent play (AGENT_PLAY.md): outside choices come from a file an external agent writes; fights run automatically. */
-    private boolean agentBridge;
-    private long agentDecision;
-    private OutsidePacket agentPacket;
-    private String agentError = "", agentWritten = "";
-    private Path agentDirectory;
+    private boolean agentBridge; // Agent play (AGENT_PLAY.md), see AgentBridge
     private String status = I18n.t("等待进入战斗"), error = "";
     // Compact combat panel: summary card left, five route rows right, then actions and toggles.
-    private static final float PANEL_WIDTH = 640;
-    private static final float PANEL_HEIGHT = 346;
     private static final float ROUTE_LEFT = 248, BODY_TOP = 76, BODY_ROW = 30, NOTE_TOP = 234;
     private static final int BODY_ROWS = 5;
     private static final float ACTIONS_TOP = 262, TOGGLES_TOP = 306;
     private static final float SETTINGS_TOP = 78, SETTINGS_PITCH = 34;
-    private static final float PILOT_WIDTH = 440, PILOT_LIST_TOP = 72, PILOT_ROW = 30;
-    private static final int PILOT_ROWS = 5;
     private static final float ACTION_SPACING = (PANEL_WIDTH - 24) / 6;
     private boolean settingsOpen;
-    private float x = -1, y = -1, dx, dy;
-    private float uiScale = 1, fontScale;
-    private com.badlogic.gdx.graphics.g2d.NinePatch rounded;
-    private com.badlogic.gdx.graphics.g2d.TextureRegion routePixel;
-    private final Color border = new Color(.20f,.26f,.34f,1);
     private TransformPreview transformPreview;
     private int previewRngCounter;
     private Object previewSource;
     private AbstractDungeon.CurrentScreen lastFoldScreen;
-    private final Color background = new Color(.055f,.070f,.105f,.96f);
-    private final Color surface = new Color(.10f,.13f,.19f,1);
-    static final Color ACCENT = new Color(.38f,.83f,.72f,1);
-    private final Color accent = ACCENT;
-    private final Color muted = new Color(.62f,.69f,.78f,1);
-    private final Color danger = new Color(1,.48f,.44f,1);
     private boolean wasCombat;
-    private Distill2 outsideModel;
-    private OutsidePacket outsidePacket;
-    private OutsidePacket outsideStatePacket;
-    private Distill2.Result outsideScores;
-    private AbstractPlayer outsidePlayer;
-    private String outsideNotice = "";
-    private int outsideMode; // 0: off, 1: confirm each outside action, 2: auto pilot.
-    private boolean outsidePrompt, outsideConfirm, outsideAwaiting;
-    private boolean outsidePilotRun, outsideFailed; // the compact pilot card replaces the panel outside combat.
-    private int outsideChosen, outsideScroll;
-    private long outsideScoredAt, outsideSubmittedAt, outsideWaitSince;
-    private int outsideRetries;
-    private List<OutsidePacket.Step> routePlan = java.util.Collections.emptyList();
-    private String routeKey = "";
-    private int skippedCardFloor = -1, skippedCards;
-    // Master-deck watch: uuid -> card and its upgrade count; changes are shown under the deck icon.
-    private final Map<UUID,AbstractCard> deckCards = new HashMap<>();
-    private final Map<UUID,Integer> deckUpgrades = new HashMap<>();
-    private AbstractPlayer deckPlayer;
-    private final List<AbstractCard> deckShown = new ArrayList<>();
-    private final List<String> deckVerbs = new ArrayList<>();
-    private long deckShownUntil;
-    private boolean shopLeft;
-    private boolean hovered;  // pointer over the panel, which is drawn after the game cursor
-    private BitmapFont uiFont;
-    private FreeTypeFontGenerator fontGenerator;
     private SpireConfig config;
     private int autoKey = Input.Keys.F10;
     private boolean bindingKey;
@@ -214,13 +103,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     // Shops and events fold the panel (results sit beside the options); it reopens on leaving
     // unless the player toggled it meanwhile.
     private boolean autoFolded, inFoldRoom;
-    private final GlyphLayout measure = new GlyphLayout();
     // Classes the combat engine imports exactly; keep in sync with backend.SUPPORTED_CLASSES.
     // Out-of-combat foresight works for every class.
     static final EnumSet<AbstractPlayer.PlayerClass> SUPPORTED = EnumSet.of(AbstractPlayer.PlayerClass.IRONCLAD);
     static final String SUPPORTED_NAMES = I18n.t("战士");
 
-    private static boolean supported() {
+    static boolean supported() {
         return AbstractDungeon.player != null && SUPPORTED.contains(AbstractDungeon.player.chosenClass);
     }
 
@@ -231,11 +119,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     public SolverMod() {
         BaseMod.subscribe(this);
         EventRules.live = true; // hidden-information event rules read the running game
-        try (InputStream stream = getClass().getResourceAsStream("/solver.properties")) {
-            Properties build = new Properties();
-            if (stream != null) build.load(stream);
-            researchRecording = Boolean.parseBoolean(build.getProperty("research_recording", "false"));
-        } catch (IOException failure) { System.err.println("[STS1Solver] " + failure); }
         try {
             Properties defaults = new Properties();
             defaults.setProperty("language", "zh");
@@ -257,7 +140,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("runLog", "true");
             config = new SpireConfig("STS1CombatSolver", "config", defaults);
             I18n.setLanguage(config.getString("language"));
-            uiScale = PanelSize.preference(config.getString("uiScale"));
+            canvas.uiScale = PanelSize.preference(config.getString("uiScale"));
             status = I18n.t("等待进入战斗");
             backendPhase = I18n.t("等待后台接收");
             autoKey = config.getInt("autoKey");
@@ -277,18 +160,17 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             routeMarks = config.getBool("routeMarks");
             autoPotionRewards = config.getBool("autoPotionRewards");
             runAutoEnabled = config.getBool("runAutoEnabled");
-            runLog = config.getBool("runLog");
+            backend.setRunLog(config.getBool("runLog"));
             if (!validAutoKey(autoKey)) autoKey = Input.Keys.F10;
         } catch (IOException failure) { error = I18n.t("快捷键配置读取失败：") + failure.getMessage(); }
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            voiceNotes.shutdown();
-            try { if (writer != null) writer.close(); } catch (IOException ignored) { }
-            // EOF lets the supervisor terminate and reap its native worker.
+            exports.shutdown();
+            backend.close();
         }, "sts1-solver-shutdown"));
     }
 
     @Override public void receivePostInitialize() {
-        initFont();
+        canvas.font();
         registerConfigPanel();
         TestRecorder.subscribe();
         ShopRecorder.subscribe();
@@ -297,11 +179,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             if (!rngMods.isEmpty()) {
                 rngWarning = I18n.t("这些 Mod 会影响随机数（RNG），求解器计算可能不准确，建议关闭：") + String.join(" / ", rngMods);
                 System.err.println("[STS1Solver] RNG-affecting mods: " + rngMods);
-                if (debugMessage.isEmpty()) { debugMessage = rngWarning; debugMessageError = true; }
+                if (exports.message.isEmpty()) { exports.message = rngWarning; exports.messageError = true; }
             }
             String fast = superFastNote();
-            if (superFastSpeed() > SUPER_FAST_TESTED && debugMessage.isEmpty()) { debugMessage = fast; debugMessageError = true; }
-            try { startBackend(); } catch (IOException failure) { System.err.println("[STS1Solver] " + failure); }
+            if (superFastSpeed() > SUPER_FAST_TESTED && exports.message.isEmpty()) { exports.message = fast; exports.messageError = true; }
+            try { backend.start(); } catch (IOException failure) { System.err.println("[STS1Solver] " + failure); }
         }, "sts1-solver-warmup");
         warmup.setDaemon(true);
         warmup.start();
@@ -312,7 +194,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         AbstractDungeon.CurrentScreen screen = room == null ? null : AbstractDungeon.screen;
         boolean event = room != null && room.phase == AbstractRoom.RoomPhase.EVENT && room.event != null;
         boolean fold = !expandOnScreen(screen, room != null && combat(), event)
-            || (outsideMode == 2 && !combat()); // the pilot's status fits the folded header.
+            || (pilot.mode == 2 && !combat()); // the pilot's status fits the folded header.
         if (fold && (!inFoldRoom || screen != lastFoldScreen) && !collapsed) { collapsed = true; autoFolded = true; }
         if (!fold && inFoldRoom && autoFolded) { collapsed = false; autoFolded = false; }
         inFoldRoom = fold;
@@ -330,8 +212,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         return warning;
     }
 
-    private float panelWidth() { return pilotCard() ? PILOT_WIDTH : collapsed ? 300 : PANEL_WIDTH; }
-    private float panelHeight() { return pilotCard() ? pilotHeight() : collapsed ? 48 : PANEL_HEIGHT; }
+    private float panelWidth() { return pilot.cardShown() ? OutsidePilot.PILOT_WIDTH : collapsed ? 300 : PANEL_WIDTH; }
+    private float panelHeight() { return pilot.cardShown() ? pilot.cardHeight() : collapsed ? 48 : PANEL_HEIGHT; }
 
     private boolean validAutoKey(int key) {
         return key >= Input.Keys.F1 && key <= Input.Keys.F12 && key != Input.Keys.F6 && key != Input.Keys.F7 && key != Input.Keys.F8 && key != Input.Keys.F9;
@@ -385,89 +267,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         } catch(Exception failure){fail(failure.toString());}
     }
 
-    private boolean combat() {
-        return CommandExecutor.isInDungeon() && AbstractDungeon.player != null
-            && AbstractDungeon.getCurrRoom().phase == AbstractRoom.RoomPhase.COMBAT
-            && !AbstractDungeon.getCurrRoom().isBattleOver && !AbstractDungeon.player.isDead;
-    }
-
-    private boolean ready() {
-        if (!combat() || !GameStateListener.isWaitingForCommand()) return false;
-        // Piles already contain cards while Soul is still moving them. Completion
-        // calls clearPowers/resetAttributes, including temporary cost reset.
-        if (com.megacrit.cardcrawl.cards.SoulGroup.isActive()) return false;
-        // AbstractMonster.updateDeathAnimation clears powers when isDead becomes
-        // true. Action queues can already be idle before this final state change.
-        for (AbstractMonster monster: AbstractDungeon.getMonsters().monsters)
-            if (waitForMonsterExit(AbstractDungeon.screen, monster.isDying, monster.isDead,
-                    monster.halfDead, monster.isEscaping, monster.escaped)) return false;
-        if (AbstractDungeon.screen != AbstractDungeon.CurrentScreen.NONE
-                && AbstractDungeon.screen != AbstractDungeon.CurrentScreen.CARD_REWARD
-                && AbstractDungeon.screen != AbstractDungeon.CurrentScreen.HAND_SELECT
-                && AbstractDungeon.screen != AbstractDungeon.CurrentScreen.GRID) return false;
-        if (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.NONE) {
-            for(com.megacrit.cardcrawl.vfx.AbstractGameEffect effect:AbstractDungeon.effectList)
-                if(pendingCardEffect(effect))return false;
-            for(com.megacrit.cardcrawl.vfx.AbstractGameEffect effect:AbstractDungeon.effectsQueue)
-                if(pendingCardEffect(effect))return false;
-            for(com.megacrit.cardcrawl.vfx.AbstractGameEffect effect:AbstractDungeon.topLevelEffects)
-                if(pendingCardEffect(effect))return false;
-            for (AbstractMonster monster: AbstractDungeon.getMonsters().monsters)
-                if (!monster.isDeadOrEscaped() && monster.intent == AbstractMonster.Intent.DEBUG) return false;
-            return AbstractDungeon.actionManager.actions.isEmpty()
-                && AbstractDungeon.actionManager.phase == GameActionManager.Phase.WAITING_ON_USER
-                && AbstractDungeon.actionManager.currentAction == null
-                && !AbstractDungeon.actionManager.hasControl
-                && AbstractDungeon.actionManager.cardQueue.isEmpty()
-                && AbstractDungeon.actionManager.preTurnActions.isEmpty()
-                && !AbstractDungeon.player.endTurnQueued;
-        }
-        return true;
-    }
-    static boolean actionPausedByScreen(AbstractDungeon.CurrentScreen screen) {
-        return screen != AbstractDungeon.CurrentScreen.NONE
-            && screen != AbstractDungeon.CurrentScreen.HAND_SELECT
-            && screen != AbstractDungeon.CurrentScreen.GRID
-            && screen != AbstractDungeon.CurrentScreen.CARD_REWARD;
-    }
-    static boolean waitForMonsterExit(AbstractDungeon.CurrentScreen screen, boolean dying,
-                                      boolean dead, boolean halfDead, boolean escaping, boolean escaped) {
-        // AbstractDungeon skips room.update on these screens unless peeking.
-        // A killing Headbutt must choose a card before death animations can resume.
-        if (screen == AbstractDungeon.CurrentScreen.GRID
-                || screen == AbstractDungeon.CurrentScreen.CARD_REWARD) return false;
-        return pendingMonsterDeath(dying, dead, halfDead) || (escaping && !escaped);
-    }
-    static boolean pendingMonsterDeath(boolean dying, boolean dead, boolean halfDead) {
-        return dying && !dead && !halfDead;
-    }
-    // The startup action identifies Gambling Chip more precisely than the relic alone:
-    // other hand selections can occur while the player owns the same relic.
-    static boolean gamblingSelection(JsonObject state) {
-        if (state == null || !state.has("game_state")) return false;
-        JsonObject game = state.getAsJsonObject("game_state");
-        if (!game.has("screen_type") || !"HAND_SELECT".equals(game.get("screen_type").getAsString())
-                || !game.has("screen_state") || !game.has("solver_selection")) return false;
-        JsonObject screen = game.getAsJsonObject("screen_state");
-        JsonObject action = game.getAsJsonObject("solver_selection").getAsJsonObject("current_action");
-        return screen != null && screen.has("max_cards") && screen.get("max_cards").getAsInt() == 99
-            && action != null && action.has("class")
-            && "GamblingChipAction".equals(action.get("class").getAsString());
-    }
     static boolean routeConfirmed(JsonObject result, boolean branchConfirmed) {
         return result != null && (!result.has("manual_choice")
             || !result.get("manual_choice").getAsBoolean() || branchConfirmed);
-    }
-    static boolean toolboxSelection(JsonObject state) {
-        if (state == null || !state.has("game_state")) return false;
-        JsonObject game = state.getAsJsonObject("game_state");
-        if (!game.has("screen_type") || !"CARD_REWARD".equals(game.get("screen_type").getAsString())
-                || !game.has("solver_selection")) return false;
-        JsonObject action = game.getAsJsonObject("solver_selection").getAsJsonObject("current_action");
-        return action != null && action.has("class") && "ChooseOneColorless".equals(action.get("class").getAsString());
-    }
-    static boolean openingSelection(JsonObject state) {
-        return gamblingSelection(state) || toolboxSelection(state);
     }
     static boolean autoAfterBranch(boolean manual) {
         return !manual;
@@ -479,12 +281,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             // user's intervening Stop or disable-auto choice.
             decisionDirty=true;
         }
-    }
-    private boolean pendingCardEffect(com.megacrit.cardcrawl.vfx.AbstractGameEffect effect) {
-        String name=effect.getClass().getSimpleName();
-        return !effect.isDone && (name.equals("ShowCardAndAddToHandEffect")
-            || name.equals("ShowCardAndAddToDiscardEffect") || name.equals("ShowCardAndAddToDrawPileEffect")
-            || name.equals("ExhaustCardEffect")); // Completion resets temporary card attributes.
     }
     @SpirePatch(clz=GameStateListener.class, method="checkForDungeonStateChange")
     public static class DecisionEvent {
@@ -565,9 +361,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             && !(act==3 && ascension>=20 && remainingBosses>1);
     }
 
-    private RunMode mode() { return RunMode.of(outsideMode,runAuto); }
+    private RunMode mode() { return RunMode.of(pilot.mode,runAuto); }
 
-    private boolean inSupportedRun() {
+    static boolean inSupportedRun() {
         return CommandExecutor.isInDungeon() && AbstractDungeon.player!=null && supported();
     }
 
@@ -579,7 +375,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             if(before==RunMode.COMBAT_AUTO && inSupportedRun())chooseOutsideMode(1);
             return;
         }
-        if(outsideMode!=0)chooseOutsideMode(0);
+        if(pilot.mode!=0)chooseOutsideMode(0);
         runAuto=false; // Switching from the pilot or step mode starts combat-only automation.
         toggleRunAuto();
     }
@@ -616,22 +412,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     /** F9 / Stop: back to Manual, where the solver and the network suggest and every step waits for the player. */
     private void stopAll() {
-        boolean manual=inSupportedRun();
-        outsidePrompt=false; outsidePacket=null; outsideStatePacket=null; outsideScores=null;
-        outsideConfirm=false; outsideAwaiting=false; outsideFailed=false;
-        outsideMode=manual?1:0; outsidePilotRun=manual;
-        outsideNotice=I18n.t(manual?"已停止 · 人工逐步：每一步回车或点击确认":"全自动已停止；现在由你接管");
+        pilot.stop(inSupportedRun());
         autoPotionRewards=false;
         cancel(true);
     }
 
     private void chooseOutsideMode(int mode) {
-        outsidePrompt=false; outsideMode=mode; outsidePacket=null; outsideStatePacket=null; outsideScores=null;
-        outsideConfirm=false; outsideAwaiting=false; outsideFailed=false;
-        if(mode==0) { outsidePilotRun=false; outsideNotice=I18n.t("局外决策由你操作"); return; }
-        outsidePilotRun=true;
-        outsideNotice=mode==1?I18n.t("人工逐步：求解器和 AI 给出建议，每一步回车或点击确认")
-            :I18n.t("全自动爬塔已开启 · F9 随时接管");
+        pilot.select(mode);
+        if(mode==0)return;
         if(mode==1) { runAuto=false; auto=turnOnly=false; decisionDirty=true; return; } // fights wait for the player too
         runAuto=true; runAutoPlayer=AbstractDungeon.player;
         auto=combat(); paused=false; decisionDirty=true;
@@ -642,261 +430,28 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         chooseOutsideMode(1);
         runAuto=true; runAutoPlayer=AbstractDungeon.player;
         auto=combat(); paused=false; decisionDirty=true;
-        outsideNotice=I18n.t("Agent 模式：局外由 agent 决定，战斗自动执行 · F9 接管");
+        pilot.notice=I18n.t("Agent 模式：局外由 agent 决定，战斗自动执行 · F9 接管");
     }
 
-    /**
-     * Writes agent/decision.json whenever the outside choice or the run status changes, and applies
-     * agent/command.txt: "<decision> <index>" confirms one listed choice, "resume" re-enters agent mode.
-     * The confirmed choice goes through the same checks as a click on the panel.
-     */
     private void syncAgent() {
         try {
-            if(agentDirectory==null)agentDirectory=Files.createDirectories(notesDirectory("agent"));
-            Path command=agentDirectory.resolve("command.txt");
-            if(Files.exists(command)) {
-                String text=new String(Files.readAllBytes(command),StandardCharsets.UTF_8).trim();
-                Files.delete(command);
-                int index=agentPending()?RunMode.agentChoice(text,agentDecision,outsidePacket.choices.size()):-1;
-                if(text.equals("resume") && inSupportedRun()) { startAgentMode(); agentError=""; }
-                else if(index>=0) { outsideChosen=index; outsideConfirm=true; agentError=""; }
-                else agentError="ignored command (stale decision or invalid index): "+text;
-            }
-            boolean pending=agentPending();
-            if(pending && outsidePacket!=agentPacket) { agentPacket=outsidePacket; agentDecision++; }
-            String phase=!inSupportedRun()?"no_run":AbstractDungeon.player.isDead?"dead":combat()?"combat":pending?"choose":"waiting";
-            boolean agentMode=outsideMode==1 && runAuto;
-            String key=(pending?agentDecision:0)+"|"+phase+"|"+agentMode+"|"+outsideNotice+"|"+agentError+"|"+rngWarning;
-            if(key.equals(agentWritten))return; // the full packet is rebuilt only when this summary changes
-            JsonObject out=new JsonObject();
-            out.addProperty("decision",pending?agentDecision:0);
-            out.addProperty("agent_mode",agentMode);
-            out.addProperty("phase",phase);
-            out.addProperty("notice",outsideNotice);
-            out.addProperty("error",agentError);
-            JsonArray warnings=new JsonArray();  // what the settings page shows, for an agent that cannot see the panel
-            if(Loader.isModLoaded("SaveStateMod") || Loader.isModLoaded("undothespire") || Loader.isModLoaded("undobutton"))
-                warnings.add(I18n.t("检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用"));
-            if(!rngWarning.isEmpty())warnings.add(rngWarning);
-            out.add("mod_warnings",warnings);
-            if(pending) {
-                JsonObject game=new JsonObject();
-                for(String field:new String[]{"class","ascension_level","act","floor","current_hp","max_hp","gold","act_boss",
-                        "room_type","screen_type","screen_state","deck","relics","potions","keys","map"})
-                    if(outsidePacket.game.has(field))game.add(field,outsidePacket.game.get(field));
-                out.add("game",game);
-                out.add("visible",outsidePacket.visible);
-                JsonArray choices=new JsonArray();
-                for(int i=0;i<outsidePacket.choices.size();i++) {
-                    JsonObject choice=new JsonObject();
-                    choice.addProperty("index",i);
-                    choice.addProperty("label",outsidePacket.choices.get(i).label);
-                    choice.addProperty("solver_score",outsideScores.scores[i]);
-                    choices.add(choice);
-                }
-                out.add("choices",choices);
-                out.addProperty("solver_pick",outsideScores.best);
-                if(outsidePacket.ruleNote!=null)out.addProperty("solver_rule",outsidePacket.ruleNote);
-            }
-            Path temp=agentDirectory.resolve("decision.json.tmp");
-            Files.write(temp,gson.toJson(out).getBytes(StandardCharsets.UTF_8));
-            Files.move(temp,agentDirectory.resolve("decision.json"),StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);
-            agentWritten=key;
-            if(error.startsWith(I18n.t("Agent 通道读写失败：")))error="";
+            if(agent.sync(pilot,runAuto,rngWarning,this::startAgentMode) && error.startsWith(I18n.t("Agent 通道读写失败：")))error="";
         } catch(IOException failure) {
             // Retried next frame: on Windows the replace fails while the agent holds the file open.
             error=I18n.t("Agent 通道读写失败：")+failure.getMessage();
         }
     }
 
-    private boolean agentPending() {
-        return outsideMode==1 && outsidePacket!=null && outsideScores!=null && !outsideConfirm && !combat();
-    }
-
-    /**
-     * The original game keeps a skipped card reward listed and lets the merchant be reopened;
-     * remember both per floor so the pilot moves on instead of looping.
-     */
-    private JsonObject outsideVisible() throws Exception {
-        if(skippedCardFloor!=AbstractDungeon.floorNum) {
-            skippedCardFloor=AbstractDungeon.floorNum; skippedCards=0; shopLeft=false;
+    /** What the outside pilot needs from the combat automation. */
+    private final OutsidePilot.Host pilotHost = new OutsidePilot.Host() {
+        @Override public JsonObject capture() { return SolverMod.this.capture(); }
+        @Override public void record(String message) {
+            try { backend.start(); diagnostic("outside",message,null); }
+            catch(IOException ignored) { }
         }
-        JsonObject visible=DecisionContext.visible();
-        visible.addProperty("skipped_card_rewards",skippedCards);
-        visible.addProperty("shop_left",shopLeft);
-        return visible;
-    }
-
-    private void updateOutside() {
-        if(!CommandExecutor.isInDungeon() || AbstractDungeon.player==null || !supported()) {
-            // Act transitions leave the dungeon for a few frames; keep the chosen mode. A new run
-            // (or a reload) brings a new player object, which asks again below.
-            outsidePacket=null; outsideStatePacket=null; outsideScores=null; outsideAwaiting=false; return;
-        }
-        if(outsidePlayer!=AbstractDungeon.player) {
-            outsidePlayer=AbstractDungeon.player; outsidePrompt=true; outsideMode=0;
-            outsidePacket=null; outsideStatePacket=null; outsideScores=null; outsideAwaiting=false;
-            outsidePilotRun=false; outsideFailed=false;
-            outsideNotice=I18n.t("新一局：选【人工逐步】每步确认，【战斗全自动】只自动打战斗，或【AI全自动】完全托管");
-            if(agentBridge)startAgentMode();
-        }
-        if(outsidePrompt) return;
-        if(outsideMode==0 || combat() || AbstractDungeon.player.isDead || rewardPotionPending!=null) return;
-        if(!GameStateListener.isWaitingForCommand()) return;
-        try {
-            JsonObject state=capture();
-            if(!state.get("ready_for_command").getAsBoolean())return;
-            JsonObject visible=outsideVisible();
-            if(outsideModel==null)outsideModel=Distill2.load();
-            OutsidePacket latest=OutsidePacket.build(outsideModel,state,visible);
-            outsideWaitSince=0;
-            if(outsideAwaiting) {
-                if(latest.sameDecision(outsideStatePacket)) {
-                    long waited=System.currentTimeMillis()-outsideSubmittedAt;
-                    // A click on a button that is still fading in is ignored by the game: try again.
-                    if(outsideMode==2 && waited>3000 && outsideRetries<3) {
-                        outsideRetries++; outsideAwaiting=false; return;
-                    }
-                    if(waited>10000)
-                        throw new IllegalStateException("局外动作未完成；请手动接管");
-                    return;
-                }
-                outsideAwaiting=false; outsideRetries=0;
-            }
-            if(outsidePacket==null || !latest.sameDecision(outsidePacket)) {
-                outsidePacket=latest;
-                outsideScores=outsidePacket.policyScore();
-                outsideStatePacket=outsidePacket; outsideScoredAt=System.currentTimeMillis();
-                outsideConfirm=false; outsideChosen=outsideScores.best; outsideScroll=0;
-            }
-            if((outsideMode==2 && System.currentTimeMillis()-outsideScoredAt>=600)
-                    || (outsideMode==1 && outsideConfirm)) {
-                OutsidePacket.Choice choice=outsidePacket.choices.get(outsideChosen);
-                if(choice.label!=null && (choice.label.contains("Prismatic") || choice.label.contains("棱镜") || choice.label.contains("PrismaticShard")))
-                    throw new IllegalStateException("检测到棱镜（Prismatic Shard），策略禁止自动获取，请手动确认！");
-                String command=choice.command, verb=command.split(" ")[0];
-                if(!CommandExecutor.isCommandAvailable(verb))
-                    throw new IllegalStateException("局外命令已不可用："+command);
-                if(verb.equals("choose")) {
-                    int index=Integer.parseInt(command.substring(7));
-                    if(index<0 || index>=communicationmod.ChoiceScreenUtils.getCurrentChoiceList().size())
-                        throw new IllegalStateException("局外候选已变化："+command);
-                }
-                JsonObject again=capture();
-                if(!again.get("ready_for_command").getAsBoolean()
-                        || !OutsidePacket.build(outsideModel,again,outsideVisible())
-                            .sameDecision(outsidePacket)) {
-                    outsidePacket=null; outsideScores=null; return;
-                }
-                if(!CommandExecutor.executeCommand(command))
-                    throw new IllegalStateException("局外动作未提交："+command);
-                GameStateListener.registerCommandExecution();
-                String screenType=visible.get("screen_type").getAsString();
-                if(verb.equals("skip") && screenType.equals("CARD_REWARD"))skippedCards++;
-                if(verb.equals("leave") && screenType.equals("SHOP_SCREEN"))shopLeft=true;
-                try { startBackend(); diagnostic("outside",screenType+" | "+choice.label+" | "+command
-                    +" | "+outsidePacket.detail()+(outsidePacket.ruleNote==null?" | 网络":" | 规则："+outsidePacket.ruleNote)
-                    +(outsidePacket.prereadNote==null?"":" | 预读："+outsidePacket.prereadNote),null); }
-                catch(IOException ignored) { }
-                outsideNotice=I18n.t("已执行：")+choice.label
-                    +(outsidePacket.ruleNote==null?"":" · "+I18n.t(outsidePacket.ruleNote));
-                outsidePacket=null; outsideScores=null; outsideConfirm=false;
-                outsideAwaiting=true; outsideSubmittedAt=System.currentTimeMillis();
-            }
-        } catch(Exception failure) {
-            long now=System.currentTimeMillis();
-            if(failure instanceof OutsidePacket.NotReady) {
-                if(outsideWaitSince==0)outsideWaitSince=now;
-                if(now-outsideWaitSince<10000)return; // UI transition frames settle within a few hundred ms.
-            }
-            outsideWaitSince=0; outsideFailed=true;
-            outsideMode=0; outsidePacket=null; outsideScores=null; outsideAwaiting=false;
-            runAuto=false; auto=false;
-            outsideNotice=I18n.t("全自动暂停，请手动接管：")+failure.getMessage();
-            System.err.println("[STS1AutoPilot] "+failure);
-            collapsed=false;
-        }
-    }
-
-    /** Re-plan the drawn route whenever the map is open and the run state or chosen next node moved. */
-    private void updateRoute() {
-        if(!CommandExecutor.isInDungeon() || !supported() || AbstractDungeon.map==null
-                || AbstractDungeon.screen!=AbstractDungeon.CurrentScreen.MAP)return;
-        int firstX=outsidePacket==null?-1:outsidePacket.mapTargetX(outsideChosen);
-        com.megacrit.cardcrawl.map.MapRoomNode at=AbstractDungeon.getCurrMapNode();
-        int atX=at==null?0:at.x, atY=at==null?-1:at.y;
-        AbstractPlayer player=AbstractDungeon.player;
-        if(player==null)return;
-        StringBuilder key=new StringBuilder().append(AbstractDungeon.actNum).append('/')
-            .append(AbstractDungeon.floorNum).append('/').append(atX).append(',').append(atY).append('/')
-            .append(firstX).append('/').append(player.currentHealth).append('/').append(player.maxHealth)
-            .append('/').append(player.gold).append('/').append(player.masterDeck.size()).append('/')
-            .append(player.relics.size());
-        key.append('/').append(Settings.hasEmeraldKey).append('/').append(Settings.hasRubyKey);
-        for(AbstractCard card:player.masterDeck.group)key.append('/').append(card.cardID).append('+').append(card.timesUpgraded);
-        for(com.megacrit.cardcrawl.relics.AbstractRelic relic:player.relics)key.append('/').append(relic.relicId);
-        for(com.megacrit.cardcrawl.potions.AbstractPotion potion:player.potions)key.append('/').append(potion.ID);
-        if(key.toString().equals(routeKey))return;
-        // Recalculate only when public route inputs change; no simulated combat or future rewards.
-        routeKey=key.toString();
-        try {
-            if(outsideModel==null)outsideModel=Distill2.load();
-            routePlan=OutsidePacket.plannedRoute(outsideModel,capture(),DecisionContext.visible(),firstX);
-            if(routePlan.isEmpty())routeKey=""; // Allow retry once map state or nodes become available
-        } catch(Exception failure) {
-            routePlan=java.util.Collections.emptyList();
-            routeKey=""; // Clear key so next frame retries
-            System.err.println("[STS1AutoPilot] route: "+failure);
-        }
-    }
-
-    /** Diff the master deck each frame: obtained, removed and upgraded cards flash for one real second. */
-    private void updateDeckChanges() {
-        AbstractPlayer player=CommandExecutor.isInDungeon()?AbstractDungeon.player:null;
-        if(player==null)return;
-        boolean fresh=player!=deckPlayer; // a new run or a reload: take a silent snapshot.
-        if(fresh) { deckPlayer=player; deckCards.clear(); deckUpgrades.clear(); }
-        long now=System.currentTimeMillis();
-        if(now>deckShownUntil) { deckShown.clear(); deckVerbs.clear(); }
-        Set<UUID> present=new HashSet<>();
-        for(AbstractCard card:player.masterDeck.group) {
-            present.add(card.uuid);
-            Integer before=deckUpgrades.put(card.uuid,card.timesUpgraded);
-            deckCards.put(card.uuid,card);
-            if(fresh)continue;
-            if(before==null)showDeckChange(card,"获得",now);
-            else if(card.timesUpgraded>before)showDeckChange(card,"强化",now);
-        }
-        for(Iterator<Map.Entry<UUID,AbstractCard>> it=deckCards.entrySet().iterator();it.hasNext();) {
-            Map.Entry<UUID,AbstractCard> entry=it.next();
-            if(present.contains(entry.getKey()))continue;
-            if(!fresh)showDeckChange(entry.getValue(),"删除",now);
-            deckUpgrades.remove(entry.getKey()); it.remove();
-        }
-    }
-    private void showDeckChange(AbstractCard card, String verb, long now) {
-        if(!outsidePilotRun)return;
-        AbstractCard copy=card.makeStatEquivalentCopy();
-        copy.drawScale=copy.targetDrawScale=.5f;
-        deckShown.add(copy); deckVerbs.add(verb);
-        deckShownUntil=now+1000;
-    }
-    private void renderDeckChanges(SpriteBatch sb) {
-        if(deckShown.isEmpty() || System.currentTimeMillis()>deckShownUntil || AbstractDungeon.topPanel==null)return;
-        float s=Settings.scale, step=165*s;
-        float cx=Math.min(AbstractDungeon.topPanel.deckHb.cX,Settings.WIDTH-85*s);
-        float cy=AbstractDungeon.topPanel.deckHb.cY-AbstractDungeon.topPanel.deckHb.height/2-130*s;
-        for(int i=0;i<deckShown.size();i++) {
-            AbstractCard card=deckShown.get(i);
-            card.current_x=card.target_x=cx-i*step;
-            card.current_y=card.target_y=cy;
-            card.render(sb);
-            String verb=deckVerbs.get(i);
-            mapCaption(sb,I18n.t(verb),card.current_x-24*s,cy+125*s,
-                verb.equals("删除")?danger:verb.equals("强化")?accent:Color.WHITE);
-        }
-        sb.setColor(Color.WHITE);
-    }
+        @Override public void runStarted() { if(agentBridge)startAgentMode(); }
+        @Override public void failed() { runAuto=false; auto=false; collapsed=false; }
+    };
 
     private void chooseAutomaticBranch() {
         if(!ready())return;
@@ -951,45 +506,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }
     }
 
-    private synchronized void startBackend() throws IOException {
-        if (backend != null && backend.isAlive()) return;
-        Properties properties = new Properties();
-        try (InputStream stream = getClass().getResourceAsStream("/solver.properties")) {
-            if (stream == null) throw new IOException(I18n.t("缺少求解器路径配置，请重新安装。"));
-            properties.load(stream);
-        }
-        Path log = BackendRuntime.dataDirectory(properties).resolve("backend.log");
-        Files.createDirectories(log.getParent());
-        ProcessBuilder pb = BackendRuntime.process(properties);
-        pb.environment().put("PYTHONUTF8", "1");
-        pb.environment().put("PYTHONIOENCODING", "utf-8");
-        pb.redirectError(ProcessBuilder.Redirect.appendTo(log.toFile()));
-        backend = pb.start();
-        final Process child = backend;
-        writer = new BufferedWriter(new OutputStreamWriter(child.getOutputStream(), StandardCharsets.UTF_8));
-        Thread reader = new Thread(() -> {
-            try (BufferedReader input = new BufferedReader(new InputStreamReader(child.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = input.readLine()) != null) {
-                    JsonObject reply = new JsonParser().parse(line).getAsJsonObject();
-                    if (reply.has("status") && reply.get("status").getAsString().startsWith("debug_")) debugReplies.add(reply);
-                    else replies.add(reply);
-                }
-            } catch (Exception failure) {
-                JsonObject reply = new JsonObject();
-                reply.addProperty("id", -1);
-                reply.addProperty("status", "transport_error");
-                reply.addProperty("message", I18n.t("后台连接中断：") + failure.getMessage());
-                replies.add(reply);
-            }
-        }, "sts1-solver-reader");
-        reader.setDaemon(true);
-        reader.start();
-        if (!runLog) sendRunLogSetting();
-    }
-
     private void send(String op, JsonObject state) throws IOException {
-        startBackend();
+        backend.start();
         JsonObject request = new JsonObject();
         request.addProperty("id", ++serial);
         request.addProperty("op", op);
@@ -1004,9 +522,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             phaseAt = lastProgressAt = System.currentTimeMillis();
         }
         if (state != null) request.add("state", state);
-        writer.write(gson.toJson(request));
-        writer.newLine();
-        writer.flush();
+        backend.write(request);
         activeId = serial;
         if (!op.equals("cancel")) {
             rootKey = key(state);
@@ -1019,7 +535,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     private void diagnostic(String event,String message,JsonObject state) {
-        if(writer==null)return;
+        if(!backend.started())return;
         try {
             if(state==null && combat())state=capture();
             JsonObject record=new JsonObject();
@@ -1035,7 +551,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             if(state!=null)record.add("state",state);
             if(rootKey!=null)record.add("expected_key",rootKey);
             if(result!=null)record.add("previous_result",result);
-            writer.write(gson.toJson(record));writer.newLine();writer.flush();
+            backend.write(record);
         } catch(Exception failure) {
             System.err.println(I18n.t("[STS1Solver] 诊断写入失败：")+failure);
         }
@@ -1046,7 +562,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         rewardPotionPending=null;
         boolean pendingSearch = pause && busy && !awaitingAction;
         boolean keepResult = pause && result != null && !awaitingAction;
-        try { if (backend != null && backend.isAlive() && (busy || awaitingAction)) send("cancel", null); }
+        try { if (backend.alive() && (busy || awaitingAction)) send("cancel", null); }
         catch (IOException failure) { error = failure.getMessage(); }
         if (!pendingSearch) { ++serial; activeId = serial; }
         if (!pendingSearch) clickedBranch = null;
@@ -1064,10 +580,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     private void fail(String message) {
-        if(outsideMode!=0) {
-            outsideMode=0; outsidePacket=null; outsideScores=null; outsideAwaiting=false; outsideFailed=true;
-            outsideNotice=I18n.t("全自动暂停，请手动接管：")+message;
-        }
+        if(pilot.mode!=0)pilot.pause(message);
         runAuto=false;
         autoPotionRewards=false;
         diagnostic("error",message,null);
@@ -1101,122 +614,18 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         else recalculate();
     }
 
-    private void showDirectory(Path directory) {
-        try { if (java.awt.Desktop.isDesktopSupported()) java.awt.Desktop.getDesktop().open(directory.toFile()); }
-        catch (Exception failure) { System.err.println("[STS1Export] " + failure); }
-    }
-
-    /** One json for the current seed, written to the desktop so the user can send it as is. */
-    private void exportRun() {
-        try {
-            startBackend();
-            JsonObject request = new JsonObject();
-            request.addProperty("op", "export_run");
-            request.addProperty("directory", desktopDirectory().toString());
-            if (AbstractDungeon.player != null) request.addProperty("seed", Long.toString(Settings.seed));
-            request.add("metadata", DecisionContext.metadata());
-            request.add("recent_battles", TestRecorder.recentBattles());
-            request.add("shop_history", ShopRecorder.snapshot());
-            writer.write(gson.toJson(request)); writer.newLine(); writer.flush();
-            debugMessageError = false;
-            debugMessage = I18n.t("正在导出记录…");
-        } catch (Exception failure) {
-            debugMessageError = true;
-            debugMessage = I18n.t("导出失败：") + failure.getMessage();
-        }
-    }
-
-    /** F7: this act's map with the planned route, as a PNG on the desktop. */
-    private void exportMap() {
-        try {
-            if (!CommandExecutor.isInDungeon() || AbstractDungeon.player == null) {
-                debugMessageError = false;
-                debugMessage = I18n.t("当前没有地图");
-                return;
-            }
-            Path file = MapExport.write(desktopDirectory(), routePlan);
-            debugMessageError = false;
-            debugMessage = I18n.t("地图已导出到桌面：") + file.getFileName();
-            showDirectory(file.getParent());
-        } catch (Exception failure) {
-            debugMessageError = true;
-            debugMessage = I18n.t("导出失败：") + failure.getMessage();
-        }
-    }
-
-    private Path desktopDirectory() {
-        try {
-            java.io.File home = javax.swing.filechooser.FileSystemView.getFileSystemView().getHomeDirectory();
-            if (home != null && home.isDirectory()) return home.toPath();
-        } catch (Throwable ignored) { }
-        return Paths.get(System.getProperty("user.home"), "Desktop");
-    }
-
     private void toggleRunLog() {
-        runLog = !runLog;
+        boolean runLog = !backend.runLog();
         try { if (config != null) { config.setBool("runLog", runLog); config.save(); } }
-        catch (IOException failure) { debugMessage = I18n.t("设置保存失败：") + failure.getMessage(); }
-        sendRunLogSetting();
-        debugMessage = I18n.t(runLog ? "持续记录已开启" : "持续记录已关闭");
-    }
-
-    private void sendRunLogSetting() {
-        if (writer == null) return;
-        try {
-            JsonObject request = new JsonObject();
-            request.addProperty("op", "run_log");
-            request.addProperty("enabled", runLog);
-            writer.write(gson.toJson(request)); writer.newLine(); writer.flush();
-        } catch (IOException failure) { System.err.println("[STS1Solver] " + failure); }
-    }
-
-    private void startVoiceNote() {
-        try {
-            Properties properties = new Properties();
-            try (InputStream stream = getClass().getResourceAsStream("/solver.properties")) {
-                if (stream == null) throw new IOException("solver.properties missing");
-                properties.load(stream);
-            }
-            JsonObject context = new JsonObject();
-            context.addProperty("schema_version", 1);
-            context.addProperty("started_at", java.time.Instant.now().toString());
-            context.addProperty("context_scope", "recording_start_only");
-            context.addProperty("decision_session", decisionNotes.session());
-            context.addProperty("decision_sequence", decisionNotes.sequence());
-            context.addProperty("bright_eye_mode", Foresight.brightEyeMode);
-            context.addProperty("seed", Long.toString(Settings.seed));
-            context.addProperty("floor", AbstractDungeon.floorNum);
-            context.addProperty("screen", String.valueOf(AbstractDungeon.screen));
-            try {
-                context.add("state", new JsonParser().parse(GameStateConverter.getCommunicationState()));
-            } catch (RuntimeException failure) {
-                context.addProperty("state_error", failure.toString());
-            }
-            voiceNotes.start(BackendRuntime.dataDirectory(properties).resolve("voice-notes"), gson.toJson(context));
-        } catch (Exception failure) {
-            error = I18n.t("录音启动失败：") + failure.getMessage();
-            System.err.println("[STS1VoiceNotes] " + failure);
-        }
+        catch (IOException failure) { exports.message = I18n.t("设置保存失败：") + failure.getMessage(); }
+        backend.setRunLog(runLog);
+        exports.message = I18n.t(runLog ? "持续记录已开启" : "持续记录已关闭");
     }
 
     /** A bug in the solver must never close the game: record the stack and keep the panel alive. */
-    private long lastGuardAt;
-
     private void guard(String where, Throwable failure) {
-        long now = System.currentTimeMillis();
-        if (now - lastGuardAt < 5000) return;
-        lastGuardAt = now;
-        System.err.println("[STS1Solver] " + where + " failed: " + failure);
-        failure.printStackTrace();
-        try {
-            Path directory = notesDirectory("crash-reports");
-            Files.createDirectories(directory);
-            java.io.StringWriter text = new java.io.StringWriter();
-            failure.printStackTrace(new java.io.PrintWriter(text));
-            Files.write(directory.resolve("mod-error-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date()) + ".txt"),
-                (where + "\n" + text).getBytes(StandardCharsets.UTF_8));
-        } catch (Throwable ignored) { }
-        error = I18n.t("求解器内部错误，已记录：") + failure;
+        String message = exports.crash(where, failure);
+        if (message != null) error = message;
     }
 
     @Override public void receivePostUpdate() {
@@ -1225,24 +634,15 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private void update() {
         layout();
-        if (researchRecording) observeInventory();
-        JsonObject debugReply;
-        while ((debugReply = debugReplies.poll()) != null) {
-            if (debugReply.get("status").getAsString().equals("debug_run_export")) {
-                debugMessageError = false;
-                debugMessage = I18n.t("已导出到桌面：") + debugReply.get("file").getAsString();
-                showDirectory(Paths.get(debugReply.get("directory").getAsString()));
-            } else {
-                debugMessageError = true;
-                debugMessage = I18n.t("导出失败：") + debugReply.get("message").getAsString();
-            }
-        }
+        if (exports.research) { String failure = exports.observeInventory(); if (failure != null) error = failure; }
+        exports.exportReplies(backend);
         if (Gdx.input.isKeyJustPressed(Input.Keys.F6)) {
-            if (researchRecording && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT) && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT)) {
-                if (voiceNotes.active()) voiceNotes.stop(); else startVoiceNote();
-            } else exportRun();
+            if (exports.research && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT) && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT)) {
+                String failure = exports.toggleVoiceNote();
+                if (failure != null) error = failure;
+            } else exports.exportRun(backend);
         }
-        if (Gdx.input.isKeyJustPressed(Input.Keys.F7)) exportMap();
+        if (Gdx.input.isKeyJustPressed(Input.Keys.F7)) exports.exportMap(pilot.routePlan);
         if (bindingKey) {
             for (int key = Input.Keys.F1; key <= Input.Keys.F12; key++) {
                 if (validAutoKey(key) && Gdx.input.isKeyJustPressed(key)) {
@@ -1260,7 +660,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             runAuto=false;runAutoPlayer=null;
         } else if(supported() && AbstractDungeon.player!=runAutoPlayer) {
             runAutoPlayer=AbstractDungeon.player;
-            runAuto=runAutoEnabled || outsideMode==2; // the pilot keeps combat automation across acts.
+            runAuto=runAutoEnabled || pilot.mode==2; // the pilot keeps combat automation across acts.
             autoPotionRewards=config==null || config.getBool("autoPotionRewards");
         }
         if(AbstractDungeon.player!=null && AbstractDungeon.player.isDead)runAuto=false;
@@ -1278,15 +678,15 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             error = "";
         }
         wasCombat = inCombat;
-        if(!inCombat && outsideMode!=0)updatePotionRewards();
-        updateOutside();
+        if(!inCombat && pilot.mode!=0)updatePotionRewards();
+        pilot.update(pilotHost, rewardPotionPending!=null);
         if(agentBridge)syncAgent();
-        updateRoute();
-        updateDeckChanges();
+        pilot.updateRoute(pilotHost);
+        deckWatch.update(pilot.pilotRun);
         if (!inCombat) {
-            status = outsidePrompt || outsideMode!=0 || !outsideNotice.isEmpty() ? outsideNotice
+            status = pilot.prompt || pilot.mode!=0 || !pilot.notice.isEmpty() ? pilot.notice
                 : runAuto ? I18n.t("战斗全自动已开 · 等待下场；其他选择由你决定") : I18n.t("选牌与路线由你决定");
-            if(outsideMode==0)updatePotionRewards();
+            if(pilot.mode==0)updatePotionRewards();
             return;
         }
         finishGamblingSelection(AbstractDungeon.screen);
@@ -1296,7 +696,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             return;
         }
         JsonObject reply;
-        while ((reply = replies.poll()) != null) {
+        while ((reply = backend.reply()) != null) {
             if (reply.get("id").getAsLong() != activeId) continue;
             String kind = reply.get("status").getAsString();
             if (kind.equals("progress")) {
@@ -1358,7 +758,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             }
         }
         long now = System.currentTimeMillis();
-        if (busy && (backend == null || !backend.isAlive()
+        if (busy && (!backend.alive()
                 || SearchStatus.expired(now, sentAt, searchTimeoutMillis))) {
             fail(I18n.t("后台求解器未响应，请重新计算。详情见数据目录中的 backend.log。"));
             return;
@@ -1472,7 +872,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             }
             JsonArray offers=game.getAsJsonObject("screen_state").getAsJsonArray("rewards");
             // Let the pilot resolve relics/linked keys before automatic potion pickup.
-            if(outsideMode!=0 && offers!=null)for(JsonElement offer:offers) {
+            if(pilot.mode!=0 && offers!=null)for(JsonElement offer:offers) {
                 String type=PotionRewards.string(offer.getAsJsonObject(),"reward_type");
                 if(type.equals("RELIC") || type.equals("SAPPHIRE_KEY") || type.equals("EMERALD_KEY"))return;
             }
@@ -1512,28 +912,17 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private void renderPotionRewardAdvice(SpriteBatch sb) {
         if(rewardPotionAdvice==null || AbstractDungeon.screen!=AbstractDungeon.CurrentScreen.COMBAT_REWARD)return;
         String label=(autoPotionRewards?I18n.t("自动 · "):I18n.t("建议 · "))+rewardPotionAdvice.message;
-        com.megacrit.cardcrawl.helpers.FontHelper.renderFontLeftTopAligned(sb,font(),label,
-            Settings.WIDTH*.20f,Settings.HEIGHT*.90f,accent);
+        com.megacrit.cardcrawl.helpers.FontHelper.renderFontLeftTopAligned(sb,canvas.font(),label,
+            Settings.WIDTH*.20f,Settings.HEIGHT*.90f,ACCENT);
     }
 
-    private float scale() {
-        return PanelSize.fit(uiScale, Settings.scale, Settings.WIDTH, Settings.HEIGHT, PANEL_WIDTH, PANEL_HEIGHT);
-    }
     private void changeScale(float value) {
-        uiScale = PanelSize.preference(Float.toString(value));
+        canvas.uiScale = PanelSize.preference(Float.toString(value));
         layout();
-        try { if (config != null) { config.setString("uiScale", Float.toString(uiScale)); config.save(); } }
+        try { if (config != null) { config.setString("uiScale", Float.toString(canvas.uiScale)); config.save(); } }
         catch (IOException failure) { error = I18n.t("界面缩放保存失败：") + failure.getMessage(); }
     }
-    private void layout() {
-        float s = scale();
-        if (x < 0) { x = 20*s; y = Settings.HEIGHT - 180*s; }
-        x = Math.max(0, Math.min(x, Settings.WIDTH - panelWidth()*s));
-        y = Math.max(panelHeight()*s, Math.min(y, Settings.HEIGHT));
-    }
-    private boolean inside(float mx, float my, float rx, float ry, float w, float h) {
-        return mx >= rx && mx <= rx+w && my >= ry && my <= ry+h;
-    }
+    private void layout() { canvas.layout(panelWidth(), panelHeight()); }
 
     // Runs after InputHelper polls, before dungeon/card/monster handlers see clicks.
     @SpirePatch(clz=InputHelper.class, method="updateFirst")
@@ -1560,8 +949,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
     private void branchKeyboard() {
         // Manual outside combat: Enter runs the suggested step.
-        if(outsideMode==1 && !combat() && outsidePacket!=null && outsideScores!=null && Gdx.input.isKeyJustPressed(Input.Keys.ENTER))
-            outsideConfirm=true;
+        if(pilot.mode==1 && !combat() && pilot.packet!=null && pilot.scores!=null && Gdx.input.isKeyJustPressed(Input.Keys.ENTER))
+            pilot.confirm=true;
         boolean held=Gdx.input.isKeyPressed(Input.Keys.ENTER);
         for(int n=0;n<=9;n++) held |= Gdx.input.isKeyPressed(Input.Keys.NUM_0+n)
                 || Gdx.input.isKeyPressed(Input.Keys.NUMPAD_0+n);
@@ -1600,41 +989,35 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (previewCount == 0 || (transformPreview != null && (previewRngCounter != AbstractDungeon.miscRng.counter || previewSource != source)))
             transformPreview = null;
         branchKeyboard();
-        float s=scale(), mx=InputHelper.mX, my=InputHelper.mY;
-        boolean over=inside(mx,my,x,y-panelHeight()*s,panelWidth()*s,panelHeight()*s);
+        float s=canvas.scale(), mx=InputHelper.mX, my=InputHelper.mY;
+        boolean over=PanelCanvas.inside(mx,my,canvas.x,canvas.y-panelHeight()*s,panelWidth()*s,panelHeight()*s);
         boolean click=InputHelper.justClickedLeft;
-        if(pilotCard()) {
-            if(dragging) {
-                if(Gdx.input.isButtonPressed(Input.Buttons.LEFT)) { x=mx-dx; y=my-dy; layout(); }
-                else dragging=false;
-            }
+        if(pilot.cardShown()) {
+            canvas.drag(mx,my); layout();
             if(over) {
-                pilotInput((mx-x)/s,(y-my)/s,click,mx,my);
+                pilotInput((mx-canvas.x)/s,(canvas.y-my)/s,click,mx,my);
                 InputHelper.justClickedLeft=false; InputHelper.justReleasedClickLeft=false;
                 InputHelper.justClickedRight=false; InputHelper.justReleasedClickRight=false;
                 InputHelper.scrolledDown=InputHelper.scrolledUp=false;
             }
-            hovered=over || dragging; return;
+            canvas.hovered=over || canvas.dragging; return;
         }
-        if (dragging) {
-            if (Gdx.input.isButtonPressed(Input.Buttons.LEFT)) { x=mx-dx; y=my-dy; layout(); }
-            else dragging=false;
-        }
+        canvas.drag(mx,my); layout();
         if (over && click) {
-            float lx=(mx-x)/s, ly=(y-my)/s, w=panelWidth();
+            float lx=(mx-canvas.x)/s, ly=(canvas.y-my)/s, w=panelWidth();
             boolean body=!collapsed && !settingsOpen, list=body && lx>=ROUTE_LEFT && ly>=BODY_TOP && ly<BODY_TOP+BODY_ROWS*BODY_ROW;
             int row=(int)((ly-BODY_TOP)/BODY_ROW);
             if (ly < 42) {
                 if (!collapsed && lx >= w-118 && lx < w-54) settingsOpen=!settingsOpen;
                 else if (lx > w-47) { collapsed=!collapsed; autoFolded=false; }
-                else { dragging=true; dx=mx-x; dy=my-y; }
+                else canvas.startDrag(mx,my);
             } else if (!collapsed && settingsOpen && ly>=SETTINGS_TOP && ly<SETTINGS_TOP+4*SETTINGS_PITCH && (ly-SETTINGS_TOP)%SETTINGS_PITCH<30) {
                 float cw=(w-40)/2, off=lx-(24+cw);
                 int setting=(int)((ly-SETTINGS_TOP)/SETTINGS_PITCH);
                 if (setting==0 && off<0) toggleBrightEye();
-                else if (setting==0) changeScale(off<cw/3 ? uiScale-.1f : off>=cw*2/3 ? uiScale+.1f : 1);
+                else if (setting==0) changeScale(off<cw/3 ? canvas.uiScale-.1f : off>=cw*2/3 ? canvas.uiScale+.1f : 1);
                 else if (setting==1) { if (off<0) toggleBossFinish(); else toggleLanguage(); }
-                else if (setting==2) { if (off<0) toggleRunLog(); else exportRun(); }
+                else if (setting==2) { if (off<0) toggleRunLog(); else exports.exportRun(backend); }
                 else if (off<0) bindingKey=true;
             } else if (body && previewCount > 0 && lx >= ROUTE_LEFT && ly >= 42 && ly < 72) {
                 if (transformPreview != null) transformPreview = null;
@@ -1692,9 +1075,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 }
             }
         }
-        hovered = over || dragging;
-        if (over || dragging) {
-            float lx=(mx-x)/s, ly=(y-my)/s;
+        canvas.hovered = over || canvas.dragging;
+        if (over || canvas.dragging) {
+            float lx=(mx-canvas.x)/s, ly=(canvas.y-my)/s;
             if (!collapsed && !settingsOpen && lx >= ROUTE_LEFT && ly >= BODY_TOP && ly < BODY_TOP+BODY_ROWS*BODY_ROW) {
                 if (InputHelper.scrolledDown) scroll++;
                 if (InputHelper.scrolledUp) scroll=Math.max(0,scroll-1);
@@ -1715,7 +1098,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     static boolean solverDriving() { return instance != null && (instance.auto || instance.turnOnly || instance.runAuto); }
-    static Path desktop() { return instance != null ? instance.desktopDirectory() : Paths.get(System.getProperty("user.home"), "Desktop"); }
+    static Path desktop() { return instance != null ? RunExports.desktopDirectory() : Paths.get(System.getProperty("user.home"), "Desktop"); }
 
     private void saveSetting(String key, boolean value) {
         try { if (config != null) { config.setBool(key, value); config.save(); } }
@@ -1756,57 +1139,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         } catch (IOException failure) { error = "Language save failed: " + failure.getMessage(); }
     }
 
-    private void box(SpriteBatch sb, float left, float top, float width, float height, Color color) {
-        if (rounded == null) {
-            com.badlogic.gdx.graphics.Pixmap pixmap = new com.badlogic.gdx.graphics.Pixmap(24,24,com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
-            pixmap.setColor(Color.WHITE);
-            pixmap.fillRectangle(6,0,12,24); pixmap.fillRectangle(0,6,24,12);
-            for (int cx : new int[]{6,17}) for (int cy : new int[]{6,17}) pixmap.fillCircle(cx,cy,6);
-            com.badlogic.gdx.graphics.Texture texture = new com.badlogic.gdx.graphics.Texture(pixmap);
-            texture.setFilter(com.badlogic.gdx.graphics.Texture.TextureFilter.Linear,com.badlogic.gdx.graphics.Texture.TextureFilter.Linear);
-            pixmap.dispose();
-            rounded = new com.badlogic.gdx.graphics.g2d.NinePatch(texture,8,8,8,8);
-        }
-        float s=scale();
-        sb.setColor(Color.WHITE);
-        rounded.setColor(color);
-        rounded.draw(sb,x+left*s,y-(top+height)*s,width*s,height*s);
-    }
-    private void line(SpriteBatch sb, float left, float top, float width) {
-        sb.setColor(border);
-        sb.draw(ImageMaster.WHITE_SQUARE_IMG,x+left*scale(),y-top*scale(),width*scale(),scale());
-        sb.setColor(Color.WHITE);
-    }
-    private void initFont() {
-        if (uiFont == null) {
-            fontGenerator = new FreeTypeFontGenerator(Gdx.files.internal("font/zhs/NotoSansMonoCJKsc-Regular.otf"));
-            FreeTypeFontGenerator.FreeTypeFontParameter parameter = new FreeTypeFontGenerator.FreeTypeFontParameter();
-            parameter.size = Math.max(12, Math.round(19*Settings.scale));
-            fontScale = parameter.size / 19f;
-            parameter.incremental = true;
-            parameter.minFilter = com.badlogic.gdx.graphics.Texture.TextureFilter.Linear;
-            parameter.magFilter = com.badlogic.gdx.graphics.Texture.TextureFilter.Linear;
-            uiFont = fontGenerator.generateFont(parameter);
-        }
-    }
-    BitmapFont font() { initFont(); return uiFont; }
-    private void text(SpriteBatch sb, String text, float left, float top, Color color) {
-        label(sb,text,left,top,(left < ROUTE_LEFT ? ROUTE_LEFT-12 : panelWidth()-16)-left,.9f,color);
-    }
-    private void label(SpriteBatch sb, String value, float left, float top, float width, float size, Color color) {
-        initFont();
-        float oldX=uiFont.getData().scaleX, oldY=uiFont.getData().scaleY;
-        try {
-            uiFont.getData().setScale(scale()/fontScale*size);
-            String text=I18n.t(value);
-            measure.setText(uiFont,text);
-            while(text.length()>1 && measure.width>width*scale()) {
-                text=text.substring(0,text.length()-2)+"…";
-                measure.setText(uiFont,text);
-            }
-            FontHelper.renderFontLeftTopAligned(sb,uiFont,text,x+left*scale(),y-top*scale(),color);
-        } finally { uiFont.getData().setScale(oldX,oldY); }
-    }
+    BitmapFont font() { return canvas.font(); }
     private static String count(long n) { return n>=10000 ? String.format(I18n.t("%.1f 万"), n/10000.0) : Long.toString(n); }
     private String progressSummary() {
         long total=0, transitions=0; int turn=0, best=-1;
@@ -1819,7 +1152,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }
         return I18n.t("本轮模拟 ")+count(total)+I18n.t("次 · 循环展开 ")+count(transitions)+I18n.t("步");
     }
-    private String shortText(String value, int max) { return I18n.t(value); }
     private boolean canCreditRest() {
         if(!combat() || !AbstractDungeon.player.hasRelic("Eternal Feather"))return false;
         for(com.megacrit.cardcrawl.map.MapRoomNode node:communicationmod.ChoiceScreenUtils.getMapScreenNodeChoices())
@@ -1857,37 +1189,37 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private void renderPanel(SpriteBatch sb) {
         Foresight.renderRubyReminder(sb);
         renderPotionRewardAdvice(sb);
-        renderOutsideRoute(sb);
-        renderDeckChanges(sb);
+        if(routeMarks)pilot.renderRoute(sb,canvas);
+        deckWatch.render(sb,canvas);
         layout();
-        if(pilotCard()) { renderPilot(sb); cursorOnTop(sb); return; }
+        if(pilot.cardShown()) { pilot.renderCard(sb,canvas); canvas.cursorOnTop(sb); return; }
         float w=panelWidth();
-        box(sb,0,0,w,panelHeight(),border);
-        box(sb,1,1,w-2,panelHeight()-2,background);
-        label(sb,I18n.t("战斗求解器"),16,collapsed?7:10,collapsed?240:w-150,collapsed?.95f:1.1f,Color.WHITE);
-        label(sb,collapsed?"＋":"－",w-36,collapsed?14:10,26,1,accent);
+        canvas.box(sb,0,0,w,panelHeight(),BORDER);
+        canvas.box(sb,1,1,w-2,panelHeight()-2,BACKGROUND);
+        canvas.label(sb,I18n.t("战斗求解器"),16,collapsed?7:10,collapsed?240:w-150,collapsed?.95f:1.1f,Color.WHITE);
+        canvas.label(sb,collapsed?"＋":"－",w-36,collapsed?14:10,26,1,ACCENT);
         if (collapsed) {
-            label(sb,error.isEmpty()?status:I18n.backend(error),20,29,240,.65f,error.isEmpty()?muted:danger);
-            sb.setColor(Color.WHITE); cursorOnTop(sb); return;
+            canvas.label(sb,error.isEmpty()?status:I18n.backend(error),20,29,240,.65f,error.isEmpty()?MUTED:DANGER);
+            sb.setColor(Color.WHITE); canvas.cursorOnTop(sb); return;
         }
-        box(sb,w-118,8,64,28,settingsOpen?accent:surface);
-        label(sb,I18n.t(settingsOpen?"返回":"设置"),w-108,12,48,.85f,settingsOpen?background:accent);
+        canvas.box(sb,w-118,8,64,28,settingsOpen?ACCENT:SURFACE);
+        canvas.label(sb,I18n.t(settingsOpen?"返回":"设置"),w-108,12,48,.85f,settingsOpen?BACKGROUND:ACCENT);
         String revivalWarning = result == null ? "" : revivalWarning(result);
         if (revivalWarning.isEmpty() && (highSpeed || streakMode) && System.currentTimeMillis()-highSpeedWarnedAt < 8000)
             revivalWarning = I18n.t(highSpeed?"高速模式：搜索量 1/20，胜率和省血下降":"连胜模式：前三幕不降预算，搜索更慢");
-        label(sb,revivalWarning.isEmpty()?status:revivalWarning,16,48,ROUTE_LEFT-28,.85f,
-            revivalWarning.isEmpty() && error.isEmpty()?muted:danger);
-        String note=researchRecording?voiceNotes.status():debugMessage;
+        canvas.label(sb,revivalWarning.isEmpty()?status:revivalWarning,16,48,ROUTE_LEFT-28,.85f,
+            revivalWarning.isEmpty() && error.isEmpty()?MUTED:DANGER);
+        String note=exports.note();
         if (settingsOpen) renderSettings(sb,w,note);
         else renderCombatBody(sb,w,note);
         String[] labels={I18n.t("重新计算"),I18n.t("执行一步"),turnOnly?I18n.t("正在执行本回合"):I18n.t("执行本回合"),
-            I18n.t(outsideMode!=2 && (runAuto || auto)?"战斗全自动：开":"战斗全自动"),
-            I18n.t(outsideMode==2?"AI全自动：开":"AI全自动"),I18n.t("停止")};
+            I18n.t(pilot.mode!=2 && (runAuto || auto)?"战斗全自动：开":"战斗全自动"),
+            I18n.t(pilot.mode==2?"AI全自动：开":"AI全自动"),I18n.t("停止")};
         for(int i=0;i<labels.length;i++) {
-            box(sb,16+i*ACTION_SPACING,ACTIONS_TOP,ACTION_SPACING-8,36,i==0?accent:surface);
-            label(sb,labels[i],26+i*ACTION_SPACING,ACTIONS_TOP+8,ACTION_SPACING-28,.8f,
-                i==0?background:i==5?danger:i==4&&outsideMode==2?accent
-                :i==3&&outsideMode!=2&&(runAuto||auto)?accent:i==2&&result==null?muted:Color.WHITE);
+            canvas.box(sb,16+i*ACTION_SPACING,ACTIONS_TOP,ACTION_SPACING-8,36,i==0?ACCENT:SURFACE);
+            canvas.label(sb,labels[i],26+i*ACTION_SPACING,ACTIONS_TOP+8,ACTION_SPACING-28,.8f,
+                i==0?BACKGROUND:i==5?DANGER:i==4&&pilot.mode==2?ACCENT
+                :i==3&&pilot.mode!=2&&(runAuto||auto)?ACCENT:i==2&&result==null?MUTED:Color.WHITE);
         }
         List<String> toggles=new ArrayList<>(Arrays.asList(
             I18n.t("搜索：")+I18n.t(highSpeed?"高速":streakMode?"连胜":"标准"),
@@ -1895,32 +1227,32 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(canCreditRest())toggles.add(I18n.t("羽毛回血：")+I18n.t(nextRest?"是":"仅必经火堆"));
         float spacing=(w-24)/toggles.size();
         for(int i=0;i<toggles.size();i++) {
-            box(sb,16+i*spacing,TOGGLES_TOP,spacing-8,28,surface);
-            label(sb,toggles.get(i),24+i*spacing,TOGGLES_TOP+5,spacing-24,.8f,
-                i==0?(highSpeed?danger:streakMode?accent:muted):i==1?(autoPotionRewards?accent:muted):accent);
+            canvas.box(sb,16+i*spacing,TOGGLES_TOP,spacing-8,28,SURFACE);
+            canvas.label(sb,toggles.get(i),24+i*spacing,TOGGLES_TOP+5,spacing-24,.8f,
+                i==0?(highSpeed?DANGER:streakMode?ACCENT:MUTED):i==1?(autoPotionRewards?ACCENT:MUTED):ACCENT);
         }
         sb.setColor(Color.WHITE);
-        cursorOnTop(sb);
+        canvas.cursorOnTop(sb);
     }
 
     private void renderSettings(SpriteBatch sb, float w, String note) {
         float cw=(w-40)/2, right=24+cw;
-        for(int row=0;row<4;row++) for(int col=0;col<2;col++) box(sb,16+col*(cw+8),SETTINGS_TOP+row*SETTINGS_PITCH,cw,30,surface);
+        for(int row=0;row<4;row++) for(int col=0;col<2;col++) canvas.box(sb,16+col*(cw+8),SETTINGS_TOP+row*SETTINGS_PITCH,cw,30,SURFACE);
         float t=SETTINGS_TOP+6, p=SETTINGS_PITCH;
-        label(sb,I18n.t("辉眼模式：")+I18n.t(Foresight.brightEyeMode?"开":"关"),26,t,cw-20,.85f,accent);
-        label(sb,"−",right+12,t-1,24,1,accent);
-        label(sb,Math.round(uiScale*100)+"%",right+cw/2-22,t,60,.85f,Color.WHITE);
-        label(sb,"＋",right+cw-30,t-1,24,1,accent);
-        label(sb,I18n.t("Boss 快速收尾：")+I18n.t(bossFastFinishEnabled?"开":"关"),26,t+p,cw-20,.85f,bossFastFinishEnabled?accent:muted);
-        label(sb,I18n.t("语言：")+("en".equals(I18n.language())?"English":"简体中文"),right+10,t+p,cw-20,.85f,accent);
-        label(sb,I18n.t("持续记录：")+" "+I18n.t(runLog?"开":"关"),26,t+2*p,cw-20,.85f,runLog?accent:muted);
-        label(sb,I18n.t("导出到桌面 · F6"),right+10,t+2*p,cw-20,.85f,accent);
-        label(sb,I18n.t("自动战斗快捷键：")+Input.Keys.toString(autoKey),26,t+3*p,cw-20,.85f,accent);
-        label(sb,"SuperFastMode: "+(Loader.isModLoaded("superfastmode")?"x"+superFastShown():I18n.t("未安装")),right+10,t+3*p,cw-20,.85f,
-            superFastSpeed()>SUPER_FAST_TESTED?danger:muted);
-        label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F7/F8/F9 保留；Esc 取消")
+        canvas.label(sb,I18n.t("辉眼模式：")+I18n.t(Foresight.brightEyeMode?"开":"关"),26,t,cw-20,.85f,ACCENT);
+        canvas.label(sb,"−",right+12,t-1,24,1,ACCENT);
+        canvas.label(sb,Math.round(canvas.uiScale*100)+"%",right+cw/2-22,t,60,.85f,Color.WHITE);
+        canvas.label(sb,"＋",right+cw-30,t-1,24,1,ACCENT);
+        canvas.label(sb,I18n.t("Boss 快速收尾：")+I18n.t(bossFastFinishEnabled?"开":"关"),26,t+p,cw-20,.85f,bossFastFinishEnabled?ACCENT:MUTED);
+        canvas.label(sb,I18n.t("语言：")+("en".equals(I18n.language())?"English":"简体中文"),right+10,t+p,cw-20,.85f,ACCENT);
+        canvas.label(sb,I18n.t("持续记录：")+" "+I18n.t(backend.runLog()?"开":"关"),26,t+2*p,cw-20,.85f,backend.runLog()?ACCENT:MUTED);
+        canvas.label(sb,I18n.t("导出到桌面 · F6"),right+10,t+2*p,cw-20,.85f,ACCENT);
+        canvas.label(sb,I18n.t("自动战斗快捷键：")+Input.Keys.toString(autoKey),26,t+3*p,cw-20,.85f,ACCENT);
+        canvas.label(sb,"SuperFastMode: "+(Loader.isModLoaded("superfastmode")?"x"+superFastShown():I18n.t("未安装")),right+10,t+3*p,cw-20,.85f,
+            superFastSpeed()>SUPER_FAST_TESTED?DANGER:MUTED);
+        canvas.label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F7/F8/F9 保留；Esc 取消")
                 :I18n.t("Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同"),
-            16,SETTINGS_TOP+4*p-2,w-32,.7f,bindingKey?accent:muted);
+            16,SETTINGS_TOP+4*p-2,w-32,.7f,bindingKey?ACCENT:MUTED);
         boolean incompatibleMod = Loader.isModLoaded("SaveStateMod") || Loader.isModLoaded("undothespire") || Loader.isModLoaded("undobutton");
         String fast = superFastNote();
         boolean warn = incompatibleMod || !rngWarning.isEmpty() || superFastSpeed() > SUPER_FAST_TESTED;
@@ -1928,9 +1260,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             ? I18n.t("检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用")
             : !rngWarning.isEmpty() ? rngWarning : !fast.isEmpty() ? fast : I18n.t("F6 导出记录到桌面，发这一个文件即可");
         Color noteColor = note.isEmpty()
-            ? (warn ? danger : muted)
-            : (debugMessageError ? danger : accent);
-        label(sb,note.isEmpty()?defaultNote:note,16,NOTE_TOP,w-32,.75f,noteColor);
+            ? (warn ? DANGER : MUTED)
+            : (exports.messageError ? DANGER : ACCENT);
+        canvas.label(sb,note.isEmpty()?defaultNote:note,16,NOTE_TOP,w-32,.75f,noteColor);
     }
 
     /** 1 when SuperFastMode is absent or its multiplier is off. */
@@ -1958,31 +1290,31 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private void renderCombatBody(SpriteBatch sb, float w, String note) {
         float inner=ROUTE_LEFT-48;
-        box(sb,16,BODY_TOP,ROUTE_LEFT-28,BODY_ROWS*BODY_ROW-4,surface);
+        canvas.box(sb,16,BODY_TOP,ROUTE_LEFT-28,BODY_ROWS*BODY_ROW-4,SURFACE);
         if (busy) {
             long seconds=(System.currentTimeMillis()-sentAt)/1000;
             long now = System.currentTimeMillis();
-            label(sb,I18n.backend(backendPhase),26,86,inner,.9f,accent);
-            label(sb,I18n.t("总等待 ")+seconds+I18n.t(" 秒 · 本阶段 ")+((now-phaseAt)/1000)+I18n.t(" 秒"),26,116,inner,.8f,muted);
-            label(sb,now-lastProgressAt>5000
+            canvas.label(sb,I18n.backend(backendPhase),26,86,inner,.9f,ACCENT);
+            canvas.label(sb,I18n.t("总等待 ")+seconds+I18n.t(" 秒 · 本阶段 ")+((now-phaseAt)/1000)+I18n.t(" 秒"),26,116,inner,.8f,MUTED);
+            canvas.label(sb,now-lastProgressAt>5000
                 ? I18n.t("已 ")+((now-lastProgressAt)/1000)+I18n.t(" 秒无进度 · F9 停止")
-                :progressRows==null?I18n.t("请求 #")+activeId+I18n.t(" · F9 停止"):progressSummary(),26,142,inner,.8f,muted);
+                :progressRows==null?I18n.t("请求 #")+activeId+I18n.t(" · F9 停止"):progressSummary(),26,142,inner,.8f,MUTED);
         } else if (result != null) {
             boolean won=result.get("won").getAsBoolean();
-            label(sb,won?I18n.t("预测胜利"):I18n.t("当前路线未找到胜利"),26,84,inner,.9f,won?accent:danger);
-            label(sb,I18n.t("战后 HP"),26,108,90,.75f,muted);
-            label(sb,I18n.t("等效战损"),126,108,90,.75f,muted);
-            label(sb,result.get("hp").getAsString(),26,124,90,1.5f,Color.WHITE);
-            label(sb,result.get("loss").getAsString(),126,124,90,1.5f,accent);
-            line(sb,26,164,inner);
-            label(sb,I18n.t("下一步  ")+commandLabel(),26,172,inner,.85f,Color.WHITE);
+            canvas.label(sb,won?I18n.t("预测胜利"):I18n.t("当前路线未找到胜利"),26,84,inner,.9f,won?ACCENT:DANGER);
+            canvas.label(sb,I18n.t("战后 HP"),26,108,90,.75f,MUTED);
+            canvas.label(sb,I18n.t("等效战损"),126,108,90,.75f,MUTED);
+            canvas.label(sb,result.get("hp").getAsString(),26,124,90,1.5f,Color.WHITE);
+            canvas.label(sb,result.get("loss").getAsString(),126,124,90,1.5f,ACCENT);
+            canvas.line(sb,26,164,inner);
+            canvas.label(sb,I18n.t("下一步  ")+commandLabel(),26,172,inner,.85f,Color.WHITE);
             String healing=I18n.t("战后恢复：")+result.get("recovery").getAsInt();
             if(result.getAsJsonArray("recovery_notes").size()>0)
                 healing+=" · "+I18n.backend(result.getAsJsonArray("recovery_notes").get(0).getAsString());
-            label(sb,healing,26,198,inner,.75f,muted);
+            canvas.label(sb,healing,26,198,inner,.75f,MUTED);
         } else {
-            label(sb,error.isEmpty()?I18n.t("自己构筑请开【战斗全自动】；点击【AI全自动】随时完全托管"):I18n.backend(error),26,90,inner,.85f,error.isEmpty()?accent:danger);
-            label(sb,error.isEmpty()?I18n.t("仅查看建议，点击按钮后才出牌"):I18n.t("详细原因已写入后台日志"),26,124,inner,.8f,muted);
+            canvas.label(sb,error.isEmpty()?I18n.t("自己构筑请开【战斗全自动】；点击【AI全自动】随时完全托管"):I18n.backend(error),26,90,inner,.85f,error.isEmpty()?ACCENT:DANGER);
+            canvas.label(sb,error.isEmpty()?I18n.t("仅查看建议，点击按钮后才出牌"):I18n.t("详细原因已写入后台日志"),26,124,inner,.8f,MUTED);
         }
         List<String> foresight=transformPreview!=null?transformPreview.lines():combat()?Collections.<String>emptyList():Foresight.lines();
         String heading=transformPreview!=null?(transformPreview.upgrade?I18n.t("星盘"):I18n.t("变化"))+I18n.t("试选 ") + transformPreview.selected.size() + "/"+transformPreview.count+I18n.t(" · 点击此处关闭")
@@ -1995,17 +1327,17 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             :(runAuto || auto) && result!=null && result.has("branch") && !result.get("branch").getAsString().equals("no-potion")
                 ?I18n.t("自动战斗已采纳用药路线 · 点击或 F9 可接管")
             :I18n.t("推荐行动顺序 · 点击执行整条路线");
-        label(sb,heading,ROUTE_LEFT,48,w-ROUTE_LEFT-16,.85f,Color.WHITE);
+        canvas.label(sb,heading,ROUTE_LEFT,48,w-ROUTE_LEFT-16,.85f,Color.WHITE);
         float rowWidth=w-ROUTE_LEFT-16, textWidth=rowWidth-16;
         String hint="";
-        Color hintColor=muted;
+        Color hintColor=MUTED;
         if (transformPreview != null) {
             scroll=Math.max(0,Math.min(scroll,Math.max(0,foresight.size()-BODY_ROWS)));
             for (int i=scroll;i<Math.min(foresight.size(),scroll+BODY_ROWS);i++) {
-                box(sb,ROUTE_LEFT,BODY_TOP+(i-scroll)*BODY_ROW,rowWidth,BODY_ROW-4,surface);
-                label(sb,foresight.get(i),ROUTE_LEFT+8,BODY_TOP+5+(i-scroll)*BODY_ROW,textWidth,.85f,i<transformPreview.selected.size()?accent:muted);
+                canvas.box(sb,ROUTE_LEFT,BODY_TOP+(i-scroll)*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE);
+                canvas.label(sb,foresight.get(i),ROUTE_LEFT+8,BODY_TOP+5+(i-scroll)*BODY_ROW,textWidth,.85f,i<transformPreview.selected.size()?ACCENT:MUTED);
             }
-            hint=I18n.t("仅试选 · 滚轮翻页 · 点击已选项撤回"); hintColor=accent;
+            hint=I18n.t("仅试选 · 滚轮翻页 · 点击已选项撤回"); hintColor=ACCENT;
         } else if (branchPicker && result!=null) {
             JsonArray branches=result.getAsJsonArray("branches");
             scroll=Math.max(0,Math.min(scroll,Math.max(0,branches.size()-BODY_ROWS)));
@@ -2020,9 +1352,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                     summary+=I18n.t(" / 金 -")+branch.get("lost_gold").getAsInt();
                 if(available && branch.has("potion_gain") && branch.get("potion_gain").getAsInt()>0)
                     summary+=I18n.t(" / 补 ")+branch.get("potion_gain").getAsInt()+I18n.t(" 药");
-                box(sb,ROUTE_LEFT,BODY_TOP+(i-scroll)*BODY_ROW,rowWidth,BODY_ROW-4,surface);
-                label(sb,i+" "+summary+" · "+I18n.backend(branch.get("name").getAsString()),ROUTE_LEFT+8,BODY_TOP+5+(i-scroll)*BODY_ROW,
-                    textWidth,.85f,!revival.isEmpty()?danger:available?accent:muted);
+                canvas.box(sb,ROUTE_LEFT,BODY_TOP+(i-scroll)*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE);
+                canvas.label(sb,i+" "+summary+" · "+I18n.backend(branch.get("name").getAsString()),ROUTE_LEFT+8,BODY_TOP+5+(i-scroll)*BODY_ROW,
+                    textWidth,.85f,!revival.isEmpty()?DANGER:available?ACCENT:MUTED);
             }
             hint=result.has("manual_choice") && result.get("manual_choice").getAsBoolean()
                 ?I18n.t("空回车：选推荐路线；选后可开自动"):I18n.t("0 / 空回车：不交药；无输入则等待");
@@ -2034,10 +1366,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 String label=row.get("text").getAsString();
                 if (row.has("label")) label=row.get("label").getAsString();
                 float top=BODY_TOP+(i-scroll)*BODY_ROW;
-                box(sb,ROUTE_LEFT,top,rowWidth,BODY_ROW-4,surface);
-                label(sb,String.format("%02d",i+1),ROUTE_LEFT+8,top+5,28,.8f,i==0?accent:muted);
-                label(sb,I18n.backend(label),ROUTE_LEFT+40,top+4,rowWidth-88,.9f,i==0?Color.WHITE:muted);
-                label(sb,"T"+row.get("turn").getAsInt(),w-56,top+5,36,.75f,muted);
+                canvas.box(sb,ROUTE_LEFT,top,rowWidth,BODY_ROW-4,SURFACE);
+                canvas.label(sb,String.format("%02d",i+1),ROUTE_LEFT+8,top+5,28,.8f,i==0?ACCENT:MUTED);
+                canvas.label(sb,I18n.backend(label),ROUTE_LEFT+40,top+4,rowWidth-88,.9f,i==0?Color.WHITE:MUTED);
+                canvas.label(sb,"T"+row.get("turn").getAsInt(),w-56,top+5,36,.75f,MUTED);
             }
         } else if (busy && progressRows != null) {
             for (int i=0;i<Math.min(progressRows.size(),BODY_ROWS);i++) {
@@ -2047,170 +1379,49 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                     +SearchStatus.phase(row)+" · "+(row.has("transitions") && (row.get("phase").getAsString().equals("beam") || row.get("phase").getAsString().equals("cycle"))
                         ? count(row.get("transitions").getAsLong())+I18n.t("步") : count(row.get("simulations").getAsLong())+I18n.t("次"))
                     +" · "+I18n.backend(row.get("name").getAsString());
-                label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+i*BODY_ROW,textWidth,.85f,row.has("ready") && row.get("ready").getAsBoolean()?accent:muted);
+                canvas.label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+i*BODY_ROW,textWidth,.85f,row.has("ready") && row.get("ready").getAsBoolean()?ACCENT:MUTED);
             }
         } else if (!foresight.isEmpty()) {
             scroll=Math.max(0,Math.min(scroll,Math.max(0,foresight.size()-BODY_ROWS)));
             for (int i=scroll;i<Math.min(foresight.size(),scroll+BODY_ROWS);i++) {
                 String line=foresight.get(i);
-                label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+(i-scroll)*BODY_ROW,textWidth,.85f,line.startsWith(" ")?muted:accent);
+                canvas.label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+(i-scroll)*BODY_ROW,textWidth,.85f,line.startsWith(" ")?MUTED:ACCENT);
             }
         } else {
-            label(sb,I18n.t("发牌和动画结算后自动生成建议"),ROUTE_LEFT+8,BODY_TOP+10,textWidth,.85f,muted);
-            label(sb,I18n.t("奖励牌 / 地图 / 商店始终由你操作"),ROUTE_LEFT+8,BODY_TOP+40,textWidth,.85f,muted);
+            canvas.label(sb,I18n.t("发牌和动画结算后自动生成建议"),ROUTE_LEFT+8,BODY_TOP+10,textWidth,.85f,MUTED);
+            canvas.label(sb,I18n.t("奖励牌 / 地图 / 商店始终由你操作"),ROUTE_LEFT+8,BODY_TOP+40,textWidth,.85f,MUTED);
         }
         if(runAuto && hint.isEmpty() && result!=null && result.has("auto_recommendation")) {
             JsonObject advice=result.getAsJsonObject("auto_recommendation");
             hint=I18n.backend(autoReason)+" · "+I18n.backend(advice.getAsJsonObject("assessment").get("summary").getAsString());
-            hintColor=accent;
+            hintColor=ACCENT;
         }
-        if(!note.isEmpty())label(sb,note,16,NOTE_TOP,ROUTE_LEFT-28,.75f,debugMessageError?danger:accent);
-        if(!hint.isEmpty())label(sb,hint,ROUTE_LEFT,NOTE_TOP,w-ROUTE_LEFT-16,.75f,hintColor);
+        if(!note.isEmpty())canvas.label(sb,note,16,NOTE_TOP,ROUTE_LEFT-28,.75f,exports.messageError?DANGER:ACCENT);
+        if(!hint.isEmpty())canvas.label(sb,hint,ROUTE_LEFT,NOTE_TOP,w-ROUTE_LEFT-16,.75f,hintColor);
     }
-    private void renderOutsideRoute(SpriteBatch sb) {
-        if(!routeMarks || routePlan.isEmpty() || AbstractDungeon.screen!=AbstractDungeon.CurrentScreen.MAP
-                || AbstractDungeon.map==null)return;
-        if(routePixel==null)routePixel=new com.badlogic.gdx.graphics.g2d.TextureRegion(ImageMaster.WHITE_SQUARE_IMG);
-        List<com.megacrit.cardcrawl.map.MapRoomNode> nodes=new ArrayList<>();
-        com.megacrit.cardcrawl.map.MapRoomNode current=AbstractDungeon.getCurrMapNode();
-        if(current!=null && current.y>=0 && current.y<AbstractDungeon.map.size())nodes.add(current);
-        int from=nodes.size();
-        for(OutsidePacket.Step step:routePlan) {
-            if(step.y<0 || step.y>=AbstractDungeon.map.size() || step.x<0
-                    || step.x>=AbstractDungeon.map.get(step.y).size())return;
-            nodes.add(AbstractDungeon.map.get(step.y).get(step.x));
-        }
-        float s=Settings.scale;
-        for(int i=1;i<nodes.size();i++) {
-            com.megacrit.cardcrawl.map.MapRoomNode a=nodes.get(i-1), b=nodes.get(i);
-            float angle=(float)Math.toDegrees(Math.atan2(b.hb.cY-a.hb.cY,b.hb.cX-a.hb.cX));
-            float length=(float)Math.hypot(b.hb.cX-a.hb.cX,b.hb.cY-a.hb.cY);
-            boolean next=i==from;
-            sb.setColor(next?1f:.38f,next?.8f:.83f,next?.25f:.72f,.8f);
-            sb.draw(routePixel,a.hb.cX,a.hb.cY-4*s,0,4*s,length,8*s,1,1,angle);
-        }
-        for(int i=from;i<nodes.size();i++) {
-            com.megacrit.cardcrawl.map.MapRoomNode node=nodes.get(i);
-            boolean next=i==from;
-            float share=routePlan.get(i-from).share, size=(next?150:118)*s;
-            // Rule routes have deterministic rings; brightness is not a survival probability.
-            sb.setColor(next?1f:.38f,next?.8f:.83f,next?.25f:.72f,next?1f:.35f+.6f*share);
-            sb.draw(ImageMaster.MAP_CIRCLE_5,node.hb.cX-size/2,node.hb.cY-size/2,size,size);
-        }
-        com.megacrit.cardcrawl.map.MapRoomNode first=nodes.get(from), last=nodes.get(nodes.size()-1);
-        mapCaption(sb,I18n.t("规则推荐下一步"),first.hb.cX+80*s,first.hb.cY+10*s,accent);
-        if(last!=first)mapCaption(sb,I18n.t("开幕偏好规划 · 状态变化后可改道"),
-            last.hb.cX+70*s,last.hb.cY+10*s,muted);
-        sb.setColor(Color.WHITE);
-    }
-    private void mapCaption(SpriteBatch sb, String value, float left, float baseline, Color color) {
-        initFont();
-        float oldX=uiFont.getData().scaleX, oldY=uiFont.getData().scaleY;
-        try {
-            uiFont.getData().setScale(Settings.scale/fontScale*.85f);
-            uiFont.setColor(Color.BLACK); uiFont.draw(sb,value,left+2*Settings.scale,baseline-2*Settings.scale);
-            uiFont.setColor(color); uiFont.draw(sb,value,left,baseline);
-        } finally { uiFont.getData().setScale(oldX,oldY); uiFont.setColor(Color.WHITE); }
-    }
-    /** Outside combat, a run with the pilot chosen (or the start-of-run question) gets the compact card. */
-    private boolean pilotCard() {
-        return (outsidePrompt || outsidePilotRun) && CommandExecutor.isInDungeon() && !combat();
-    }
-    private int pilotListRows() {
-        return outsideMode==1 && outsidePacket!=null && outsideScores!=null
-            ? Math.min(PILOT_ROWS,outsidePacket.choices.size()) : 0;
-    }
-    private float pilotButtonsTop() {
-        int rows=pilotListRows();
-        return PILOT_LIST_TOP+rows*PILOT_ROW+(rows>0?8:0);
-    }
-    private float pilotHeight() { return pilotButtonsTop()+38+14; }
-    /** Buttons as {action, label}; actions: 2 auto, 1 step, 0 take over, 3 confirm, -1 start manual, -2 auto combat only. */
-    private String[][] pilotButtons() {
-        if(outsidePrompt) return new String[][]{{"-1","人工逐步"},{"-2","战斗全自动"},{"2","AI全自动"}};
-        if(outsideMode==2) return new String[][]{{"0","人工逐步"}};
-        if(outsideMode==1) return new String[][]{{"3","确认这一步（回车）"},{"-2","战斗全自动"},{"2","AI全自动"}};
-        return new String[][]{{"2","继续AI全自动"},{"1","人工逐步"}};
-    }
+    /** Clicks on the compact pilot card, in card units. */
     private void pilotInput(float lx, float ly, boolean click, float mx, float my) {
-        int rows=pilotListRows();
-        if(rows>0 && ly>=PILOT_LIST_TOP && ly<PILOT_LIST_TOP+rows*PILOT_ROW) {
-            int last=Math.max(0,outsidePacket.choices.size()-rows);
-            if(InputHelper.scrolledDown)outsideScroll=Math.min(last,outsideScroll+1);
-            if(InputHelper.scrolledUp)outsideScroll=Math.max(0,outsideScroll-1);
-            if(click) {
-                int index=outsideScroll+(int)((ly-PILOT_LIST_TOP)/PILOT_ROW);
-                if(index<outsidePacket.choices.size())outsideChosen=index;
-            }
-            return;
-        }
-        if(!click)return;
+        if(pilot.listInput(ly,click) || !click)return;
         if(ly<40) {
-            if(lx>=PILOT_WIDTH-40 && !outsidePrompt) { // hide the card; the full panel returns, without suggestions.
-                if(outsideMode==2)stopAll();
-                outsideMode=0; outsidePacket=null; outsideScores=null; outsideConfirm=false;
-                outsidePilotRun=false;
-            } else { dragging=true; dx=mx-x; dy=my-y; }
+            if(lx>=OutsidePilot.PILOT_WIDTH-40 && !pilot.prompt) { // hide the card; the full panel returns, without suggestions.
+                if(pilot.mode==2)stopAll();
+                pilot.close();
+            } else canvas.startDrag(mx,my);
             return;
         }
-        float top=pilotButtonsTop();
-        if(ly<top || ly>top+38)return;
-        String[][] buttons=pilotButtons();
-        float width=(PILOT_WIDTH-32-(buttons.length-1)*8)/buttons.length;
-        int slot=(int)((lx-16)/(width+8));
-        if(lx<16 || slot<0 || slot>=buttons.length || lx-16-slot*(width+8)>width)return;
-        switch(Integer.parseInt(buttons[slot][0])) {
-            case 3: if(outsidePacket!=null)outsideConfirm=true; break;
+        int action=pilot.buttonAt(lx,ly);
+        switch(action) {
+            case OutsidePilot.NO_BUTTON: break;
+            case 3: if(pilot.packet!=null)pilot.confirm=true; break;
             case 0: stopAll(); break;
             case -1: chooseOutsideMode(1); break;
             case -2:
                 chooseOutsideMode(0);
                 if (!runAuto) toggleRunAuto();
                 break;
-            default: chooseOutsideMode(Integer.parseInt(buttons[slot][0]));
+            default: chooseOutsideMode(action);
         }
     }
-    private void renderPilot(SpriteBatch sb) {
-        float height=pilotHeight();
-        box(sb,0,0,PILOT_WIDTH,height,border);
-        box(sb,1,1,PILOT_WIDTH-2,height-2,background);
-        label(sb,I18n.t("自动爬塔"),16,10,140,1.05f,Color.WHITE);
-        String chip=outsidePrompt?"新一局":outsideMode==2?"AI全自动中":outsideMode==1?"人工逐步"
-            :outsideFailed?"已暂停":"已接管";
-        Color chipColor=outsideMode==2?accent:outsideFailed?danger:outsideMode==1?Color.WHITE:muted;
-        box(sb,PILOT_WIDTH-170,9,120,24,surface);
-        label(sb,I18n.t(chip),PILOT_WIDTH-160,13,100,.78f,chipColor);
-        if(!outsidePrompt)label(sb,"×",PILOT_WIDTH-32,9,20,1,muted);
-        label(sb,outsideNotice,16,46,PILOT_WIDTH-32,.78f,outsideFailed?danger:muted);
-        int rows=pilotListRows();
-        for(int row=0;row<rows;row++) {
-            int i=outsideScroll+row;
-            if(i>=outsidePacket.choices.size())break;
-            float top=PILOT_LIST_TOP+row*PILOT_ROW;
-            boolean chosen=i==outsideChosen;
-            box(sb,16,top,PILOT_WIDTH-32,PILOT_ROW-4,chosen?new Color(.17f,.29f,.32f,1):surface);
-            label(sb,(chosen?"● ":"  ")+outsidePacket.choices.get(i).label,24,top+5,PILOT_WIDTH-130,.8f,
-                chosen?accent:Color.WHITE);
-            label(sb,String.format(java.util.Locale.ROOT,"%.3f",outsideScores.scores[i]),
-                PILOT_WIDTH-86,top+5,62,.76f,muted);
-        }
-        String[][] buttons=pilotButtons();
-        float top=pilotButtonsTop(), width=(PILOT_WIDTH-32-(buttons.length-1)*8)/buttons.length;
-        for(int b=0;b<buttons.length;b++) {
-            int action=Integer.parseInt(buttons[b][0]);
-            boolean primary=b==0 && !(action==3 && outsidePacket==null);
-            float left=16+b*(width+8);
-            box(sb,left,top,width,38,primary?accent:surface);
-            label(sb,I18n.t(buttons[b][1]),left+12,top+9,width-20,.9f,
-                primary?background:action==0?danger:action==3?muted:Color.WHITE);
-        }
-        sb.setColor(Color.WHITE);
-    }
-    // The game draws its cursor before post-render overlays; repeat it above the panel.
-    private void cursorOnTop(SpriteBatch sb) {
-        if (hovered && !com.megacrit.cardcrawl.core.GameCursor.hidden) com.megacrit.cardcrawl.core.CardCrawlGame.cursor.render(sb);
-    }
-
     static String firstDifference(JsonElement a, JsonElement b, String path) {
         if (Objects.equals(a,b)) return "";
         if(a!=null && b!=null && a.isJsonObject() && b.isJsonObject()) {
