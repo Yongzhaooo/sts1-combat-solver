@@ -10,6 +10,7 @@ The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher
 2. [架构](docs/architecture.md)：目标结构和路线。
 3. [四职业范围与分工](docs/multi-character.md)：模拟器现状、缺口位置、里程碑小步和分工。
 4. [真值校准与夹具](docs/truth-calibration.md)：怎么校准自己的真值、怎么生成夹具。
+5. 改面板、游玩模式和按键：[面板与模式开发说明](docs/ui-development.md)，里面有代码位置、检查、实机测试和 PR 流程。
 
 动手前先在 issue 或邮件里说一下要认领哪个职业的哪一小步，避免两个人改同一处。
 
@@ -21,7 +22,7 @@ The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher
 
 ## 分支和 PR
 
-- fork 本仓库，从集成分支 `main` 开分支，PR 也提到 `main`，分支名写职业和小步，例如 `silent/m1a-starter-cards`。
+- fork 本仓库，从集成分支 `main` 开分支，PR 也提到 `main`，分支名写职业和小步，例如 `silent/m1a-starter-cards`；面板改动写功能，例如 `ui/no-potion-switch`。
 - 一个 PR 只做一个职业的一个小步（见范围文档第 3 节），不顺手重构共享代码，也不夹带无关修复。
 - PR 说明写清：实现了哪些牌、遗物、能力；每项依据的 Java 类名和方法名（只写名字，不贴代码）；覆盖清单的变化；新增了哪些夹具和测试。
 
