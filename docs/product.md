@@ -39,7 +39,7 @@ Players of *Slay the Spire 1* install one local Mod and get bounded combat plann
 
 Player request (七月流火, 2026-10-21), cleaned; every item is proposed.
 
-- Three modes map to the existing `RunMode`: AI autopilot (route, rewards and fights automatic), Combat auto (the player owns route, rewards, shops and events; fights run automatically) and Manual (the player approves each fight's plan). The mode is chosen at run start and can be switched from the panel; F9 always stops and returns to Manual. Switching never advances an action by itself (proposed).
+- Three modes map to the existing `RunMode`: AI autopilot (route, rewards and fights automatic), Combat auto (the player owns route, rewards, shops and events; fights run automatically) and Manual (the player approves each fight's plan). The mode is chosen at run start and switched with the panel's Combat auto and AI autopilot buttons; F9 always stops and returns to Manual. Switching never advances an action by itself (proposed).
 - Search tier (Standard, High-speed, Streak) is independent of the mode; changing one leaves the other unchanged (proposed).
 - In Combat auto, a "no potions" switch makes the solver search and execute only potion-free lines. The potion slots after the fight equal those before it. When no potion-free line wins, execution stops before the first action and the panel says so; it never falls back to a potion line (proposed).
 - In Manual, while the player holds potions, the panel lists the plans before any action: the potion-free line always, plus potion lines, each with predicted HP loss, win or not, and the bottles used. Listing executes nothing and consumes nothing. Today the list appears only when the potion-free line loses HP or fails and a potion line is available (proposed).
