@@ -124,6 +124,17 @@ battle=battle.replace(early_end,'''    // Java callEndTurnEarlySequence -> relea
         addToBot(Actions::DrawCards(1));
     }
 '''+early_end,1)
+turn_ending='''        if (endTurnQueued) {
+            endTurnQueued = false;
+'''
+assert battle.count(turn_ending)==1,'upstream turn-ending layout changed'
+battle=battle.replace(turn_ending,turn_ending+'''            // Java refreshes the hand once the end-turn item's actions drain, before AbstractRoom.endTurn queues
+            // ClearCardQueue and the discard: Unceasing Top draws here when a Time Warp ending found the queue busy
+            // and nothing refilled the hand since (train-r5 5213729386368735704, 6468454909721897195).
+            if (player.hasRelic<R::UNCEASING_TOP>() && cards.cardsInHand == 0 && !player.hasStatus<PS::NO_DRAW>()) {
+                addToBot(Actions::DrawCards(1));
+            }
+''',1)
 # playCardQueueItem distinguishes playable cards with no target from rejected autoplay.
 # A rejected Clash still runs UseCardAction and Havoc exhausts it during rebirth.
 patched_battle.write_text(battle,encoding='utf-8')
