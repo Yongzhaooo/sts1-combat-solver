@@ -62,3 +62,26 @@ def incense_targets(game):
     if boss == 'Automaton' and not game.get('solver_elite_ahead', True):
         return [0]
     return [5] if last != 'Slavers' else [4]
+
+
+def carry_weight(game):
+    """Weight of the cross-fight counters other than Incense Burner (user rule, 2026-10-21).
+
+    x2 when the next fight can be an elite, x3 when it is a Boss. Without map data (headless) x1.
+    """
+    if any(m['id'] == 'CorruptHeart' for m in game['combat_state']['monsters']):
+        return 1.0
+    act, room = game.get('act', 1), game.get('room_type')
+    if act >= 4:
+        return 3.0 if room == 'MonsterRoomElite' else 1.0  # Shield and Spear, then the Heart
+    if room == 'MonsterRoomBoss':
+        if act < 3:
+            return 1.0  # the next act opens with hallway fights
+        # A20 Beyond: two candidates remain during Boss #1, so Boss #2 is next (SolverMod.bossFastFinish).
+        context = game.get('solver_auto_context') or {}
+        if game.get('ascension_level', 0) >= 20 and context.get('boss_candidates_remaining', 0) > 1:
+            return 3.0
+        keys = game.get('keys') or {}
+        return 2.0 if all(keys.get(k) for k in ('ruby', 'emerald', 'sapphire')) else 1.0
+    kinds = game.get('solver_next_fights', [])
+    return 3.0 if 'boss' in kinds else 2.0 if 'elite' in kinds else 1.0

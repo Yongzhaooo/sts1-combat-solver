@@ -108,6 +108,30 @@ public final class Foresight {
         return found;
     }
 
+    /** First fights on the paths from this node: "monster", "elite", or "boss" when a path reaches the Boss without one. Event rooms do not count as fights. */
+    static List<String> nextFights(List<? extends List<MapRoomNode>> map, MapRoomNode node) {
+        int kinds = nextFights(map, node, new IdentityHashMap<>());
+        List<String> out = new ArrayList<>();
+        if ((kinds & 1) != 0) out.add("monster");
+        if ((kinds & 2) != 0) out.add("elite");
+        if ((kinds & 4) != 0) out.add("boss");
+        return out;
+    }
+
+    private static int nextFights(List<? extends List<MapRoomNode>> map, MapRoomNode node, Map<MapRoomNode,Integer> memo) {
+        Integer known = memo.get(node);
+        if (known != null) return known;
+        int kinds = node.getEdges().isEmpty() ? 4 : 0;
+        for (com.megacrit.cardcrawl.map.MapEdge edge : node.getEdges()) {
+            if (edge.dstY < 0 || edge.dstY >= map.size()) { kinds |= 4; continue; }
+            MapRoomNode next = map.get(edge.dstY).get(edge.dstX);
+            kinds |= next.room instanceof com.megacrit.cardcrawl.rooms.MonsterRoomElite ? 2
+                : next.room instanceof com.megacrit.cardcrawl.rooms.MonsterRoom ? 1 : nextFights(map, next, memo);
+        }
+        memo.put(node, kinds);
+        return kinds;
+    }
+
     static boolean remindRuby(int act, boolean enabled, boolean owned, boolean atRest, int remaining) {
         return act == 3 && enabled && !owned && atRest && remaining <= 1;
     }
