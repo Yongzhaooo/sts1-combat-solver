@@ -42,6 +42,8 @@ SUPPORTED_CLASSES = {'IRONCLAD': '战士'}
 COVERAGE_MANIFEST = Path(__file__).with_name('coverage_manifest.json')
 # Bottle sets are compared only when no single bottle wins within this effective loss.
 MULTI_POTION_LOSS = 6
+# After a Boss the next act heals (boss_heal): bottles are searched only past this loss or without a win.
+BOSS_HEAL_POTION_LOSS = 50
 # Safety net: if cardRandomRng still drifts after card generation, keep executing the planned
 # route (later random cards are re-checked) instead of letting LiveSearch silently drop it.
 FRAME_RNG = ('/rng/card_random',)
@@ -296,9 +298,10 @@ class Advisor:
         # native call releases the GIL). A clean no-potion 8k plan avoids
         # submitting bottles; otherwise bottles overlap its refinement. Keep
         # the existing bottle comparison when the no-potion line has net
-        # HP loss. Bottle sets are searched only if no line so far wins within
-        # MULTI_POTION_LOSS effective HP loss.
+        # HP loss (beyond BOSS_HEAL_POTION_LOSS at a healing Boss). Bottle sets are
+        # searched only if no line so far wins within the larger of that and MULTI_POTION_LOSS.
         fast_boss = view['game'].get('solver_auto_context', {}).get('boss_fast_finish') is True
+        quiet_loss = BOSS_HEAL_POTION_LOSS if view['game'].get('solver_auto_context', {}).get('boss_heal') is True else 0
         initial_plan = None
         initial_seconds = None
         clean_regular = False
@@ -313,7 +316,7 @@ class Advisor:
                 self.searching = []
                 raise
             clean_regular = (initial_plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
-                             and health(initial_plan, self.root_game, True)['loss'] == 0
+                             and health(initial_plan, self.root_game, True)['loss'] <= quiet_loss
                              and not initial_plan.get('used_tail') and not initial_plan.get('used_fairy')
                              and not toolbox_selection(view['game']))
         if (_ELITE_DEEP_GATE is not None and self.root_game.get('act', 4) <= 3
@@ -356,7 +359,7 @@ class Advisor:
                     if self.plan.get('boss_fast_finish'):
                         break
                     if (not smoke_slots and self.plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
-                            and self.branch_info[0]['loss'] == 0
+                            and self.branch_info[0]['loss'] <= quiet_loss
                             and not self.plan.get('used_tail') and not self.plan.get('used_fairy')
                             and not toolbox_selection(view['game'])
                             and not (brew_order or (budget >= DEEP_BUDGET and brew_slots))):
@@ -366,7 +369,7 @@ class Advisor:
                         self.potion_branch(slots, names, future, started, view, budget)
                 if self.interrupt.is_set():
                     break
-                good = any(b['available'] and b['won'] and b['loss'] <= MULTI_POTION_LOSS for b in self.branch_info)
+                good = any(b['available'] and b['won'] and b['loss'] <= max(MULTI_POTION_LOSS, quiet_loss) for b in self.branch_info)
                 if fast_boss and stage is stages[0] and potions:
                     stages.append([(slot,) for slot, _ in potions])
                 singles_done = (not fast_boss and stage is stages[0]) or (
