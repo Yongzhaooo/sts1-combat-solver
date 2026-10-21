@@ -23,6 +23,13 @@ public class StateKeyCheck {
                 card.add(field,old);
             }
         }
+        JsonObject state = parser.parse("{\"game_state\":{\"combat_state\":{},\"solver_auto_context\":{\"run_auto\":true,\"high_speed\":false}},\"available_commands\":[]}").getAsJsonObject();
+        JsonObject context = state.getAsJsonObject("game_state").getAsJsonObject("solver_auto_context");
+        JsonObject before = SolverMod.key(state);
+        context.addProperty("run_auto", false);
+        if (!before.equals(SolverMod.key(state))) throw new AssertionError("F9 / automation toggle discards the found route");
+        context.addProperty("high_speed", true);
+        if (before.equals(SolverMod.key(state))) throw new AssertionError("search settings must stay in the key");
         // Headbutt kills a minion then opens GRID: the game freezes room.update,
         // so waiting for that monster's death animation would deadlock the picker.
         for (com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen screen
@@ -31,18 +38,18 @@ public class StateKeyCheck {
                 || screen == com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.HAND_SELECT
                 || screen == com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.GRID
                 || screen == com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.CARD_REWARD;
-            if(SolverMod.actionPausedByScreen(screen)==interactive)
+            if(CombatReadiness.actionPausedByScreen(screen)==interactive)
                 throw new AssertionError("Action timeout must pause on overlay screen " + screen);
             boolean paused = screen == com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.GRID
                 || screen == com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.CARD_REWARD;
-            if (SolverMod.waitForMonsterExit(screen,true,false,false,false,false) == paused)
+            if (CombatReadiness.waitForMonsterExit(screen,true,false,false,false,false) == paused)
                 throw new AssertionError("death gate on " + screen);
-            if (SolverMod.waitForMonsterExit(screen,false,false,false,true,false) == paused)
+            if (CombatReadiness.waitForMonsterExit(screen,false,false,false,true,false) == paused)
                 throw new AssertionError("escape gate on " + screen);
-            if (SolverMod.waitForMonsterExit(screen,true,true,false,true,true)
-                    || SolverMod.waitForMonsterExit(screen,true,false,true,false,false))
+            if (CombatReadiness.waitForMonsterExit(screen,true,true,false,true,true)
+                    || CombatReadiness.waitForMonsterExit(screen,true,false,true,false,false))
                 throw new AssertionError("finished/half-dead monster blocks " + screen);
         }
-        System.out.println("PASS: picker/card previews ignored; card identity, costs and base rules retained");
+        System.out.println("PASS: picker/card previews and run_auto ignored; card identity, costs, base rules and search settings retained");
     }
 }

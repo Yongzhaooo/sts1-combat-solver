@@ -21,6 +21,16 @@ public final class ModeCheck {
         require(RunMode.of(0, false) == RunMode.MANUAL, "manual with the suggestions card hidden");
         require(RunMode.of(0, true) == RunMode.COMBAT_AUTO, "combat auto");
         require(RunMode.values().length == 3, "exactly three modes");
+        com.google.gson.JsonParser json = new com.google.gson.JsonParser();
+        com.google.gson.JsonObject revivalSwap = json.parse("{\"needs_confirmation\":false,\"branches\":["
+            + "{\"id\":\"no-potion\",\"available\":true},{\"id\":\"potion-1\",\"available\":true}]}").getAsJsonObject();
+        require(SolverMod.routeChoice(revivalSwap, true), "Manual lists the routes whenever two are usable");
+        require(!SolverMod.routeChoice(revivalSwap, false), "Combat auto keeps choosing by itself");
+        com.google.gson.JsonObject single = json.parse("{\"needs_confirmation\":false,\"branches\":["
+            + "{\"id\":\"no-potion\",\"available\":true},{\"id\":\"potion-0\",\"available\":false}]}").getAsJsonObject();
+        require(!SolverMod.routeChoice(single, true), "one usable route needs no choice");
+        require(SolverMod.routeChoice(json.parse("{\"needs_confirmation\":true}").getAsJsonObject(), false),
+            "a backend confirmation is always asked");
 
         // Agent commands: "<decision> <index>" for the current decision only.
         require(RunMode.agentChoice("7 2", 7, 3) == 2, "agent picks a listed choice");

@@ -37,12 +37,15 @@ Players of *Slay the Spire 1* install one local Mod and get bounded combat plann
 
 ### Play modes and player control
 
-Player request (七月流火, 2026-10-21), cleaned; every item is proposed.
+Player request (七月流火, 2026-10-21), cleaned. Items marked (proposed) are not yet decided; the rest the maintainer decided on 2026-10-21.
 
 - Three modes map to the existing `RunMode`: AI autopilot (route, rewards and fights automatic), Combat auto (the player owns route, rewards, shops and events; fights run automatically) and Manual (the player approves each fight's plan). The mode is chosen at run start and switched with the panel's Combat auto and AI autopilot buttons; F9 always stops and returns to Manual. Switching never advances an action by itself (proposed).
 - Search tier (Standard, High-speed, Streak) is independent of the mode; changing one leaves the other unchanged (proposed).
 - In Combat auto, a "no potions" switch makes the solver search and execute only potion-free lines. The potion slots after the fight equal those before it. When no potion-free line wins, execution stops before the first action and the panel says so; it never falls back to a potion line (proposed).
-- In Manual, while the player holds potions, the panel lists the plans before any action: the potion-free line always, plus potion lines, each with predicted HP loss, win or not, and the bottles used. Listing executes nothing and consumes nothing. Today the list appears only when the potion-free line loses HP or fails and a potion line is available (proposed).
+- In Manual, whenever more than one plan is usable, the panel lists them before any action: the potion-free line, plus potion lines, each with predicted HP loss, win or not, revivals spent and bottles gained. Listing executes nothing and consumes nothing. A potion-free win without HP loss is not interrupted: the search does not try bottles then, so there is nothing to choose. Combat auto keeps choosing by itself.
+- Finished plans are clickable while the search continues; a click plays that plan and keeps the current mode. After F9 the plan found so far stays on the panel.
+- In Manual, a click on the plan list plays the whole fight, Enter plays one step, and F9 stops. In Combat auto, Step, Execute turn or F10 take over the current fight only; the next fight runs automatically again, and the Combat auto button stays on.
+- Every clickable control and plan row brightens under the pointer; rows that cannot be clicked do not.
 - After the player approves a plan, the solver plays the fight under that plan's potion constraint. A divergence from the prediction re-plans under the same constraint without asking again; an approved potion-free plan never drinks a bottle (proposed).
 - The player can restrict the usable bottles for a fight, and the listed plans respect it. The search already accepts potion permissions; the panel has no control for it (proposed).
 

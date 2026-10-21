@@ -259,7 +259,7 @@ public final class Foresight {
         sb.setColor(0, 0, 0, .72f);
         sb.draw(ImageMaster.WHITE_SQUARE_IMG, left - pad, top - layout.height - pad, layout.width + 2 * pad, layout.height + 2 * pad);
         sb.setColor(Color.WHITE);
-        FontHelper.renderFontLeftTopAligned(sb, font, text, left, top, SolverMod.ACCENT);
+        FontHelper.renderFontLeftTopAligned(sb, font, text, left, top, PanelCanvas.ACCENT);
     }
 
     /** Prediction rows for the panel; empty when nothing predictable is on screen. */

@@ -18,7 +18,12 @@
 
 | 位置 | 内容 |
 |---|---|
-| `overlay/src/sts1solver/SolverMod.java` | 面板绘制、按键和点击、自动执行、与后台通信。界面改动大多在这里 |
+| `overlay/src/sts1solver/SolverMod.java` | 模式切换、战斗自动执行（请求、回复、逐步执行）、按键和点击分发、战斗面板的内容。界面改动大多在这里 |
+| `overlay/src/sts1solver/PanelCanvas.java` | 面板位置、缩放、拖动、配色、字体和绘制函数（`box`、`label`、`line`） |
+| `overlay/src/sts1solver/OutsidePilot.java` | 局外：打分、AI全自动执行、人工逐步确认、地图路线，以及战斗外的小卡片 |
+| `overlay/src/sts1solver/BackendClient.java` | 后台进程和收发通道；请求内容由 `SolverMod.send` 组装 |
+| `overlay/src/sts1solver/CombatReadiness.java` | 是否在战斗中、局面是否稳定到可以读取和执行 |
+| `AgentBridge.java`、`DeckWatch.java`、`RunExports.java` | Agent 文件通道；卡组变化提示；F6/F7 导出、崩溃记录 |
 | `overlay/src/sts1solver/RunMode.java` | 三种模式（`MANUAL` 人工逐步、`COMBAT_AUTO` 战斗全自动、`PILOT` AI全自动）以及按钮切换规则，纯逻辑 |
 | `overlay/src/sts1solver/PanelSize.java`、`SearchStatus.java` | 面板尺寸、搜索超时，纯逻辑 |
 | `overlay/src/sts1solver/I18n.java`，`overlay/resources/localization/en.tsv` | 中英文切换；英文表是“中文<TAB>英文” |
@@ -27,7 +32,17 @@
 | `overlay/test/*.java` | Java 检查，`main` 里用 `require` 断言 |
 | `tools/check_*.py` | Python 检查 |
 
-`SolverMod.java` 有 2,200 多行，绘制、状态和通信都在一个类里。已经拆出去的纯逻辑（`RunMode`、`PanelSize` 和 `SolverMod` 里的 `static` 方法）都有 Java 检查。新功能照这个模式写：判断逻辑写成纯函数，放进 `RunMode` 或一个新的小类，配一个检查；`SolverMod` 里只留几行调用。
+`SolverMod` 负责把这些部分串起来：模式状态和战斗自动执行在它里面，局外、绘制、通信各在自己的类里。纯逻辑（`RunMode`、`PanelSize`、`CombatReadiness` 和 `SolverMod` 里的 `static` 方法）都有 Java 检查。新功能照这个模式写：判断逻辑写成纯函数，放进 `RunMode` 或一个新的小类，配一个检查；`SolverMod` 里只留几行调用。
+
+### 有意保留的耦合
+
+下面这些地方没有拆开，是有意的。改动时照现状写，不要顺手“解耦”；确实要拆，先开 issue 说明终态。
+
+- **模式切换留在 `SolverMod`。** `stopAll()`、`chooseOutsideMode()`、`startAgentMode()`、`fail()` 要同时改局外（`OutsidePilot`）和战斗自动执行的状态，必须一次改完，所以放在两者之上的 `SolverMod` 里。`OutsidePilot` 只提供各自那一半（`stop`、`select`、`pause`、`close`）。
+- **战斗状态由三处共用。** `busy`、`result`、`auto`、`turnOnly`、`paused`、`branchPicker`、`branchConfirmed`、`heldThisFight` 等字段，按键（`input`、`branchKeyboard`）、绘制（`renderCombatBody`）和后台回复处理（`update`）都要读写。拆开需要先设计一个战斗状态对象和它的规则，不是搬代码能解决的。
+- **`OutsidePilot` 的部分字段是包内可见的。** `SolverMod` 直接读写 `pilot.mode`、`pilot.notice`、`pilot.packet`、`pilot.scores`、`pilot.confirm`，`AgentBridge` 直接写 `pilot.chosen` 和 `pilot.confirm`。依赖关系看得见，但没有封装成方法。
+- **局外反向调用只走 `OutsidePilot.Host`。** 局外需要战斗这一侧时，只能用这四个方法：读局面（`capture`）、写诊断（`record`）、新一局开始（`runStarted`）、局外失败时停掉战斗自动（`failed`）。需要更多时扩展这个接口，不要把 `SolverMod` 传进去。
+- **设置还在 `SolverMod` 里。** 读写 `SpireConfig` 的默认值和各个开关（构造函数和 `saveSetting`、`saveAutomation` 等），以及奖励界面的自动换药（`updatePotionRewards`），都还没有单独成类。这是下一步可以拆的地方。
 
 ## 面板状态
 
@@ -35,8 +50,9 @@
 
 | 字段 | 含义 |
 |---|---|
-| `outsideMode` | 局外：0 不给建议，1 每步给建议、玩家确认，2 AI全自动 |
+| `pilot.mode` | 局外（`OutsidePilot.mode`）：0 不给建议，1 每步给建议、玩家确认，2 AI全自动 |
 | `runAuto` | 整局的战斗都自动打（战斗全自动和 AI全自动） |
+| `heldThisFight` | 玩家用“执行一步”“执行本回合”或 F10 接管了这一场；下一场照常自动。`fightAuto()` = `runAuto` 且未接管 |
 | `auto` | 当前这场正在自动执行 |
 | `turnOnly` | 只自动执行到本回合结束 |
 | `paused` | 自动执行被暂停（F9 或出错） |
@@ -48,14 +64,14 @@
 | `runAfterBranch` | 玩家按了 F10，选完路线后直接打完整场 |
 | `highSpeed`、`streakMode` | 搜索档位：高速、连胜；都为 false 时是标准 |
 
-模式由 `RunMode.of(outsideMode, runAuto)` 推出来。面板上的“战斗全自动”和“AI全自动”按钮分别调用 `toggleCombatMode()` 和 `togglePilotMode()`；`stopAll()`（F9）停下并回到人工逐步。
+模式由 `RunMode.of(pilot.mode, runAuto)` 推出来。面板上的“战斗全自动”和“AI全自动”按钮分别调用 `toggleCombatMode()` 和 `togglePilotMode()`；`stopAll()`（F9）停下并回到人工逐步。
 
 一场战斗的流程：
 
 1. 进入战斗或局面变化，`send("solve", capture())` 请求后台计算。
 2. 后台回复 `status: "ready"`，写进 `result`。
-3. 回复里 `needs_confirmation` 为 true 时，进入 `requestBranches()`：
-   - 战斗全自动（`runAuto` 且未暂停）调用 `chooseAutomaticBranch()`，按后台的 `auto_recommendation` 选一条；
+3. `routeChoice(result, 人工)` 为 true 时（后台要求确认，或人工逐步下有两条以上可用路线），进入 `requestBranches()`：
+   - 战斗全自动（`fightAuto()` 且未暂停）调用 `chooseAutomaticBranch()`，按后台的 `auto_recommendation` 选一条；
    - 人工逐步则把 `branchPicker` 设为 true，面板列出路线，玩家输入编号或回车（`branchKeyboard()`）。
 4. `chooseBranch(id)` 发出 `send("choose", ...)`，后台按选定路线重算。
 5. 执行：`executeStep()` 每次走一步，执行后 `send("advance", ...)` 让后台核对实际结果；`auto` 为 true 时连续执行。
@@ -83,9 +99,9 @@
 ## 改动的位置（对应产品 spec 里的提议）
 
 - **战斗全自动的“不用药”开关**：设置项照 `registerConfigPanel()` 里的写法加，用 `saveSetting` 保存；在 `chooseAutomaticBranch()` 里，开关打开时只接受 `no-potion` 路线，这条赢不了就调用 `fail(...)` 停下。判断写成 `static` 方法，在 `overlay/test/ModeCheck.java` 里加断言。
-- **人工逐步时总显示路线列表**：改面板这一侧（`requestBranches()` 的调用条件，以及 `renderCombatBody()` 里的列表），不要改后台的 `needs_confirmation`，因为战斗全自动也依赖它。
+- **人工逐步时总显示路线列表**：已完成，见 `SolverMod.routeChoice`；判断放在面板这一侧，后台的 `needs_confirmation` 不变，因为战斗全自动也依赖它。
 - **限定可用药水**：需要后台新增请求字段，并在 `backend.py` 生成用药路线时使用；属于面板和后台一起改的情况，要加 Python 检查。
-- **列表的显示格式**：`renderCombatBody()` 里 `branchPicker` 分支；面板尺寸见 `PanelSize`，改了尺寸要更新 `PanelSizeCheck`。
+- **列表的显示格式**：`renderCombatBody()` 里 `branchPicker` 分支；面板尺寸见 `PanelSize`，改了尺寸要更新 `PanelSizeCheck`。能点的框用 `canvas.button`（悬停变亮），不能点的用 `canvas.box`。
 
 ## 开发环境
 
