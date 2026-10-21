@@ -116,8 +116,7 @@ def recommend(game, branches):
               'Dexterity Potion', 'Strength Potion', 'PowerPotion',
               'SkillPotion', 'AttackPotion', 'ColorlessPotion', 'EntropicBrew', 'SneckoOil'}
 
-    # The next act heals 75% of missing HP after this Boss (A5+; full below), so only the rest counts;
-    # bottles carried into the next act are kept like a reserve.
+    # The next act heals 75% of missing HP after this Boss (A5+; full below), so only the rest counts.
     hp_weight = (.25 if game.get('ascension_level', 20) >= 5 else 0) if context.get('boss_heal') is True else 1
     heal_note = {1: '', .25: '；首领战后回血，战损按 1/4 计', 0: '；首领战后回满血，战损不计'}[hp_weight]
 
@@ -129,7 +128,7 @@ def recommend(game, branches):
             covers_gap = ((potion in {'Fire Potion', 'FlexPotion', 'Energy Potion'} and '爆发不足' in profile['weaknesses'])
                           or (potion == 'Explosive Potion' and '群攻不足' in profile['weaknesses'])
                           or (potion in {'Block Potion', 'SpeedPotion'} and '防御不足' in profile['weaknesses']))
-            reserve = (profile['reserve'] or hp_weight < 1) and (valuable or covers_gap)
+            reserve = profile['reserve'] and (valuable or covers_gap)
             # Full inventory discounts strong bottles too; otherwise it hoards
             # Strength/Dexterity even when the next drop is likely to be wasted.
             # A consumed bottle creates a real slot. A guaranteed refill lowers its
