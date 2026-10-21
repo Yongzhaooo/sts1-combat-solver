@@ -913,7 +913,8 @@ Action Actions::WarcryAction() {
 Action Actions::TimeEaterPlayCardQueueItem(const CardQueueItem &x) {
     return {[=] (BattleContext &bc) {
         auto item = x;
-        item.exhaustOnUse |= bc.curCardQueueItem.card.doesExhaust();
+        // Java UseCardAction: the cleared card's own exhaust / exhaustOnUseOnce, not the card whose use ended the turn.
+        item.exhaustOnUse |= item.card.doesExhaust();
         item.triggerOnUse = false;
         bc.curCardQueueItem = item;
         bc.onAfterUseCard();
