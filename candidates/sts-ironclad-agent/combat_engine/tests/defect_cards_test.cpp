@@ -684,6 +684,9 @@ int main() {
         }
         check(bc.cards.cardsInHand == 1 && bc.cards.hand[0].getType() == CardType::POWER,
               "Creative AI should add a Power card at turn start");
+        // CreativeAIPower.atStartOfTurn never lowers the cost; only White Noise does.
+        check(bc.cards.hand[0].costForTurn == bc.cards.hand[0].cost,
+              "Creative AI should add the card at its printed cost");
     }
     {
         // Thunder Strike: one random hit per Lightning orb channeled this combat.
@@ -801,7 +804,7 @@ int main() {
         check(bc.cards.hand[0].cost == 3, "a Power play should lower Force Field cost by 1");
     }
     {
-        // Hello World: at turn start add a random Common Skill, free this turn.
+        // Hello World: at turn start add a random Common card at its printed cost.
         BattleContext bc = freshBattle();
         playCard(bc, CardId::HELLO_WORLD);
         check(bc.player.hasStatus<PS::HELLO_WORLD>(), "Hello World should apply its power");
@@ -811,7 +814,9 @@ int main() {
         }
         check(bc.cards.cardsInHand == 1, "Hello World should add one card");
         check(bc.cards.hand[0].getType() == CardType::SKILL, "Hello World should add a Skill");
-        check(bc.cards.hand[0].costForTurn == 0, "Hello World should make the card free");
+        // HelloPower.atStartOfTurn never lowers the cost; only White Noise does.
+        check(bc.cards.hand[0].costForTurn == bc.cards.hand[0].cost,
+              "Hello World should add the card at its printed cost");
     }
 
     {
@@ -840,11 +845,18 @@ int main() {
     }
 
     {
-        // Self Repair: stores the combat-end heal amount.
+        // Self Repair: stores the combat-end heal amount, and the projection the search
+        // scores with has to include it. It did not, so the search saw the card as
+        // worthless and almost never played it.
         BattleContext bc = freshBattle();
         playCard(bc, CardId::SELF_REPAIR);
         check(bc.player.getStatus<PS::SELF_REPAIR>() == 7,
               "Self Repair should store a 7 HP combat-end heal");
+        bc.player.curHp = bc.player.maxHp - 20;
+        const auto relicOnly = bc.victoryHpRelics.project(bc.player.curHp, bc.player.maxHp);
+        const auto projected = bc.victoryHp();
+        check(projected.curHp == std::min(relicOnly.curHp + 7, bc.player.maxHp),
+              "the post-combat projection should include the Self Repair heal");
     }
 
     {

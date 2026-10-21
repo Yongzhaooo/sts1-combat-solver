@@ -83,6 +83,11 @@ class Comparator:
             misc = raw["base_damage"] - 8
         elif name == "RITUAL_DAGGER":
             misc = raw["base_damage"]
+        elif name == "STEAM_BARRIER":
+            # SteamBarrier.java drops its own baseBlock by 1 on every play and leaves
+            # misc at 0; the engine keeps that count in specialData. build_snapshot
+            # derives the same value, so this only mirrors it for the comparison.
+            misc = (8 if raw["upgrades"] else 6) - raw["base_block"]
         return {"id": name, "upgrades": raw["upgrades"], "cost": raw["cost"],
                 "base_cost": raw["base_cost"], "free_to_play_once": raw["free_to_play_once"],
                 "special_data": misc}

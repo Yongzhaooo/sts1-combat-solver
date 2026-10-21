@@ -33,7 +33,7 @@ source=source.replace(terminal,'''    if (overlayAcceptTerminal(endState, action
         outcomePlayerHp = terminalHp;
     }
 '''+terminal,1)
-victory='    const auto hp = bc.victoryHpRelics.project(bc.player.curHp, bc.player.maxHp);'
+victory='    const auto hp = bc.victoryHp();'
 assert source.count(victory)==1
 source=source.replace(victory,'''    // Terminal fight: survival dominates; among wins prefer fewer turns only.
     if (overlayHeartFight()) return 100000000.0 - 1000.0 * bc.turn;

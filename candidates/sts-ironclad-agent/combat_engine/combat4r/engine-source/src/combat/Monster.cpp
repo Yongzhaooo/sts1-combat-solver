@@ -390,15 +390,19 @@ void Monster::attackedUnblockedHelper(BattleContext &bc, int damage, DamageType 
         damage = 5;
     }
 
-    if (bc.player.hasStatus<PS::ENVENOM>()) {
+    if (bc.player.hasStatus<PS::ENVENOM>() && type == DamageType::NORMAL) {
+        // EnvenomPower.onAttack requires a NORMAL DamageInfo, so the THORNS-typed
+        // damage an orb deals never applies its poison.
         bc.addToTop( Actions::DebuffEnemy<MS::POISON>(this->idx, bc.player.getStatus<PS::ENVENOM>()) );
     }
 
     if (hasStatus<MS::INVINCIBLE>()) {
+        // InvinciblePower.onAttackedToChangeDamage caps every type, orbs included.
         damage = std::min(damage, getStatus<MS::INVINCIBLE>());
         setStatus<MS::INVINCIBLE>(getStatus<MS::INVINCIBLE>() - damage);
 
-    } else if (hasStatus<MS::PLATED_ARMOR>()) {
+    } else if (hasStatus<MS::PLATED_ARMOR>() && type == DamageType::NORMAL) {
+        // PlatedArmorPower.wasHPLost skips HP_LOSS and THORNS.
         decrementStatus<MS::PLATED_ARMOR>();
         if(!hasStatus<MS::PLATED_ARMOR>() && id == MonsterId::SHELLED_PARASITE) {
             setMove(MMID::SHELLED_PARASITE_STUNNED);
@@ -485,7 +489,9 @@ void Monster::attacked(BattleContext &bc, int damage, DamageType type) {
     damage -= block;
     block = std::max(0, block - tempDamage);
 
-    if (damage > 0 && hasStatus<MS::ANGRY>()) {
+    if (damage > 0 && type == DamageType::NORMAL && hasStatus<MS::ANGRY>()) {
+        // AngryPower.onAttacked skips HP_LOSS and THORNS, so orb damage never raises
+        // the monster's Strength.
         bc.addToTop(Actions::BuffEnemy<MS::STRENGTH>(idx, getStatus<MS::ANGRY>()));
     }
 
@@ -493,9 +499,9 @@ void Monster::attacked(BattleContext &bc, int damage, DamageType type) {
         bc.addToBot(Actions::DebuffEnemy<MS::VULNERABLE>(idx, 2, false) );
     }
 
-    // Thorns is an onAttacked hook, including zero and fully blocked hits.
-    // HP-loss hooks below still require damage to pass the defender's block.
-    if (hasStatus<MS::THORNS>()) {
+    // ThornsPower.onAttacked fires for a zero or fully blocked hit too, but it skips
+    // THORNS and HP_LOSS: an orb attack does not set the monster's thorns off.
+    if (type == DamageType::NORMAL && hasStatus<MS::THORNS>()) {
         bc.addToTop(Actions::DamagePlayer(getStatus<MS::THORNS>()));
     }
     if (damage > 0) {

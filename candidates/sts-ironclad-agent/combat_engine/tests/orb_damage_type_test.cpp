@@ -157,6 +157,48 @@ int main() {
               "the bomb should deal its full damage");
     }
 
+    {
+        // Four more hooks the game gates on the DamageInfo type, so the THORNS damage an
+        // orb deals must not set them off: AngryPower.onAttacked and ThornsPower.onAttacked
+        // skip THORNS, PlatedArmorPower.wasHPLost skips THORNS and HP_LOSS, and
+        // EnvenomPower.onAttack requires NORMAL. Each case asks for one power only: the
+        // engine stores the "unique" monster powers in a single slot.
+        BattleContext angry = freshBattle(0);
+        angry.monsters.arr[0].buff<MS::ANGRY>(1);
+        Actions::AttackEnemy(0, 5, DamageType::THORNS).actFunc(angry);
+        drain(angry);
+        check(!angry.monsters.arr[0].hasStatus<MS::STRENGTH>(),
+              "THORNS damage must not raise Angry's Strength");
+        BattleContext angryNormal = freshBattle(0);
+        angryNormal.monsters.arr[0].buff<MS::ANGRY>(1);
+        Actions::AttackEnemy(0, 5, DamageType::NORMAL).actFunc(angryNormal);
+        drain(angryNormal);
+        check(angryNormal.monsters.arr[0].getStatus<MS::STRENGTH>() == 1,
+              "a normal hit should still raise Angry's Strength");
+
+        BattleContext thorns = freshBattle(0);
+        thorns.monsters.arr[0].buff<MS::THORNS>(3);
+        const int hpBefore = thorns.player.curHp;
+        Actions::AttackEnemy(0, 5, DamageType::THORNS).actFunc(thorns);
+        drain(thorns);
+        check(thorns.player.curHp == hpBefore,
+              "THORNS damage must not set off the monster's own Thorns");
+
+        BattleContext plated = freshBattle(0);
+        plated.monsters.arr[0].buff<MS::PLATED_ARMOR>(4);
+        Actions::AttackEnemy(0, 5, DamageType::THORNS).actFunc(plated);
+        drain(plated);
+        check(plated.monsters.arr[0].getStatus<MS::PLATED_ARMOR>() == 4,
+              "THORNS damage must not spend Plated Armor");
+
+        BattleContext envenom = freshBattle(0);
+        envenom.player.buff<PS::ENVENOM>(2);
+        Actions::AttackEnemy(0, 5, DamageType::THORNS).actFunc(envenom);
+        drain(envenom);
+        check(!envenom.monsters.arr[0].hasStatus<MS::POISON>(),
+              "THORNS damage must not apply Envenom's poison");
+    }
+
     std::cout << "Orb damage type holds\n";
     } catch (const std::exception &error) {
         std::cout << error.what() << "\n";

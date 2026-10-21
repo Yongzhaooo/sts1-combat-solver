@@ -753,7 +753,7 @@ static double escapedThiefPenaltyHp(const BattleContext &bc, int victoryHp) {
 
 double search::BattleScumSearcher2::evaluateEndState4r(const BattleContext &bc, int initialMaxHp) {
     if (bc.outcome != Outcome::PLAYER_VICTORY) return evaluateEndState4q(bc);
-    const auto hp = bc.victoryHpRelics.project(bc.player.curHp, bc.player.maxHp);
+    const auto hp = bc.victoryHp();
     // Keep the existing Feed, potion and turn values, then account for escaped gold.
     // The projection cannot create rewards, enter another room or consume RNG.
     return evaluateEndState4q(bc) + 100.0 * (hp.curHp - bc.player.curHp)

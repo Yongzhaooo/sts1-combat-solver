@@ -57,17 +57,19 @@ Action Actions::AllForOneAction() {
     }};
 }
 
-Action Actions::CreateRandomCardInHandAction(CardType type, bool commonOnly) {
+Action Actions::CreateRandomCardInHandAction(CardType type, bool commonOnly, bool zeroCost) {
     return {[=] (BattleContext &bc) {
-        // Hello World / Creative AI / White Noise all add one random card of a given
-        // type, free to play this turn; Hello World also restricts the pool to
-        // Common cards, which is the only difference between the three.
+        // Hello World and Creative AI add the card at its printed cost: neither
+        // HelloPower.atStartOfTurn nor CreativeAIPower.atStartOfTurn touches the cost,
+        // and MakeTempCardInHandAction never zeroes one. Only WhiteNoise.java calls
+        // setCostForTurn(0) on what it adds, hence zeroCost. commonOnly restricts the
+        // pool to Common cards, which is what separates Hello World from the others.
         const auto cid = commonOnly
                 ? getRandomClassCardOfTypeAndRarity(
                         bc.cardRandomRng, bc.player.cc, type, CardRarity::COMMON)
                 : getTrulyRandomCardInCombat(bc.cardRandomRng, bc.player.cc, type);
         CardInstance generated = bc.createGeneratedCard(cid);
-        generated.setCostForTurn(0);
+        if (zeroCost) generated.setCostForTurn(0);
         bc.addToTop(Actions::MakeTempCardInHand(generated));
     }};
 }

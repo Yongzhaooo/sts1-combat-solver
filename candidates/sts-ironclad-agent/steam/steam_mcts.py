@@ -65,6 +65,9 @@ PLAYER_POWER_ALIASES = {
     "WaveOfTheHandPower": "WAVE_OF_THE_HAND",
     "EnergizedBlue": "ENERGIZED",
     "Hello": "HELLO_WORLD",
+    # Two Defect powers whose game ids differ from the engine's names.
+    "Heatsink": "HEATSINKS",
+    "Repair": "SELF_REPAIR",
 }
 MONSTER_POWER_ALIASES = {
     "Anger": "ENRAGE",
@@ -317,6 +320,11 @@ def card_snapshot(card):
         result["misc"] = int(card["base_damage"]) - 8
     if key == "RITUAL_DAGGER" and "base_damage" in card:
         result["misc"] = int(card["base_damage"])
+    if key == "STEAM_BARRIER" and "base_block" in card:
+        # SteamBarrier.java drops its own baseBlock by 1 on every play
+        # (ModifyBlockAction) and leaves misc at 0; the engine carries that count in
+        # misc/specialData instead, so it has to be derived from the block.
+        result["misc"] = (8 if int(card.get("upgrades") or 0) else 6) - int(card["base_block"])
     return result
 
 
@@ -599,8 +607,13 @@ def build_snapshot(game_state, counters=None):
             "energy": int(player.get("energy") or 0),
             "energy_per_turn": int(combat.get("energy_per_turn") or 3) + berserk_energy,
             "card_draw_per_turn": int(combat.get("card_draw_per_turn", 5 - int(any(p.get("id")=="Draw Reduction" for p in player_powers)))) ,
+            # The engine folds two game powers into dedicated fields rather than
+            # importing them as statuses: Berserk's energy, and the DrawPower that
+            # Machine Learning applies (the engine tracks it as card_draw_per_turn,
+            # and the game already reports the raised value there). CommunicationMod
+            # lists both among the player's powers, so skip them by their game ids.
             "powers": [power_snapshot(power, "player") for power in player_powers
-                       if (power.get("id") or power.get("name")) != "Berserk"],
+                       if (power.get("id") or power.get("name")) not in ("Berserk", "Draw")],
             # CommunicationMod always exports the orb list, empty slots included.
             "orb_slots": len(player.get("orbs") or []),
             "orbs": [orb_snapshot(orb) for orb in player.get("orbs") or []],

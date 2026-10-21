@@ -728,8 +728,8 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 break;
 
             case PS::CREATIVE_AI:
-                // CreativeAiPower.atStartOfTurn: add one random Power card to hand,
-                // free to play this turn (one per stack).
+                // CreativeAiPower.atStartOfTurn: add one random Power card to hand per
+                // stack, at its printed cost (the power never lowers it).
                 for (int i = 0; i < pair.second; ++i) {
                     bc.addToBot(Actions::CreateRandomCardInHandAction(CardType::POWER));
                 }
@@ -760,8 +760,9 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 break;
 
             case PS::HELLO_WORLD:
-                // HelloWorldPower.atStartOfTurn: one random Common Skill, free this
-                // turn, per stack. It is a permanent power, not a one-shot.
+                // HelloPower.atStartOfTurn: one random Common card per stack, at its
+                // printed cost (the power never lowers it). It is a permanent power,
+                // not a one-shot.
                 for (int i = 0; i < pair.second; ++i) {
                     bc.addToBot(Actions::CreateRandomCardInHandAction(CardType::SKILL, true));
                 }

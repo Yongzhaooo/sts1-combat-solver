@@ -52,9 +52,11 @@ namespace sts {
         static Action SunderAction(int idx, int damage); // attack; +3 energy when the hit kills
         static Action FissionAction(bool upgraded); // remove (evoke when upgraded) all orbs: +1 energy/card each
         static Action RipAndTearAction(int damage, int times); // one random-target hit per time
-        // Random card of the player's class, free this turn. commonOnly restricts the
-        // pool to Common cards (Hello World); otherwise any rarity is allowed.
-        static Action CreateRandomCardInHandAction(CardType type, bool commonOnly = false);
+        // Random card of the player's class at its printed cost. commonOnly restricts the
+        // pool to Common cards (Hello World); zeroCost is only for White Noise, whose
+        // Java sets the generated card's turn cost to 0.
+        static Action CreateRandomCardInHandAction(CardType type, bool commonOnly = false,
+                                                   bool zeroCost = false);
         static Action AllForOneAction(); // return every 0-cost discard pile card to hand
 
         // Per-target damage is captured when the card is used.

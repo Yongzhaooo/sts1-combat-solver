@@ -7,7 +7,9 @@ MONSTER_BOOL={'BARRICADE','MINION','PAINFUL_STABS','REGROW','SHIFTING','STASIS'}
 def player_expected(g):
  c=g['combat_state'];out={};bombs=[0,0,0]
  for p in c['player']['powers']:
-  if p['id']=='Berserk':continue
+  # Berserk and the DrawPower Machine Learning applies are folded into
+  # energy_per_turn and card_draw_per_turn below, not imported as statuses.
+  if p['id'] in ('Berserk','Draw'):continue
   snap=bridge.power_snapshot(p,'player');key=sts.PlayerStatus(snap['id']).name
   if key=='THE_BOMB':bombs[snap['bomb_turns']-1]+=snap['amount'];continue
   if snap['amount'] or key=='PANACHE':out[key]=1 if key in PLAYER_BOOL else snap['amount']
