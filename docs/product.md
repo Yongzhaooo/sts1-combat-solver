@@ -1,8 +1,8 @@
-# STS1 Combat Solver product spec: four characters
+# STS1 Combat Solver product spec
 
 Last confirmed: not yet confirmed
 
-This spec states the destination for the four-character version. The released coverage is in the [README](../README.md); the structure and route are in [Architecture](architecture.md); the current simulator inventory is in [Multi-character scope](multi-character.md).
+This spec states the destination for the four-character version and the player's control modes. The released coverage is in the [README](../README.md); the structure and route are in [Architecture](architecture.md); the current simulator inventory is in [Multi-character scope](multi-character.md).
 
 ## Purpose
 
@@ -35,6 +35,17 @@ Players of *Slay the Spire 1* install one local Mod and get bounded combat plann
 - A contributor can build the native part, run its tests and pass public CI without owning the game. Java-side checks and live play need the contributor's own copy of the game, ModTheSpire and BaseMod.
 - [CONTRIBUTING](../CONTRIBUTING.md) states the code and CI requirements; [Truth calibration](truth-calibration.md) states the case format and the adapter protocol.
 
+### Play modes and player control
+
+Player request (七月流火, 2026-10-21), cleaned; every item is proposed.
+
+- Three modes map to the existing `RunMode`: AI autopilot (route, rewards and fights automatic), Combat auto (the player owns route, rewards, shops and events; fights run automatically) and Manual (the player approves each fight's plan). The mode is chosen at run start and can be switched from the panel; F9 always stops and returns to Manual. Switching never advances an action by itself (proposed).
+- Search tier (Standard, High-speed, Streak) is independent of the mode; changing one leaves the other unchanged (proposed).
+- In Combat auto, a "no potions" switch makes the solver search and execute only potion-free lines. The potion slots after the fight equal those before it. When no potion-free line wins, execution stops before the first action and the panel says so; it never falls back to a potion line (proposed).
+- In Manual, while the player holds potions, the panel lists the plans before any action: the potion-free line always, plus potion lines, each with predicted HP loss, win or not, and the bottles used. Listing executes nothing and consumes nothing. Today the list appears only when the potion-free line loses HP or fails and a potion line is available (proposed).
+- After the player approves a plan, the solver plays the fight under that plan's potion constraint. A divergence from the prediction re-plans under the same constraint without asking again; an approved potion-free plan never drinks a bottle (proposed).
+- The player can restrict the usable bottles for a fight, and the listed plans respect it. The search already accepts potion permissions; the panel has no control for it (proposed).
+
 ## Non-goals
 
 - Distributing the game JAR, decompiled game source, or any truth engine (the maintainer's or an upstream one), including through fixtures or patches.
@@ -42,9 +53,15 @@ Players of *Slay the Spire 1* install one local Mod and get bounded combat plann
 - Changing Ironclad's search objective or outside-combat rules as part of four-character work.
 - Supporting Mods that change combat rules.
 - Full autopilot for the new characters in their first supported release (proposed; see Open questions).
+- Run win rate as the acceptance measure for play-mode or panel changes. A run's result also depends on routing, rewards and the player; panel changes are accepted by the observable behavior above (proposed).
 
 ## Open questions
 
 - Order after Silent: Watcher or Defect first. Blocks the order of the second and third character milestones.
 - Whether the new characters get full autopilot, and with what evaluation. Blocks outside-combat rule and model work for them.
 - Size and composition of each character's acceptance set. Blocks turning on that character's support switch.
+- Scope of the Combat auto "no potions" switch: this fight or the whole run, and whether it covers elites and Bosses. Blocks where the switch lives and whether it is saved.
+- Which constraints Manual plans vary beyond potion use (relic counters, Feed, fewest turns, keeping a bottle). Each adds a search before the fight starts. Blocks the size of the Manual plan list.
+- What approval covers: the whole fight before it starts (today) or each turn. Blocks the Manual interaction and any new keys.
+- Whether a re-plan after a divergence needs a new approval. Blocks the Manual execution flow.
+- Who implements the play-mode changes: an outside contributor or the maintainer. Blocks whether a panel state and protocol guide is written for contributors.
