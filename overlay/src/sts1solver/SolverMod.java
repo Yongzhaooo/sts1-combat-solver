@@ -213,6 +213,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         return warning;
     }
 
+    // The export button stays in the header in every panel state (F6 does the same).
+    private float exportLeft(float w) { return collapsed ? w-108 : w-196; }
+    private float exportWidth() { return collapsed ? 60 : 72; }
+
     private float panelWidth() { return pilot.cardShown() ? OutsidePilot.PILOT_WIDTH : collapsed ? 300 : PANEL_WIDTH; }
     private float panelHeight() { return pilot.cardShown() ? pilot.cardHeight() : collapsed ? 48 : PANEL_HEIGHT; }
 
@@ -1026,7 +1030,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             boolean body=!collapsed && !settingsOpen, list=body && lx>=ROUTE_LEFT && ly>=BODY_TOP && ly<BODY_TOP+BODY_ROWS*BODY_ROW;
             int row=(int)((ly-BODY_TOP)/BODY_ROW);
             if (ly < 42) {
-                if (!collapsed && lx >= w-118 && lx < w-54) settingsOpen=!settingsOpen;
+                if (lx >= exportLeft(w) && lx < exportLeft(w)+exportWidth()) exports.exportRun(backend);
+                else if (!collapsed && lx >= w-118 && lx < w-54) settingsOpen=!settingsOpen;
                 else if (lx > w-47) { collapsed=!collapsed; autoFolded=false; }
                 else canvas.startDrag(mx,my);
             } else if (!collapsed && settingsOpen && ly>=SETTINGS_TOP && ly<SETTINGS_TOP+4*SETTINGS_PITCH && (ly-SETTINGS_TOP)%SETTINGS_PITCH<30) {
@@ -1216,8 +1221,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         float w=panelWidth();
         canvas.box(sb,0,0,w,panelHeight(),BORDER);
         canvas.box(sb,1,1,w-2,panelHeight()-2,BACKGROUND);
-        canvas.label(sb,I18n.t("战斗求解器"),16,collapsed?7:10,collapsed?240:w-150,collapsed?.95f:1.1f,Color.WHITE);
+        canvas.label(sb,I18n.t("战斗求解器"),16,collapsed?7:10,exportLeft(w)-24,collapsed?.95f:1.1f,Color.WHITE);
         canvas.label(sb,collapsed?"＋":"－",w-36,collapsed?14:10,26,1,ACCENT);
+        canvas.button(sb,exportLeft(w),collapsed?6:8,exportWidth(),collapsed?22:28,SURFACE);
+        canvas.label(sb,I18n.t("导出"),exportLeft(w)+8,collapsed?8:12,exportWidth()-12,collapsed?.72f:.85f,ACCENT);
         if (collapsed) {
             canvas.label(sb,error.isEmpty()?status:I18n.backend(error),20,29,240,.65f,error.isEmpty()?MUTED:DANGER);
             sb.setColor(Color.WHITE); canvas.cursorOnTop(sb); return;
@@ -1408,8 +1415,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                         ? count(row.get("transitions").getAsLong())+I18n.t("步") : count(row.get("simulations").getAsLong())+I18n.t("次"))
                     +" · "+I18n.backend(row.get("name").getAsString());
                 boolean ready=row.has("ready") && row.get("ready").getAsBoolean();
+                String revival=ready?revivalWarning(row):"";
+                if(!revival.isEmpty()) line=revival+" · "+line;
                 if(ready) canvas.button(sb,ROUTE_LEFT,BODY_TOP+i*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE); // finished routes can be clicked
-                canvas.label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+i*BODY_ROW,textWidth,.85f,ready?ACCENT:MUTED);
+                canvas.label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+i*BODY_ROW,textWidth,.85f,!revival.isEmpty()?DANGER:ready?ACCENT:MUTED);
             }
         } else if (!foresight.isEmpty()) {
             scroll=Math.max(0,Math.min(scroll,Math.max(0,foresight.size()-BODY_ROWS)));
@@ -1435,7 +1444,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private void pilotInput(float lx, float ly, boolean click, float mx, float my) {
         if(pilot.listInput(ly,click) || !click)return;
         if(ly<40) {
-            if(lx>=OutsidePilot.PILOT_WIDTH-40 && !pilot.prompt) { // hide the card; the full panel returns, without suggestions.
+            if(lx>=OutsidePilot.EXPORT_LEFT && lx<OutsidePilot.EXPORT_LEFT+OutsidePilot.EXPORT_WIDTH) exports.exportRun(backend);
+            else if(lx>=OutsidePilot.PILOT_WIDTH-40 && !pilot.prompt) { // hide the card; the full panel returns, without suggestions.
                 if(pilot.mode==2)stopAll();
                 pilot.close();
             } else canvas.startDrag(mx,my);
