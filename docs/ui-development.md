@@ -39,7 +39,7 @@
 下面这些地方没有拆开，是有意的。改动时照现状写，不要顺手“解耦”；确实要拆，先开 issue 说明终态。
 
 - **模式切换留在 `SolverMod`。** `stopAll()`、`chooseOutsideMode()`、`startAgentMode()`、`fail()` 要同时改局外（`OutsidePilot`）和战斗自动执行的状态，必须一次改完，所以放在两者之上的 `SolverMod` 里。`OutsidePilot` 只提供各自那一半（`stop`、`select`、`pause`、`close`）。
-- **战斗状态由三处共用。** `busy`、`result`、`auto`、`turnOnly`、`paused`、`branchPicker`、`branchConfirmed`、`heldThisFight` 等字段，按键（`input`、`branchKeyboard`）、绘制（`renderCombatBody`）和后台回复处理（`update`）都要读写。拆开需要先设计一个战斗状态对象和它的规则，不是搬代码能解决的。
+- **战斗状态由三处共用。** `busy`、`result`、`auto`、`paused`、`branchPicker`、`branchConfirmed`、`heldThisFight` 等字段，按键（`input`、`branchKeyboard`）、绘制（`renderCombatBody`）和后台回复处理（`update`）都要读写。拆开需要先设计一个战斗状态对象和它的规则，不是搬代码能解决的。
 - **`OutsidePilot` 的部分字段是包内可见的。** `SolverMod` 直接读写 `pilot.mode`、`pilot.notice`、`pilot.packet`、`pilot.scores`、`pilot.confirm`，`AgentBridge` 直接写 `pilot.chosen` 和 `pilot.confirm`。依赖关系看得见，但没有封装成方法。
 - **局外反向调用只走 `OutsidePilot.Host`。** 局外需要战斗这一侧时，只能用这四个方法：读局面（`capture`）、写诊断（`record`）、新一局开始（`runStarted`）、局外失败时停掉战斗自动（`failed`）。需要更多时扩展这个接口，不要把 `SolverMod` 传进去。
 - **设置还在 `SolverMod` 里。** 读写 `SpireConfig` 的默认值和各个开关（构造函数和 `saveSetting`、`saveAutomation` 等），以及奖励界面的自动换药（`updatePotionRewards`），都还没有单独成类。这是下一步可以拆的地方。
@@ -52,9 +52,8 @@
 |---|---|
 | `pilot.mode` | 局外（`OutsidePilot.mode`）：0 不给建议，1 每步给建议、玩家确认，2 AI全自动 |
 | `runAuto` | 整局的战斗都自动打（战斗全自动和 AI全自动） |
-| `heldThisFight` | 玩家用“执行一步”“执行本回合”或 F10 接管了这一场；下一场照常自动。`fightAuto()` = `runAuto` 且未接管 |
+| `heldThisFight` | 玩家用“执行一步”或 F10 接管了这一场；下一场照常自动。`fightAuto()` = `runAuto` 且未接管 |
 | `auto` | 当前这场正在自动执行 |
-| `turnOnly` | 只自动执行到本回合结束 |
 | `paused` | 自动执行被暂停（F9 或出错） |
 | `busy` | 正在等后台回复 |
 | `result` | 后台最近一次回复的路线（JSON） |
