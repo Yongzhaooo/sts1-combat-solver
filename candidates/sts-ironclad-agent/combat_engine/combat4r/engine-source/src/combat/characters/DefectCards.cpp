@@ -537,8 +537,10 @@ namespace sts {
                 return true;
 
             case CardId::BULLSEYE:
-                // Bullseye.java: LockOnPower makes orb damage hit 50% harder.
-                bc.addToBot(Actions::DebuffEnemy<MS::LOCK_ON>(t, up ? 2 : 1));
+                // LockOn.java: 8 damage (11 upgraded), then 2 Lock-On (3 upgraded).
+                // LockOnPower makes orb damage against that target hit 50% harder.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 11 : 8)));
+                bc.addToBot(Actions::DebuffEnemy<MS::LOCK_ON>(t, up ? 3 : 2));
                 return true;
 
             case CardId::REBOOT: {
