@@ -34,13 +34,23 @@ final class RunExports {
 
     RunExports() {
         boolean recording = false;
+        defectTestBuild = false;
         try (InputStream stream = getClass().getResourceAsStream("/solver.properties")) {
             Properties build = new Properties();
             if (stream != null) build.load(stream);
             recording = Boolean.parseBoolean(build.getProperty("research_recording", "false"));
+            defectTestBuild = Boolean.parseBoolean(build.getProperty("defect_test", "false"));
         } catch (IOException failure) { System.err.println("[STS1Solver] " + failure); }
         research = recording;
     }
+
+    /**
+     * True only in builds produced by {@code overlay/build.py --defect-test}, which also point
+     * {@code backend=} at {@code overlay/backend_defect_test.py}. The Defect is still work in
+     * progress, so it stays out of ordinary releases; {@code solver.properties} is a build
+     * constant, so whichever instance reads it last still leaves the right answer here.
+     */
+    static boolean defectTestBuild;
 
     static Path dataDirectory(String name) throws IOException {
         Properties properties = new Properties();

@@ -22,9 +22,15 @@ def main():
     parser.add_argument('--basemod', type=Path, help='Override BaseMod.jar location')
     parser.add_argument('--bundled-windows', action='store_true', help='Use the existing Windows release runtime')
     parser.add_argument('--bundled', action='store_true', help='Use the portable Windows/macOS Workshop runtimes')
+    parser.add_argument('--defect-test', action='store_true',
+                        help='TEST BUILD ONLY: point the backend at overlay/backend_defect_test.py '
+                             '(regenerate it first with tools/make_test_backend.py)')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     here = root / 'overlay'
+    if args.defect_test and not (here / 'backend_defect_test.py').is_file():
+        parser.error('--defect-test needs ' + str(here / 'backend_defect_test.py')
+                     + '; run tools/make_test_backend.py first')
     game = args.game.expanduser().resolve()
     game_jar = game / 'desktop-1.0.jar'
     if not game_jar.is_file():
@@ -59,10 +65,13 @@ def main():
         shutil.copy2(root / 'candidates/sts-ironclad-agent/LICENSE', licenses / 'sts-ironclad-agent.txt')
         properties = {'runtime': 'bundled' if args.bundled else 'windows-bundled' if args.bundled_windows else 'native',
                       'research_recording': 'false', 'recorder_build': datetime.now(timezone.utc).isoformat()}
+        if args.defect_test:
+            properties['defect_test'] = 'true'
         if not (args.bundled_windows or args.bundled):
             # Do not resolve the venv interpreter symlink: that would lose its environment.
             properties.update(python=Path(sys.executable).absolute().as_posix(),
-                              backend=(here / 'backend.py').as_posix())
+                              backend=((here / 'backend_defect_test.py') if args.defect_test
+                                       else (here / 'backend.py')).as_posix())
         (classes / 'solver.properties').write_text(''.join(
             key + '=' + property_value(value) + '\n' for key, value in properties.items()), encoding='ascii')
         jar = staging / 'STS1CombatSolver.jar'

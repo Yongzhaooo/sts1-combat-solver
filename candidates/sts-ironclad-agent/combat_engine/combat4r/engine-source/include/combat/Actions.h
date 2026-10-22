@@ -116,6 +116,7 @@ namespace sts {
         static Action UnnamedEndOfTurnAction();
         static Action MonsterStartTurnAction();
         static Action DoubleEnergy(); // DoubleEnergyAction: double the current energy
+        static Action EmptyEnergy(); // X cards: AbstractCard.useCard() zeroes the energy pool
         static Action MultiCastAction(int times); // MulticastAction: evoke the oldest orb N times, consume once
         static Action TriggerStartOfTurnOrbsAction();
         static Action TriggerOrbPassiveAction(int orbIdx); // Loop: one orb's full passive
@@ -151,7 +152,7 @@ namespace sts {
         static Action DiscoveryAction(CardType type, int amount); // attack potion, skill potion
         static Action InfernalBladeAction();
         static Action JackOfAllTradesAction(bool upgraded);
-        static Action TransmutationAction(bool upgraded, int energy, bool useEnergy);
+        static Action TransmutationAction(bool upgraded, int energy, bool freeToPlay);
         static Action ViolenceAction(int count);
 
         static Action BetterDiscardPileToHandAction(int amount, CardSelectTask task); // used by hologram and liquid memories
@@ -193,7 +194,7 @@ namespace sts {
         static Action SecondWindAction(int blockPerCard);
         static Action SeverSoulExhaustAction();
         static Action SpotWeaknessAction(int target, int strength); // Spot Weakness
-        static Action WhirlwindAction(DamageMatrix damageMatrix, int energy, bool useEnergy);
+        static Action WhirlwindAction(DamageMatrix damageMatrix, int energy, bool freeToPlay);
 
     };
 

@@ -3,6 +3,7 @@
 #include "sim/search/Action.h"
 #include <iostream>
 #include <stdexcept>
+#include <vector>
 
 using namespace sts;
 static void check(bool value, const char *why) {
@@ -405,6 +406,19 @@ int main() {
         }
         check(hp - bc.monsters.arr[0].curHp == 3, "Loop should trigger the lightning passive for 3");
         check(bc.player.orbs.size() == 1, "Loop should not consume the orb");
+
+        // Loop.java upgradeMagicNumber(1): Loop+ applies two stacks, so the passive
+        // fires twice. A live run caught the engine applying one either way.
+        BattleContext plus = freshBattle();
+        playCard(plus, CardId::LOOP, 1);
+        check(plus.player.getStatus<PS::LOOP>() == 2, "Loop+ should apply two stacks");
+        const int plusHp = plus.monsters.arr[0].curHp;
+        plus.player.applyStartOfTurnPowers(plus);
+        for (int i = 0; i < 8 && !plus.actionQueue.isEmpty(); ++i) {
+            plus.actionQueue.popFront()(plus);
+        }
+        check(plusHp - plus.monsters.arr[0].curHp == 6,
+              "Loop+ should trigger the lightning passive twice");
     }
     {
         // Electrodynamics: lightning hits all enemies (passive and evoke), no target roll.
@@ -952,6 +966,76 @@ int main() {
         check(bc.player.orbs.size() == 1 && bc.player.orbs[0].type == Orb::LIGHTNING,
               "Zap+ should channel one Lightning orb");
         check(bc.player.orbs[0].evokeBonus == 0, "Zap+ should not add an evoke bonus");
+    }
+
+    {
+        // Reboot: ShuffleAllAction queues PutOnDeckAction(p, p, 99, true) and then
+        // shuffles the discard pile. With isRandom set, PutOnDeckAction pulls
+        // hand.getRandomCard(cardRandomRng) (one random(hand.size()-1) per card) and
+        // moves it with Soul.onToDeck -> drawPile.addToRandomSpot, which inserts at
+        // random(size-1) - appending only when the pile is empty. So the hand leaves
+        // in random order, never in hand order. The played Reboot is still in hand
+        // when ShuffleAllAction is constructed, so it is transferred too.
+        //
+        // cardRandomRng is reseeded so the picks are fixed and repeatable.
+        BattleContext bc = freshBattle();
+        bc.player.energy = 3;
+        bc.cardRandomRng = sts::Random(7);
+        bc.cards.createTempCardInHand(CardInstance(CardId::DUALCAST));
+        bc.cards.createTempCardInHand(CardInstance(CardId::DEFEND_BLUE));
+        bc.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
+        bc.cards.moveToDiscardPile(CardInstance(CardId::ZAP));
+        bc.cards.moveToDiscardPile(CardInstance(CardId::GLACIER));
+
+        playCard(bc, CardId::REBOOT);
+        check(bc.cards.cardsInHand == 4, "Reboot should draw 4 cards");
+        check(bc.cards.discardPile.size() == 2,
+              "the discard pile is only shuffled, never moved into the draw pile");
+        check(bc.cards.drawPile.empty(),
+              "the three hand cards and the one pile card are all drawn");
+    }
+    {
+        // Reboot puts the hand into the draw pile at *random* spots, so the order the
+        // hand is drained in is not the hand order. Comparing two seeds proves the
+        // cardRandomRng actually drives it: the drawn hands must differ.
+        auto drawWithSeed = [](std::uint64_t seed) {
+            BattleContext bc = freshBattle();
+            bc.player.energy = 3;
+            bc.cardRandomRng = sts::Random(seed);
+            bc.cards.createTempCardInHand(CardInstance(CardId::DUALCAST));
+            bc.cards.createTempCardInHand(CardInstance(CardId::DEFEND_BLUE));
+            bc.cards.createTempCardInHand(CardInstance(CardId::STRIKE_BLUE));
+            bc.cards.createTempCardInHand(CardInstance(CardId::ZAP));
+            playCard(bc, CardId::REBOOT, 1);
+            std::vector<CardId> seen;
+            for (int i = 0; i < bc.cards.cardsInHand; ++i) {
+                seen.push_back(bc.cards.hand[i].getId());
+            }
+            return seen;
+        };
+        check(drawWithSeed(1) != drawWithSeed(2),
+              "Reboot should draw the hand in a cardRandomRng-driven order");
+        check(drawWithSeed(1) == drawWithSeed(1),
+              "Reboot should be deterministic for a given cardRandomRng state");
+    }
+    {
+        // Reboot+: draws 6. Only 4 cards exist after the hand transfer minus the
+        // drawn ones, so the draw runs the discard pile through EmptyDeckShuffle,
+        // which consumes a second shuffleRng draw and feeds the remaining cards.
+        BattleContext bc = freshBattle();
+        bc.player.energy = 3;
+        bc.cards.createTempCardInHand(CardInstance(CardId::DEFEND_BLUE));
+        bc.cards.createTempCardInHand(CardInstance(CardId::DEFEND_BLUE));
+        bc.cards.moveToDiscardPile(CardInstance(CardId::ZAP));
+        bc.cards.moveToDiscardPile(CardInstance(CardId::GLACIER));
+        bc.cards.moveToDiscardPile(CardInstance(CardId::STRIKE_BLUE));
+        bc.cards.moveToDiscardPile(CardInstance(CardId::STRIKE_BLUE));
+        playCard(bc, CardId::REBOOT, 1);
+
+        check(bc.cards.cardsInHand == 6, "Reboot+ should draw 6 cards");
+        check(bc.cards.discardPile.empty(), "Reboot+ should empty the discard pile");
+        check(bc.cards.drawPile.size() == 1,
+              "Reboot+ should refill the draw pile from the discard pile and leave one card");
     }
 
     std::cout << "Defect card behaviors hold\n";

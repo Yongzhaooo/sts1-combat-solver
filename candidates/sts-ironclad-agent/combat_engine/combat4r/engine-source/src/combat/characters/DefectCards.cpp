@@ -1,4 +1,5 @@
 #include "combat/CharacterCards.h"
+#include <iostream>
 #include "combat/BattleContext.h"
 
 namespace sts {
@@ -208,24 +209,19 @@ namespace sts {
             }
 
             case CardId::TEMPEST: {
-                // Tempest.java: channel X (+1 upgraded) Lightning orbs. X-cost
-                // energy is spent by the card action itself (Whirlwind pattern),
-                // skipped when the card is free to play. Chemical X adds 2 to X.
+                // Tempest.java: channel X (+1 upgraded) Lightning orbs, then the
+                // card itself empties the energy pool (an X card pays nothing at
+                // the cost check). Chemical X adds 2 to X.
                 auto &item = bc.curCardQueueItem;
                 if (!item.ignoreEnergyTotal && bc.player.energy < item.energyOnUse) {
                     item.energyOnUse = bc.player.energy;
                 }
                 const int count = item.energyOnUse + (up ? 1 : 0)
                     + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
-                const bool useEnergy = !(item.freeToPlay || c.freeToPlayOnce);
-                bc.addToBot({[=] (BattleContext &bc) {
-                    if (useEnergy) {
-                        bc.player.useEnergy(bc.player.energy);
-                    }
-                    for (int i = 0; i < count; ++i) {
-                        bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
-                    }
-                }});
+                for (int i = 0; i < count; ++i) {
+                    bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
+                }
+                bc.addToBot(Actions::EmptyEnergy());
                 return true;
             }
 
@@ -243,9 +239,10 @@ namespace sts {
                 return true;
 
             case CardId::LOOP:
-                // Loop.java: apply the Loop power; Player::applyStartOfTurnPowers
-                // triggers the oldest orb's passive per stack at turn start.
-                bc.addToBot(Actions::BuffPlayer<PS::LOOP>(1));
+                // Loop.java applies magicNumber stacks, and upgradeMagicNumber(1)
+                // makes Loop+ apply two; Player::applyStartOfTurnPowers triggers the
+                // oldest orb's passive once per stack at turn start.
+                bc.addToBot(Actions::BuffPlayer<PS::LOOP>(up ? 2 : 1));
                 return true;
 
             case CardId::STORM:
@@ -308,44 +305,33 @@ namespace sts {
             case CardId::MULTI_CAST: {
                 // MultiCast.java -> MulticastAction: evoke the oldest orb X times,
                 // consuming it once. X = energyOnUse + Chemical X (2) + upgraded (1).
-                // Energy is spent after the evokes resolve.
+                // The evokes resolve first, then the card empties the energy pool.
                 auto &item = bc.curCardQueueItem;
                 if (!item.ignoreEnergyTotal && bc.player.energy < item.energyOnUse) {
                     item.energyOnUse = bc.player.energy;
                 }
                 const int times = item.energyOnUse + (up ? 1 : 0)
                     + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
-                const bool useEnergy = !(item.freeToPlay || c.freeToPlayOnce);
-                bc.addToBot({[=] (BattleContext &bc) {
-                    bc.addToBot(Actions::MultiCastAction(times));
-                    if (useEnergy) {
-                        bc.addToBot({[] (BattleContext &bc) {
-                            bc.player.useEnergy(bc.player.energy);
-                        }});
-                    }
-                }});
+                bc.addToBot(Actions::MultiCastAction(times));
+                bc.addToBot(Actions::EmptyEnergy());
                 return true;
             }
 
             case CardId::REINFORCED_BODY: {
                 // ReinforcedBody.java -> ReinforcedBodyAction: gain block X times,
                 // X = energyOnUse + Chemical X (2). Upgraded raises block 7 -> 9.
+                // The card empties the energy pool when it is used.
                 auto &item = bc.curCardQueueItem;
                 if (!item.ignoreEnergyTotal && bc.player.energy < item.energyOnUse) {
                     item.energyOnUse = bc.player.energy;
                 }
                 const int times = item.energyOnUse
                     + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
-                const bool useEnergy = !(item.freeToPlay || c.freeToPlayOnce);
-                bc.addToBot({[=] (BattleContext &bc) {
-                    const int block = bc.calculateCardBlock(up ? 9 : 7);
-                    if (useEnergy) {
-                        bc.player.useEnergy(bc.player.energy);
-                    }
-                    for (int i = 0; i < times; ++i) {
-                        bc.addToBot(Actions::GainBlock(block));
-                    }
-                }});
+                const int block = bc.calculateCardBlock(up ? 9 : 7);
+                for (int i = 0; i < times; ++i) {
+                    bc.addToBot(Actions::GainBlock(block));
+                }
+                bc.addToBot(Actions::EmptyEnergy());
                 return true;
             }
 
@@ -556,20 +542,59 @@ namespace sts {
                 return true;
 
             case CardId::REBOOT: {
-                // Reboot.java: hand and discard pile shuffle together into the draw
-                // pile, then draw 4 (6). The card itself lands in the discard pile
-                // first, so it is shuffled back as well - same as the game.
+                // Reboot.java: addToBot(new ShuffleAllAction()); addToBot(new DrawCardAction(p, 4|6));
+                //
+                // ShuffleAllAction.update() on its first tick does exactly two things:
+                //   1. addToTop(new PutOnDeckAction(p, p, 99, true))
+                //   2. player.discardPile.shuffle(AbstractDungeon.shuffleRng)
+                // and it never moves the discard pile into the draw pile: the discard
+                // cards only come back when the draw pile runs out during the draw
+                // below (DrawCardAction -> EmptyDeckShuffleAction).
+                //
+                // PutOnDeckAction with isRandom=true runs, hand.size() times:
+                //   card = hand.getRandomCard(AbstractDungeon.cardRandomRng)  // random(hand.size()-1)
+                //   hand.moveToDeck(card, isRandom=true)
+                // so the hand leaves in a *random* order, not in hand order, and each
+                // pick consumes one cardRandomRng draw. moveToDeck ends in
+                // Soul.onToDeck(card, isRandom, isRandomSpot=false) ->
+                // drawPile.addToRandomSpot(card) -> group.add(random(size-1), card),
+                // i.e. a second cardRandomRng draw places the card at a random spot in
+                // the draw pile (or appends it when the pile is empty). Java's
+                // Random.random(n) is inclusive of n, hence the -1 bounds below.
+                //
+                // Reboot itself is still in hand when ShuffleAllAction is constructed
+                // (AbstractPlayer.useCard calls card.use() before hand.removeCard), so it
+                // is part of that transfer like any other hand card. This engine removes
+                // the played card from hand before the queued actions run, so we put it
+                // back into the hand array first.
                 const int draw = up ? 6 : 4;
-                bc.addToBot({[=] (BattleContext &bc) {
-                    for (int i = 0; i < bc.cards.cardsInHand; ++i) {
-                        bc.cards.discardPile.push_back(bc.cards.hand[i]);
+                const CardInstance played = c;
+                bc.addToBot({[played] (BattleContext &bc) {
+                    if (bc.cards.cardsInHand < CardManager::MAX_HAND_SIZE) {
+                        bc.cards.hand[bc.cards.cardsInHand++] = played;
                     }
-                    bc.cards.cardsInHand = 0;
+                    while (bc.cards.cardsInHand > 0) {
+                        // PutOnDeckAction: hand.getRandomCard(cardRandomRng)
+                        const int pick = bc.cardRandomRng.random(bc.cards.cardsInHand - 1);
+                        const CardInstance card = bc.cards.hand[pick];
+                        for (int i = pick; i + 1 < bc.cards.cardsInHand; ++i) {
+                            bc.cards.hand[i] = bc.cards.hand[i + 1];
+                        }
+                        --bc.cards.cardsInHand;
+                        // Soul.onToDeck -> drawPile.addToRandomSpot(card)
+                        if (bc.cards.drawPile.empty()) {
+                            bc.cards.moveToDrawPileTop(card);
+                        } else {
+                            const int spot = bc.cardRandomRng.random(
+                                    static_cast<int>(bc.cards.drawPile.size()) - 1);
+                            bc.cards.drawPile.insert(bc.cards.drawPile.begin() + spot, card);
+                        }
+                    }
+                    // player.discardPile.shuffle(AbstractDungeon.shuffleRng)
                     java::Collections::shuffle(
                             bc.cards.discardPile.begin(),
                             bc.cards.discardPile.end(),
                             java::Random(bc.shuffleRng.randomLong()));
-                    bc.cards.moveDiscardPileIntoToDrawPile();
                 }});
                 bc.addToBot(Actions::DrawCards(draw));
                 return true;

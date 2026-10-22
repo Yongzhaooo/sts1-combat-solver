@@ -69,8 +69,11 @@ public class BackendRuntimeCheck {
                     if ("native".equals(installed.getProperty("runtime"))) {
                         ProcessBuilder configured = BackendRuntime.process(installed);
                         require(configured.command().get(0).equals(args[0]), "packaged interpreter round trip");
-                        require(configured.directory().toPath().resolve("backend.py").equals(
-                            Paths.get(installed.getProperty("backend"))), "packaged backend round trip");
+                        // The test build points backend= at backend_defect_test.py; both must sit in the
+                        // launcher's cwd so the frozen runtime resolves its sibling files the same way.
+                        Path configuredBackend = Paths.get(installed.getProperty("backend"));
+                        require(configured.directory().toPath().resolve(configuredBackend.getFileName())
+                                .equals(configuredBackend), "packaged backend round trip");
                     }
                 }
             }

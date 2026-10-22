@@ -94,6 +94,42 @@ int main() {
               "the lightning orb should still fire its passive once");
     }
 
+    {
+        // Cables must trigger orbs.get(0) in a *separate* deferred action, so the
+        // first pass's damage resolves first and a monster it kills is already
+        // out of the random-target pool when the relic rolls.
+        //
+        // Floor 39 (seed -1208793710291554246) is the live case: the relic rolled
+        // inside the original action, monstersAlive was still 4 instead of 3, and
+        // the draw landed on the corpse's neighbour, so the engine predicted
+        // Exploder1 21 / Spiker 38 against the game's 24 / 35.
+        //
+        // The observable contract is the queue: the end-of-turn trigger leaves the
+        // Cables hit behind as its own action instead of having already rolled.
+        BattleContext bc = freshBattle();
+        bc.player.setHasRelic<R::GOLD_PLATED_CABLES>(true);
+        bc.player.orbs.clear();
+        bc.player.channelOrb(Orb::LIGHTNING);
+
+        const int hp = bc.monsters.arr[0].curHp;
+        const int queuedBefore = bc.actionQueue.size;
+        const int rollsBefore = bc.cardRandomRng.counter;
+        Actions::TriggerEndOfTurnOrbsAction().actFunc(bc);
+        // One queued lightning hit for the main pass plus one for the relic.
+        check(bc.actionQueue.size - queuedBefore == 2,
+              "Cables must defer its extra passive as its own queued action");
+        // Only the main pass may roll here; the relic's target comes later, when
+        // the queue reaches its own action and the first hit has resolved.
+        check(bc.cardRandomRng.counter - rollsBefore == 1,
+              "the end-of-turn trigger must not roll the Cables target up front");
+        check(bc.monsters.arr[0].curHp == hp,
+              "nothing should resolve while the end-of-turn trigger is queued");
+
+        drain(bc);
+        check(hp - bc.monsters.arr[0].curHp == 6,
+              "both lightning passives should land once the queue drains");
+    }
+
     std::cout << "Defect relic behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {

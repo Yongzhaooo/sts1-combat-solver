@@ -938,6 +938,14 @@ void BattleContext::useCard() {
     item.exhaustOnUse |= c.doesExhaust();
     ++player.cardsPlayedThisTurn;
 
+    // AbstractCard keeps the printed X cost at -1 for the whole time the card is
+    // in play: use() reads it, and the printed cost is what RecycleAction tests.
+    // A this-turn override (Madness, Mummified Hand) must survive: the game
+    // spends energy when costForTurn > 0, exactly like any other card.
+    if (c.isXCost()) {
+        c.cost = -1;
+    }
+
     switch (c.getType()) {
         case CardType::ATTACK:
             useAttackCard();
@@ -972,8 +980,23 @@ void BattleContext::useCard() {
 
     if (!item.purgeOnUse) { // todo change to checking the card queue item
         cards.removeFromHandById(c.uniqueId);
+        // A printed X cost (-1) never reaches the payment branch below, and a
+        // positive this-turn override (Whirlwind after Madness) is paid exactly
+        // like any other card.
         if (c.costForTurn > 0 && !c.isFreeToPlay(*this) && !item.autoplay && !(player.hasStatus<PS::CORRUPTION>() && c.getType() == CardType::SKILL)) {
             player.useEnergy(c.costForTurn);
+        }
+        // The unresolved X sentinel (-1) applies only while the card is in hand
+        // or being played. AbstractCard clears it on use, so it must not leak
+        // onto the played card, the hand copy held by the card queue item, or
+        // the copy Echo Form keeps for the next play.
+        if (c.costForTurn == -1) {
+            for (int i = 0; i < cards.cardsInHand; ++i) {
+                if (cards.hand[i].getUniqueId() == c.getUniqueId()) {
+                    cards.hand[i].costForTurn = 0;
+                }
+            }
+            curCardQueueItem.card.costForTurn = 0;
         }
     }
 }
@@ -1255,7 +1278,7 @@ void BattleContext::useAttackCard() {
                 item.energyOnUse = player.energy;
             }
             addToBot(Actions::WhirlwindAction(calculateCardDamageMatrix(c, up ? 8 : 5),
-                    item.energyOnUse, !(item.freeToPlay || c.freeToPlayOnce)));
+                    item.energyOnUse, item.freeToPlay || c.freeToPlayOnce));
             break;
         }
 
@@ -1545,7 +1568,7 @@ void BattleContext::useSkillCard() {
                 item.energyOnUse = player.energy;
             }
 
-            addToBot( Actions::TransmutationAction(up, item.energyOnUse, !(item.freeToPlay || c.freeToPlayOnce)) );
+            addToBot( Actions::TransmutationAction(up, item.energyOnUse, item.freeToPlay || c.freeToPlayOnce) );
             break;
 
         case CardId::TRIP: // maybe fixed --- todo this doesn't work properly because it only requires a target when not upgraded, also the trip card doesn't uses its own implementation of debuff all enemy
@@ -3265,11 +3288,16 @@ void BattleContext::chooseRecycleCard(int handIdx) {
 #ifdef sts_asserts
     assert(handIdx >= 0 && handIdx < cards.cardsInHand);
 #endif
-    // Recycle.java: exhaust the chosen card and gain its cost in energy.
+    // RecycleAction: exhaust the chosen card and gain energy from its current
+    // cost. Java inspects the number, so Confusion setting the cost to 0 grants
+    // nothing, and the -1 X-cost sentinel grants everything currently available.
     const CardInstance chosen = cards.hand[handIdx];
+    const int energyGain = chosen.recycleEnergyGain(player.energy);
     cards.moveToExhaustPile(chosen);
     cards.removeFromHandAtIdx(handIdx);
-    player.gainEnergy(chosen.cost);
+    if (energyGain > 0) {
+        player.gainEnergy(energyGain);
+    }
 }
 
 void BattleContext::chooseWarcryCard(int handIdx) {

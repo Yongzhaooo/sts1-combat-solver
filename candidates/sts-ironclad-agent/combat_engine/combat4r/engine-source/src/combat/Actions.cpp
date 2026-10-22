@@ -325,7 +325,7 @@ Action Actions::MakeTempCardInDiscard(const CardInstance &c, int amount) {
     // This action animates the inserted object; its Soul clears temporary
     // costs. Hand-overflow and Dual Wield insert a distinct source object
     // while animating a copy, so their CardManager paths must not reset it.
-    c_copy.costForTurn = c_copy.cost;
+    c_copy.costForTurn = (c_copy.cost == -1) ? static_cast<int8_t>(-1) : c_copy.cost;
     return {[=](BattleContext &bc) { // todo maybe store by reference instead of copy if CardInstance is too big to fit directly in the lambda. Make a seperate space where the card will be stored
         for (int i = 0; i < amount; ++i) {
             bc.cards.createTempCardInDiscard(c_copy);
@@ -504,9 +504,17 @@ Action Actions::TriggerEndOfTurnOrbsAction() {
         }
         // GoldPlatedCables lives inside TriggerEndOfTurnOrbsAction in the game:
         // after the full pass it triggers orbs.get(0) - the orb evokeOrb removes
-        // first, index 0 here - one more time.
+        // first, index 0 here - one more time. The game queues that second
+        // TriggerEndOfTurnOrbsAction to the bottom, so the first pass's damage
+        // resolves and can kill a monster before the second pass picks its
+        // target. Rolling the target here instead would see a corpse as alive
+        // and draw from the wrong range.
         if (bc.player.hasRelic<R::GOLD_PLATED_CABLES>() && bc.player.orbs.size() > 0) {
-            triggerOrbEndOfTurnPassive(bc, bc.player.orbs[0]);
+            bc.addToBot({[] (BattleContext &bc) {
+                if (bc.player.orbs.size() > 0) {
+                    triggerOrbEndOfTurnPassive(bc, bc.player.orbs[0]);
+                }
+            }});
         }
     }};
 }
@@ -640,6 +648,16 @@ Action Actions::DoubleEnergy() {
     return {[] (BattleContext &bc) {
         // DoubleEnergyAction: gainEnergy(player.energy) doubles the current energy.
         bc.player.gainEnergy(bc.player.energy);
+    }};
+}
+
+Action Actions::EmptyEnergy() {
+    return {[] (BattleContext &bc) {
+        // AbstractCard.useCard() for an X card: costForTurn is -1, so nothing is
+        // paid at the cost check and the card empties the pool itself.
+        if (bc.player.energy > 0) {
+            bc.player.useEnergy(bc.player.energy);
+        }
     }};
 }
 
@@ -976,7 +994,7 @@ Action Actions::JackOfAllTradesAction(bool upgraded) {
     }};
 }
 
-Action Actions::TransmutationAction(bool upgraded, int energy, bool useEnergy) {
+Action Actions::TransmutationAction(bool upgraded, int energy, bool) {
     return {[=] (BattleContext &bc) {
         const auto effectAmount = energy + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
 
@@ -993,9 +1011,6 @@ Action Actions::TransmutationAction(bool upgraded, int energy, bool useEnergy) {
        }
        bc.addToBot( Actions::MakeTempCardsInHand(cards) );
 
-       if (useEnergy) {
-           bc.player.useEnergy(bc.player.energy);
-       }
     }};
 }
 
@@ -1662,12 +1677,8 @@ Action Actions::SpotWeaknessAction(int target, int strength) {
     }};
 }
 
-Action Actions::WhirlwindAction(DamageMatrix damageMatrix, int energy, bool useEnergy) {
+Action Actions::WhirlwindAction(DamageMatrix damageMatrix, int energy, bool) {
     return {[=] (BattleContext &bc) {
-        if (useEnergy) {
-            bc.player.useEnergy(bc.player.energy);
-        }
-
         const auto effectAmount = energy + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
         // Whirlwind appends its hits after already queued on-use effects.
         for (int i = 0; i < effectAmount; ++i) {

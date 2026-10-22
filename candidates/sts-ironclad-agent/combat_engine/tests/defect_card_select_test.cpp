@@ -49,6 +49,18 @@ static std::vector<search::Action> enumerate(const BattleContext &battle) {
     return search::Action::enumerateCardSelectActions(battle);
 }
 
+// Recycle enumerates one action per hand card in hand order, so the action index
+// equals the hand index of the card it picks. Look the card up by id: playing
+// Recycle itself reshuffles the hand, so the position is not known in advance.
+static int pickIdx(const BattleContext &battle, CardId id) {
+    for (int i = 0; i < battle.cards.cardsInHand; ++i) {
+        if (battle.cards.hand[i].getId() == id) {
+            return i;
+        }
+    }
+    throw std::runtime_error("card not in hand while enumerating the select");
+}
+
 int main() {
     try {
     {
@@ -100,6 +112,52 @@ int main() {
         actions.front().execute(bc);
         check(bc.cards.cardsInHand >= 1, "the sought card should join the hand");
         check(bc.cards.drawPile.empty(), "the draw pile should be emptied");
+    }
+
+    {
+        // The live F55 run diverged here. Tempest is an X-cost card (cost -1),
+        // but Confusion had randomised its costForTurn to 0. RecycleAction reads
+        // the *number*: a 0 cost grants nothing, while the -1 sentinel grants all
+        // the energy available. The engine used to answer "all of it" here, so
+        // the solver predicted energy it never got on the next play.
+        BattleContext bc = fresh();
+        bc.cards.createTempCardInHand(CardInstance(CardId::TEMPEST));
+        bc.cards.createTempCardInHand(CardInstance(CardId::STRIKE_BLUE));
+        // Confusion randomises the this-turn cost of every card it shuffles in,
+        // X-cost ones included; that is the only way a Tempest ends up at 0.
+        bc.cards.hand[0].costForTurn = 0;
+        check(bc.cards.hand[0].costForTurn == 0,
+              "Confusion should leave a 0 this-turn cost on the X card");
+        bc.player.energy = 3;
+        playCard(bc, CardId::RECYCLE); // spends its own 1 energy
+        check(bc.cardSelectInfo.cardSelectTask == CardSelectTask::RECYCLE,
+              "playing Recycle should open its select");
+        const auto actions = enumerate(bc);
+        check(actions.size() == 2, "Recycle should enumerate both hand cards");
+        const int energyBefore = bc.player.energy;
+        const int tempestIdx = pickIdx(bc, CardId::TEMPEST);
+        actions[tempestIdx].execute(bc);
+        check(bc.player.energy == energyBefore,
+              "Recycling a 0-cost X card must grant its printed 0, not the whole pool");
+        check(bc.cards.cardsInHand == 1, "Recycle should exhaust the picked card");
+    }
+
+    {
+        // Without Confusion the X card keeps its -1 sentinel, so recycling it
+        // grants everything currently available (RecycleAction's X branch).
+        BattleContext bc = fresh();
+        bc.cards.createTempCardInHand(CardInstance(CardId::TEMPEST));
+        bc.cards.createTempCardInHand(CardInstance(CardId::STRIKE_BLUE));
+        bc.player.energy = 3;
+        playCard(bc, CardId::RECYCLE); // spends its own 1 energy
+        const auto actions = enumerate(bc);
+        check(actions.size() == 2, "Recycle should enumerate both hand cards");
+        const int energyBefore = bc.player.energy;
+        const int tempestIdx = pickIdx(bc, CardId::TEMPEST);
+        actions[tempestIdx].execute(bc);
+        check(bc.player.energy == energyBefore * 2,
+              "Recycling an X card with no confusion should grant the whole pool");
+        check(bc.cards.cardsInHand == 1, "Recycle should exhaust the picked card");
     }
 
     std::cout << "Defect card select enumeration holds\n";

@@ -180,7 +180,7 @@ void CardManager::moveToHand(const CardInstance &c) {
 void CardManager::moveToExhaustPile(const CardInstance &c) {
     notifyRemoveFromCombat(c);
     exhaustPile.push_back(c);
-    exhaustPile.back().costForTurn = c.cost;
+    resetCostForTurn(exhaustPile.back());
 }
 
 
@@ -196,7 +196,7 @@ void CardManager::insertToDrawPile(int drawPileIdx, const CardInstance &c) {
 #endif
     notifyAddToDrawPile(c);
     drawPile.insert(drawPile.begin()+drawPileIdx, c);
-    drawPile[drawPileIdx].costForTurn = c.cost;
+    resetCostForTurn(drawPile[drawPileIdx]);
 }
 
 void CardManager::moveToDrawPileTop(const CardInstance &c) {
@@ -210,7 +210,7 @@ void CardManager::moveToDrawPileTop(const CardInstance &c) {
 #endif
     notifyAddToDrawPile(c);
     drawPile.push_back(c);
-    drawPile.back().costForTurn = c.cost;
+    resetCostForTurn(drawPile.back());
 }
 
 void CardManager::shuffleIntoDrawPile(Random &cardRandomRng, const CardInstance &c) {
@@ -234,13 +234,16 @@ void CardManager::moveToDiscardPile(const CardInstance &c) {
 #endif
     notifyAddToDiscardPile(c);
     discardPile.push_back(c);
-    discardPile.back().costForTurn = c.cost;
+    resetCostForTurn(discardPile.back());
 }
 
 void CardManager::moveDiscardPileIntoToDrawPile() {
     if (drawPile.empty()) {
         drawPileBloodCardCount = discardPileBloodCardCount;
         drawPile = discardPile;
+        for (auto &c : drawPile) {
+            resetCostForTurn(c);
+        }
 
     } else {
         for (const auto &c : discardPile) {
