@@ -688,11 +688,12 @@ void Player::applyStartOfTurnRelics(BattleContext &bc) {
     }
 
     if (hasRelic<R::INSERTER>()) {
+        // Inserter.atTurnStart adds two instead of one while the counter is -1, and only the
+        // pre-battle step ever sets -1. Once that step is in play the counter is never
+        // negative, so every start adds one.
         if (++inserterCounter == 2) {
-            inserterCounter = 0; // todo
-            bc.addToBot( {[=](BattleContext &bc) {
-                bc.player.increaseOrbSlots(1);
-            }});
+            inserterCounter = 0;
+            bc.addToBot( Actions::IncreaseOrbSlots(1) );
         }
     }
 

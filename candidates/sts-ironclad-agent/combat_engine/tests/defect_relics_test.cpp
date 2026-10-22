@@ -28,6 +28,19 @@ namespace {
             battle.actionQueue.popFront()(battle);
         }
     }
+
+    // Same fight, but the relic is in the GameContext before init, so the
+    // battle-start and pre-battle triggers fire the way they do in a real run.
+    BattleContext freshBattleWithRelic(RelicId relic) {
+        GameContext game(CharacterClass::DEFECT, 123, 0);
+        game.regainControlAction = [](GameContext&) {};
+        game.relics.add(RelicInstance{relic, 0});
+        BattleContext battle;
+        battle.init(game, MonsterEncounter::CULTIST);
+        battle.cards = CardManager{};
+        battle.setState(InputState::PLAYER_NORMAL);
+        return battle;
+    }
 }
 
 int main() {
@@ -128,6 +141,95 @@ int main() {
         drain(bc);
         check(hp - bc.monsters.arr[0].curHp == 6,
               "both lightning passives should land once the queue drains");
+    }
+    {
+        // DataDisk.atBattleStart applies one Focus. Battle init is the point where
+        // the relic fires, so the fresh battle carries it before any card.
+        BattleContext bc = freshBattleWithRelic(R::DATA_DISK);
+        check(bc.player.focus == 1, "Data Disk should start the fight with 1 Focus");
+    }
+    {
+        // NuclearBattery.atPreBattle channels one Plasma; SymbioticVirus.atPreBattle
+        // channels one Dark in its place. Cracked Core adds a Lightning to both.
+        BattleContext battery = freshBattleWithRelic(R::NUCLEAR_BATTERY);
+        check(battery.player.orbs.size() == 2, "Nuclear Battery should add one orb");
+        check(battery.player.orbs[1].type == Orb::FUSION,
+              "Nuclear Battery should channel a Plasma orb");
+
+        BattleContext virus = freshBattleWithRelic(R::SYMBIOTIC_VIRUS);
+        check(virus.player.orbs.size() == 2, "Symbiotic Virus should add one orb");
+        check(virus.player.orbs[1].type == Orb::DARK,
+              "Symbiotic Virus should channel a Dark orb");
+    }
+    {
+        // RunicCapacitor.atTurnStart raises the slots by 3 on the first player turn
+        // only. The engine applies them at battle start, which is the same fight.
+        BattleContext bc = freshBattleWithRelic(R::RUNIC_CAPACITOR);
+        check(bc.player.orbSlots == 6, "Runic Capacitor should raise slots from 3 to 6");
+    }
+    {
+        // Inserter.atTurnStart counts turns and adds a slot when the counter reaches
+        // 2, so it fires on the second player turn and every second turn after.
+        BattleContext bc = freshBattleWithRelic(R::INSERTER);
+        const int startSlots = bc.player.orbSlots;
+        bc.afterMonsterTurns();
+        drain(bc);
+        check(bc.player.orbSlots == startSlots,
+              "Inserter must not fire on the first player turn");
+        bc.afterMonsterTurns();
+        drain(bc);
+        check(bc.player.orbSlots == startSlots + 1,
+              "Inserter should add one slot on the second player turn");
+        bc.afterMonsterTurns();
+        drain(bc);
+        check(bc.player.orbSlots == startSlots + 1,
+              "Inserter must not fire twice in a row");
+        bc.afterMonsterTurns();
+        drain(bc);
+        check(bc.player.orbSlots == startSlots + 2,
+              "Inserter should fire again on the fourth player turn");
+    }
+    {
+        // FrozenCore.onPlayerEndTurn channels a Frost orb when a slot is free, and
+        // does nothing when the bar is full.
+        BattleContext empty = freshBattleWithRelic(R::FROZEN_CORE);
+        empty.player.orbs.clear();
+        empty.callEndOfTurnActions();
+        check(empty.player.orbs.size() == 1 && empty.player.orbs[0].type == Orb::FROST,
+              "Frozen Core should channel one Frost into an empty bar");
+
+        BattleContext full = freshBattleWithRelic(R::FROZEN_CORE);
+        full.player.orbs.clear();
+        for (int i = 0; i < full.player.orbSlots; ++i) full.player.channelOrb(Orb::LIGHTNING);
+        const int before = full.player.orbs.size();
+        full.callEndOfTurnActions();
+        check(full.player.orbs.size() == before,
+              "Frozen Core must stay quiet when every slot is taken");
+    }
+    {
+        // EmotionChip.atTurnStart runs one extra start-of-turn and end-of-turn pass
+        // over every orb, but only in the turn after the player lost hp.
+        BattleContext bc = freshBattleWithRelic(R::EMOTION_CHIP);
+        bc.player.orbs.clear();
+        bc.player.channelOrb(Orb::LIGHTNING);
+        const int hp = bc.monsters.arr[0].curHp;
+
+        bc.afterMonsterTurns();
+        drain(bc);
+        check(bc.monsters.arr[0].curHp == hp,
+              "Emotion Chip must not pulse on a turn with no hp loss");
+
+        bc.player.hpWasLost(bc, 1);
+        bc.afterMonsterTurns();
+        drain(bc);
+        check(hp - bc.monsters.arr[0].curHp >= 1,
+              "Emotion Chip should pulse after hp was lost");
+
+        const int afterPulse = bc.monsters.arr[0].curHp;
+        bc.afterMonsterTurns();
+        drain(bc);
+        check(bc.monsters.arr[0].curHp == afterPulse,
+              "the pulse is spent, so the next turn runs the passives once only");
     }
 
     std::cout << "Defect relic behaviors hold\n";

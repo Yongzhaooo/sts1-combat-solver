@@ -194,14 +194,19 @@ void BattleContext::initRelics(const GameContext &gc, int extraOpeningDraw) {
                 p.inkBottleCounter = r.data;
                 break;
 
-            case R::INSERTER:
+            case R::INSERTER: {
+                // Inserter.atTurnStart adds one counter per turn, but treats a counter of -1 as
+                // "one short of firing" and then adds two, so the counter only reaches 2 on the
+                // turn after an odd number of starts. Carrying the counter between fights keeps
+                // that parity; a counter of 0 here means 1 on the next start.
                 if (r.data) {
-                    p.inserterCounter = 0;
+                    p.inserterCounter = 2;
                     p.increaseOrbSlots(1);
                 } else {
-                    p.inserterCounter = 1;
+                    p.inserterCounter = 0;
                 }
                 break;
+            }
 
             case R::LIZARD_TAIL:
                 p.setHasRelic<R::LIZARD_TAIL>(r.data == -1);
@@ -353,6 +358,10 @@ void BattleContext::initRelics(const GameContext &gc, int extraOpeningDraw) {
                 break;
 
             case R::RUNIC_CAPACITOR:
+                // RunicCapacitor.atTurnStart raises the slots on the first player turn only, but
+                // nothing later in the fight reads that turn boundary, so applying them up front
+                // gives the same fight. It must not stack per fight, so tools must not add this
+                // relic to a battle that starts with it already counted.
                 p.increaseOrbSlots(3);
                 break;
 
