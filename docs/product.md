@@ -53,6 +53,7 @@ Player request (七月流火, 2026-10-21), cleaned, and the maintainer's decisio
 - Every clickable control and plan row brightens under the pointer; rows that cannot be clicked do not.
 - Warnings about other mods (incompatible save/undo mods, RNG-changing mods, SuperFastMode above the tested speed) stay on screen in red, whole, in their own box under the panel, in every panel state.
 - After the player approves a plan, the solver plays the fight under that plan's potion constraint. A divergence from the prediction re-plans under the same constraint without asking again; an approved potion-free plan never drinks a bottle (proposed).
+- A plan that drinks an Entropic Brew may also drink the bottles the Brew makes, at every search tier. The simulator knows the brewed bottles exactly, so the plan can empty other slots first (an Elixir, say) to brew more of them (user, 2026-10-24).
 - The player can restrict the usable bottles for a fight, and the listed plans respect it. The search already accepts potion permissions; the panel has no control for it (proposed).
 
 ### Combat panel
