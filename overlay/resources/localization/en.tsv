@@ -20,7 +20,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 下一步  |Next: 
 下层走火堆计羽毛回血：|Next campfire Feather healing: 
 不可用|Unavailable
-仅必经火堆|Only forced campfire
+仅必经火堆|forced
 仅查看建议，点击按钮后才出牌|Advice ready; click to execute
 仅试选 · 滚轮翻页 · 点击已选项撤回|Preview only · scroll · click a pick to undo
 停止|Stop
@@ -48,7 +48,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 建议 · |Advice · 
 开|On
 开场选牌：规划并自动选择（不用药路线）|Opening selection: planning potion-free route
-当前路线未找到胜利|No win found on this route
+当前路线未找到胜利|No win on this route
 录音启动失败：|Recording failed to start: 
 快捷键保存失败：|Hotkey save failed: 
 快捷键配置读取失败：|Config load failed: 
@@ -102,7 +102,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 自动已关闭 · 保留建议|Auto off · advice retained
 自动开关保存失败：|Auto preference save failed: 
 自动战斗|Auto combat
-自动战斗已采纳用药路线 · 点击或 F9 可接管|Auto combat adopted potion route · click or F9 to take over
+自动战斗已采纳用药路线 · 点击或 F9 可接管|Potion route · click or F9 to take over
 自动执行已开启 · 仅本场战斗|Auto execution on · this fight only
 自动换药失败：|Auto potion swap failed: 
 自动换药：|Auto potion swap: 
@@ -318,7 +318,7 @@ F6 导出错误报告|F6 Export bug report
 界面缩放保存失败：|Could not save panel size:
 预测胜利|Victory predicted
 战后 HP|Final HP
-等效战损|Effective loss
+等效战损|Net HP loss
 战后恢复：|Recovery:
 自动战斗快捷键：|Auto battle key:
 语言：|Language:
@@ -339,7 +339,7 @@ F6 导出错误报告|F6 Export bug report
 导出到桌面 · F6|Export to desktop · F6
 按种子记录牌组、战斗与选择，仅保存到本机|Per-seed record of decks, fights and choices; stays on this PC
 F6 导出记录到桌面，发这一个文件即可|F6 exports the record to your desktop; send that one file
-检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用|Incompatible mod detected (SaveStateMod / Undo): disrupts selection and combat sync; disabling recommended.
+检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用|Incompatible mod (SaveStateMod / Undo): disable it, it breaks state sync
 求解器内部错误，已记录：|Solver internal error, logged: 
 涅奥：掉血删两张牌|Neow: lose HP, remove two cards
 涅奥：不拿诅咒|Neow: no curse
@@ -364,7 +364,7 @@ SuperFastMode 速度 ×|SuperFastMode speed x
 已兼容 SuperFastMode（当前 ×|SuperFastMode supported (now x
 ，建议不超过 ×10）|, recommended at most x10)
 Boss 快速收尾：|Boss fast finish: 
-Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同|Boss fast finish: stop searching once a potion-free win is found; saves time but may lose more HP. Off: a Boss is searched like any fight
+Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同|Boss fast finish: stop at a potion-free win; faster, may cost more HP
 未安装|not installed
 确认这一步（回车）|Confirm this step (Enter)
 已停止 · 人工逐步：每一步回车或点击确认|Stopped · Manual: every step waits for Enter or a click
@@ -395,6 +395,6 @@ Agent 通道读写失败：|Agent channel read/write failed:
 已停止 · 点击路线打完本场，回车走一步|Stopped · click the route to finish the fight, Enter for one step
 点击路线，或输入 0～10 后回车：[|Click a route, or type 0–10 and Enter: [
 推荐行动顺序 · 自动执行中，F9 停止|Suggested actions · running, F9 to stop
-点击列表打完本场 · 回车走一步|Click the list to finish the fight · Enter for one step
-点击列表或回车：继续自动打完本场|Click the list or Enter: finish the fight automatically
+点击列表打完本场 · 回车走一步|Click the list to finish · Enter for one step
+点击列表或回车：继续自动打完本场|Click the list or Enter: auto-finish the fight
 0 / 空回车：选 0 号路线；无输入则等待|0 / Enter: route 0; waits for input
