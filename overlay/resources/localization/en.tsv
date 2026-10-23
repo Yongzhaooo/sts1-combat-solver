@@ -354,7 +354,6 @@ AI全自动中|AI running
 第三幕最后宝箱：开箱取得蓝钥匙|Last Act 3 chest: open it for the Sapphire Key
 第三幕最后宝箱：蓝钥匙最高优先级|Last Act 3 chest: Sapphire Key takes priority
 人工逐步|Manual (step)
-新一局：选【人工逐步】每步确认，【战斗全自动】只自动打战斗，或【AI全自动】完全托管|New run: pick [Manual (step)] to confirm every step, [Combat auto] to automate fights only, or [AI autopilot] for everything
 自己构筑请开【战斗全自动】|Turn on [Combat auto] to build yourself
 或点【AI全自动】随时完全托管|or click [AI autopilot] anytime
 这些 Mod 会影响随机数（RNG），求解器计算可能不准确，建议关闭：|These mods affect the game RNG, so solver results may be inaccurate; consider disabling: 
@@ -366,8 +365,6 @@ Boss 快速收尾：|Boss fast finish:
 Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同|Boss fast finish: stop at a potion-free win; faster, may cost more HP
 未安装|not installed
 确认（回车）|Confirm
-已停止 · 人工逐步：每一步回车或点击确认|Stopped · Manual: every step waits for Enter or a click
-人工逐步：求解器和 AI 给出建议，每一步回车或点击确认|Manual: the solver and the AI suggest; every step waits for Enter or a click
 自动爬塔|Autopilot
 新一局|New run
 已暂停|Paused
@@ -400,8 +397,9 @@ Agent 通道读写失败：|Agent channel read/write failed:
 计算|Solve
 执行|Play
 暂停|Pause
-待命模式：|Standby: 
 待命 · 点【计算】开始搜索|Standby · click [Solve] to search
 待命：点【重新计算】才开始搜索|Standby: click [Recalc] to search
-待命模式：面板保持折叠，战斗中点【计算】才搜索，打完自动收起|Standby: the panel stays folded; click [Solve] to search a fight; it folds again afterwards
-待命模式已关闭|Standby off
+待命|Standby
+已停止 · 待命：局外由你决定，战斗点【计算】才搜索|Stopped · Standby: you decide outside fights; a fight is searched after [Solve]
+Agent 确认每一步局外选择|The agent confirms each outside step
+新一局：选【待命】每场点了才算，【战斗全自动】只自动打战斗，或【AI全自动】完全托管|New run: pick [Standby] to solve each fight on request, [Combat auto] to automate fights only, or [AI autopilot] for everything

@@ -60,12 +60,12 @@ final class OutsidePilot {
     private boolean shopLeft;
     private com.badlogic.gdx.graphics.g2d.TextureRegion routePixel;
 
-    /** F9 / Stop: drop the pending decision; {@code manual} keeps the card in step mode. */
-    void stop(boolean manual) {
+    /** F9: drop the pending decision and hand outside decisions to the player (Standby has no card). */
+    void stop() {
         prompt=false; packet=null; statePacket=null; scores=null;
         confirm=false; awaiting=false; failed=false;
-        mode=manual?1:0; pilotRun=manual;
-        notice=I18n.t(manual?"已停止 · 人工逐步：每一步回车或点击确认":"全自动已停止；现在由你接管");
+        mode=0; pilotRun=false;
+        notice=I18n.t("已停止 · 待命：局外由你决定，战斗点【计算】才搜索");
     }
 
     void select(int newMode) {
@@ -73,7 +73,7 @@ final class OutsidePilot {
         confirm=false; awaiting=false; failed=false;
         if(newMode==0) { pilotRun=false; notice=I18n.t("局外决策由你操作"); return; }
         pilotRun=true;
-        notice=newMode==1?I18n.t("人工逐步：求解器和 AI 给出建议，每一步回车或点击确认")
+        notice=newMode==1?I18n.t("Agent 确认每一步局外选择")
             :I18n.t("全自动爬塔已开启 · F9 随时接管");
     }
 
@@ -119,7 +119,7 @@ final class OutsidePilot {
             player=AbstractDungeon.player; prompt=true; mode=0;
             packet=null; statePacket=null; scores=null; awaiting=false;
             pilotRun=false; failed=false;
-            notice=I18n.t("新一局：选【人工逐步】每步确认，【战斗全自动】只自动打战斗，或【AI全自动】完全托管");
+            notice=I18n.t("新一局：选【待命】每场点了才算，【战斗全自动】只自动打战斗，或【AI全自动】完全托管");
             host.runStarted();
         }
         if(prompt) return;
@@ -285,12 +285,12 @@ final class OutsidePilot {
 
     float cardHeight() { return buttonsTop()+38+14; }
 
-    /** Buttons as {action, label}; actions: 2 auto, 1 step, 0 take over, 3 confirm, -1 start manual, -2 auto combat only. */
+    /** Buttons as {action, label}; actions: 2 pilot, 0 take over, 3 confirm (agent play), -1 Standby, -2 Combat auto. */
     private String[][] buttons() {
-        if(prompt) return new String[][]{{"-1","人工逐步"},{"-2","战斗全自动"},{"2","AI全自动"}};
-        if(mode==2) return new String[][]{{"0","人工逐步"}};
+        if(prompt) return new String[][]{{"-1","待命"},{"-2","战斗全自动"},{"2","AI全自动"}};
+        if(mode==2) return new String[][]{{"0","待命"}};
         if(mode==1) return new String[][]{{"3","确认（回车）"},{"-2","战斗全自动"},{"2","AI全自动"}};
-        return new String[][]{{"2","继续AI全自动"},{"1","人工逐步"}};
+        return new String[][]{{"2","继续AI全自动"},{"-1","待命"}};
     }
 
     /** Scrolls or picks in the step-mode list; true when the pointer is over the list. */
@@ -325,7 +325,7 @@ final class OutsidePilot {
         canvas.label(sb,I18n.t("自动爬塔"),16,10,140,1.05f,Color.WHITE);
         canvas.button(sb,EXPORT_LEFT,9,EXPORT_WIDTH,24,PanelCanvas.SURFACE);
         canvas.label(sb,I18n.t("导出"),EXPORT_LEFT+8,13,EXPORT_WIDTH-12,.78f,PanelCanvas.ACCENT);
-        String chip=prompt?"新一局":mode==2?"AI全自动中":mode==1?"人工逐步"
+        String chip=prompt?"新一局":mode==2?"AI全自动中":mode==1?"Agent"
             :failed?"已暂停":"已接管";
         Color chipColor=mode==2?PanelCanvas.ACCENT:failed?PanelCanvas.DANGER:mode==1?Color.WHITE:PanelCanvas.MUTED;
         canvas.box(sb,PILOT_WIDTH-170,9,120,24,PanelCanvas.SURFACE);

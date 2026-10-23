@@ -53,9 +53,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private boolean decisionDirty=true;
     private boolean busy, awaitingAction, auto, gamblingAuto, paused, collapsed;
     private boolean runAuto;
-    // Standby: the panel stays folded and a fight is searched only after the player asks (Calculate, F10 or
-    // Recalculate); armed marks that request for the current fight.
-    private boolean standby, armed;
+    // Standby mode: a fight is searched only after the player asks (Solve, F10 or Recalculate); armed marks that request.
+    private boolean armed;
     private int warningRows; // rows of mod warnings drawn under the panel; layout keeps them on screen
     private boolean heldThisFight; // Step or Execute fight took this fight over; the next fight runs automatically again
     private boolean runAfterBranch; // F10 pressed while a route choice was pending: run the fight once chosen
@@ -143,7 +142,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("autoPotionRewards", "true");
             defaults.setProperty("runAutoEnabled", "true");
             defaults.setProperty("runLog", "true");
-            defaults.setProperty("standby", "false");
             config = new SpireConfig("STS1CombatSolver", "config", defaults);
             I18n.setLanguage(config.getString("language"));
             canvas.uiScale = PanelSize.preference(config.getString("uiScale"));
@@ -167,7 +165,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             autoPotionRewards = config.getBool("autoPotionRewards");
             runAutoEnabled = config.getBool("runAutoEnabled");
             backend.setRunLog(config.getBool("runLog"));
-            standby = config.getBool("standby");
             if (!validAutoKey(autoKey)) autoKey = Input.Keys.F10;
         } catch (IOException failure) { error = I18n.t("快捷键配置读取失败：") + failure.getMessage(); }
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -200,7 +197,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         boolean fold = !expandOnScreen(screen, room != null && combat(), event)
             || (pilot.mode == 2 && !combat()); // the pilot's status fits the folded header.
         if (fold && (!inFoldRoom || screen != lastFoldScreen) && !collapsed) { collapsed = true; autoFolded = true; }
-        if (!fold && inFoldRoom && autoFolded && !standbyFolds()) { collapsed = false; autoFolded = false; }
+        if (!fold && inFoldRoom && autoFolded && !standby()) { collapsed = false; autoFolded = false; }
         inFoldRoom = fold;
         lastFoldScreen = screen;
     }
@@ -223,9 +220,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private float panelWidth() { return pilot.cardShown() ? OutsidePilot.PILOT_WIDTH : collapsed ? 360 : PANEL_WIDTH; }
     private float foldedLeft(float w) { return exportLeft(w)-64; }
 
-    /** Standby applies while fights wait for the player (not in Combat auto or the pilot). */
-    private boolean standbyFolds() { return standby && !runAuto; }
-    private boolean standbyWaiting() { return standbyFolds() && !armed; }
+    /** Standby mode: fights wait for the player (not Combat auto, the pilot or agent play). */
+    private boolean standby() { return !runAuto; }
+    private boolean standbyWaiting() { return standby() && !armed; }
 
     /** The folded panel's combat button: search this fight, play it, pause it. Empty when there is nothing to do. */
     private String foldedAction() {
@@ -308,8 +305,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             branchPicker=false;
             branchConfirmed=true;
             boolean manual=result.has("manual_choice") && result.get("manual_choice").getAsBoolean();
-            auto=fightAuto() || (autoAfterBranch(manual) && (RunMode.combatAutomatic(mode()) || runAfterBranch)); // Manual steps unless F10 asked for the run
+            auto=fightAuto() || (autoAfterBranch(manual) && (RunMode.combatAutomatic(mode()) || runAfterBranch)); // Standby waits for Play unless it was pressed
             runAfterBranch=false;
+            if(standby()) { collapsed=true; autoFolded=false; }
             if(manual)thiefPreference=branch;
             paused=false;
             send("choose",state);
@@ -319,6 +317,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     static boolean routeConfirmed(JsonObject result, boolean branchConfirmed) {
         return result != null && (!result.has("manual_choice")
             || !result.get("manual_choice").getAsBoolean() || branchConfirmed);
+    }
+    /** A plan may run: the backend's route question is answered, and in Standby a plan is picked whenever several are usable. */
+    static boolean approved(JsonObject result, boolean branchConfirmed, boolean standby) {
+        return routeConfirmed(result, branchConfirmed) && (branchConfirmed || !routeChoice(result, standby));
     }
     static boolean autoAfterBranch(boolean manual) {
         return !manual;
@@ -415,7 +417,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     /** Combat automation drives this fight: on for the run and not taken over for this fight. */
     private boolean fightAuto() { return runAuto && !heldThisFight; }
 
-    /** The player picks a route first: the backend asks, or Manual has more than one usable route. */
+    /** The player picks a route first: the backend asks, or Standby has more than one usable route. */
     static boolean routeChoice(JsonObject result, boolean manual) {
         if (result.get("needs_confirmation").getAsBoolean()) return true;
         if (!manual || !result.has("branches")) return false;
@@ -429,22 +431,15 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         return CommandExecutor.isInDungeon() && AbstractDungeon.player!=null && supported();
     }
 
-    private void toggleCombatMode() {
-        RunMode before=mode();
-        if(RunMode.combatButton(before,auto)==RunMode.MANUAL) {
-            if(runAuto){runAutoEnabled=false;saveAutomation();}
-            cancel(true); // also ends the automatic run of this fight alone
-            if(before==RunMode.COMBAT_AUTO && inSupportedRun())chooseOutsideMode(1);
-            return;
-        }
-        if(pilot.mode!=0)chooseOutsideMode(0);
-        runAuto=false; // Switching from the pilot or step mode starts combat-only automation.
-        toggleRunAuto();
-    }
-
-    private void togglePilotMode() {
-        if(RunMode.pilotButton(mode())==RunMode.MANUAL)stopAll();
-        else chooseOutsideMode(2);
+    /** The panel's three-way mode switch and the new-run question. Switching to Standby keeps every setting. */
+    private void setMode(RunMode target) {
+        RunMode current=mode();
+        if(target==current)return;
+        if(target==RunMode.PILOT) { chooseOutsideMode(2); return; }
+        if(pilot.mode!=0)pilot.select(0);
+        if(target==RunMode.COMBAT_AUTO) { runAuto=false; toggleRunAuto(); return; } // from the pilot: combat-only automation
+        runAutoEnabled=false; saveAutomation();
+        cancel(true); // also ends the automatic run of this fight
     }
 
     private void toggleRunAuto() {
@@ -472,9 +467,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         saveAutomation();
     }
 
-    /** F9 / Stop: back to Manual, where the solver and the network suggest and every step waits for the player. */
+    /** F9: back to Standby, where every fight waits for Solve and outside decisions are the player's. */
     private void stopAll() {
-        pilot.stop(inSupportedRun());
+        pilot.stop();
         autoPotionRewards=false;
         cancel(true);
     }
@@ -739,7 +734,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         boolean inCombat = combat();
         if(!wasCombat && inCombat) {
             heldThisFight=false;
-            if(standbyFolds()) { collapsed=true; autoFolded=false; status=I18n.t("待命 · 点【计算】开始搜索"); }
+            if(standby()) { collapsed=true; autoFolded=false; status=I18n.t("待命 · 点【计算】开始搜索"); }
         }
         if(!wasCombat && inCombat && runAuto) {
             auto=true;paused=false;branchConfirmed=false;decisionDirty=true;lastKey=null;
@@ -751,7 +746,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             lastKey = null;
             thiefPreference=null;
             armed=false;
-            if(standbyFolds()) { collapsed=true; autoFolded=false; }
+            if(standby()) { collapsed=true; autoFolded=false; }
             error = "";
         }
         wasCombat = inCombat;
@@ -888,7 +883,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private void executeStep() {
         if (result == null || !ready() || busy || awaitingAction) return;
-        if (!routeConfirmed(result,branchConfirmed) || branchPicker || captureBranchKeys) return;
+        if (branchPicker || captureBranchKeys) return;
+        if (!approved(result,branchConfirmed,!fightAuto())) { requestBranches(); return; } // never an unpicked plan
         try {
             JsonObject state = capture();
             if (!key(state).equals(rootKey)) { stateChanged(state); return; }
@@ -1023,7 +1019,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         } catch(NumberFormatException invalid) { return -1; }
     }
     private void branchKeyboard() {
-        // Manual outside combat: Enter runs the suggested step.
+        // Agent play outside combat: Enter confirms the listed step.
         if(pilot.mode==1 && !combat() && pilot.packet!=null && pilot.scores!=null && Gdx.input.isKeyJustPressed(Input.Keys.ENTER))
             pilot.confirm=true;
         boolean held=Gdx.input.isKeyPressed(Input.Keys.ENTER);
@@ -1031,12 +1027,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 || Gdx.input.isKeyPressed(Input.Keys.NUMPAD_0+n);
         // Keep native card hotkeys suppressed until the selecting key is released.
         captureBranchKeys=branchPicker || (captureBranchKeys && held);
-        // Enter runs one step in Manual, otherwise resumes this combat's automation. The key is
-        // withheld from the game until released; potion choices keep their own Enter.
-        if(!branchPicker && !auto && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)
+        // In Combat auto and the pilot, Enter resumes this fight's automation; in Standby it stays the game's. The key
+        // is withheld from the game until released; potion choices keep their own Enter.
+        if(!branchPicker && !auto && RunMode.combatAutomatic(mode()) && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)
                 && supported() && ready()) {
-            if(RunMode.combatAutomatic(mode())) toggleAuto();
-            else executeStep(); // one step per Enter; F10 runs the whole fight
+            toggleAuto();
             captureBranchKeys=true;
             return;
         }
@@ -1094,7 +1089,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 if (setting==0 && off<0) toggleBrightEye();
                 else if (setting==0) changeScale(off<cw/3 ? canvas.uiScale-.1f : off>=cw*2/3 ? canvas.uiScale+.1f : 1);
                 else if (setting==1) { if (off<0) toggleBossFinish(); else toggleLanguage(); }
-                else if (setting==2) { if (off<0) toggleRunLog(); else toggleStandby(); }
+                else if (setting==2) { if (off<0) toggleRunLog(); }
                 else if (off<0) bindingKey=true;
             } else if (body && previewCount > 0 && lx >= ROUTE_LEFT && ly >= 42 && ly < 72) {
                 if (transformPreview != null) transformPreview = null;
@@ -1135,8 +1130,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 if (action==0) { armed=true; recalculate(); }
                 else if (action==1) { heldThisFight=true; auto=false; executeStep(); }
                 else if (action==2) toggleAuto(); // the whole fight, the same as F10
-                else if (action==3) toggleCombatMode();
-                else if (action==4) togglePilotMode();
+                else if (action==3) setMode(mode()==RunMode.COMBAT_AUTO?RunMode.STANDBY:RunMode.COMBAT_AUTO);
+                else if (action==4) setMode(mode()==RunMode.PILOT?RunMode.STANDBY:RunMode.PILOT);
                 else stopAll();
             } else if (!collapsed && lx >= 16 && lx < w-16 && ly >= TOGGLES_TOP && ly <= TOGGLES_TOP+28) {
                 float spacing=(w-24)/(canCreditRest()?3:2);
@@ -1177,14 +1172,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     static boolean solverDriving() { return instance != null && (instance.auto || instance.runAuto); }
     static Path desktop() { return instance != null ? RunExports.desktopDirectory() : Paths.get(System.getProperty("user.home"), "Desktop"); }
-
-    private void toggleStandby() {
-        standby = !standby;
-        armed = combat(); // a fight already on screen keeps its search
-        saveSetting("standby", standby);
-        exports.message = I18n.t(standby ? "待命模式：面板保持折叠，战斗中点【计算】才搜索，打完自动收起" : "待命模式已关闭");
-        exports.messageError = false;
-    }
 
     private void saveSetting(String key, boolean value) {
         try { if (config != null) { config.setBool(key, value); config.save(); } }
@@ -1352,7 +1339,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         canvas.label(sb,I18n.t("Boss 快速收尾：")+I18n.t(bossFastFinishEnabled?"开":"关"),26,t+p,cw-20,.85f,bossFastFinishEnabled?ACCENT:MUTED);
         canvas.label(sb,I18n.t("语言：")+("en".equals(I18n.language())?"English":"简体中文"),right+10,t+p,cw-20,.85f,ACCENT);
         canvas.label(sb,I18n.t("持续记录：")+" "+I18n.t(backend.runLog()?"开":"关"),26,t+2*p,cw-20,.85f,backend.runLog()?ACCENT:MUTED);
-        canvas.label(sb,I18n.t("待命模式：")+I18n.t(standby?"开":"关"),right+10,t+2*p,cw-20,.85f,standby?ACCENT:MUTED);
         canvas.label(sb,I18n.t("自动战斗快捷键：")+Input.Keys.toString(autoKey),26,t+3*p,cw-20,.85f,ACCENT);
         canvas.label(sb,"SuperFastMode: "+(Loader.isModLoaded("superfastmode")?"x"+superFastShown():I18n.t("未安装")),right+10,t+3*p,cw-20,.85f,
             superFastSpeed()>SUPER_FAST_TESTED?DANGER:MUTED);
@@ -1542,11 +1528,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             case OutsidePilot.NO_BUTTON: break;
             case 3: if(pilot.packet!=null)pilot.confirm=true; break;
             case 0: stopAll(); break;
-            case -1: chooseOutsideMode(1); break;
-            case -2:
-                chooseOutsideMode(0);
-                if (!runAuto) toggleRunAuto();
-                break;
+            case -1: pilot.select(0); setMode(RunMode.STANDBY); break;
+            case -2: pilot.select(0); setMode(RunMode.COMBAT_AUTO); break;
             default: chooseOutsideMode(action);
         }
     }
