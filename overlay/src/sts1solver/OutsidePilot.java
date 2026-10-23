@@ -34,7 +34,7 @@ final class OutsidePilot {
     }
 
     static final float PILOT_WIDTH = 440, PILOT_LIST_TOP = 72, PILOT_ROW = 30, NOTICE_ROW = 20;
-    static final float EXPORT_LEFT = PILOT_WIDTH-240, EXPORT_WIDTH = 64;  // header button between the title and the mode chip
+    static final float EXPORT_LEFT = PILOT_WIDTH-266, EXPORT_WIDTH = 90;  // header button between the title and the mode chip
     static final int PILOT_ROWS = 5;
     static final int NO_BUTTON = Integer.MIN_VALUE;
 
@@ -324,7 +324,7 @@ final class OutsidePilot {
         canvas.box(sb,1,1,PILOT_WIDTH-2,height-2,PanelCanvas.BACKGROUND);
         canvas.label(sb,I18n.t("自动爬塔"),16,10,140,1.05f,Color.WHITE);
         canvas.button(sb,EXPORT_LEFT,9,EXPORT_WIDTH,24,PanelCanvas.SURFACE);
-        canvas.label(sb,I18n.t("导出"),EXPORT_LEFT+8,13,EXPORT_WIDTH-12,.78f,PanelCanvas.ACCENT);
+        canvas.label(sb,I18n.t("导出日志"),EXPORT_LEFT+8,13,EXPORT_WIDTH-12,.78f,PanelCanvas.ACCENT);
         String chip=prompt?"新一局":mode==2?"AI全自动中":mode==1?"Agent"
             :failed?"已暂停":"已接管";
         Color chipColor=mode==2?PanelCanvas.ACCENT:failed?PanelCanvas.DANGER:mode==1?Color.WHITE:PanelCanvas.MUTED;

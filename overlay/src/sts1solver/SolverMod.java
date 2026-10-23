@@ -1283,7 +1283,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         canvas.label(sb,I18n.t(settingsOpen?"设置":"战斗求解器"),PAD,11,200,.95f,Color.WHITE);
         canvas.button(sb,right,8,24,26,null,"－",1,MUTED,() -> { collapsed=true; autoFolded=false; });
         right=ghost(sb,right,settingsOpen?"返回":"设置",() -> settingsOpen=!settingsOpen);
-        if(!settingsOpen) ghost(sb,right,"导出",() -> exports.exportRun(backend));
+        if(!settingsOpen) ghost(sb,right,"导出日志",() -> exports.exportRun(backend));
         float top=44;
         if(settingsOpen) top=renderSettings(sb,top);
         else {
@@ -1575,7 +1575,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         float fw=canvas.textWidth(fast,.78f);
         canvas.label(sb,fast,right-fw,top+5,fw+2,.78f,superFastSpeed()>SUPER_FAST_TESTED?DANGER:MUTED); top+=p;
         canvas.line(sb,PAD,top,WIDTH-2*PAD);
-        return lines(sb,I18n.t("F6 导出记录 · F8 收起 · F9 停止")+" · "+Input.Keys.toString(autoKey)+" "+I18n.t("执行整场"),top+8,.72f,MUTED);
+        return lines(sb,I18n.t("F6 导出日志 · F8 收起 · F9 停止")+" · "+Input.Keys.toString(autoKey)+" "+I18n.t("执行整场"),top+8,.72f,MUTED);
     }
 
     /** 1 when SuperFastMode is absent or its multiplier is off. */

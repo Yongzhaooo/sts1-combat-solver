@@ -33,7 +33,7 @@ QQ community group: **232459269**. Share your experience and report issues.
   | `F7` | Save this act's map with the planned route as a PNG on the desktop |
   | `F6` | Export a diagnostic archive (`Shift+F6` finalizes experience parts when recording is on) |
 
-- **Report a problem:** press `F6` (or the panel header's **Export**) and send the exported file in the QQ group or GitHub Issues. Data stays on your computer (`%LOCALAPPDATA%\STS1CombatSolver` on Windows, `~/Library/Application Support/STS1CombatSolver` on Mac) and nothing uploads automatically; read [Privacy](PRIVACY.md) before sharing.
+- **Report a problem:** press `F6` (or **Export log** in the panel header) and send the exported file in the QQ group or GitHub Issues. Data stays on your computer (`%LOCALAPPDATA%\STS1CombatSolver` on Windows, `~/Library/Application Support/STS1CombatSolver` on Mac) and nothing uploads automatically; read [Privacy](PRIVACY.md) before sharing.
 
 ## Full autopilot (early)
 
