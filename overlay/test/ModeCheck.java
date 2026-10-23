@@ -86,7 +86,7 @@ public final class ModeCheck {
 
         // New and renamed panel text is translated.
         I18n.setLanguage("en");
-        for (String key : new String[]{"Boss 快速收尾：", "未安装", "战斗全自动", "战斗全自动：开", "人工逐步", "确认这一步（回车）",
+        for (String key : new String[]{"Boss 快速收尾：", "未安装", "战斗全自动", "执行中", "人工逐步", "确认这一步（回车）",
                 "战斗全自动已开 · 等待下场；其他选择由你决定", "按 F1-F12 绑定；F6/F7/F8/F9 保留；Esc 取消",
                 "Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同",
                 "已停止 · 人工逐步：每一步回车或点击确认", "人工逐步：求解器和 AI 给出建议，每一步回车或点击确认",

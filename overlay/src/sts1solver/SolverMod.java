@@ -1247,12 +1247,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         String note=exports.note();
         if (settingsOpen) renderSettings(sb,w,note);
         else renderCombatBody(sb,w,note);
-        String[] labels={I18n.t("重新计算"),I18n.t("执行一步"),turnOnly?I18n.t("正在执行本回合"):I18n.t("执行本回合"),
-            I18n.t(pilot.mode!=2 && (runAuto || auto)?"战斗全自动：开":"战斗全自动"),
-            I18n.t(pilot.mode==2?"AI全自动：开":"AI全自动"),I18n.t("停止")};
+        String[] labels={I18n.t("重新计算"),I18n.t("执行一步"),turnOnly?I18n.t("执行中"):I18n.t("执行本回合"),
+            I18n.t("战斗全自动"),I18n.t("AI全自动"),I18n.t("停止")};
         for(int i=0;i<labels.length;i++) {
             canvas.button(sb,16+i*ACTION_SPACING,ACTIONS_TOP,ACTION_SPACING-8,36,i==0?ACCENT:SURFACE);
-            canvas.label(sb,labels[i],26+i*ACTION_SPACING,ACTIONS_TOP+8,ACTION_SPACING-28,.8f,
+            canvas.label(sb,labels[i],26+i*ACTION_SPACING,ACTIONS_TOP+8,ACTION_SPACING-28,.75f,
                 i==0?BACKGROUND:i==5?DANGER:i==4&&pilot.mode==2?ACCENT
                 :i==3&&pilot.mode!=2&&(runAuto||auto)?ACCENT:i==2&&result==null?MUTED:Color.WHITE);
         }
