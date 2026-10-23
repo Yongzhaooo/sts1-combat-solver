@@ -20,7 +20,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 下一步  |Next: 
 下层走火堆计羽毛回血：|Next campfire Feather healing: 
 不可用|Unavailable
-仅必经火堆|forced
+仅必经火堆|Forced
 仅建议，点按钮才出牌|Advice only; you play
 仅试选 · 滚轮翻页 · 点击已选项撤回|Preview only · scroll · click a pick to undo
 停止|Stop
@@ -318,7 +318,7 @@ F6 导出错误报告|F6 Export bug report
 界面缩放保存失败：|Could not save panel size:
 预测胜利|Victory predicted
 战后 HP|Final HP
-等效战损|Net HP loss
+等效战损|Equiv. loss
 战后恢复：|Recovery:
 自动战斗快捷键：|Auto battle key:
 语言：|Language:
@@ -346,7 +346,7 @@ F6 导出记录到桌面，发这一个文件即可|F6 exports the record to you
 当前没有地图|No map to export
 地图已导出到桌面：|Map saved to the desktop: 
 
-战斗全自动|Combat
+战斗全自动|Auto
 AI全自动|AI pilot
 AI全自动中|AI running
 继续AI全自动|Resume AI
