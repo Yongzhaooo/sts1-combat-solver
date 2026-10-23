@@ -52,7 +52,7 @@
 |---|---|
 | `pilot.mode` | 局外（`OutsidePilot.mode`）：0 不给建议，1 每步给建议、玩家确认，2 AI全自动 |
 | `runAuto` | 整局的战斗都自动打（战斗全自动和 AI全自动） |
-| `heldThisFight` | 玩家用“执行一步”“执行本回合”或 F10 接管了这一场；下一场照常自动。`fightAuto()` = `runAuto` 且未接管 |
+| `heldThisFight` | 玩家用“执行一步”“执行整场”或 F10 接管了这一场；下一场照常自动。`fightAuto()` = `runAuto` 且未接管 |
 | `auto` | 当前这场正在自动执行 |
 | `turnOnly` | 只自动执行到本回合结束 |
 | `paused` | 自动执行被暂停（F9 或出错） |

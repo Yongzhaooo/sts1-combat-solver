@@ -51,9 +51,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private long searchTimeoutMillis = SearchStatus.timeoutMillis(8000);
     private JsonObject rootKey, lastKey, result;
     private boolean decisionDirty=true;
-    private boolean busy, awaitingAction, auto, turnOnly, gamblingAuto, paused, collapsed;
+    private boolean busy, awaitingAction, auto, gamblingAuto, paused, collapsed;
     private boolean runAuto;
-    private boolean heldThisFight; // Step, Execute turn or F10 took this fight over; the next fight runs automatically again
+    private boolean heldThisFight; // Step or Execute fight took this fight over; the next fight runs automatically again
     private boolean runAfterBranch; // F10 pressed while a route choice was pending: run the fight once chosen
     private boolean autoPotionRewards = true;
     private boolean runAutoEnabled = true;
@@ -66,7 +66,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private String autoReason = "";
     private PotionRewards.Advice rewardPotionAdvice;
     private PotionRewards.Pending rewardPotionPending;
-    private int scroll, startingTurn;
+    private int scroll;
     private int executedTurn;
     private String executedCommand = "";
     // Every request asks for the standard budget; the backend tiers it per act and room (low-performance mode: 1/20,
@@ -227,10 +227,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private void toggleAuto() {
         decisionDirty=true;
         if (!combat() || !supported()) return;
-        if (auto || turnOnly) { heldThisFight = true; auto = turnOnly = false; status = I18n.t("自动已关闭 · 保留建议"); return; }
+        if (auto) { heldThisFight = true; auto = false; status = I18n.t("自动已关闭 · 保留建议"); return; }
         heldThisFight = false;
         auto = true;
-        turnOnly = false;
         paused = false;
         error = "";
         if (!busy && result == null && !awaitingAction) lastKey = null;
@@ -243,7 +242,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             chooseAutomaticBranch();
             return;
         }
-        auto=turnOnly=false;
+        auto=false;
         branchPicker=true;
         collapsed=false;
         branchInput="";
@@ -408,7 +407,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(!CommandExecutor.isInDungeon() || AbstractDungeon.player==null || !supported())return;
         runAutoEnabled=true;saveAutomation();
         runAuto=true;runAutoPlayer=AbstractDungeon.player;heldThisFight=false;
-        auto=combat();turnOnly=false;paused=false;branchConfirmed=false;
+        auto=combat();paused=false;branchConfirmed=false;
         branchPicker=false;captureBranchKeys=false;branchInput="";decisionDirty=true;
         error="";autoReason=I18n.t("自动用药＋跨场战斗已开启");
         if(result!=null && !busy && ready())chooseAutomaticBranch();
@@ -438,7 +437,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private void chooseOutsideMode(int mode) {
         pilot.select(mode);
         if(mode==0)return;
-        if(mode==1) { runAuto=false; auto=turnOnly=false; decisionDirty=true; return; } // fights wait for the player too
+        if(mode==1) { runAuto=false; auto=false; decisionDirty=true; return; } // fights wait for the player too
         runAuto=true; runAutoPlayer=AbstractDungeon.player; heldThisFight=false;
         auto=combat(); paused=false; decisionDirty=true;
     }
@@ -574,7 +573,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             if(AbstractDungeon.player!=null){record.addProperty("seed",Long.toString(Settings.seed));record.addProperty("floor",AbstractDungeon.floorNum);}
             record.addProperty("message",message);
             record.addProperty("auto",auto);
-            record.addProperty("turn_only",turnOnly);
             record.addProperty("awaiting_action",awaitingAction);
             record.addProperty("executed_command",executedCommand);
             if(state!=null)record.add("state",state);
@@ -596,7 +594,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (!pendingSearch) { ++serial; activeId = serial; }
         if (!pendingSearch) clickedBranch = null;
         busy = pendingSearch;
-        awaitingAction = auto = turnOnly = gamblingAuto = runAfterBranch = false;
+        awaitingAction = auto = gamblingAuto = runAfterBranch = false;
         if (!keepResult) { branchPicker = branchConfirmed = false; branchInput = ""; result = null; }
         decisionDirty = true;
         paused = pause;
@@ -622,10 +620,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private void recalculate() {
         diagnostic("recalculate",I18n.t("重新计算"),null);
-        boolean resumeAuto=auto, resumeTurn=turnOnly;
+        boolean resumeAuto=auto;
         cancel(false);
         auto=resumeAuto;
-        turnOnly=resumeTurn;
         error = "";
         lastKey = null;
         scroll = 0;
@@ -639,7 +636,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             cancel(false);
             paused=true;
             status=I18n.t("局面已变化 · 请重新计算");
-        } else if(auto || turnOnly)fail(I18n.t("局面发生未预期变化，已停止自动执行：")+difference);
+        } else if(auto)fail(I18n.t("局面发生未预期变化，已停止自动执行：")+difference);
         else recalculate();
     }
 
@@ -782,7 +779,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             } else if (kind.equals("error")) fail(reply.get("message").getAsString());
             else if (kind.equals("cancelled")) { busy=false; clickedBranch=null; status=I18n.t("已停止 · 尚无可执行路线"); }
             else if (kind.equals("complete")) {
-                auto = turnOnly = false;
+                auto = false;
                 paused = true;
                 status = I18n.t("路线已结束 · 可手动操作或重新计算");
             }
@@ -803,7 +800,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (!ready() || !decisionDirty) return;
         try {
             JsonObject state = capture(), current = key(state);
-            if (!paused && !gamblingAuto && !auto && !turnOnly && !awaitingAction
+            if (!paused && !gamblingAuto && !auto && !awaitingAction
                     && openingSelection(state)) {
                 gamblingAuto = auto = branchConfirmed = true;
                 branchPicker=false;captureBranchKeys=false;branchInput="";
@@ -830,11 +827,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 send("solve", state);
                 return;
             }
-            if (result != null && (auto || turnOnly)) {
+            if (result != null && auto) {
                 if(fightAuto() && !branchConfirmed){chooseAutomaticBranch();return;}
                 if (routeChoice(result, !fightAuto()) && !branchConfirmed) {requestBranches();return;}
-                int turn = state.getAsJsonObject("game_state").getAsJsonObject("combat_state").get("turn").getAsInt();
-                if (turnOnly && turn != startingTurn) { turnOnly = false; return; }
                 executeStep();
             }
             if(!awaitingAction && !captureBranchKeys)decisionDirty=false;
@@ -988,10 +983,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         captureBranchKeys=branchPicker || (captureBranchKeys && held);
         // Enter runs one step in Manual, otherwise resumes this combat's automation. The key is
         // withheld from the game until released; potion choices keep their own Enter.
-        if(!branchPicker && !auto && !turnOnly && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)
+        if(!branchPicker && !auto && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)
                 && supported() && ready()) {
             if(RunMode.combatAutomatic(mode())) toggleAuto();
-            else executeStep(); // one step per Enter; F10 or Execute turn runs more
+            else executeStep(); // one step per Enter; F10 runs the whole fight
             captureBranchKeys=true;
             return;
         }
@@ -1082,15 +1077,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                     }
                 }
             } else if (list && result!=null) {
-                if (!auto && !turnOnly) toggleAuto(); // the whole route; Enter is one step in Manual
+                if (!auto) toggleAuto(); // the whole route; Enter is one step in Manual
             } else if (!collapsed && lx >= 16 && lx < w-16 && ly >= ACTIONS_TOP && ly <= ACTIONS_TOP+36
                     && (lx-16)%ACTION_SPACING < ACTION_SPACING-8) {
                 int action=(int)((lx-16)/ACTION_SPACING);
                 if (action==0) recalculate();
-                else if (action==1) { heldThisFight=true; auto=turnOnly=false; executeStep(); }
-                else if (action==2) {
-                    if (result != null && ready()) { startingTurn=AbstractDungeon.actionManager.turn; turnOnly=true; heldThisFight=true; auto=false; }
-                } else if (action==3) toggleCombatMode();
+                else if (action==1) { heldThisFight=true; auto=false; executeStep(); }
+                else if (action==2) toggleAuto(); // the whole fight, the same as F10
+                else if (action==3) toggleCombatMode();
                 else if (action==4) togglePilotMode();
                 else stopAll();
             } else if (!collapsed && lx >= 16 && lx < w-16 && ly >= TOGGLES_TOP && ly <= TOGGLES_TOP+28) {
@@ -1130,7 +1124,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         catch(IOException failure) { error=I18n.t("模式保存失败：")+failure.getMessage(); }
     }
 
-    static boolean solverDriving() { return instance != null && (instance.auto || instance.turnOnly || instance.runAuto); }
+    static boolean solverDriving() { return instance != null && (instance.auto || instance.runAuto); }
     static Path desktop() { return instance != null ? RunExports.desktopDirectory() : Paths.get(System.getProperty("user.home"), "Desktop"); }
 
     private void saveSetting(String key, boolean value) {
@@ -1247,14 +1241,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         String note=exports.note();
         if (settingsOpen) renderSettings(sb,w,note);
         else renderCombatBody(sb,w,note);
-        String[] labels={I18n.t("重新计算"),I18n.t("执行一步"),turnOnly?I18n.t("正在执行本回合"):I18n.t("执行本回合"),
+        String[] labels={I18n.t("重新计算"),I18n.t("执行一步"),auto?I18n.t("暂停自动"):I18n.t("执行整场"),
             I18n.t(pilot.mode!=2 && (runAuto || auto)?"战斗全自动：开":"战斗全自动"),
             I18n.t(pilot.mode==2?"AI全自动：开":"AI全自动"),I18n.t("停止")};
         for(int i=0;i<labels.length;i++) {
             canvas.button(sb,16+i*ACTION_SPACING,ACTIONS_TOP,ACTION_SPACING-8,36,i==0?ACCENT:SURFACE);
             canvas.label(sb,labels[i],26+i*ACTION_SPACING,ACTIONS_TOP+8,ACTION_SPACING-28,.8f,
                 i==0?BACKGROUND:i==5?DANGER:i==4&&pilot.mode==2?ACCENT
-                :i==3&&pilot.mode!=2&&(runAuto||auto)?ACCENT:i==2&&result==null?MUTED:Color.WHITE);
+                :i==3&&pilot.mode!=2&&(runAuto||auto)?ACCENT:i==2&&auto?ACCENT:Color.WHITE);
         }
         List<String> toggles=new ArrayList<>(Arrays.asList(
             I18n.t("搜索：")+I18n.t(highSpeed?"高速":streakMode?"连胜":"标准"),
@@ -1364,7 +1358,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 ?I18n.t("抢劫怪路线 · 可手动或自动执行")
             :(fightAuto() || auto) && result!=null && result.has("branch") && !result.get("branch").getAsString().equals("no-potion")
                 ?I18n.t("自动战斗已采纳用药路线 · 点击或 F9 可接管")
-            :result!=null && (auto || turnOnly)?I18n.t("推荐行动顺序 · 自动执行中，F9 停止")
+            :result!=null && auto?I18n.t("推荐行动顺序 · 自动执行中，F9 停止")
             :I18n.t("推荐行动顺序 · 点击执行整条路线");
         canvas.label(sb,heading,ROUTE_LEFT,48,w-ROUTE_LEFT-16,.85f,Color.WHITE);
         float rowWidth=w-ROUTE_LEFT-16, textWidth=rowWidth-16;
@@ -1408,7 +1402,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 String label=row.get("text").getAsString();
                 if (row.has("label")) label=row.get("label").getAsString();
                 float top=BODY_TOP+(i-scroll)*BODY_ROW;
-                if(!auto && !turnOnly) canvas.button(sb,ROUTE_LEFT,top,rowWidth,BODY_ROW-4,SURFACE);
+                if(!auto) canvas.button(sb,ROUTE_LEFT,top,rowWidth,BODY_ROW-4,SURFACE);
                 else canvas.box(sb,ROUTE_LEFT,top,rowWidth,BODY_ROW-4,SURFACE);
                 canvas.label(sb,String.format("%02d",i+1),ROUTE_LEFT+8,top+5,28,.8f,i==0?ACCENT:MUTED);
                 canvas.label(sb,I18n.backend(label),ROUTE_LEFT+40,top+4,rowWidth-88,.9f,i==0?Color.WHITE:MUTED);
@@ -1438,7 +1432,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             canvas.label(sb,I18n.t("发牌和动画结算后自动生成建议"),ROUTE_LEFT+8,BODY_TOP+10,textWidth,.85f,MUTED);
             canvas.label(sb,I18n.t("奖励牌 / 地图 / 商店始终由你操作"),ROUTE_LEFT+8,BODY_TOP+40,textWidth,.85f,MUTED);
         }
-        if(hint.isEmpty() && result!=null && !busy && !auto && !turnOnly && !branchPicker && transformPreview==null)
+        if(hint.isEmpty() && result!=null && !busy && !auto && !branchPicker && transformPreview==null)
             hint=I18n.t(RunMode.combatAutomatic(mode())?"点击列表或回车：继续自动打完本场":"点击列表打完本场 · 回车走一步");
         if(fightAuto() && hint.isEmpty() && result!=null && result.has("auto_recommendation")) {
             JsonObject advice=result.getAsJsonObject("auto_recommendation");
