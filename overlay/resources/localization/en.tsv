@@ -21,7 +21,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 下层走火堆计羽毛回血：|Next campfire Feather healing: 
 不可用|Unavailable
 仅必经火堆|Only forced campfire
-仅查看建议，点击按钮后才出牌|Advice ready; click to execute
+仅建议，点按钮才出牌|Advice only; you play
 仅试选 · 滚轮翻页 · 点击已选项撤回|Preview only · scroll · click a pick to undo
 停止|Stop
 关|Off
@@ -29,12 +29,12 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 动作未产生可执行的完成状态，请手动检查。|Action did not finish; check the game manually.
 动作未完成，已停止；请手动操作或重新计算。|Action incomplete; stopped. Play manually or recalculate.
 动作未提交|Action not submitted
-发牌和动画结算后自动生成建议|Advice appears after dealing and animations
+发牌和动画结算后自动生成建议|Advice appears once the deal ends
 变化|Transform
 变化预览 · 点击此处打开试选列表|Transform preview · click to try picks
 后台求解器未响应，请重新计算。详情见数据目录中的 backend.log。|Backend not responding. Recalculate; see backend.log in the data directory.
 后台连接中断：|Backend disconnected: 
-奖励牌 / 地图 / 商店始终由你操作|You choose rewards, map and shop actions
+奖励牌 / 地图 / 商店始终由你操作|You choose rewards, map and shop
 小精灵×|Fairy ×
 局面发生未预期变化，已停止自动执行：|Unexpected state change; auto stopped: 
 局面已变化 · 请重新计算|State changed · recalculate
@@ -117,7 +117,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 药水：|Potion: 
 试选 | preview 
 该路线尚无完整结果 · 请重新选择|Route incomplete · choose again
-详细原因已写入后台日志|Details are in the backend log
+详细原因已写入后台日志|See the backend log
 请求 #|Request #
 请确认战斗与用药路线 · 等待数字选择|Confirm combat / potion route · waiting for number
 战斗全自动已开 · 等待下场；其他选择由你决定|Combat auto on · waiting for the next fight; other choices are yours
@@ -357,7 +357,8 @@ AI全自动中|AI running
 第三幕最后宝箱：蓝钥匙最高优先级|Last Act 3 chest: Sapphire Key takes priority
 人工逐步|Manual (step)
 新一局：选【人工逐步】每步确认，【战斗全自动】只自动打战斗，或【AI全自动】完全托管|New run: pick [Manual (step)] to confirm every step, [Combat auto] to automate fights only, or [AI autopilot] for everything
-自己构筑请开【战斗全自动】；点击【AI全自动】随时完全托管|Turn on [Combat auto] to build yourself; click [AI autopilot] anytime
+自己构筑请开【战斗全自动】|Turn on [Combat auto] to build yourself
+或点【AI全自动】随时完全托管|or click [AI autopilot] anytime
 这些 Mod 会影响随机数（RNG），求解器计算可能不准确，建议关闭：|These mods affect the game RNG, so solver results may be inaccurate; consider disabling: 
 SuperFastMode 速度 ×|SuperFastMode speed x
  超出已测试的 ×10，如自动执行异常请调低| exceeds the tested x10; lower it if automation misbehaves
