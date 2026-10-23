@@ -1250,10 +1250,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         String[] labels={I18n.t("重新计算"),I18n.t("执行一步"),turnOnly?I18n.t("执行中"):I18n.t("执行本回合"),
             I18n.t("战斗全自动"),I18n.t("AI全自动"),I18n.t("停止")};
         for(int i=0;i<labels.length;i++) {
-            canvas.button(sb,16+i*ACTION_SPACING,ACTIONS_TOP,ACTION_SPACING-8,36,i==0?ACCENT:SURFACE);
+            boolean on=i==3&&pilot.mode!=2&&(runAuto||auto)||i==4&&pilot.mode==2;
+            float left=16+i*ACTION_SPACING;
+            if(on) canvas.box(sb,left-2,ACTIONS_TOP-2,ACTION_SPACING-4,40,ACCENT);
+            canvas.button(sb,left,ACTIONS_TOP,ACTION_SPACING-8,36,i==0?ACCENT:SURFACE);
             canvas.label(sb,labels[i],26+i*ACTION_SPACING,ACTIONS_TOP+8,ACTION_SPACING-28,.75f,
-                i==0?BACKGROUND:i==5?DANGER:i==4&&pilot.mode==2?ACCENT
-                :i==3&&pilot.mode!=2&&(runAuto||auto)?ACCENT:i==2&&result==null?MUTED:Color.WHITE);
+                i==0?BACKGROUND:i==5?DANGER:on?ACCENT:i==2&&result==null?MUTED:Color.WHITE);
         }
         List<String> toggles=new ArrayList<>(Arrays.asList(
             I18n.t("搜索：")+I18n.t(highSpeed?"高速":streakMode?"连胜":"标准"),
