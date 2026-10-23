@@ -30,6 +30,21 @@ public class StateKeyCheck {
         if (!before.equals(SolverMod.key(state))) throw new AssertionError("F9 / automation toggle discards the found route");
         context.addProperty("high_speed", true);
         if (before.equals(SolverMod.key(state))) throw new AssertionError("search settings must stay in the key");
+        JsonObject opening = parser.parse("{\"game_state\":{\"screen_type\":\"CARD_REWARD\",\"combat_state\":{\"monsters\":"
+            + "[{\"move_id\":2,\"intent\":\"DEBUG\",\"move_adjusted_damage\":-1}]}},\"available_commands\":[\"choose\"]}").getAsJsonObject();
+        JsonObject monster = opening.getAsJsonObject("game_state").getAsJsonObject("combat_state")
+            .getAsJsonArray("monsters").get(0).getAsJsonObject();
+        before = SolverMod.key(opening);
+        monster.addProperty("intent", "ATTACK"); monster.addProperty("move_adjusted_damage", 12);
+        if (!before.equals(SolverMod.key(opening))) throw new AssertionError("Toolbox: intent shown during the picker cancels the route");
+        if (!monster.get("intent").getAsString().equals("ATTACK")) throw new AssertionError("snapshot mutated");
+        monster.addProperty("move_id", 3);
+        if (before.equals(SolverMod.key(opening))) throw new AssertionError("Toolbox: monster move must stay in the key");
+        opening.getAsJsonObject("game_state").addProperty("screen_type", "NONE");
+        monster.addProperty("move_id", 2);
+        before = SolverMod.key(opening);
+        monster.addProperty("intent", "DEFEND");
+        if (before.equals(SolverMod.key(opening))) throw new AssertionError("intent must stay in the key outside pickers");
         // Headbutt kills a minion then opens GRID: the game freezes room.update,
         // so waiting for that monster's death animation would deadlock the picker.
         for (com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen screen
@@ -50,6 +65,6 @@ public class StateKeyCheck {
                     || CombatReadiness.waitForMonsterExit(screen,true,false,true,false,false))
                 throw new AssertionError("finished/half-dead monster blocks " + screen);
         }
-        System.out.println("PASS: picker/card previews and run_auto ignored; card identity, costs, base rules and search settings retained");
+        System.out.println("PASS: picker/card previews, run_auto and picker-time intents ignored; card identity, costs, base rules and search settings retained");
     }
 }

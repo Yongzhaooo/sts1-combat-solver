@@ -502,6 +502,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         JsonObject c = game.getAsJsonObject("combat_state");
         if (c != null) {
             c.remove("frame_delta_seconds");
+            // Toolbox and Gambling Chip pick before monsters show intents (DEBUG); the intent can appear while the
+            // picker is still open. The move id and powers stay in the key, so the route is still checked.
+            if (game.has("screen_type") && !"NONE".equals(game.get("screen_type").getAsString())
+                    && c.has("monsters"))
+                for (JsonElement monster : c.getAsJsonArray("monsters")) {
+                    monster.getAsJsonObject().remove("intent");
+                    monster.getAsJsonObject().remove("move_adjusted_damage");
+                }
         }
         // F9 and the automation buttons flip run_auto mid-fight; the route found so far stays valid.
         JsonObject context = game.getAsJsonObject("solver_auto_context");
