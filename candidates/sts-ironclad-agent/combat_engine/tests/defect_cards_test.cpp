@@ -46,7 +46,8 @@ namespace {
 }
 
 // M3b Defect cards: common attacks/skills that only use existing mechanics.
-// Values cross-checked against the calibration fixtures and the game wiki.
+// Values follow the card classes in the game jar; defect_card_values_test.cpp
+// carries the full base/upgraded table.
 int main() {
     try {
     {
@@ -157,7 +158,7 @@ int main() {
         check(bc.cards.exhaustPile.size() == 1, "Chill should exhaust");
     }
     {
-        // Card costs corrected against the wiki and calibration fixtures.
+        // Card costs come from each card class's baseCost and upgradeBaseCost.
         check(CardInstance(CardId::BEAM_CELL).cost == 0, "Beam Cell should cost 0");
         check(CardInstance(CardId::CHILL).cost == 0, "Chill should cost 0");
         check(CardInstance(CardId::TURBO).cost == 0, "Turbo should cost 0");

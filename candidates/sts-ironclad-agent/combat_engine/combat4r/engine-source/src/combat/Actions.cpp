@@ -612,9 +612,11 @@ namespace {
 
 Action Actions::ChannelOrb(Orb orb, std::int8_t evokeBonus, std::int16_t darkCounter) {
     return {[=] (BattleContext &bc) {
-        // Vanilla rules (wiki/game): with no slots a channel does nothing and
-        // never triggers the orb's evoke; with a full bar the oldest orb is
-        // evoked first (its effects fire), then the new orb takes the open end.
+        // AbstractPlayer.channelOrb: with no orb slots it only shows a thought
+        // bubble and returns, so nothing is evoked; otherwise the first empty
+        // slot takes the orb. With no empty slot it queues an evoke of slot 0
+        // and then the channel, so the oldest orb fires and the new one lands
+        // at the end.
         if (bc.player.orbSlots <= 0) {
             return;
         }

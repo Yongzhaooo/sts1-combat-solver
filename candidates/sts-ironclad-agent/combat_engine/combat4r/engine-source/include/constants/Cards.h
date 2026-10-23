@@ -840,9 +840,9 @@ namespace sts {
                 return -2;
 
 
-            // Defect costs that differ from the historical default of 1. Verified
-            // against the game wiki and the calibration fixtures (Beam Cell is
-            // played at 0 energy in defect-a0-04).
+            // Defect costs that differ from the historical default of 1. Each one
+            // is the card class's own baseCost, or the argument of the
+            // upgradeBaseCost call in its upgrade() method.
             case CardId::BEAM_CELL:
             case CardId::CHILL:
             case CardId::TURBO:
