@@ -396,6 +396,7 @@ PYBIND11_MODULE(overlay_search, m) {
         combat_search::ReuseResult result;
         bool beamRan=false, beamUsed=false;
         bool macroUsed=false;
+        int shortenedFrom=0;  // actions before the shortening pass; 0 when it kept the line
         int smokePrefixes=0;
         bool smokeCapped=false;
         double mctsValue=0;
@@ -496,6 +497,19 @@ PYBIND11_MODULE(overlay_search, m) {
                     }
                 }
             }
+            // Equal results, fewest actions: a long win gets one shortening pass; it never lowers the end value. A Heart
+            // victory ends the run, so there a shorter win keeping half of max HP (at most the found line's HP) is equal.
+            if(predicted.outcome==Outcome::PLAYER_VICTORY && result.actions.size()>64 && !overlayInterrupted()) {
+                loop_beam::Best seed{true,value(predicted),std::make_shared<BattleContext>(predicted),
+                                     result.actions};
+                const int floor=heartFight ? std::min(predicted.player.curHp,root.player.maxHp/2) : -1;
+                auto shorter=loop_beam::shorten(root,std::move(seed),std::min(LOOP_BEAM_PER_SIM*simulations,2000000LL),
+                                                value,cancelled,floor);
+                if(shorter.actions.size()<result.actions.size()) {
+                    shortenedFrom=static_cast<int>(result.actions.size());
+                    predicted=*shorter.state; result.actions=shorter.actions; result.bestHp=predicted.player.curHp; beamUsed=true;
+                }
+            }
             }
         }
         if(macroUsed){ live.bestHp=predicted.player.curHp; live.turn=predicted.turn; }
@@ -531,6 +545,7 @@ PYBIND11_MODULE(overlay_search, m) {
         out["value"]=search::BattleScumSearcher2::evaluateEndState4r(predicted,initialMaxHp);
         out["loop_beam_ran"]=beamRan;
         out["loop_beam_used"]=beamUsed;
+        out["shortened_from"]=shortenedFrom;
         out["loop_beam_transitions"]=beamRan ? loop_beam::stats.transitions : 0;
         out["loop_beam_mcts_value"]=mctsValue;
         out["loop_macro_used"]=macroUsed;
