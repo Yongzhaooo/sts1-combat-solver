@@ -1346,8 +1346,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 healing+=" · "+I18n.backend(result.getAsJsonArray("recovery_notes").get(0).getAsString());
             canvas.label(sb,healing,26,198,inner,.75f,MUTED);
         } else {
-            canvas.label(sb,error.isEmpty()?I18n.t("自己构筑请开【战斗全自动】；点击【AI全自动】随时完全托管"):I18n.backend(error),26,90,inner,.85f,error.isEmpty()?ACCENT:DANGER);
-            canvas.label(sb,error.isEmpty()?I18n.t("仅查看建议，点击按钮后才出牌"):I18n.t("详细原因已写入后台日志"),26,124,inner,.8f,MUTED);
+            // This column is 200 units wide; the mode guidance sits in the 360-unit list area instead.
+            canvas.label(sb,error.isEmpty()?I18n.t("仅建议，点按钮才出牌"):I18n.backend(error),26,90,inner,.8f,error.isEmpty()?ACCENT:DANGER);
+            if(!error.isEmpty())canvas.label(sb,I18n.t("详细原因已写入后台日志"),26,124,inner,.8f,MUTED);
         }
         List<String> foresight=transformPreview!=null?transformPreview.lines():combat()?Collections.<String>emptyList():Foresight.lines();
         String heading=transformPreview!=null?(transformPreview.upgrade?I18n.t("星盘"):I18n.t("变化"))+I18n.t("试选 ") + transformPreview.selected.size() + "/"+transformPreview.count+I18n.t(" · 点击此处关闭")
@@ -1430,8 +1431,15 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 canvas.label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+(i-scroll)*BODY_ROW,textWidth,.85f,line.startsWith(" ")?MUTED:ACCENT);
             }
         } else {
-            canvas.label(sb,I18n.t("发牌和动画结算后自动生成建议"),ROUTE_LEFT+8,BODY_TOP+10,textWidth,.85f,MUTED);
-            canvas.label(sb,I18n.t("奖励牌 / 地图 / 商店始终由你操作"),ROUTE_LEFT+8,BODY_TOP+40,textWidth,.85f,MUTED);
+            boolean idle=result==null&&!busy;
+            float top=BODY_TOP+10;
+            if(idle) {
+                canvas.label(sb,I18n.t("自己构筑请开【战斗全自动】"),ROUTE_LEFT+8,top,textWidth,.8f,MUTED);
+                canvas.label(sb,I18n.t("或点【AI全自动】随时完全托管"),ROUTE_LEFT+8,top+BODY_ROW,textWidth,.8f,MUTED);
+                top+=BODY_ROW*2;
+            }
+            canvas.label(sb,I18n.t("发牌和动画结算后自动生成建议"),ROUTE_LEFT+8,top,textWidth,.8f,MUTED);
+            canvas.label(sb,I18n.t("奖励牌 / 地图 / 商店始终由你操作"),ROUTE_LEFT+8,top+BODY_ROW,textWidth,.8f,MUTED);
         }
         if(hint.isEmpty() && result!=null && !busy && !auto && !branchPicker && transformPreview==null)
             hint=I18n.t(RunMode.combatAutomatic(mode())?"点击列表或回车：继续自动打完本场":"点击列表打完本场 · 回车走一步");
