@@ -1180,7 +1180,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             turn=Math.max(turn,row.get("turn").getAsInt());
             best=Math.max(best,row.get("best_hp").getAsInt());
         }
-        return I18n.t("本轮模拟 ")+count(total)+I18n.t("次 · 循环展开 ")+count(transitions)+I18n.t("步");
+        return I18n.t("本轮模拟 ")+count(total)+I18n.t("次 · 循环展开 ")+count(transitions)+" "+I18n.t("步");
     }
     private boolean canCreditRest() {
         if(!combat() || !AbstractDungeon.player.hasRelic("Eternal Feather"))return false;
@@ -1270,7 +1270,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             String revival=revivalWarning(result);
             boolean good=won && revival.isEmpty();
             tone[0]=good?ACCENT_SOFT:DANGER_SOFT; tone[1]=good?ACCENT:DANGER;
-            return I18n.t(won?"预测胜利":"未胜")+" · HP "+result.get("hp").getAsString()
+            // A win is told by the green badge; the words would not fit beside Play in English.
+            return (won?"":I18n.t("未胜")+" · ")+"HP "+result.get("hp").getAsString()
                 +" · "+I18n.t("战损")+" "+result.get("loss").getAsString()+(revival.isEmpty()?"":" · "+revival);
         }
         return standbyWaiting() ? I18n.t("待命") : status;

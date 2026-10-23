@@ -361,8 +361,8 @@ Boss 快速收尾：找到不交药的胜利路线就停止搜索|Boss fast fini
 开局逃跑候选|Opening escape candidates
 追加深搜|Deeper search
 基础搜索|Base search
-本轮模拟 |Current simulations:
-次 · 循环展开 |; loop transitions:
+本轮模拟 |Simulations 
+次 · 循环展开 | · loop 
 步|steps
 次|simulations
 Agent 模式：局外由 agent 决定，战斗自动执行 · F9 接管|Agent mode: an agent makes outside choices; fights run automatically · F9 takes over

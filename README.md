@@ -16,6 +16,8 @@ QQ community group: **232459269**. Share your experience and report issues.
 
 ## Use
 
+![Combat panel: folded, searching, picking a potion plan, play order and settings](docs/images/panel-en.png)
+
 - **Three modes, chosen when a run starts and switchable on the panel at any time:** **Standby:** the panel stays folded; press Solve to search this fight and Play to run all of it. When several potion plans are usable the panel opens for you to pick one, and nothing plays until you do. Outside combat you decide. **Combat auto:** every fight runs automatically, including potions, and you make the other decisions. **AI autopilot:** the solver climbs and fights. `F9` returns to Standby at any time.
 - **Combat panel:** shows the outcome and the next action; the play order and search progress open on click.
 - **Search effort:** set automatically by act and room. On an older PC, switch Settings to **High speed**: every fight uses 1/20 of the search, which is faster but wins less often and loses more HP. For win streaks, switch to **Streak**: acts 1-3 keep the full search, which is slower.
