@@ -19,7 +19,7 @@ Subscribe with ModTheSpire and BaseMod. Windows x64 and Apple Silicon Macs; Inte
 
 [源码与下载 / Source & downloads](https://github.com/Yongzhaooo/sts1-combat-solver)
 
-v0.9.3: Routes already found survive F9 and switching automation mid-fight, and can be clicked to continue; finished routes can be clicked while the search still runs. In Manual, clicking the route list plays out the fight and Enter plays one step; when more than one route is usable (for example, the no-potion line spends the Fairy), the list is shown first. Routes that spend a Fairy or Lizard Tail are marked red during the search. The panel header always has an Export button, the same as F6. Fixed: Toolbox openings stopped with an unexpected state change, and Spire Growth picked a different move from the game.
+v0.9.4: Standby replaces Manual: the panel starts each fight folded and searches only after you press Solve; when several potion plans are usable you must pick one, and Execute plays out the fight; Enter belongs to the game again, and no suggestion cards appear outside combat. The combat panel is compact: a three-way switch for Standby, Combat auto and AI autopilot, play order shown on demand, at most three buttons, and the toggles moved into Settings. Among equal wins the solver plays the one with the fewest actions; a Heart win longer than 150 actions gets a second, deeper search for a shorter win. A plan that drinks an Entropic Brew can drink the potions it brews. Export is now Export log, and the log says why each re-search started. Fixed: long Chinese text was cut off on the panel.
 
 Special thanks to 七月流火（猫火） for long-term testing and feedback.
 
