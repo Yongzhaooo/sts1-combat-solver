@@ -17,18 +17,26 @@ import com.megacrit.cardcrawl.helpers.input.InputHelper;
  * Drawing coordinates are panel units measured from the panel's top-left corner.
  */
 final class PanelCanvas {
-    static final float PANEL_WIDTH = 640, PANEL_HEIGHT = 346;
-    static final Color BORDER = new Color(.20f,.26f,.34f,1);
-    static final Color BACKGROUND = new Color(.055f,.070f,.105f,.96f);
-    static final Color SURFACE = new Color(.10f,.13f,.19f,1);
-    static final Color ACCENT = new Color(.38f,.83f,.72f,1);
-    static final Color MUTED = new Color(.62f,.69f,.78f,1);
-    static final Color DANGER = new Color(1,.48f,.44f,1);
+    // The largest panel (Settings with mod warnings) must fit the screen at the chosen scale.
+    static final float PANEL_WIDTH = 420, PANEL_HEIGHT = 480;
+    // shadcn/ui-style neutral palette; the teal stays the mod's primary colour.
+    static final Color BORDER = new Color(.165f,.165f,.188f,1);
+    static final Color BACKGROUND = new Color(.047f,.047f,.059f,.96f);
+    static final Color SURFACE = new Color(.094f,.094f,.106f,1);
+    static final Color SECONDARY = new Color(.149f,.149f,.169f,1);
+    static final Color ACCENT = new Color(.37f,.83f,.72f,1);
+    static final Color ACCENT_SOFT = new Color(.09f,.23f,.20f,1);
+    static final Color MUTED = new Color(.63f,.63f,.67f,1);
+    static final Color DANGER = new Color(.97f,.44f,.44f,1);
+    static final Color DANGER_SOFT = new Color(.23f,.09f,.10f,1);
 
     float x = -1, y = -1;
     float uiScale = 1;
     boolean dragging;
     boolean hovered;  // pointer over the panel, which is drawn after the game cursor
+    boolean dry;      // measuring pass: drawing and click regions are skipped, sizes are still computed
+    private final java.util.List<float[]> hitBoxes = new java.util.ArrayList<>();
+    private final java.util.List<Runnable> hitActions = new java.util.ArrayList<>();
     private float dx, dy, fontScale;
     private com.badlogic.gdx.graphics.g2d.NinePatch rounded;
     private BitmapFont uiFont;
@@ -62,6 +70,7 @@ final class PanelCanvas {
     }
 
     void box(SpriteBatch sb, float left, float top, float width, float height, Color color) {
+        if (dry) return;
         if (rounded == null) {
             com.badlogic.gdx.graphics.Pixmap pixmap = new com.badlogic.gdx.graphics.Pixmap(24,24,com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
             pixmap.setColor(Color.WHITE);
@@ -90,6 +99,7 @@ final class PanelCanvas {
     }
 
     void line(SpriteBatch sb, float left, float top, float width) {
+        if (dry) return;
         sb.setColor(BORDER);
         sb.draw(ImageMaster.WHITE_SQUARE_IMG,x+left*scale(),y-top*scale(),width*scale(),scale());
         sb.setColor(Color.WHITE);
@@ -111,6 +121,7 @@ final class PanelCanvas {
 
     /** One line of translated text, cut with an ellipsis to fit the width. */
     void label(SpriteBatch sb, String value, float left, float top, float width, float size, Color color) {
+        if (dry) return;
         BitmapFont font=font();
         float oldX=font.getData().scaleX, oldY=font.getData().scaleY;
         try {
@@ -123,6 +134,54 @@ final class PanelCanvas {
             }
             FontHelper.renderFontLeftTopAligned(sb,font,text,x+left*scale(),y-top*scale(),color);
         } finally { font.getData().setScale(oldX,oldY); }
+    }
+
+    /** Width of translated text in panel units at this size. */
+    float textWidth(String value, float size) {
+        BitmapFont font=font();
+        float oldX=font.getData().scaleX, oldY=font.getData().scaleY;
+        try {
+            font.getData().setScale(scale()/fontScale*size);
+            measure.setText(font,I18n.t(value));
+            return measure.width/scale();
+        } finally { font.getData().setScale(oldX,oldY); }
+    }
+
+    /** Click regions are those drawn in the last frame, so drawing and clicking share one geometry. */
+    void clearHits() { hitBoxes.clear(); hitActions.clear(); }
+
+    void hit(float left, float top, float width, float height, Runnable action) {
+        if (dry || action == null) return;
+        hitBoxes.add(new float[]{left, top, width, height});
+        hitActions.add(action);
+    }
+
+    /** Runs the action under panel point (lx, ly); false when the point is on no control. */
+    boolean click(float lx, float ly) {
+        for (int i = hitBoxes.size()-1; i >= 0; i--) {
+            float[] b = hitBoxes.get(i);
+            if (lx >= b[0] && lx < b[0]+b[2] && ly >= b[1] && ly < b[1]+b[3]) { hitActions.get(i).run(); return true; }
+        }
+        return false;
+    }
+
+    /** A labelled button that runs {@code action} on click; a null {@code fill} is a ghost button, filled only under the pointer. */
+    void button(SpriteBatch sb, float left, float top, float width, float height, Color fill, String value, float size, Color text, Runnable action) {
+        hit(left, top, width, height, action);
+        if (dry) return;
+        boolean over = action != null && pointing(left, top, width, height);
+        if (fill != null || over) box(sb, left, top, width, height, lit.set(fill == null ? SECONDARY : fill).lerp(Color.WHITE, over ? .12f : 0));
+        if (value == null || value.isEmpty()) return;
+        float w = textWidth(value, size);
+        label(sb, value, left+Math.max(6, (width-w)/2), top+(height-19*size)/2-2, width-12, size, text);
+    }
+
+    /** A small rounded tag: status or mode. Returns its width. */
+    float badge(SpriteBatch sb, String value, float left, float top, float maxWidth, Color fill, Color text) {
+        float w = Math.min(maxWidth, textWidth(value, .68f)+16);
+        box(sb, left, top, w, 20, fill);
+        label(sb, value, left+8, top+2, w-16, .68f, text);
+        return w;
     }
 
     /** Splits text into lines that label() draws whole at this width and size. */

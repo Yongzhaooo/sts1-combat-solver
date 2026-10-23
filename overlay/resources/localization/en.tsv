@@ -403,3 +403,26 @@ Agent 通道读写失败：|Agent channel read/write failed:
 已停止 · 待命：局外由你决定，战斗点【计算】才搜索|Stopped · Standby: you decide outside fights; a fight is searched after [Solve]
 Agent 确认每一步局外选择|The agent confirms each outside step
 新一局：选【待命】每场点了才算，【战斗全自动】只自动打战斗，或【AI全自动】完全托管|New run: pick [Standby] to solve each fight on request, [Combat auto] to automate fights only, or [AI autopilot] for everything
+Boss 快速收尾|Boss fast finish
+F6 导出记录 · F8 收起 · F9 停止|F6 export record · F8 fold · F9 stop
+下一步|Next
+停止搜索|Stop search
+出牌顺序|Play order
+已停止 · 点【执行整场】继续|Stopped · press [Fight] to continue
+战损|loss
+持续记录|Continuous log
+搜索|Search
+搜索中|Searching
+搜索过程|Search progress
+条已完成|finished
+点【计算】开始搜索本场|Press [Solve] to search this fight
+界面缩放|Panel scale
+秒|s
+羽毛回血|Feather heal
+自动战斗已采纳用药路线|Combat auto took a potion plan
+自动战斗快捷键|Combat auto key
+自动执行中|Playing
+自动换药|Auto potion swap
+语言|Language
+辉眼模式|Bright Eye mode
+选择用药路线|Pick a potion plan
