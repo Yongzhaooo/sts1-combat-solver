@@ -126,7 +126,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 跳过战斗选牌|Skip combat selection
 辉眼模式：|Foresight: 
 选牌与路线由你决定|You choose cards and map routes
-重新计算|Recalculate
+重新计算|Recalc
 随机结果预测 · 滚轮翻页|RNG predictions · scroll
 预测胜利   战后 HP |Predicted win · final HP 
 领取药水时库存发生变化，已停止自动|Inventory changed during pickup; auto stopped
@@ -346,10 +346,8 @@ F6 导出记录到桌面，发这一个文件即可|F6 exports the record to you
 当前没有地图|No map to export
 地图已导出到桌面：|Map saved to the desktop: 
 
-战斗全自动|Combat auto
-战斗全自动：开|Combat auto: on
-AI全自动|AI autopilot
-AI全自动：开|AI: on
+战斗全自动|Combat
+AI全自动|AI pilot
 AI全自动中|AI running
 继续AI全自动|Resume AI
 
