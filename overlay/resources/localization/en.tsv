@@ -58,7 +58,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 战斗选牌：第 |Combat pick #
 执行一步|Step
 执行中 · 等待动画结算|Executing · waiting for animations
-执行本回合|Play turn
+执行整场|Fight
 抢劫怪路线 · 可手动或自动执行|Thief routes · manual or auto execution
 抢劫怪：先选路线，再决定是否自动执行|Thief: choose a route before auto execution
 抢劫怪：选定路线后可开启自动战斗|Thief: select route, then enable auto combat
@@ -84,7 +84,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 模式保存失败：|Mode save failed: 
 次 · 规划至 T| times · through T
 正在停止搜索 · 保留已找到路线|Stopping search · keeping completed routes
-正在执行本回合|Playing turn
+暂停自动|Pause
 正在搜索整场战斗…|Searching the full fight…
 消耗尾巴|Uses Tail
 由你构筑，由它求解战斗|Build your deck; let it solve fights

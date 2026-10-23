@@ -4,7 +4,7 @@ package sts1solver;
  * The panel's three automation modes and the transitions its buttons and keys make between them.
  *
  * MANUAL (step by step): the solver and the network suggest, and every step waits for the player, in combat
- * (Enter or a click runs one step; F10 or Execute turn run more) and outside it (Enter or Confirm runs the
+ * (Enter or a click runs one step; F10 runs the whole fight) and outside it (Enter or Confirm runs the
  * suggested action). COMBAT_AUTO: every fight runs automatically, outside decisions stay with the player.
  * PILOT: full autopilot (climb and fight).
  */
