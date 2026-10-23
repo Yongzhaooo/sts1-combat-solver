@@ -234,7 +234,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     /** Solve, Recalculate and the error box: search this fight now. */
-    private void solveAgain() { armed = true; recalculate(); }
+    private void solveAgain() { armed = true; recalculate("player"); }
 
     /** Stop search keeps the mode; in Combat auto this fight is then the player's. */
     private void stopSearch() {
@@ -307,7 +307,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(result==null || busy || !ready())return;
         try {
             JsonObject state=capture();
-            if(!key(state).equals(rootKey)){recalculate();return;}
+            if(!key(state).equals(rootKey)){recalculate("branch_state_changed");return;}
             chosenBranch=branch;
             branchPicker=false;
             branchConfirmed=true;
@@ -523,7 +523,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 GameActionManager.damageReceivedThisCombat,GameActionManager.hpLossThisCombat)
                 && (!result.has("smoke_policy") || !result.get("smoke_policy").getAsBoolean())) {
             for(com.megacrit.cardcrawl.potions.AbstractPotion potion:AbstractDungeon.player.potions)
-                if("SmokeBomb".equals(potion.ID) && potion.canUse()) {recalculate();return;}
+                if("SmokeBomb".equals(potion.ID) && potion.canUse()) {recalculate("smoke_opening");return;}
         }
         JsonObject advice=result.getAsJsonObject("auto_recommendation");
         if(advice==null || !advice.has("branch") || advice.get("branch").isJsonNull()) {
@@ -531,7 +531,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }
         autoReason=advice.get("reason").getAsString();
         String branch=advice.get("branch").getAsString();
-        if(!result.get("branch_current").getAsBoolean()) {recalculate();return;}
+        if(!result.get("branch_current").getAsBoolean()) {recalculate("auto_branch_stale");return;}
         if(branch.equals(result.get("branch").getAsString())) {
             branchConfirmed=true;branchPicker=false;auto=true;decisionDirty=true;
         } else chooseBranch(branch);
@@ -665,8 +665,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         System.err.println("[STS1Solver] " + message);
     }
 
-    private void recalculate() {
-        diagnostic("recalculate",I18n.t("重新计算"),null);
+    /** Drops the plan and searches again; the reason goes to the run record so an unexpected re-search can be traced. */
+    private void recalculate(String reason) {
+        diagnostic("recalculate",reason,null);
         boolean resumeAuto=auto;
         cancel(false);
         auto=resumeAuto;
@@ -684,7 +685,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             paused=true;
             status=I18n.t("局面已变化 · 请重新计算");
         } else if(auto)fail(I18n.t("局面发生未预期变化，已停止自动执行：")+difference);
-        else recalculate();
+        else recalculate("state_changed");
     }
 
     private void toggleRunLog() {
@@ -1116,7 +1117,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private void setSearchTier(int tier) {
         highSpeed = tier == 1; streakMode = tier == 2;
-        saveSetting("highSpeed", highSpeed); saveSetting("streakMode", streakMode); recalculate();
+        saveSetting("highSpeed", highSpeed); saveSetting("streakMode", streakMode); recalculate("search_tier");
         highSpeedWarnedAt = highSpeed || streakMode ? System.currentTimeMillis() : 0;
     }
 
@@ -1554,7 +1555,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         settingLabel(sb,"自动换药",top); onOff(sb,top,autoPotionRewards,this::togglePotionRewards); top+=p;
         if(canCreditRest()) {
             settingLabel(sb,"羽毛回血",top);
-            segmented(sb,top,new String[]{"是","仅必经火堆"},nextRest?0:1,index -> { nextRest=index==0; recalculate(); }); top+=p;
+            segmented(sb,top,new String[]{"是","仅必经火堆"},nextRest?0:1,index -> { nextRest=index==0; recalculate("rest_setting"); }); top+=p;
         }
         settingLabel(sb,"Boss 快速收尾",top); onOff(sb,top,bossFastFinishEnabled,this::toggleBossFinish); top+=p;
         settingLabel(sb,"辉眼模式",top); onOff(sb,top,Foresight.brightEyeMode,this::toggleBrightEye); top+=p;
