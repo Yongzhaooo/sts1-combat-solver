@@ -13,17 +13,19 @@ final class PanelSize {
         return Math.min(gameScale * preference, Math.min(width / panelWidth, height / panelHeight));
     }
 
-    /** Greedy line breaking: after the last space that fits, or between characters when a line has none. */
+    /** Greedy line breaking: Chinese breaks between characters; a Latin word or number moves whole to the next line when it can. */
     static java.util.List<String> wrap(String text, java.util.function.ToDoubleFunction<String> width, float max) {
         java.util.List<String> lines=new java.util.ArrayList<>();
         String rest=text.trim();
         while(!rest.isEmpty()) {
             int end=1;
             while(end<rest.length() && width.applyAsDouble(rest.substring(0,end+1))<=max) end++;
-            if(end<rest.length()) { int space=rest.lastIndexOf(' ',end); if(space>0) end=space; }
+            if(end<rest.length() && word(rest.charAt(end-1)) && word(rest.charAt(end))) { int space=rest.lastIndexOf(' ',end); if(space>0) end=space; }
             lines.add(rest.substring(0,end).trim());
             rest=rest.substring(end).trim();
         }
         return lines;
     }
+
+    private static boolean word(char c) { return c < 0x2E80 && Character.isLetterOrDigit(c); }
 }

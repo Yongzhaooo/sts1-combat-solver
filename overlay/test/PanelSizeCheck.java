@@ -25,6 +25,9 @@ public class PanelSizeCheck {
         for (String line : lines) check(line.length() <= 30);
         check(PanelSize.wrap("检测到不兼容模组会破坏同步", chars, 5).equals(java.util.Arrays.asList("检测到不兼", "容模组会破", "坏同步")));
         check(PanelSize.wrap("", chars, 5).isEmpty() && PanelSize.wrap("toolongword", chars, 3).size() == 4);
+        // Chinese never breaks early at a space; only a Latin word or number that would be cut moves to the next line.
+        check(PanelSize.wrap("求解器超时：搜索 100 秒内没有找到可行路线", chars, 15).get(0).equals("求解器超时：搜索 100 秒内"));
+        check(PanelSize.wrap("搜索 100 秒内", chars, 5).equals(java.util.Arrays.asList("搜索", "100 秒", "内")));
         System.out.println("PASS: panel sizes, invalid settings, viewport fit and pointer scaling");
     }
 }
