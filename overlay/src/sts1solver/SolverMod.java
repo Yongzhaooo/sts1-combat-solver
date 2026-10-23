@@ -1242,7 +1242,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         String revivalWarning = result == null ? "" : revivalWarning(result);
         if (revivalWarning.isEmpty() && (highSpeed || streakMode) && System.currentTimeMillis()-highSpeedWarnedAt < 8000)
             revivalWarning = I18n.t(highSpeed?"高速模式：搜索量 1/20，胜率和省血下降":"连胜模式：前三幕不降预算，搜索更慢");
-        canvas.label(sb,revivalWarning.isEmpty()?status:revivalWarning,16,48,ROUTE_LEFT-28,.85f,
+        canvas.label(sb,revivalWarning.isEmpty()?status:revivalWarning,16,40,w-32,.85f,
             revivalWarning.isEmpty() && error.isEmpty()?MUTED:DANGER);
         String note=exports.note();
         if (settingsOpen) renderSettings(sb,w,note);
@@ -1366,7 +1366,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 ?I18n.t("自动战斗已采纳用药路线 · 点击或 F9 可接管")
             :result!=null && (auto || turnOnly)?I18n.t("推荐行动顺序 · 自动执行中，F9 停止")
             :I18n.t("推荐行动顺序 · 点击执行整条路线");
-        canvas.label(sb,heading,ROUTE_LEFT,48,w-ROUTE_LEFT-16,.85f,Color.WHITE);
+        canvas.label(sb,heading,ROUTE_LEFT,60,w-ROUTE_LEFT-16,.74f,Color.WHITE);
         float rowWidth=w-ROUTE_LEFT-16, textWidth=rowWidth-16;
         String hint="";
         Color hintColor=MUTED;
