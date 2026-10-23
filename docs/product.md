@@ -57,13 +57,14 @@ Player request (七月流火, 2026-10-21), cleaned, and the maintainer's decisio
 
 Maintainer decisions of 2026-10-23: the combat panel shows as little as possible, details open on request, and each action has one way in. Visual language follows shadcn/ui (neutral card, one primary button, secondary and ghost buttons, badges, disclosure rows), drawn with the game's own font.
 
-- The panel is 420 units wide and as tall as its content. Its header holds the title, Export, Settings and fold; under it sits the three-way mode switch.
+- The panel is 420 units wide and as tall as its content. Its header holds the title, Export log, Settings and fold; under it sits the three-way mode switch.
 - The folded panel is one row: title, one status badge (Standby, searching with seconds, predicted result, auto playing) and at most one action (Solve, Stop, Play, Pause).
 - While a search runs, a bar fills with the time waited, folded or unfolded: half at 8 seconds, never full. It reassures that the search is alive and does not measure progress; the panel shows no percentage.
 - Unfolded, the panel shows the outcome in one line (win or not, final HP, equivalent HP loss), the next action, and a "Play order · N steps" row that is closed by default. Opening it lists the steps with their turn; the rows are for reading and execute nothing. The open or closed state lasts for the run.
 - At most three action buttons show, chosen by state: with a plan, Play, Step and Recalculate; while playing, Pause; while searching, Stop search; on an error, Recalculate under a red box that shows the whole message.
 - Search tier, automatic potion swap and the feather-heal choice live in Settings with the other switches; the panel has no row of toggles and no hint line. Keys are listed at the foot of Settings.
 - Every text in the panel shows whole or wraps; Chinese wraps between characters and English between words.
+- Export log (or F6) writes the current seed's record as one file on the desktop. The record says why each re-search started: the player, a changed game state, a stale route under automation, the Smoke Bomb opening, or a settings change (maintainer request 2026-10-23).
 
 ## Non-goals
 
