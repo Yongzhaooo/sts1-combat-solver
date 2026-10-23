@@ -143,6 +143,15 @@ int main() {
               "both lightning passives should land once the queue drains");
     }
     {
+        // CrackedCore.atBattleStart channels one Lightning. It is the starter relic,
+        // so it fires in every fresh battle above; assert it rather than assume it.
+        BattleContext bc = freshBattle();
+        check(bc.player.hasRelic<R::CRACKED_CORE>(), "the starter relic should be Cracked Core");
+        check(bc.player.orbs.size() == 1, "Cracked Core should channel one orb");
+        check(bc.player.orbs[0].type == Orb::LIGHTNING,
+              "Cracked Core should channel a Lightning orb");
+    }
+    {
         // DataDisk.atBattleStart applies one Focus. Battle init is the point where
         // the relic fires, so the fresh battle carries it before any card.
         BattleContext bc = freshBattleWithRelic(R::DATA_DISK);

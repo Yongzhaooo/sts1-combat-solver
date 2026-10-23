@@ -22,6 +22,19 @@
         "total": 11,
         "implemented": 11,
         "missing": []
+      },
+      "class_relic_tests": {
+        "total": 11,
+        "implemented": 4,
+        "missing": [
+          "BRIMSTONE",
+          "CHAMPION_BELT",
+          "CHARONS_ASHES",
+          "MARK_OF_PAIN",
+          "PAPER_PHROG",
+          "RED_SKULL",
+          "SELF_FORMING_CLAY"
+        ]
       }
     },
     "THE_SILENT": {
@@ -124,6 +137,23 @@
           "TINGSHA",
           "TOUGH_BANDAGES"
         ]
+      },
+      "class_relic_tests": {
+        "total": 11,
+        "implemented": 0,
+        "missing": [
+          "HOVERING_KITE",
+          "NINJA_SCROLL",
+          "PAPER_KRANE",
+          "RING_OF_THE_SERPENT",
+          "RING_OF_THE_SNAKE",
+          "SNECKO_SKULL",
+          "THE_SPECIMEN",
+          "TINGSHA",
+          "TOUGH_BANDAGES",
+          "TWISTED_FUNNEL",
+          "WRIST_BLADE"
+        ]
       }
     },
     "DEFECT": {
@@ -143,6 +173,11 @@
         "missing": []
       },
       "class_relics": {
+        "total": 9,
+        "implemented": 9,
+        "missing": []
+      },
+      "class_relic_tests": {
         "total": 9,
         "implemented": 9,
         "missing": []
@@ -255,6 +290,21 @@
         "implemented": 7,
         "missing": [
           "GOLDEN_EYE",
+          "VIOLET_LOTUS"
+        ]
+      },
+      "class_relic_tests": {
+        "total": 9,
+        "implemented": 0,
+        "missing": [
+          "CLOAK_CLASP",
+          "DAMARU",
+          "DUALITY",
+          "GOLDEN_EYE",
+          "HOLY_WATER",
+          "MELANGE",
+          "PURE_WATER",
+          "TEARDROP_LOCKET",
           "VIOLET_LOTUS"
         ]
       }
