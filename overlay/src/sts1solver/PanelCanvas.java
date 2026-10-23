@@ -87,6 +87,14 @@ final class PanelCanvas {
         rounded.draw(sb,x+left*s,y-(top+height)*s,width*s,height*s);
     }
 
+    /** A flat rectangle, for bars too thin for the rounded corners. */
+    void bar(SpriteBatch sb, float left, float top, float width, float height, Color color) {
+        if (dry || width <= 0) return;
+        sb.setColor(color);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,x+left*scale(),y-(top+height)*scale(),width*scale(),height*scale());
+        sb.setColor(Color.WHITE);
+    }
+
     /** The pointer is over this panel rectangle. */
     boolean pointing(float left, float top, float width, float height) {
         float s=scale();

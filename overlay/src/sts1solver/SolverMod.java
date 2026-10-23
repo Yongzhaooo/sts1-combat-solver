@@ -1249,6 +1249,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             boolean danger=action.equals("停止"), soft=action.equals("暂停");
             canvas.button(sb,right,7,w,26,danger?DANGER_SOFT:soft?SECONDARY:ACCENT,action,.74f,danger?DANGER:soft?Color.WHITE:BACKGROUND,this::foldedClick);
         }
+        if(busy && combat() && supported()) canvas.bar(sb,1,FOLDED-4,(WIDTH-2)*SearchStatus.waitingFill(System.currentTimeMillis()-sentAt),3,ACCENT);
         Color[] tone={SECONDARY,MUTED};
         String badge=foldedBadge(tone);
         if(!badge.isEmpty()) canvas.badge(sb,badge,left,10,right-8-left,tone[0],tone[1]);
@@ -1394,6 +1395,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private float renderSearch(SpriteBatch sb, float top) {
         long now=System.currentTimeMillis();
         top=headline(sb,I18n.t("搜索中")+" …",top,Color.WHITE);
+        canvas.bar(sb,PAD,top-2,WIDTH-2*PAD,6,SECONDARY);
+        canvas.bar(sb,PAD,top-2,(WIDTH-2*PAD)*SearchStatus.waitingFill(now-sentAt),6,ACCENT);
+        top+=12;
         top=lines(sb,I18n.backend(backendPhase),top,.8f,MUTED);
         top=lines(sb,I18n.t("总等待 ")+((now-sentAt)/1000)+I18n.t(" 秒 · 本阶段 ")+((now-phaseAt)/1000)+I18n.t(" 秒"),top-4,.76f,MUTED);
         top=lines(sb,now-lastProgressAt>5000 ? I18n.t("已 ")+((now-lastProgressAt)/1000)+I18n.t(" 秒无进度 · F9 停止")

@@ -59,6 +59,7 @@ Maintainer decisions of 2026-10-23: the combat panel shows as little as possible
 
 - The panel is 420 units wide and as tall as its content. Its header holds the title, Export, Settings and fold; under it sits the three-way mode switch.
 - The folded panel is one row: title, one status badge (Standby, searching with seconds, predicted result, auto playing) and at most one action (Solve, Stop, Play, Pause).
+- While a search runs, a bar fills with the time waited, folded or unfolded: half at 8 seconds, never full. It reassures that the search is alive and does not measure progress; the panel shows no percentage.
 - Unfolded, the panel shows the outcome in one line (win or not, final HP, equivalent HP loss), the next action, and a "Play order · N steps" row that is closed by default. Opening it lists the steps with their turn; the rows are for reading and execute nothing. The open or closed state lasts for the run.
 - At most three action buttons show, chosen by state: with a plan, Play, Step and Recalculate; while playing, Pause; while searching, Stop search; on an error, Recalculate under a red box that shows the whole message.
 - Search tier, automatic potion swap and the feather-heal choice live in Settings with the other switches; the panel has no row of toggles and no hint line. Keys are listed at the foot of Settings.
