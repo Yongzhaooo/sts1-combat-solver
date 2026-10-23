@@ -62,6 +62,7 @@
 | `chosenBranch` | 选定的路线 id，`"no-potion"` 表示不用药 |
 | `runAfterBranch` | 玩家按了 F10，选完路线后直接打完整场 |
 | `highSpeed`、`streakMode` | 搜索档位：高速、连胜；都为 false 时是标准 |
+| `standby`、`armed` | 待命模式：不在战斗全自动和 AI全自动时，面板保持折叠，玩家点“计算”、F10 或“重新计算”后（`armed`）才搜索这一场；战斗结束清掉 `armed` 并折叠 |
 
 模式由 `RunMode.of(pilot.mode, runAuto)` 推出来。面板上的“战斗全自动”和“AI全自动”按钮分别调用 `toggleCombatMode()` 和 `togglePilotMode()`；`stopAll()`（F9）停下并回到人工逐步。
 

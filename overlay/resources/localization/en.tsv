@@ -397,3 +397,11 @@ Agent 通道读写失败：|Agent channel read/write failed:
 点击列表打完本场 · 回车走一步|Click the list to finish · Enter for one step
 点击列表或回车：继续自动打完本场|Click the list or Enter: auto-finish the fight
 0 / 空回车：选 0 号路线；无输入则等待|0 / Enter: route 0; waits for input
+计算|Solve
+执行|Play
+暂停|Pause
+待命模式：|Standby: 
+待命 · 点【计算】开始搜索|Standby · click [Solve] to search
+待命：点【重新计算】才开始搜索|Standby: click [Recalc] to search
+待命模式：面板保持折叠，战斗中点【计算】才搜索，打完自动收起|Standby: the panel stays folded; click [Solve] to search a fight; it folds again afterwards
+待命模式已关闭|Standby off

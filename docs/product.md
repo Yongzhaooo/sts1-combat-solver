@@ -46,6 +46,8 @@ Player request (七月流火, 2026-10-21), cleaned. Items marked (proposed) are 
 - Finished plans are clickable while the search continues; a click plays that plan and keeps the current mode. After F9 the plan found so far stays on the panel.
 - In Manual, a click on the plan list plays the whole fight, Enter plays one step, and F9 stops. In Combat auto, Step, Pause auto or F10 take over the current fight only; the next fight runs automatically again, and the Combat auto button stays on.
 - Every clickable control and plan row brightens under the pointer; rows that cannot be clicked do not.
+- Standby (a setting, maintainer request 2026-10-23): outside Combat auto and the pilot, the panel stays folded and a fight is not searched until the player asks. The folded panel shows Solve, then the predicted result with Play, then Pause while the fight runs; F10 and Recalculate also start the search. When the fight ends the panel folds again and the next fight waits.
+- Warnings about other mods (incompatible save/undo mods, RNG-changing mods, SuperFastMode above the tested speed) stay on screen in red, whole, in their own box under the panel, in every panel state.
 - After the player approves a plan, the solver plays the fight under that plan's potion constraint. A divergence from the prediction re-plans under the same constraint without asking again; an approved potion-free plan never drinks a bottle (proposed).
 - The player can restrict the usable bottles for a fight, and the listed plans respect it. The search already accepts potion permissions; the panel has no control for it (proposed).
 

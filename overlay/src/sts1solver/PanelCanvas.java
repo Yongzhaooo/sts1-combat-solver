@@ -125,6 +125,30 @@ final class PanelCanvas {
         } finally { font.getData().setScale(oldX,oldY); }
     }
 
+    /** Splits text into lines that label() draws whole at this width and size. */
+    java.util.List<String> wrap(String value, float width, float size) {
+        BitmapFont font=font();
+        float oldX=font.getData().scaleX, oldY=font.getData().scaleY;
+        try {
+            font.getData().setScale(scale()/fontScale*size);
+            return wrap(I18n.t(value), text -> { measure.setText(font,text); return measure.width/scale(); }, width);
+        } finally { font.getData().setScale(oldX,oldY); }
+    }
+
+    /** Greedy line breaking: after the last space that fits, or between characters when a line has none. */
+    static java.util.List<String> wrap(String text, java.util.function.ToDoubleFunction<String> width, float max) {
+        java.util.List<String> lines=new java.util.ArrayList<>();
+        String rest=text.trim();
+        while(!rest.isEmpty()) {
+            int end=1;
+            while(end<rest.length() && width.applyAsDouble(rest.substring(0,end+1))<=max) end++;
+            if(end<rest.length()) { int space=rest.lastIndexOf(' ',end); if(space>0) end=space; }
+            lines.add(rest.substring(0,end).trim());
+            rest=rest.substring(end).trim();
+        }
+        return lines;
+    }
+
     /** Shadowed text at screen coordinates, for captions on the map and the deck. */
     void caption(SpriteBatch sb, String value, float left, float baseline, Color color) {
         BitmapFont font=font();

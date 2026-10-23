@@ -53,6 +53,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private boolean decisionDirty=true;
     private boolean busy, awaitingAction, auto, gamblingAuto, paused, collapsed;
     private boolean runAuto;
+    // Standby: the panel stays folded and a fight is searched only after the player asks (Calculate, F10 or
+    // Recalculate); armed marks that request for the current fight.
+    private boolean standby, armed;
+    private int warningRows; // rows of mod warnings drawn under the panel; layout keeps them on screen
     private boolean heldThisFight; // Step or Execute fight took this fight over; the next fight runs automatically again
     private boolean runAfterBranch; // F10 pressed while a route choice was pending: run the fight once chosen
     private boolean autoPotionRewards = true;
@@ -139,6 +143,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("autoPotionRewards", "true");
             defaults.setProperty("runAutoEnabled", "true");
             defaults.setProperty("runLog", "true");
+            defaults.setProperty("standby", "false");
             config = new SpireConfig("STS1CombatSolver", "config", defaults);
             I18n.setLanguage(config.getString("language"));
             canvas.uiScale = PanelSize.preference(config.getString("uiScale"));
@@ -162,6 +167,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             autoPotionRewards = config.getBool("autoPotionRewards");
             runAutoEnabled = config.getBool("runAutoEnabled");
             backend.setRunLog(config.getBool("runLog"));
+            standby = config.getBool("standby");
             if (!validAutoKey(autoKey)) autoKey = Input.Keys.F10;
         } catch (IOException failure) { error = I18n.t("快捷键配置读取失败：") + failure.getMessage(); }
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -180,10 +186,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             if (!rngMods.isEmpty()) {
                 rngWarning = I18n.t("这些 Mod 会影响随机数（RNG），求解器计算可能不准确，建议关闭：") + String.join(" / ", rngMods);
                 System.err.println("[STS1Solver] RNG-affecting mods: " + rngMods);
-                if (exports.message.isEmpty()) { exports.message = rngWarning; exports.messageError = true; }
             }
-            String fast = superFastNote();
-            if (superFastSpeed() > SUPER_FAST_TESTED && exports.message.isEmpty()) { exports.message = fast; exports.messageError = true; }
             try { backend.start(); } catch (IOException failure) { System.err.println("[STS1Solver] " + failure); }
         }, "sts1-solver-warmup");
         warmup.setDaemon(true);
@@ -197,7 +200,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         boolean fold = !expandOnScreen(screen, room != null && combat(), event)
             || (pilot.mode == 2 && !combat()); // the pilot's status fits the folded header.
         if (fold && (!inFoldRoom || screen != lastFoldScreen) && !collapsed) { collapsed = true; autoFolded = true; }
-        if (!fold && inFoldRoom && autoFolded) { collapsed = false; autoFolded = false; }
+        if (!fold && inFoldRoom && autoFolded && !standbyFolds()) { collapsed = false; autoFolded = false; }
         inFoldRoom = fold;
         lastFoldScreen = screen;
     }
@@ -217,7 +220,48 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private float exportLeft(float w) { return collapsed ? w-108 : w-220; }
     private float exportWidth() { return collapsed ? 60 : 72; }
 
-    private float panelWidth() { return pilot.cardShown() ? OutsidePilot.PILOT_WIDTH : collapsed ? 300 : PANEL_WIDTH; }
+    private float panelWidth() { return pilot.cardShown() ? OutsidePilot.PILOT_WIDTH : collapsed ? 360 : PANEL_WIDTH; }
+    private float foldedLeft(float w) { return exportLeft(w)-64; }
+
+    /** Standby applies while fights wait for the player (not in Combat auto or the pilot). */
+    private boolean standbyFolds() { return standby && !runAuto; }
+    private boolean standbyWaiting() { return standbyFolds() && !armed; }
+
+    /** The folded panel's combat button: search this fight, play it, pause it. Empty when there is nothing to do. */
+    private String foldedAction() {
+        if (!combat() || !supported() || branchPicker) return "";
+        if (auto) return I18n.t("暂停");
+        if (result != null) return I18n.t("执行");
+        return busy ? "" : I18n.t("计算");
+    }
+
+    private void foldedClick() {
+        if (auto || result != null) toggleAuto();
+        else { armed = true; recalculate(); }
+    }
+
+    /** Red warnings about other mods, shown whole in their own box under the panel. */
+    private List<String> modWarnings() {
+        List<String> warnings = new ArrayList<>();
+        if (Loader.isModLoaded("SaveStateMod") || Loader.isModLoaded("undothespire") || Loader.isModLoaded("undobutton"))
+            warnings.add(I18n.t("检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用"));
+        if (!rngWarning.isEmpty()) warnings.add(rngWarning);
+        if (superFastSpeed() > SUPER_FAST_TESTED) warnings.add(superFastNote());
+        return warnings;
+    }
+
+    private void renderModWarnings(SpriteBatch sb) {
+        float w = panelWidth(), top = panelHeight()+4;
+        List<String> rows = new ArrayList<>();
+        for (String warning : modWarnings()) rows.addAll(canvas.wrap(warning, w-24, .75f));
+        warningRows = rows.size();
+        if (rows.isEmpty()) return;
+        canvas.box(sb,0,top,w,warningHeight(),DANGER);
+        canvas.box(sb,1,top+1,w-2,warningHeight()-2,BACKGROUND);
+        for (int i = 0; i < rows.size(); i++) canvas.label(sb,rows.get(i),12,top+6+i*20,w-24,.75f,DANGER);
+        sb.setColor(Color.WHITE);
+    }
+    private float warningHeight() { return warningRows == 0 ? 0 : 12+warningRows*20; }
     private float panelHeight() { return pilot.cardShown() ? pilot.cardHeight() : collapsed ? 48 : PANEL_HEIGHT; }
 
     private boolean validAutoKey(int key) {
@@ -229,6 +273,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (!combat() || !supported()) return;
         if (auto) { heldThisFight = true; auto = false; status = I18n.t("自动已关闭 · 保留建议"); return; }
         heldThisFight = false;
+        armed = true;
         auto = true;
         paused = false;
         error = "";
@@ -692,7 +737,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(AbstractDungeon.player!=null && AbstractDungeon.player.isDead)runAuto=false;
         if (Gdx.input.isKeyJustPressed(Input.Keys.F9)) stopAll();
         boolean inCombat = combat();
-        if(!wasCombat && inCombat) heldThisFight=false;
+        if(!wasCombat && inCombat) {
+            heldThisFight=false;
+            if(standbyFolds()) { collapsed=true; autoFolded=false; status=I18n.t("待命 · 点【计算】开始搜索"); }
+        }
         if(!wasCombat && inCombat && runAuto) {
             auto=true;paused=false;branchConfirmed=false;decisionDirty=true;lastKey=null;
         }
@@ -702,6 +750,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             nextRest=false;
             lastKey = null;
             thiefPreference=null;
+            armed=false;
+            if(standbyFolds()) { collapsed=true; autoFolded=false; }
             error = "";
         }
         wasCombat = inCombat;
@@ -800,7 +850,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (!ready() || !decisionDirty) return;
         try {
             JsonObject state = capture(), current = key(state);
-            if (!paused && !gamblingAuto && !auto && !awaitingAction
+            if (!paused && !gamblingAuto && !auto && !awaitingAction && !standbyWaiting()
                     && openingSelection(state)) {
                 gamblingAuto = auto = branchConfirmed = true;
                 branchPicker=false;captureBranchKeys=false;branchInput="";
@@ -822,7 +872,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 stateChanged(state);
                 if(paused)return;
             }
-            if (!busy && result == null && !paused && !current.equals(lastKey)) {
+            if (!busy && result == null && !paused && !standbyWaiting() && !current.equals(lastKey)) {
                 decisionDirty=false;
                 send("solve", state);
                 return;
@@ -947,7 +997,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         try { if (config != null) { config.setString("uiScale", Float.toString(canvas.uiScale)); config.save(); } }
         catch (IOException failure) { error = I18n.t("界面缩放保存失败：") + failure.getMessage(); }
     }
-    private void layout() { canvas.layout(panelWidth(), panelHeight()); }
+    private void layout() { canvas.layout(panelWidth(), panelHeight()+(warningRows==0?0:4+warningHeight())); }
 
     // Runs after InputHelper polls, before dungeon/card/monster handlers see clicks.
     @SpirePatch(clz=InputHelper.class, method="updateFirst")
@@ -1034,6 +1084,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             int row=(int)((ly-BODY_TOP)/BODY_ROW);
             if (ly < 42) {
                 if (lx >= exportLeft(w) && lx < exportLeft(w)+exportWidth()) exports.exportRun(backend);
+                else if (collapsed && lx >= foldedLeft(w) && lx < foldedLeft(w)+56 && !foldedAction().isEmpty()) foldedClick();
                 else if (!collapsed && lx >= w-138 && lx < w-54) settingsOpen=!settingsOpen;
                 else if (lx > w-47) { collapsed=!collapsed; autoFolded=false; }
                 else canvas.startDrag(mx,my);
@@ -1043,7 +1094,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 if (setting==0 && off<0) toggleBrightEye();
                 else if (setting==0) changeScale(off<cw/3 ? canvas.uiScale-.1f : off>=cw*2/3 ? canvas.uiScale+.1f : 1);
                 else if (setting==1) { if (off<0) toggleBossFinish(); else toggleLanguage(); }
-                else if (setting==2) { if (off<0) toggleRunLog(); else exports.exportRun(backend); }
+                else if (setting==2) { if (off<0) toggleRunLog(); else toggleStandby(); }
                 else if (off<0) bindingKey=true;
             } else if (body && previewCount > 0 && lx >= ROUTE_LEFT && ly >= 42 && ly < 72) {
                 if (transformPreview != null) transformPreview = null;
@@ -1081,7 +1132,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             } else if (!collapsed && lx >= 16 && lx < w-16 && ly >= ACTIONS_TOP && ly <= ACTIONS_TOP+36
                     && (lx-16)%ACTION_SPACING < ACTION_SPACING-8) {
                 int action=(int)((lx-16)/ACTION_SPACING);
-                if (action==0) recalculate();
+                if (action==0) { armed=true; recalculate(); }
                 else if (action==1) { heldThisFight=true; auto=false; executeStep(); }
                 else if (action==2) toggleAuto(); // the whole fight, the same as F10
                 else if (action==3) toggleCombatMode();
@@ -1126,6 +1177,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     static boolean solverDriving() { return instance != null && (instance.auto || instance.runAuto); }
     static Path desktop() { return instance != null ? RunExports.desktopDirectory() : Paths.get(System.getProperty("user.home"), "Desktop"); }
+
+    private void toggleStandby() {
+        standby = !standby;
+        armed = combat(); // a fight already on screen keeps its search
+        saveSetting("standby", standby);
+        exports.message = I18n.t(standby ? "待命模式：面板保持折叠，战斗中点【计算】才搜索，打完自动收起" : "待命模式已关闭");
+        exports.messageError = false;
+    }
 
     private void saveSetting(String key, boolean value) {
         try { if (config != null) { config.setBool(key, value); config.save(); } }
@@ -1210,7 +1269,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     @Override public void receivePostRender(SpriteBatch sb) {
-        try { renderPanel(sb); } catch (Throwable failure) { guard("render", failure); }
+        try { renderPanel(sb); renderModWarnings(sb); } catch (Throwable failure) { guard("render", failure); }
     }
 
     private void renderPanel(SpriteBatch sb) {
@@ -1223,12 +1282,26 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         float w=panelWidth();
         canvas.box(sb,0,0,w,panelHeight(),BORDER);
         canvas.box(sb,1,1,w-2,panelHeight()-2,BACKGROUND);
-        canvas.label(sb,I18n.t("战斗求解器"),16,collapsed?7:10,exportLeft(w)-24,collapsed?.95f:1.1f,Color.WHITE);
+        String action=collapsed?foldedAction():"";
+        canvas.label(sb,I18n.t("战斗求解器"),16,collapsed?7:10,(action.isEmpty()?exportLeft(w):foldedLeft(w))-24,collapsed?.95f:1.1f,Color.WHITE);
         canvas.label(sb,collapsed?"＋":"－",w-36,collapsed?14:10,26,1,ACCENT);
         canvas.button(sb,exportLeft(w),collapsed?6:8,exportWidth(),collapsed?22:28,SURFACE);
         canvas.label(sb,I18n.t("导出"),exportLeft(w)+8,collapsed?8:12,exportWidth()-12,collapsed?.72f:.85f,ACCENT);
         if (collapsed) {
-            canvas.label(sb,error.isEmpty()?status:I18n.backend(error),20,29,240,.65f,error.isEmpty()?MUTED:DANGER);
+            if(!action.isEmpty()) {
+                canvas.button(sb,foldedLeft(w),6,56,22,SURFACE);
+                canvas.label(sb,action,foldedLeft(w)+8,8,44,.72f,ACCENT);
+            }
+            String line=error.isEmpty()?status:I18n.backend(error);
+            Color color=error.isEmpty()?MUTED:DANGER;
+            if(error.isEmpty() && result!=null && !auto && !branchPicker) { // the folded panel still shows what Execute would do
+                boolean won=result.get("won").getAsBoolean();
+                String revival=revivalWarning(result);
+                line=I18n.t(won?"预测胜利":"当前路线未找到胜利")+" · "+I18n.t("战后 HP")+" "+result.get("hp").getAsString()
+                    +" · "+I18n.t("等效战损")+" "+result.get("loss").getAsString()+(revival.isEmpty()?"":" · "+revival);
+                color=won && revival.isEmpty()?ACCENT:DANGER;
+            }
+            canvas.label(sb,line,20,29,w-40,.65f,color);
             sb.setColor(Color.WHITE); canvas.cursorOnTop(sb); return;
         }
         canvas.button(sb,w-138,8,84,28,settingsOpen?ACCENT:SURFACE);
@@ -1279,21 +1352,17 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         canvas.label(sb,I18n.t("Boss 快速收尾：")+I18n.t(bossFastFinishEnabled?"开":"关"),26,t+p,cw-20,.85f,bossFastFinishEnabled?ACCENT:MUTED);
         canvas.label(sb,I18n.t("语言：")+("en".equals(I18n.language())?"English":"简体中文"),right+10,t+p,cw-20,.85f,ACCENT);
         canvas.label(sb,I18n.t("持续记录：")+" "+I18n.t(backend.runLog()?"开":"关"),26,t+2*p,cw-20,.85f,backend.runLog()?ACCENT:MUTED);
-        canvas.label(sb,I18n.t("导出到桌面 · F6"),right+10,t+2*p,cw-20,.85f,ACCENT);
+        canvas.label(sb,I18n.t("待命模式：")+I18n.t(standby?"开":"关"),right+10,t+2*p,cw-20,.85f,standby?ACCENT:MUTED);
         canvas.label(sb,I18n.t("自动战斗快捷键：")+Input.Keys.toString(autoKey),26,t+3*p,cw-20,.85f,ACCENT);
         canvas.label(sb,"SuperFastMode: "+(Loader.isModLoaded("superfastmode")?"x"+superFastShown():I18n.t("未安装")),right+10,t+3*p,cw-20,.85f,
             superFastSpeed()>SUPER_FAST_TESTED?DANGER:MUTED);
         canvas.label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F7/F8/F9 保留；Esc 取消")
                 :I18n.t("Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同"),
             16,SETTINGS_TOP+4*p-2,w-32,.7f,bindingKey?ACCENT:MUTED);
-        boolean incompatibleMod = Loader.isModLoaded("SaveStateMod") || Loader.isModLoaded("undothespire") || Loader.isModLoaded("undobutton");
-        String fast = superFastNote();
-        boolean warn = incompatibleMod || !rngWarning.isEmpty() || superFastSpeed() > SUPER_FAST_TESTED;
-        String defaultNote = incompatibleMod
-            ? I18n.t("检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用")
-            : !rngWarning.isEmpty() ? rngWarning : !fast.isEmpty() ? fast : I18n.t("F6 导出记录到桌面，发这一个文件即可");
+        String fast = superFastNote(); // mod warnings sit in their own box under the panel
+        String defaultNote = !fast.isEmpty() ? fast : I18n.t("F6 导出记录到桌面，发这一个文件即可");
         Color noteColor = note.isEmpty()
-            ? (warn ? DANGER : MUTED)
+            ? (superFastSpeed() > SUPER_FAST_TESTED ? DANGER : MUTED)
             : (exports.messageError ? DANGER : ACCENT);
         canvas.label(sb,note.isEmpty()?defaultNote:note,16,NOTE_TOP,w-32,.75f,noteColor);
     }
@@ -1438,7 +1507,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 canvas.label(sb,I18n.t("或点【AI全自动】随时完全托管"),ROUTE_LEFT+8,top+BODY_ROW,textWidth,.8f,MUTED);
                 top+=BODY_ROW*2;
             }
-            canvas.label(sb,I18n.t("发牌和动画结算后自动生成建议"),ROUTE_LEFT+8,top,textWidth,.8f,MUTED);
+            canvas.label(sb,I18n.t(standbyWaiting()?"待命：点【重新计算】才开始搜索":"发牌和动画结算后自动生成建议"),ROUTE_LEFT+8,top,textWidth,.8f,MUTED);
             canvas.label(sb,I18n.t("奖励牌 / 地图 / 商店始终由你操作"),ROUTE_LEFT+8,top+BODY_ROW,textWidth,.8f,MUTED);
         }
         if(hint.isEmpty() && result!=null && !busy && !auto && !branchPicker && transformPreview==null)
