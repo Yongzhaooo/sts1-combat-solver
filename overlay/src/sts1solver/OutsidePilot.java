@@ -33,7 +33,7 @@ final class OutsidePilot {
         void failed();
     }
 
-    static final float PILOT_WIDTH = 440, PILOT_LIST_TOP = 72, PILOT_ROW = 30;
+    static final float PILOT_WIDTH = 440, PILOT_LIST_TOP = 72, PILOT_ROW = 30, NOTICE_ROW = 20;
     static final float EXPORT_LEFT = PILOT_WIDTH-240, EXPORT_WIDTH = 64;  // header button between the title and the mode chip
     static final int PILOT_ROWS = 5;
     static final int NO_BUTTON = Integer.MIN_VALUE;
@@ -42,6 +42,7 @@ final class OutsidePilot {
     boolean prompt, confirm;
     boolean pilotRun, failed; // the compact pilot card replaces the panel outside combat.
     String notice = "";
+    private int noticeRows = 1; // set while drawing; the list and buttons sit below the wrapped notice
     OutsidePacket packet;
     Distill2.Result scores;
     int chosen;
@@ -275,9 +276,11 @@ final class OutsidePilot {
             ? Math.min(PILOT_ROWS,packet.choices.size()) : 0;
     }
 
+    private float listTop() { return PILOT_LIST_TOP+(noticeRows-1)*NOTICE_ROW; }
+
     private float buttonsTop() {
         int rows=listRows();
-        return PILOT_LIST_TOP+rows*PILOT_ROW+(rows>0?8:0);
+        return listTop()+rows*PILOT_ROW+(rows>0?8:0);
     }
 
     float cardHeight() { return buttonsTop()+38+14; }
@@ -286,19 +289,19 @@ final class OutsidePilot {
     private String[][] buttons() {
         if(prompt) return new String[][]{{"-1","人工逐步"},{"-2","战斗全自动"},{"2","AI全自动"}};
         if(mode==2) return new String[][]{{"0","人工逐步"}};
-        if(mode==1) return new String[][]{{"3","确认这一步（回车）"},{"-2","战斗全自动"},{"2","AI全自动"}};
+        if(mode==1) return new String[][]{{"3","确认（回车）"},{"-2","战斗全自动"},{"2","AI全自动"}};
         return new String[][]{{"2","继续AI全自动"},{"1","人工逐步"}};
     }
 
     /** Scrolls or picks in the step-mode list; true when the pointer is over the list. */
     boolean listInput(float ly, boolean click) {
         int rows=listRows();
-        if(rows<=0 || ly<PILOT_LIST_TOP || ly>=PILOT_LIST_TOP+rows*PILOT_ROW)return false;
+        if(rows<=0 || ly<listTop() || ly>=listTop()+rows*PILOT_ROW)return false;
         int last=Math.max(0,packet.choices.size()-rows);
         if(InputHelper.scrolledDown)scroll=Math.min(last,scroll+1);
         if(InputHelper.scrolledUp)scroll=Math.max(0,scroll-1);
         if(click) {
-            int index=scroll+(int)((ly-PILOT_LIST_TOP)/PILOT_ROW);
+            int index=scroll+(int)((ly-listTop())/PILOT_ROW);
             if(index<packet.choices.size())chosen=index;
         }
         return true;
@@ -328,12 +331,15 @@ final class OutsidePilot {
         canvas.box(sb,PILOT_WIDTH-170,9,120,24,PanelCanvas.SURFACE);
         canvas.label(sb,I18n.t(chip),PILOT_WIDTH-160,13,100,.78f,chipColor);
         if(!prompt)canvas.label(sb,"×",PILOT_WIDTH-32,9,20,1,PanelCanvas.MUTED);
-        canvas.label(sb,notice,16,46,PILOT_WIDTH-32,.78f,failed?PanelCanvas.DANGER:PanelCanvas.MUTED);
+        java.util.List<String> lines=canvas.wrap(notice,PILOT_WIDTH-32,.78f);
+        noticeRows=Math.max(1,lines.size());
+        for(int i=0;i<lines.size();i++)
+            canvas.label(sb,lines.get(i),16,46+i*NOTICE_ROW,PILOT_WIDTH-32,.78f,failed?PanelCanvas.DANGER:PanelCanvas.MUTED);
         int rows=listRows();
         for(int row=0;row<rows;row++) {
             int i=scroll+row;
             if(i>=packet.choices.size())break;
-            float top=PILOT_LIST_TOP+row*PILOT_ROW;
+            float top=listTop()+row*PILOT_ROW;
             boolean selected=i==chosen;
             canvas.button(sb,16,top,PILOT_WIDTH-32,PILOT_ROW-4,selected?new Color(.17f,.29f,.32f,1):PanelCanvas.SURFACE);
             canvas.label(sb,(selected?"● ":"  ")+packet.choices.get(i).label,24,top+5,PILOT_WIDTH-130,.8f,

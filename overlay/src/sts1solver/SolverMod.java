@@ -1416,8 +1416,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             canvas.label(sb,healing,26,198,inner,.75f,MUTED);
         } else {
             // This column is 200 units wide; the mode guidance sits in the 360-unit list area instead.
-            canvas.label(sb,error.isEmpty()?I18n.t("仅建议，点按钮才出牌"):I18n.backend(error),26,90,inner,.8f,error.isEmpty()?ACCENT:DANGER);
-            if(!error.isEmpty())canvas.label(sb,I18n.t("详细原因已写入后台日志"),26,124,inner,.8f,MUTED);
+            if(error.isEmpty()) canvas.label(sb,I18n.t("仅建议，点按钮才出牌"),26,90,inner,.8f,ACCENT);
+            else {
+                List<String> lines=canvas.wrap(I18n.backend(error),inner,.8f);
+                int shown=Math.min(lines.size(),4);
+                // label() trims a line that ends in "…" back to the width, so a cut error ends in an ellipsis
+                for(int i=0;i<shown;i++) canvas.label(sb,lines.get(i)+(i==3&&lines.size()>4?"…":""),26,90+i*20,inner,.8f,DANGER);
+                canvas.label(sb,I18n.t("详细原因已写入后台日志"),26,100+shown*20,inner,.8f,MUTED);
+            }
         }
         List<String> foresight=transformPreview!=null?transformPreview.lines():combat()?Collections.<String>emptyList():Foresight.lines();
         String heading=transformPreview!=null?(transformPreview.upgrade?I18n.t("星盘"):I18n.t("变化"))+I18n.t("试选 ") + transformPreview.selected.size() + "/"+transformPreview.count+I18n.t(" · 点击此处关闭")

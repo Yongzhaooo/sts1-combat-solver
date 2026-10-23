@@ -365,7 +365,7 @@ SuperFastMode 速度 ×|SuperFastMode speed x
 Boss 快速收尾：|Boss fast finish: 
 Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同|Boss fast finish: stop at a potion-free win; faster, may cost more HP
 未安装|not installed
-确认这一步（回车）|Confirm this step (Enter)
+确认（回车）|Confirm
 已停止 · 人工逐步：每一步回车或点击确认|Stopped · Manual: every step waits for Enter or a click
 人工逐步：求解器和 AI 给出建议，每一步回车或点击确认|Manual: the solver and the AI suggest; every step waits for Enter or a click
 自动爬塔|Autopilot
