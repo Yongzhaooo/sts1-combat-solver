@@ -214,7 +214,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     // The export button stays in the header in every panel state (F6 does the same).
-    private float exportLeft(float w) { return collapsed ? w-108 : w-196; }
+    private float exportLeft(float w) { return collapsed ? w-108 : w-220; }
     private float exportWidth() { return collapsed ? 60 : 72; }
 
     private float panelWidth() { return pilot.cardShown() ? OutsidePilot.PILOT_WIDTH : collapsed ? 300 : PANEL_WIDTH; }
@@ -1034,7 +1034,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             int row=(int)((ly-BODY_TOP)/BODY_ROW);
             if (ly < 42) {
                 if (lx >= exportLeft(w) && lx < exportLeft(w)+exportWidth()) exports.exportRun(backend);
-                else if (!collapsed && lx >= w-118 && lx < w-54) settingsOpen=!settingsOpen;
+                else if (!collapsed && lx >= w-138 && lx < w-54) settingsOpen=!settingsOpen;
                 else if (lx > w-47) { collapsed=!collapsed; autoFolded=false; }
                 else canvas.startDrag(mx,my);
             } else if (!collapsed && settingsOpen && ly>=SETTINGS_TOP && ly<SETTINGS_TOP+4*SETTINGS_PITCH && (ly-SETTINGS_TOP)%SETTINGS_PITCH<30) {
@@ -1231,8 +1231,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             canvas.label(sb,error.isEmpty()?status:I18n.backend(error),20,29,240,.65f,error.isEmpty()?MUTED:DANGER);
             sb.setColor(Color.WHITE); canvas.cursorOnTop(sb); return;
         }
-        canvas.button(sb,w-118,8,64,28,settingsOpen?ACCENT:SURFACE);
-        canvas.label(sb,I18n.t(settingsOpen?"返回":"设置"),w-108,12,48,.85f,settingsOpen?BACKGROUND:ACCENT);
+        canvas.button(sb,w-138,8,84,28,settingsOpen?ACCENT:SURFACE);
+        canvas.label(sb,I18n.t(settingsOpen?"返回":"设置"),w-128,12,72,.85f,settingsOpen?BACKGROUND:ACCENT);
         String revivalWarning = result == null ? "" : revivalWarning(result);
         if (revivalWarning.isEmpty() && (highSpeed || streakMode) && System.currentTimeMillis()-highSpeedWarnedAt < 8000)
             revivalWarning = I18n.t(highSpeed?"高速模式：搜索量 1/20，胜率和省血下降":"连胜模式：前三幕不降预算，搜索更慢");
