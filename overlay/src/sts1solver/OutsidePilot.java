@@ -34,7 +34,7 @@ final class OutsidePilot {
     }
 
     static final float PILOT_WIDTH = 440, PILOT_LIST_TOP = 72, PILOT_ROW = 30, NOTICE_ROW = 20;
-    static final float EXPORT_LEFT = PILOT_WIDTH-266, EXPORT_WIDTH = 90;  // header button between the title and the mode chip
+    static final float EXPORT_LEFT = PILOT_WIDTH-276, EXPORT_WIDTH = 100;  // header button between the title and the mode chip
     static final int PILOT_ROWS = 5;
     static final int NO_BUTTON = Integer.MIN_VALUE;
 
