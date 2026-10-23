@@ -53,6 +53,13 @@ def heart_fight(game):
     return any(m['id'] == 'CorruptHeart' for m in game['combat_state']['monsters'])
 
 
+def generated_potions(game, slots, budget):
+    """Deep plans may drink bottles made in combat; a branch drinking an Entropic Brew may at any budget, since the brew
+    is worth only what it makes (F16 Slime Boss 2026-10-24: Elixir then Brew kept 27 HP at 8k without the new bottles,
+    36 with them)."""
+    return budget >= DEEP_BUDGET or any(game['potions'][slot]['id'] == 'EntropicBrew' for slot in slots)
+
+
 def toolbox_selection(game):
     return (game.get('screen_type') == 'CARD_REWARD'
             and game.get('solver_selection', {}).get('current_action', {}).get('class') == 'ChooseOneColorless')
@@ -347,7 +354,7 @@ class Advisor:
                         continue
                     futures[slots] = pool.submit(self.search_plan, self.root, budget,
                                                  list(slots), credit, index, False,
-                                                 budget >= DEEP_BUDGET,
+                                                 generated_potions(view['game'], slots, budget),
                                                  **({'initial_plan': initial_plan}
                                                     if not slots and initial_plan is not None else {}))
                 if () in futures:
@@ -478,7 +485,7 @@ class Advisor:
                     self.searching = searching
                     futures.extend(pool.submit(self.search_plan, self.root, budget,
                                                list(other_option), credit, other_index, other_forced,
-                                               budget >= DEEP_BUDGET and bool(other_option))
+                                               bool(other_option) and generated_potions(view['game'], other_option, budget))
                                    for other_index, (_, _, other_forced, other_option) in enumerate(jobs[1:], 1))
                 future = futures[index]
                 try:
@@ -542,7 +549,7 @@ class Advisor:
         s.mapper = ActionMapper(s.comparator, s.battle, view)
 
     def potion_branch(self, slots, names, future, started, view, budget):
-        """Validate initial bottles; deep plans may also use generated bottles."""
+        """Validate initial bottles; deep and brew plans may also use generated bottles."""
         s = self.search
         branch_id = 'potion-' + '+'.join(map(str, slots))
         name = ' + '.join(names[i] for i in slots)
@@ -557,7 +564,7 @@ class Advisor:
                 action = s.sts.SearchAction.from_bits(bits & 0xffffffff)
                 if action.action_type == s.sts.SearchActionType.POTION:
                     slot = int(action.source_idx)
-                    generated = budget >= DEEP_BUDGET and (
+                    generated = generated_potions(view['game'], slots, budget) and (
                         view['game']['potions'][slot]['id'] == 'Potion Slot'
                         or replay.potions[slot] != self.root.potions[slot]
                         or slot in initial_slots_used)
