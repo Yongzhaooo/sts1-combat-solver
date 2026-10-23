@@ -13,6 +13,13 @@ public class SearchStatusCheck {
         String beam = SearchStatus.phase(row);
         row.addProperty("phase", "finalizing");
         if (beam.equals(SearchStatus.phase(row))) throw new AssertionError("stage is hidden");
-        System.out.println("PASS: shared deadlines, 100/150-second boundary and visible beam/finalization stages");
+        float previous = SearchStatus.waitingFill(-5);
+        if (previous != 0 || Math.abs(SearchStatus.waitingFill(8000) - .5f) > 1e-6) throw new AssertionError("search bar start or midpoint");
+        for (long t = 500; t <= 3600000; t *= 2) {
+            float fill = SearchStatus.waitingFill(t);
+            if (fill < previous || fill > .95f) throw new AssertionError("search bar must only grow and never look finished: " + t);
+            previous = fill;
+        }
+        System.out.println("PASS: shared deadlines, 100/150-second boundary, visible beam/finalization stages and the search bar");
     }
 }

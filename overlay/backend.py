@@ -982,6 +982,7 @@ ALLOWED_DIAGNOSTIC_EVENTS = {
     'error',
     'state_changed',
     'combat_end',
+    'recalculate',
 }
 
 

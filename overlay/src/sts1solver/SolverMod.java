@@ -53,9 +53,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private boolean decisionDirty=true;
     private boolean busy, awaitingAction, auto, gamblingAuto, paused, collapsed;
     private boolean runAuto;
-    // Standby: the panel stays folded and a fight is searched only after the player asks (Calculate, F10 or
-    // Recalculate); armed marks that request for the current fight.
-    private boolean standby, armed;
+    // Standby mode: a fight is searched only after the player asks (Solve, F10 or Recalculate); armed marks that request.
+    private boolean armed;
     private int warningRows; // rows of mod warnings drawn under the panel; layout keeps them on screen
     private boolean heldThisFight; // Step or Execute fight took this fight over; the next fight runs automatically again
     private boolean runAfterBranch; // F10 pressed while a route choice was pending: run the fight once chosen
@@ -80,13 +79,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private long highSpeedWarnedAt;
     private boolean agentBridge; // Agent play (AGENT_PLAY.md), see AgentBridge
     private String status = I18n.t("等待进入战斗"), error = "";
-    // Compact combat panel: summary card left, five route rows right, then actions and toggles.
-    private static final float ROUTE_LEFT = 248, BODY_TOP = 76, BODY_ROW = 30, NOTE_TOP = 234;
-    private static final int BODY_ROWS = 5;
-    private static final float ACTIONS_TOP = 262, TOGGLES_TOP = 306;
-    private static final float SETTINGS_TOP = 78, SETTINGS_PITCH = 34;
-    private static final float ACTION_SPACING = (PANEL_WIDTH - 24) / 6;
+    // Compact panel (product spec "Combat panel"): 420 units wide and as tall as its content, measured each frame.
+    private static final float WIDTH = 420, PAD = 14, FOLDED = 40;
+    private static final int LIST_ROWS = 6; // rows a list shows before the wheel scrolls it
+    private float contentHeight = 200;
     private boolean settingsOpen;
+    private boolean playOrderOpen, progressOpen; // disclosure rows stay as the player left them
     private TransformPreview transformPreview;
     private int previewRngCounter;
     private Object previewSource;
@@ -143,7 +141,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("autoPotionRewards", "true");
             defaults.setProperty("runAutoEnabled", "true");
             defaults.setProperty("runLog", "true");
-            defaults.setProperty("standby", "false");
             config = new SpireConfig("STS1CombatSolver", "config", defaults);
             I18n.setLanguage(config.getString("language"));
             canvas.uiScale = PanelSize.preference(config.getString("uiScale"));
@@ -167,7 +164,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             autoPotionRewards = config.getBool("autoPotionRewards");
             runAutoEnabled = config.getBool("runAutoEnabled");
             backend.setRunLog(config.getBool("runLog"));
-            standby = config.getBool("standby");
             if (!validAutoKey(autoKey)) autoKey = Input.Keys.F10;
         } catch (IOException failure) { error = I18n.t("快捷键配置读取失败：") + failure.getMessage(); }
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -200,7 +196,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         boolean fold = !expandOnScreen(screen, room != null && combat(), event)
             || (pilot.mode == 2 && !combat()); // the pilot's status fits the folded header.
         if (fold && (!inFoldRoom || screen != lastFoldScreen) && !collapsed) { collapsed = true; autoFolded = true; }
-        if (!fold && inFoldRoom && autoFolded && !standbyFolds()) { collapsed = false; autoFolded = false; }
+        if (!fold && inFoldRoom && autoFolded && !standby()) { collapsed = false; autoFolded = false; }
         inFoldRoom = fold;
         lastFoldScreen = screen;
     }
@@ -216,28 +212,36 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         return warning;
     }
 
-    // The export button stays in the header in every panel state (F6 does the same).
-    private float exportLeft(float w) { return collapsed ? w-108 : w-220; }
-    private float exportWidth() { return collapsed ? 60 : 72; }
+    private float panelWidth() { return pilot.cardShown() ? OutsidePilot.PILOT_WIDTH : WIDTH; }
 
-    private float panelWidth() { return pilot.cardShown() ? OutsidePilot.PILOT_WIDTH : collapsed ? 360 : PANEL_WIDTH; }
-    private float foldedLeft(float w) { return exportLeft(w)-64; }
+    /** Standby mode: fights wait for the player (not Combat auto, the pilot or agent play). */
+    private boolean standby() { return !runAuto; }
+    private boolean standbyWaiting() { return standby() && !armed; }
 
-    /** Standby applies while fights wait for the player (not in Combat auto or the pilot). */
-    private boolean standbyFolds() { return standby && !runAuto; }
-    private boolean standbyWaiting() { return standbyFolds() && !armed; }
-
-    /** The folded panel's combat button: search this fight, play it, pause it. Empty when there is nothing to do. */
+    /** The folded panel's one action: search this fight, stop the search, play the plan, pause it. Empty when there is nothing to do. */
     private String foldedAction() {
         if (!combat() || !supported() || branchPicker) return "";
-        if (auto) return I18n.t("暂停");
-        if (result != null) return I18n.t("执行");
-        return busy ? "" : I18n.t("计算");
+        if (auto) return "暂停";
+        if (busy) return "停止";
+        if (result != null) return "执行";
+        return standbyWaiting() || !error.isEmpty() ? "计算" : "";
     }
 
     private void foldedClick() {
-        if (auto || result != null) toggleAuto();
-        else { armed = true; recalculate(); }
+        if (auto || result != null && !busy) toggleAuto();
+        else if (busy) stopSearch();
+        else solveAgain();
+    }
+
+    /** Solve, Recalculate and the error box: search this fight now. */
+    private void solveAgain() { armed = true; recalculate("player"); }
+
+    /** Stop search keeps the mode; in Combat auto this fight is then the player's. */
+    private void stopSearch() {
+        boolean keep = runAuto;
+        cancel(true);
+        runAuto = keep;
+        if (keep) heldThisFight = true;
     }
 
     /** Red warnings about other mods, shown whole in their own box under the panel. */
@@ -262,7 +266,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         sb.setColor(Color.WHITE);
     }
     private float warningHeight() { return warningRows == 0 ? 0 : 12+warningRows*20; }
-    private float panelHeight() { return pilot.cardShown() ? pilot.cardHeight() : collapsed ? 48 : PANEL_HEIGHT; }
+    private float panelHeight() { return pilot.cardShown() ? pilot.cardHeight() : collapsed ? FOLDED : contentHeight; }
 
     private boolean validAutoKey(int key) {
         return key >= Input.Keys.F1 && key <= Input.Keys.F12 && key != Input.Keys.F6 && key != Input.Keys.F7 && key != Input.Keys.F8 && key != Input.Keys.F9;
@@ -303,13 +307,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(result==null || busy || !ready())return;
         try {
             JsonObject state=capture();
-            if(!key(state).equals(rootKey)){recalculate();return;}
+            if(!key(state).equals(rootKey)){recalculate("branch_state_changed");return;}
             chosenBranch=branch;
             branchPicker=false;
             branchConfirmed=true;
             boolean manual=result.has("manual_choice") && result.get("manual_choice").getAsBoolean();
-            auto=fightAuto() || (autoAfterBranch(manual) && (RunMode.combatAutomatic(mode()) || runAfterBranch)); // Manual steps unless F10 asked for the run
+            auto=fightAuto() || (autoAfterBranch(manual) && (RunMode.combatAutomatic(mode()) || runAfterBranch)); // Standby waits for Play unless it was pressed
             runAfterBranch=false;
+            if(standby()) { collapsed=true; autoFolded=false; }
             if(manual)thiefPreference=branch;
             paused=false;
             send("choose",state);
@@ -319,6 +324,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     static boolean routeConfirmed(JsonObject result, boolean branchConfirmed) {
         return result != null && (!result.has("manual_choice")
             || !result.get("manual_choice").getAsBoolean() || branchConfirmed);
+    }
+    /** A plan may run: the backend's route question is answered, and in Standby a plan is picked whenever several are usable. */
+    static boolean approved(JsonObject result, boolean branchConfirmed, boolean standby) {
+        return routeConfirmed(result, branchConfirmed) && (branchConfirmed || !routeChoice(result, standby));
     }
     static boolean autoAfterBranch(boolean manual) {
         return !manual;
@@ -415,7 +424,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     /** Combat automation drives this fight: on for the run and not taken over for this fight. */
     private boolean fightAuto() { return runAuto && !heldThisFight; }
 
-    /** The player picks a route first: the backend asks, or Manual has more than one usable route. */
+    /** The player picks a route first: the backend asks, or Standby has more than one usable route. */
     static boolean routeChoice(JsonObject result, boolean manual) {
         if (result.get("needs_confirmation").getAsBoolean()) return true;
         if (!manual || !result.has("branches")) return false;
@@ -429,22 +438,15 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         return CommandExecutor.isInDungeon() && AbstractDungeon.player!=null && supported();
     }
 
-    private void toggleCombatMode() {
-        RunMode before=mode();
-        if(RunMode.combatButton(before,auto)==RunMode.MANUAL) {
-            if(runAuto){runAutoEnabled=false;saveAutomation();}
-            cancel(true); // also ends the automatic run of this fight alone
-            if(before==RunMode.COMBAT_AUTO && inSupportedRun())chooseOutsideMode(1);
-            return;
-        }
-        if(pilot.mode!=0)chooseOutsideMode(0);
-        runAuto=false; // Switching from the pilot or step mode starts combat-only automation.
-        toggleRunAuto();
-    }
-
-    private void togglePilotMode() {
-        if(RunMode.pilotButton(mode())==RunMode.MANUAL)stopAll();
-        else chooseOutsideMode(2);
+    /** The panel's three-way mode switch and the new-run question. Switching to Standby keeps every setting. */
+    private void setMode(RunMode target) {
+        RunMode current=mode();
+        if(target==current)return;
+        if(target==RunMode.PILOT) { chooseOutsideMode(2); return; }
+        if(pilot.mode!=0)pilot.select(0);
+        if(target==RunMode.COMBAT_AUTO) { runAuto=false; toggleRunAuto(); return; } // from the pilot: combat-only automation
+        runAutoEnabled=false; saveAutomation();
+        cancel(true); // also ends the automatic run of this fight
     }
 
     private void toggleRunAuto() {
@@ -472,9 +474,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         saveAutomation();
     }
 
-    /** F9 / Stop: back to Manual, where the solver and the network suggest and every step waits for the player. */
+    /** F9: back to Standby, where every fight waits for Solve and outside decisions are the player's. */
     private void stopAll() {
-        pilot.stop(inSupportedRun());
+        pilot.stop();
         autoPotionRewards=false;
         cancel(true);
     }
@@ -521,7 +523,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 GameActionManager.damageReceivedThisCombat,GameActionManager.hpLossThisCombat)
                 && (!result.has("smoke_policy") || !result.get("smoke_policy").getAsBoolean())) {
             for(com.megacrit.cardcrawl.potions.AbstractPotion potion:AbstractDungeon.player.potions)
-                if("SmokeBomb".equals(potion.ID) && potion.canUse()) {recalculate();return;}
+                if("SmokeBomb".equals(potion.ID) && potion.canUse()) {recalculate("smoke_opening");return;}
         }
         JsonObject advice=result.getAsJsonObject("auto_recommendation");
         if(advice==null || !advice.has("branch") || advice.get("branch").isJsonNull()) {
@@ -529,7 +531,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }
         autoReason=advice.get("reason").getAsString();
         String branch=advice.get("branch").getAsString();
-        if(!result.get("branch_current").getAsBoolean()) {recalculate();return;}
+        if(!result.get("branch_current").getAsBoolean()) {recalculate("auto_branch_stale");return;}
         if(branch.equals(result.get("branch").getAsString())) {
             branchConfirmed=true;branchPicker=false;auto=true;decisionDirty=true;
         } else chooseBranch(branch);
@@ -644,7 +646,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         decisionDirty = true;
         paused = pause;
         status = pendingSearch ? I18n.t("正在停止搜索 · 保留已找到路线")
-            : pause ? (keepResult ? I18n.t("已停止 · 点击路线打完本场，回车走一步") : I18n.t("已停止 · 点击重新计算恢复")) : I18n.t("等待稳定局面");
+            : pause ? (keepResult ? I18n.t("已停止 · 点【执行整场】继续") : I18n.t("已停止 · 点击重新计算恢复")) : I18n.t("等待稳定局面");
         if (keepResult && result.has("branches") && result.getAsJsonArray("branches").size()>1) {
             branchPicker=true;
             status=I18n.t("已停止 · 点击路线或输入编号后回车");
@@ -663,8 +665,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         System.err.println("[STS1Solver] " + message);
     }
 
-    private void recalculate() {
-        diagnostic("recalculate",I18n.t("重新计算"),null);
+    /** Drops the plan and searches again; the reason goes to the run record so an unexpected re-search can be traced. */
+    private void recalculate(String reason) {
+        diagnostic("recalculate",reason,null);
         boolean resumeAuto=auto;
         cancel(false);
         auto=resumeAuto;
@@ -682,7 +685,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             paused=true;
             status=I18n.t("局面已变化 · 请重新计算");
         } else if(auto)fail(I18n.t("局面发生未预期变化，已停止自动执行：")+difference);
-        else recalculate();
+        else recalculate("state_changed");
     }
 
     private void toggleRunLog() {
@@ -739,7 +742,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         boolean inCombat = combat();
         if(!wasCombat && inCombat) {
             heldThisFight=false;
-            if(standbyFolds()) { collapsed=true; autoFolded=false; status=I18n.t("待命 · 点【计算】开始搜索"); }
+            if(standby()) { collapsed=true; autoFolded=false; status=I18n.t("待命 · 点【计算】开始搜索"); }
         }
         if(!wasCombat && inCombat && runAuto) {
             auto=true;paused=false;branchConfirmed=false;decisionDirty=true;lastKey=null;
@@ -751,7 +754,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             lastKey = null;
             thiefPreference=null;
             armed=false;
-            if(standbyFolds()) { collapsed=true; autoFolded=false; }
+            if(standby()) { collapsed=true; autoFolded=false; }
             error = "";
         }
         wasCombat = inCombat;
@@ -793,7 +796,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 status = reply.has("manual_choice") && reply.get("manual_choice").getAsBoolean()
                     ? I18n.t("抢劫怪：选定路线后可开启自动战斗")
                     : reply.has("interrupted") && reply.get("interrupted").getAsBoolean()
-                    ? I18n.t("已停止 · 点击路线打完本场，回车走一步") : I18n.t("路线已就绪 · 等待你的操作");
+                    ? I18n.t("已停止 · 点【执行整场】继续") : I18n.t("路线已就绪 · 等待你的操作");
                 if(reply.has("boss_fast_finish") && reply.get("boss_fast_finish").getAsBoolean())
                     status=I18n.t("Boss 已有合格无药胜线 · 固定路线，结束搜索");
                 if(fightAuto() && !paused && !branchConfirmed) {
@@ -888,7 +891,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private void executeStep() {
         if (result == null || !ready() || busy || awaitingAction) return;
-        if (!routeConfirmed(result,branchConfirmed) || branchPicker || captureBranchKeys) return;
+        if (branchPicker || captureBranchKeys) return;
+        if (!approved(result,branchConfirmed,!fightAuto())) { requestBranches(); return; } // never an unpicked plan
         try {
             JsonObject state = capture();
             if (!key(state).equals(rootKey)) { stateChanged(state); return; }
@@ -1023,7 +1027,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         } catch(NumberFormatException invalid) { return -1; }
     }
     private void branchKeyboard() {
-        // Manual outside combat: Enter runs the suggested step.
+        // Agent play outside combat: Enter confirms the listed step.
         if(pilot.mode==1 && !combat() && pilot.packet!=null && pilot.scores!=null && Gdx.input.isKeyJustPressed(Input.Keys.ENTER))
             pilot.confirm=true;
         boolean held=Gdx.input.isKeyPressed(Input.Keys.ENTER);
@@ -1031,12 +1035,11 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 || Gdx.input.isKeyPressed(Input.Keys.NUMPAD_0+n);
         // Keep native card hotkeys suppressed until the selecting key is released.
         captureBranchKeys=branchPicker || (captureBranchKeys && held);
-        // Enter runs one step in Manual, otherwise resumes this combat's automation. The key is
-        // withheld from the game until released; potion choices keep their own Enter.
-        if(!branchPicker && !auto && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)
+        // In Combat auto and the pilot, Enter resumes this fight's automation; in Standby it stays the game's. The key
+        // is withheld from the game until released; potion choices keep their own Enter.
+        if(!branchPicker && !auto && RunMode.combatAutomatic(mode()) && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)
                 && supported() && ready()) {
-            if(RunMode.combatAutomatic(mode())) toggleAuto();
-            else executeStep(); // one step per Enter; F10 runs the whole fight
+            toggleAuto();
             captureBranchKeys=true;
             return;
         }
@@ -1078,94 +1081,44 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             canvas.hovered=over || canvas.dragging; return;
         }
         canvas.drag(mx,my); layout();
-        if (over && click) {
-            float lx=(mx-canvas.x)/s, ly=(canvas.y-my)/s, w=panelWidth();
-            boolean body=!collapsed && !settingsOpen, list=body && lx>=ROUTE_LEFT && ly>=BODY_TOP && ly<BODY_TOP+BODY_ROWS*BODY_ROW;
-            int row=(int)((ly-BODY_TOP)/BODY_ROW);
-            if (ly < 42) {
-                if (lx >= exportLeft(w) && lx < exportLeft(w)+exportWidth()) exports.exportRun(backend);
-                else if (collapsed && lx >= foldedLeft(w) && lx < foldedLeft(w)+56 && !foldedAction().isEmpty()) foldedClick();
-                else if (!collapsed && lx >= w-138 && lx < w-54) settingsOpen=!settingsOpen;
-                else if (lx > w-47) { collapsed=!collapsed; autoFolded=false; }
-                else canvas.startDrag(mx,my);
-            } else if (!collapsed && settingsOpen && ly>=SETTINGS_TOP && ly<SETTINGS_TOP+4*SETTINGS_PITCH && (ly-SETTINGS_TOP)%SETTINGS_PITCH<30) {
-                float cw=(w-40)/2, off=lx-(24+cw);
-                int setting=(int)((ly-SETTINGS_TOP)/SETTINGS_PITCH);
-                if (setting==0 && off<0) toggleBrightEye();
-                else if (setting==0) changeScale(off<cw/3 ? canvas.uiScale-.1f : off>=cw*2/3 ? canvas.uiScale+.1f : 1);
-                else if (setting==1) { if (off<0) toggleBossFinish(); else toggleLanguage(); }
-                else if (setting==2) { if (off<0) toggleRunLog(); else toggleStandby(); }
-                else if (off<0) bindingKey=true;
-            } else if (body && previewCount > 0 && lx >= ROUTE_LEFT && ly >= 42 && ly < 72) {
-                if (transformPreview != null) transformPreview = null;
-                else {
-                    boolean astrolabe = Foresight.astrolabeOffered();
-                    transformPreview = new TransformPreview(astrolabe ? AbstractDungeon.player.masterDeck.getPurgeableCards().group
-                        : EventForesight.transformCards(AbstractDungeon.getCurrRoom().event).group,
-                        AbstractDungeon.miscRng, previewCount, astrolabe);
-                    previewRngCounter = AbstractDungeon.miscRng.counter;
-                    previewSource = source;
-                }
-                scroll = 0;
-            } else if (list && transformPreview != null) {
-                transformPreview.pick(scroll + row);
-                scroll = 0;
-            } else if (list && branchPicker && result!=null) {
-                int index=scroll+row;
-                JsonArray branches=result.getAsJsonArray("branches");
-                if(index<branches.size()) {
-                    JsonObject branch=branches.get(index).getAsJsonObject();
-                    if(branch.get("available").getAsBoolean())chooseBranch(branch.get("id").getAsString());
-                }
-            } else if (list && busy && progressRows!=null) {
-                if(row<Math.min(progressRows.size(),BODY_ROWS)) {
-                    JsonObject progress=progressRows.get(row).getAsJsonObject();
-                    if(progress.has("ready") && progress.get("ready").getAsBoolean() && progress.has("id")) {
-                        boolean keepAuto=runAuto; // picking a finished route is not a Stop
-                        clickedBranch=progress.get("id").getAsString();
-                        cancel(true);
-                        runAuto=keepAuto;
-                    }
-                }
-            } else if (list && result!=null) {
-                if (!auto) toggleAuto(); // the whole route; Enter is one step in Manual
-            } else if (!collapsed && lx >= 16 && lx < w-16 && ly >= ACTIONS_TOP && ly <= ACTIONS_TOP+36
-                    && (lx-16)%ACTION_SPACING < ACTION_SPACING-8) {
-                int action=(int)((lx-16)/ACTION_SPACING);
-                if (action==0) { armed=true; recalculate(); }
-                else if (action==1) { heldThisFight=true; auto=false; executeStep(); }
-                else if (action==2) toggleAuto(); // the whole fight, the same as F10
-                else if (action==3) toggleCombatMode();
-                else if (action==4) togglePilotMode();
-                else stopAll();
-            } else if (!collapsed && lx >= 16 && lx < w-16 && ly >= TOGGLES_TOP && ly <= TOGGLES_TOP+28) {
-                float spacing=(w-24)/(canCreditRest()?3:2);
-                if ((lx-16)%spacing < spacing-8) {
-                    int toggle=(int)((lx-16)/spacing);
-                    if (toggle==0) {
-                        boolean fast=highSpeed;   // standard -> high speed -> streak -> standard
-                        highSpeed=!highSpeed && !streakMode; streakMode=fast;
-                        saveSetting("highSpeed", highSpeed); saveSetting("streakMode", streakMode); recalculate();
-                        highSpeedWarnedAt=highSpeed || streakMode?System.currentTimeMillis():0;
-                    }
-                    else if (toggle==1) togglePotionRewards();
-                    else { nextRest=!nextRest; recalculate(); }
-                }
-            }
-        }
+        if (over && click && !canvas.click((mx-canvas.x)/s,(canvas.y-my)/s) && (canvas.y-my)/s < 40) canvas.startDrag(mx,my);
         canvas.hovered = over || canvas.dragging;
         if (over || canvas.dragging) {
-            float lx=(mx-canvas.x)/s, ly=(canvas.y-my)/s;
-            if (!collapsed && !settingsOpen && lx >= ROUTE_LEFT && ly >= BODY_TOP && ly < BODY_TOP+BODY_ROWS*BODY_ROW) {
-                if (InputHelper.scrolledDown) scroll++;
-                if (InputHelper.scrolledUp) scroll=Math.max(0,scroll-1);
-            }
+            if (!collapsed && InputHelper.scrolledDown) scroll++; // the one list on screen; drawing clamps it
+            if (!collapsed && InputHelper.scrolledUp) scroll=Math.max(0,scroll-1);
             InputHelper.justClickedLeft=false;
             InputHelper.justReleasedClickLeft=false;
             InputHelper.justClickedRight=false;
             InputHelper.justReleasedClickRight=false;
             InputHelper.scrolledDown=InputHelper.scrolledUp=false;
         }
+    }
+
+    private void toggleTransformPreview() {
+        if (transformPreview != null) transformPreview = null;
+        else {
+            boolean astrolabe = Foresight.astrolabeOffered();
+            transformPreview = new TransformPreview(astrolabe ? AbstractDungeon.player.masterDeck.getPurgeableCards().group
+                : EventForesight.transformCards(AbstractDungeon.getCurrRoom().event).group,
+                AbstractDungeon.miscRng, Foresight.previewCount(), astrolabe);
+            previewRngCounter = AbstractDungeon.miscRng.counter;
+            previewSource = AbstractDungeon.currMapNode;
+        }
+        scroll = 0;
+    }
+
+    /** A finished route clicked during the search: stop and take it (Standby then waits for Play). */
+    private void pickProgress(JsonObject progress) {
+        boolean keepAuto=runAuto; // picking a finished route is not a Stop
+        clickedBranch=progress.get("id").getAsString();
+        cancel(true);
+        runAuto=keepAuto;
+    }
+
+    private void setSearchTier(int tier) {
+        highSpeed = tier == 1; streakMode = tier == 2;
+        saveSetting("highSpeed", highSpeed); saveSetting("streakMode", streakMode); recalculate("search_tier");
+        highSpeedWarnedAt = highSpeed || streakMode ? System.currentTimeMillis() : 0;
     }
 
     private void toggleBrightEye() {
@@ -1177,14 +1130,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     static boolean solverDriving() { return instance != null && (instance.auto || instance.runAuto); }
     static Path desktop() { return instance != null ? RunExports.desktopDirectory() : Paths.get(System.getProperty("user.home"), "Desktop"); }
-
-    private void toggleStandby() {
-        standby = !standby;
-        armed = combat(); // a fight already on screen keeps its search
-        saveSetting("standby", standby);
-        exports.message = I18n.t(standby ? "待命模式：面板保持折叠，战斗中点【计算】才搜索，打完自动收起" : "待命模式已关闭");
-        exports.messageError = false;
-    }
 
     private void saveSetting(String key, boolean value) {
         try { if (config != null) { config.setBool(key, value); config.save(); } }
@@ -1236,7 +1181,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             turn=Math.max(turn,row.get("turn").getAsInt());
             best=Math.max(best,row.get("best_hp").getAsInt());
         }
-        return I18n.t("本轮模拟 ")+count(total)+I18n.t("次 · 循环展开 ")+count(transitions)+I18n.t("步");
+        return I18n.t("本轮模拟 ")+count(total)+I18n.t("次 · 循环展开 ")+count(transitions)+" "+I18n.t("步");
     }
     private boolean canCreditRest() {
         if(!combat() || !AbstractDungeon.player.hasRelic("Eternal Feather"))return false;
@@ -1278,93 +1223,360 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(routeMarks)pilot.renderRoute(sb,canvas);
         deckWatch.render(sb,canvas);
         layout();
+        canvas.clearHits();
         if(pilot.cardShown()) { pilot.renderCard(sb,canvas); canvas.cursorOnTop(sb); return; }
-        float w=panelWidth();
-        canvas.box(sb,0,0,w,panelHeight(),BORDER);
-        canvas.box(sb,1,1,w-2,panelHeight()-2,BACKGROUND);
-        String action=collapsed?foldedAction():"";
-        canvas.label(sb,I18n.t("战斗求解器"),16,collapsed?7:10,(action.isEmpty()?exportLeft(w):foldedLeft(w))-24,collapsed?.95f:1.1f,Color.WHITE);
-        canvas.label(sb,collapsed?"＋":"－",w-36,collapsed?14:10,26,1,ACCENT);
-        canvas.button(sb,exportLeft(w),collapsed?6:8,exportWidth(),collapsed?22:28,SURFACE);
-        canvas.label(sb,I18n.t("导出"),exportLeft(w)+8,collapsed?8:12,exportWidth()-12,collapsed?.72f:.85f,ACCENT);
-        if (collapsed) {
-            if(!action.isEmpty()) {
-                canvas.button(sb,foldedLeft(w),6,56,22,SURFACE);
-                canvas.label(sb,action,foldedLeft(w)+8,8,44,.72f,ACCENT);
-            }
-            String line=error.isEmpty()?status:I18n.backend(error);
-            Color color=error.isEmpty()?MUTED:DANGER;
-            if(error.isEmpty() && result!=null && !auto && !branchPicker) { // the folded panel still shows what Execute would do
-                boolean won=result.get("won").getAsBoolean();
-                String revival=revivalWarning(result);
-                line=I18n.t(won?"预测胜利":"当前路线未找到胜利")+" · "+I18n.t("战后 HP")+" "+result.get("hp").getAsString()
-                    +" · "+I18n.t("等效战损")+" "+result.get("loss").getAsString()+(revival.isEmpty()?"":" · "+revival);
-                color=won && revival.isEmpty()?ACCENT:DANGER;
-            }
-            canvas.label(sb,line,20,29,w-40,.65f,color);
-            sb.setColor(Color.WHITE); canvas.cursorOnTop(sb); return;
-        }
-        canvas.button(sb,w-138,8,84,28,settingsOpen?ACCENT:SURFACE);
-        canvas.label(sb,I18n.t(settingsOpen?"返回":"设置"),w-128,12,72,.85f,settingsOpen?BACKGROUND:ACCENT);
-        String revivalWarning = result == null ? "" : revivalWarning(result);
-        if (revivalWarning.isEmpty() && (highSpeed || streakMode) && System.currentTimeMillis()-highSpeedWarnedAt < 8000)
-            revivalWarning = I18n.t(highSpeed?"高速模式：搜索量 1/20，胜率和省血下降":"连胜模式：前三幕不降预算，搜索更慢");
-        canvas.label(sb,revivalWarning.isEmpty()?status:revivalWarning,16,40,w-32,.85f,
-            revivalWarning.isEmpty() && error.isEmpty()?MUTED:DANGER);
-        String note=exports.note();
-        if (settingsOpen) renderSettings(sb,w,note);
-        else renderCombatBody(sb,w,note);
-        String[] labels={I18n.t("重新计算"),I18n.t("执行一步"),auto?I18n.t("暂停自动"):I18n.t("执行整场"),
-            I18n.t("战斗全自动"),I18n.t("AI全自动"),I18n.t("停止")};
-        for(int i=0;i<labels.length;i++) {
-            boolean on=i==3&&pilot.mode!=2&&(runAuto||auto)||i==4&&pilot.mode==2;
-            float left=16+i*ACTION_SPACING;
-            if(on) canvas.box(sb,left-2,ACTIONS_TOP-2,ACTION_SPACING-4,40,ACCENT);
-            canvas.button(sb,left,ACTIONS_TOP,ACTION_SPACING-8,36,i==0?ACCENT:SURFACE);
-            canvas.label(sb,labels[i],26+i*ACTION_SPACING,ACTIONS_TOP+8,ACTION_SPACING-28,.75f,
-                i==0?BACKGROUND:i==5?DANGER:on||i==2&&auto?ACCENT:Color.WHITE);
-        }
-        List<String> toggles=new ArrayList<>(Arrays.asList(
-            I18n.t("搜索：")+I18n.t(highSpeed?"高速":streakMode?"连胜":"标准"),
-            I18n.t("自动换药：")+I18n.t(autoPotionRewards?"开":"关")));
-        if(canCreditRest())toggles.add(I18n.t("羽毛回血：")+I18n.t(nextRest?"是":"仅必经火堆"));
-        float spacing=(w-24)/toggles.size();
-        for(int i=0;i<toggles.size();i++) {
-            canvas.button(sb,16+i*spacing,TOGGLES_TOP,spacing-8,28,SURFACE);
-            canvas.label(sb,toggles.get(i),24+i*spacing,TOGGLES_TOP+5,spacing-24,.8f,
-                i==0?(highSpeed?DANGER:streakMode?ACCENT:MUTED):i==1?(autoPotionRewards?ACCENT:MUTED):ACCENT);
+        if(collapsed) renderFolded(sb);
+        else {
+            canvas.dry=true; // measure first so the card is drawn at this frame's height
+            try { contentHeight=renderBody(sb); } finally { canvas.dry=false; }
+            canvas.box(sb,0,0,WIDTH,contentHeight,BORDER);
+            canvas.box(sb,1,1,WIDTH-2,contentHeight-2,BACKGROUND);
+            renderBody(sb);
         }
         sb.setColor(Color.WHITE);
         canvas.cursorOnTop(sb);
     }
 
-    private void renderSettings(SpriteBatch sb, float w, String note) {
-        float cw=(w-40)/2, right=24+cw;
-        for(int row=0;row<4;row++) for(int col=0;col<2;col++) {
-            if(row==3 && col==1) canvas.box(sb,16+col*(cw+8),SETTINGS_TOP+row*SETTINGS_PITCH,cw,30,SURFACE); // SuperFastMode: display only
-            else canvas.button(sb,16+col*(cw+8),SETTINGS_TOP+row*SETTINGS_PITCH,cw,30,SURFACE);
+    private void renderFolded(SpriteBatch sb) {
+        canvas.box(sb,0,0,WIDTH,FOLDED,BORDER);
+        canvas.box(sb,1,1,WIDTH-2,FOLDED-2,BACKGROUND);
+        canvas.label(sb,I18n.t("战斗求解器"),PAD,9,150,.9f,Color.WHITE);
+        float left=PAD+canvas.textWidth("战斗求解器",.9f)+10, right=WIDTH-PAD-24;
+        canvas.button(sb,right,7,24,26,null,"＋",1,MUTED,() -> { collapsed=false; autoFolded=false; });
+        String action=foldedAction();
+        if(!action.isEmpty()) {
+            float w=canvas.textWidth(action,.74f)+26;
+            right-=w+6;
+            boolean danger=action.equals("停止"), soft=action.equals("暂停");
+            canvas.button(sb,right,7,w,26,danger?DANGER_SOFT:soft?SECONDARY:ACCENT,action,.74f,danger?DANGER:soft?Color.WHITE:BACKGROUND,this::foldedClick);
         }
-        float t=SETTINGS_TOP+6, p=SETTINGS_PITCH;
-        canvas.label(sb,I18n.t("辉眼模式：")+I18n.t(Foresight.brightEyeMode?"开":"关"),26,t,cw-20,.85f,ACCENT);
-        canvas.label(sb,"−",right+12,t-1,24,1,ACCENT);
-        canvas.label(sb,Math.round(canvas.uiScale*100)+"%",right+cw/2-22,t,60,.85f,Color.WHITE);
-        canvas.label(sb,"＋",right+cw-30,t-1,24,1,ACCENT);
-        canvas.label(sb,I18n.t("Boss 快速收尾：")+I18n.t(bossFastFinishEnabled?"开":"关"),26,t+p,cw-20,.85f,bossFastFinishEnabled?ACCENT:MUTED);
-        canvas.label(sb,I18n.t("语言：")+("en".equals(I18n.language())?"English":"简体中文"),right+10,t+p,cw-20,.85f,ACCENT);
-        canvas.label(sb,I18n.t("持续记录：")+" "+I18n.t(backend.runLog()?"开":"关"),26,t+2*p,cw-20,.85f,backend.runLog()?ACCENT:MUTED);
-        canvas.label(sb,I18n.t("待命模式：")+I18n.t(standby?"开":"关"),right+10,t+2*p,cw-20,.85f,standby?ACCENT:MUTED);
-        canvas.label(sb,I18n.t("自动战斗快捷键：")+Input.Keys.toString(autoKey),26,t+3*p,cw-20,.85f,ACCENT);
-        canvas.label(sb,"SuperFastMode: "+(Loader.isModLoaded("superfastmode")?"x"+superFastShown():I18n.t("未安装")),right+10,t+3*p,cw-20,.85f,
-            superFastSpeed()>SUPER_FAST_TESTED?DANGER:MUTED);
-        canvas.label(sb,bindingKey?I18n.t("按 F1-F12 绑定；F6/F7/F8/F9 保留；Esc 取消")
-                :I18n.t("Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同"),
-            16,SETTINGS_TOP+4*p-2,w-32,.7f,bindingKey?ACCENT:MUTED);
-        String fast = superFastNote(); // mod warnings sit in their own box under the panel
-        String defaultNote = !fast.isEmpty() ? fast : I18n.t("F6 导出记录到桌面，发这一个文件即可");
-        Color noteColor = note.isEmpty()
-            ? (superFastSpeed() > SUPER_FAST_TESTED ? DANGER : MUTED)
-            : (exports.messageError ? DANGER : ACCENT);
-        canvas.label(sb,note.isEmpty()?defaultNote:note,16,NOTE_TOP,w-32,.75f,noteColor);
+        if(busy && combat() && supported()) canvas.bar(sb,1,FOLDED-4,(WIDTH-2)*SearchStatus.waitingFill(System.currentTimeMillis()-sentAt),3,ACCENT);
+        Color[] tone={SECONDARY,MUTED};
+        String badge=foldedBadge(tone);
+        if(!badge.isEmpty()) canvas.badge(sb,badge,left,10,right-8-left,tone[0],tone[1]);
+    }
+
+    /** The folded panel's status tag; {@code tone} receives its fill and text colours. */
+    private String foldedBadge(Color[] tone) {
+        if(!combat() || !supported()) {
+            if(runAuto) { tone[0]=ACCENT_SOFT; tone[1]=ACCENT; }
+            return I18n.t(pilot.mode==2?"AI全自动":runAuto?"战斗全自动":"待命");
+        }
+        if(!error.isEmpty()) { tone[0]=DANGER_SOFT; tone[1]=DANGER; return status; }
+        if(auto) { tone[0]=ACCENT_SOFT; tone[1]=ACCENT; return I18n.t("自动执行中"); }
+        if(busy) return I18n.t("搜索中")+" "+(System.currentTimeMillis()-sentAt)/1000+I18n.t("秒");
+        if(branchPicker) { tone[0]=ACCENT_SOFT; tone[1]=ACCENT; return I18n.t("选择用药路线"); }
+        if(result!=null) {
+            boolean won=result.get("won").getAsBoolean();
+            String revival=revivalWarning(result);
+            boolean good=won && revival.isEmpty();
+            tone[0]=good?ACCENT_SOFT:DANGER_SOFT; tone[1]=good?ACCENT:DANGER;
+            // A win is told by the green badge; the words would not fit beside Play in English.
+            return (won?"":I18n.t("未胜")+" · ")+"HP "+result.get("hp").getAsString()
+                +" · "+I18n.t("战损")+" "+result.get("loss").getAsString()+(revival.isEmpty()?"":" · "+revival);
+        }
+        return standbyWaiting() ? I18n.t("待命") : status;
+    }
+
+    /** The unfolded panel from the top; returns its height. Runs twice a frame: measured (canvas.dry), then drawn. */
+    private float renderBody(SpriteBatch sb) {
+        float right=WIDTH-PAD-24;
+        canvas.label(sb,I18n.t(settingsOpen?"设置":"战斗求解器"),PAD,11,200,.95f,Color.WHITE);
+        canvas.button(sb,right,8,24,26,null,"－",1,MUTED,() -> { collapsed=true; autoFolded=false; });
+        right=ghost(sb,right,settingsOpen?"返回":"设置",() -> settingsOpen=!settingsOpen);
+        if(!settingsOpen) ghost(sb,right,"导出日志",() -> exports.exportRun(backend));
+        float top=44;
+        if(settingsOpen) top=renderSettings(sb,top);
+        else {
+            if(inSupportedRun()) top=modeSwitch(sb,top);
+            if((highSpeed || streakMode) && System.currentTimeMillis()-highSpeedWarnedAt < 8000)
+                top=lines(sb,I18n.t(highSpeed?"高速模式：搜索量 1/20，胜率和省血下降":"连胜模式：前三幕不降预算，搜索更慢"),top,.76f,DANGER);
+            if(!combat()) top=renderOutside(sb,top);
+            else if(!supported()) top=lines(sb,status,top,.85f,MUTED);
+            else if(!error.isEmpty()) top=renderError(sb,top);
+            else if(branchPicker && result!=null) top=renderPicker(sb,top);
+            else if(busy) top=renderSearch(sb,top);
+            else if(result!=null) top=renderPlan(sb,top);
+            else top=renderIdle(sb,top);
+        }
+        String note=exports.note();
+        if(!note.isEmpty()) top=lines(sb,note,top,.74f,exports.messageError?DANGER:ACCENT);
+        return top+PAD-6;
+    }
+
+    /** A ghost header button ending at {@code right}; returns its left edge. */
+    private float ghost(SpriteBatch sb, float right, String label, Runnable action) {
+        float w=canvas.textWidth(label,.76f)+18;
+        canvas.button(sb,right-w-4,8,w,26,null,label,.76f,MUTED,action);
+        return right-w-4;
+    }
+
+    /** Wrapped text, whole; returns the top of the next row. */
+    private float lines(SpriteBatch sb, String text, float top, float size, Color color) {
+        for(String line:canvas.wrap(text,WIDTH-2*PAD,size)) { canvas.label(sb,line,PAD,top,WIDTH-2*PAD,size,color); top+=size*24; }
+        return top+6;
+    }
+
+    private float modeSwitch(SpriteBatch sb, float top) {
+        String[] labels={"待命","战斗全自动","AI全自动"};
+        RunMode[] modes={RunMode.STANDBY,RunMode.COMBAT_AUTO,RunMode.PILOT};
+        RunMode current=mode();
+        float w=(WIDTH-2*PAD-4)/3;
+        canvas.box(sb,PAD,top,WIDTH-2*PAD,28,SECONDARY);
+        for(int i=0;i<3;i++) {
+            RunMode target=modes[i];
+            boolean on=current==target;
+            canvas.button(sb,PAD+2+i*w,top+2,w,24,on?ACCENT_SOFT:null,labels[i],.74f,on?ACCENT:MUTED,on?null:() -> setMode(target));
+        }
+        return top+38;
+    }
+
+    /** Up to three buttons in one row; kinds: 0 primary, 1 secondary, 2 ghost, 3 danger. */
+    private float actions(SpriteBatch sb, float top, String[] labels, int[] kinds, Runnable[] runs) {
+        float avail=WIDTH-2*PAD-8*(labels.length-1), left=PAD;
+        for(int i=0;i<labels.length;i++) {
+            float w=labels.length==3 ? (i==0?avail*.38f:i==1?avail*.31f:avail*.31f) : avail/labels.length;
+            Color fill=kinds[i]==0?ACCENT:kinds[i]==1?SECONDARY:kinds[i]==3?DANGER_SOFT:null;
+            Color text=kinds[i]==0?BACKGROUND:kinds[i]==1?Color.WHITE:kinds[i]==3?DANGER:MUTED;
+            canvas.button(sb,left,top,w,32,fill,labels[i],.8f,text,runs[i]);
+            left+=w+8;
+        }
+        return top+32+PAD;
+    }
+
+    /** A "▶ title" row that opens and closes the list under it. */
+    private float disclosure(SpriteBatch sb, float top, String title, boolean open, Runnable toggle, String tail) {
+        canvas.line(sb,PAD,top,WIDTH-2*PAD);
+        top+=6;
+        canvas.button(sb,PAD-6,top,WIDTH-2*PAD+12,26,null,null,.76f,MUTED,toggle);
+        float tw=tail.isEmpty()?0:canvas.textWidth(tail,.72f);
+        canvas.label(sb,(open?"▼ ":"▶ ")+title,PAD,top+5,WIDTH-2*PAD-tw-12,.76f,MUTED);
+        if(tw>0) canvas.label(sb,tail,WIDTH-PAD-tw,top+6,tw+2,.72f,MUTED);
+        return top+32;
+    }
+
+    /** Rows of a list, at most LIST_ROWS from {@code scroll}; {@code click} null leaves the rows display-only. */
+    private float listRows(SpriteBatch sb, float top, List<String> rows, List<Color> colors, java.util.function.IntConsumer click) {
+        scroll=Math.max(0,Math.min(scroll,Math.max(0,rows.size()-LIST_ROWS)));
+        for(int i=scroll;i<Math.min(rows.size(),scroll+LIST_ROWS);i++) {
+            int index=i;
+            if(click==null) canvas.box(sb,PAD,top,WIDTH-2*PAD,24,SURFACE);
+            else canvas.button(sb,PAD,top,WIDTH-2*PAD,24,SURFACE,null,.8f,MUTED,() -> click.accept(index));
+            canvas.label(sb,rows.get(i),PAD+10,top+4,WIDTH-2*PAD-20,.8f,colors.get(i));
+            top+=28;
+        }
+        return top+4;
+    }
+
+    private float headline(SpriteBatch sb, String text, float top, Color color) {
+        canvas.label(sb,text,PAD,top,WIDTH-2*PAD,1.05f,color);
+        return top+30;
+    }
+
+    private float renderIdle(SpriteBatch sb, float top) {
+        if(standbyWaiting()) {
+            top=headline(sb,I18n.t("待命"),top,Color.WHITE);
+            top=lines(sb,I18n.t("点【计算】开始搜索本场"),top,.8f,MUTED);
+            return actions(sb,top+4,new String[]{"计算"},new int[]{0},new Runnable[]{this::solveAgain});
+        }
+        top=lines(sb,status,top,.85f,MUTED);
+        return actions(sb,top+4,new String[]{"重新计算"},new int[]{2},new Runnable[]{this::solveAgain});
+    }
+
+    private float renderError(SpriteBatch sb, float top) {
+        List<String> rows=canvas.wrap(I18n.backend(error),WIDTH-2*PAD-24,.78f);
+        float h=58+rows.size()*20;
+        canvas.box(sb,PAD,top,WIDTH-2*PAD,h,DANGER);
+        canvas.box(sb,PAD+1,top+1,WIDTH-2*PAD-2,h-2,DANGER_SOFT);
+        canvas.label(sb,status,PAD+12,top+9,WIDTH-2*PAD-24,.85f,DANGER);
+        for(int i=0;i<rows.size();i++) canvas.label(sb,rows.get(i),PAD+12,top+34+i*20,WIDTH-2*PAD-24,.78f,Color.WHITE);
+        canvas.label(sb,I18n.t("详细原因已写入后台日志"),PAD+12,top+36+rows.size()*20,WIDTH-2*PAD-24,.72f,MUTED);
+        return actions(sb,top+h+10,new String[]{"重新计算"},new int[]{0},new Runnable[]{this::solveAgain});
+    }
+
+    private float renderSearch(SpriteBatch sb, float top) {
+        long now=System.currentTimeMillis();
+        top=headline(sb,I18n.t("搜索中")+" …",top,Color.WHITE);
+        canvas.bar(sb,PAD,top-2,WIDTH-2*PAD,6,SECONDARY);
+        canvas.bar(sb,PAD,top-2,(WIDTH-2*PAD)*SearchStatus.waitingFill(now-sentAt),6,ACCENT);
+        top+=12;
+        top=lines(sb,I18n.backend(backendPhase),top,.8f,MUTED);
+        top=lines(sb,I18n.t("总等待 ")+((now-sentAt)/1000)+I18n.t(" 秒 · 本阶段 ")+((now-phaseAt)/1000)+I18n.t(" 秒"),top-4,.76f,MUTED);
+        top=lines(sb,now-lastProgressAt>5000 ? I18n.t("已 ")+((now-lastProgressAt)/1000)+I18n.t(" 秒无进度 · F9 停止")
+            : progressRows==null ? I18n.t("请求 #")+activeId+I18n.t(" · F9 停止") : progressSummary(),top-4,.76f,MUTED);
+        if(progressRows!=null) {
+            List<String> rows=new ArrayList<>(); List<Color> colors=new ArrayList<>(); int done=0;
+            for(JsonElement e:progressRows) {
+                JsonObject row=e.getAsJsonObject();
+                int best=row.get("best_hp").getAsInt();
+                boolean ready=row.has("ready") && row.get("ready").getAsBoolean() && row.has("id");
+                String revival=ready?revivalWarning(row):"";
+                String phase=row.get("phase").getAsString();
+                rows.add((revival.isEmpty()?"":revival+" · ")+(best>0?"HP "+best:I18n.t("未胜"))+" · T"+row.get("turn").getAsInt()+" · "
+                    +SearchStatus.phase(row)+" · "+(row.has("transitions") && (phase.equals("beam") || phase.equals("cycle"))
+                        ? count(row.get("transitions").getAsLong())+I18n.t("步") : count(row.get("simulations").getAsLong())+I18n.t("次"))
+                    +" · "+I18n.backend(row.get("name").getAsString()));
+                colors.add(!revival.isEmpty()?DANGER:ready?ACCENT:MUTED);
+                if(ready)done++;
+            }
+            top=disclosure(sb,top,I18n.t("搜索过程")+" · "+done+" "+I18n.t("条已完成"),progressOpen,() -> { progressOpen=!progressOpen; scroll=0; },"");
+            if(progressOpen) top=listRows(sb,top,rows,colors,index -> {
+                JsonObject row=progressRows.get(index).getAsJsonObject();
+                if(row.has("ready") && row.get("ready").getAsBoolean() && row.has("id")) pickProgress(row);
+            });
+        }
+        return actions(sb,top+4,new String[]{"停止搜索"},new int[]{3},new Runnable[]{this::stopSearch});
+    }
+
+    private float renderPlan(SpriteBatch sb, float top) {
+        boolean won=result.get("won").getAsBoolean();
+        String head=I18n.t(won?"预测胜利":"当前路线未找到胜利");
+        String metrics=I18n.t("战后 HP")+" "+result.get("hp").getAsString()+" · "+I18n.t("等效战损")+" "+result.get("loss").getAsString();
+        canvas.label(sb,head,PAD,top,WIDTH-2*PAD,1.05f,won?ACCENT:DANGER);
+        float x=PAD+canvas.textWidth(head,1.05f)+12;
+        if(x+canvas.textWidth(metrics,.8f)<=WIDTH-PAD) canvas.label(sb,metrics,x,top+4,WIDTH-PAD-x,.8f,MUTED);
+        else { top+=26; canvas.label(sb,metrics,PAD,top,WIDTH-2*PAD,.8f,MUTED); }
+        top+=30;
+        String revival=revivalWarning(result);
+        if(!revival.isEmpty()) top=lines(sb,revival,top-4,.78f,DANGER);
+        if((fightAuto() || auto) && result.has("branch") && !result.get("branch").getAsString().equals("no-potion")) {
+            String why=result.has("auto_recommendation") && !autoReason.isEmpty() ? I18n.backend(autoReason) : I18n.t("自动战斗已采纳用药路线");
+            if(result.has("auto_recommendation"))
+                why+=" · "+I18n.backend(result.getAsJsonObject("auto_recommendation").getAsJsonObject("assessment").get("summary").getAsString());
+            top=lines(sb,why,top-4,.74f,MUTED);
+        }
+        String lead=I18n.t(auto?"自动执行中":"下一步");
+        canvas.label(sb,lead,PAD,top,140,.82f,MUTED);
+        float lx=PAD+canvas.textWidth(lead,.82f)+8;
+        canvas.label(sb,commandLabel(),lx,top,WIDTH-PAD-lx,.82f,Color.WHITE);
+        top+=30;
+        JsonArray route=result.getAsJsonArray("route");
+        String healing=I18n.t("战后恢复：")+result.get("recovery").getAsInt();
+        top=disclosure(sb,top,I18n.t("出牌顺序")+" · "+route.size()+" "+I18n.t("步"),playOrderOpen,() -> { playOrderOpen=!playOrderOpen; scroll=0; },healing);
+        if(playOrderOpen) {
+            List<String> rows=new ArrayList<>(); List<Color> colors=new ArrayList<>();
+            for(int i=0;i<route.size();i++) {
+                JsonObject row=route.get(i).getAsJsonObject();
+                String label=row.has("label")?row.get("label").getAsString():row.get("text").getAsString();
+                rows.add(String.format("%02d  ",i+1)+I18n.backend(label)+"  · T"+row.get("turn").getAsInt());
+                colors.add(i==0?Color.WHITE:MUTED);
+            }
+            top=listRows(sb,top,rows,colors,null); // reading only; Play and Step are the ways in
+            if(result.getAsJsonArray("recovery_notes").size()>0)
+                top=lines(sb,I18n.backend(result.getAsJsonArray("recovery_notes").get(0).getAsString()),top,.72f,MUTED);
+        }
+        if(auto) return actions(sb,top+4,new String[]{"暂停自动"},new int[]{1},new Runnable[]{this::toggleAuto});
+        return actions(sb,top+4,new String[]{"执行整场","执行一步","重新计算"},new int[]{0,1,2},new Runnable[]{
+            this::toggleAuto, () -> { heldThisFight=true; auto=false; executeStep(); }, this::solveAgain});
+    }
+
+    private float renderPicker(SpriteBatch sb, float top) {
+        boolean thief=result.has("manual_choice") && result.get("manual_choice").getAsBoolean();
+        top=headline(sb,I18n.t(thief?"抢劫怪路线 · 可手动或自动执行":"选择用药路线"),top,Color.WHITE);
+        top=lines(sb,status+(branchInput.isEmpty()?"":"  ["+branchInput+"]"),top-4,.78f,MUTED);
+        JsonArray branches=result.getAsJsonArray("branches");
+        List<String> rows=new ArrayList<>(); List<Color> colors=new ArrayList<>();
+        for(int i=0;i<branches.size();i++) {
+            JsonObject branch=branches.get(i).getAsJsonObject();
+            boolean available=branch.get("available").getAsBoolean();
+            // Result first so a long bottle list can only truncate the route name.
+            String summary=available?(branch.get("won").getAsBoolean()?I18n.t("损 ")+branch.get("loss").getAsInt():I18n.t("未胜")):I18n.t("不可用");
+            String revival=revivalWarning(branch);
+            if(!revival.isEmpty()) summary=revival+" · "+summary;
+            if(available && branch.has("lost_gold") && branch.get("lost_gold").getAsInt()>0)
+                summary+=I18n.t(" / 金 -")+branch.get("lost_gold").getAsInt();
+            if(available && branch.has("potion_gain") && branch.get("potion_gain").getAsInt()>0)
+                summary+=I18n.t(" / 补 ")+branch.get("potion_gain").getAsInt()+I18n.t(" 药");
+            rows.add(i+"  "+summary+" · "+I18n.backend(branch.get("name").getAsString()));
+            colors.add(!revival.isEmpty()?DANGER:available?ACCENT:MUTED);
+        }
+        top=listRows(sb,top,rows,colors,index -> {
+            JsonObject branch=branches.get(index).getAsJsonObject();
+            if(branch.get("available").getAsBoolean()) chooseBranch(branch.get("id").getAsString());
+        });
+        String hint=thief ? I18n.t("空回车：选推荐路线；选后可开自动")
+            : branches.size()>0 && branches.get(0).getAsJsonObject().get("id").getAsString().equals("no-potion")
+            ? I18n.t("0 / 空回车：不交药；无输入则等待") : I18n.t("0 / 空回车：选 0 号路线；无输入则等待");
+        return lines(sb,hint,top,.72f,MUTED);
+    }
+
+    /** Outside combat: the run status, and the event foresight or the transform preview when there is one. */
+    private float renderOutside(SpriteBatch sb, float top) {
+        top=lines(sb,status,top,.8f,MUTED);
+        List<String> foresight=transformPreview!=null?transformPreview.lines():Foresight.lines();
+        if(transformPreview!=null || Foresight.previewCount()>0) {
+            String title=transformPreview!=null
+                ? (transformPreview.upgrade?I18n.t("星盘"):I18n.t("变化"))+I18n.t("试选 ")+transformPreview.selected.size()+"/"+transformPreview.count
+                : I18n.t("变化预览 · 点击此处打开试选列表");
+            top=disclosure(sb,top,title,transformPreview!=null,this::toggleTransformPreview,"");
+        } else if(!foresight.isEmpty()) {
+            canvas.line(sb,PAD,top,WIDTH-2*PAD);
+            top=lines(sb,I18n.t("随机结果预测 · 滚轮翻页"),top+6,.76f,MUTED);
+        }
+        if(foresight.isEmpty()) return top;
+        List<Color> colors=new ArrayList<>();
+        for(int i=0;i<foresight.size();i++)
+            colors.add(transformPreview!=null ? (i<transformPreview.selected.size()?ACCENT:MUTED) : foresight.get(i).startsWith(" ")?MUTED:ACCENT);
+        top=listRows(sb,top,foresight,colors,transformPreview==null?null:index -> { transformPreview.pick(index); scroll=0; });
+        return transformPreview==null ? top : lines(sb,I18n.t("仅试选 · 滚轮翻页 · 点击已选项撤回"),top,.72f,ACCENT);
+    }
+
+    /** One settings row: the label on the left; the control is drawn by the caller on the right. */
+    private void settingLabel(SpriteBatch sb, String label, float top) {
+        canvas.label(sb,I18n.t(label),PAD,top+5,170,.8f,Color.WHITE);
+    }
+
+    /** A segmented control ending at the panel's right padding. */
+    private void segmented(SpriteBatch sb, float top, String[] options, int active, java.util.function.IntConsumer pick) {
+        float[] widths=new float[options.length]; float total=4;
+        for(int i=0;i<options.length;i++) { widths[i]=canvas.textWidth(options[i],.72f)+18; total+=widths[i]; }
+        float left=WIDTH-PAD-total;
+        canvas.box(sb,left,top,total,26,SECONDARY);
+        left+=2;
+        for(int i=0;i<options.length;i++) {
+            int index=i;
+            canvas.button(sb,left,top+2,widths[i],22,i==active?ACCENT_SOFT:null,options[i],.72f,i==active?ACCENT:MUTED,
+                i==active?null:() -> pick.accept(index));
+            left+=widths[i];
+        }
+    }
+
+    /** An on/off switch at the panel's right padding. */
+    private void onOff(SpriteBatch sb, float top, boolean on, Runnable toggle) {
+        float left=WIDTH-PAD-38;
+        canvas.button(sb,left,top+3,38,20,on?ACCENT:SECONDARY,null,.7f,MUTED,toggle);
+        canvas.box(sb,left+(on?20:2),top+5,16,16,on?BACKGROUND:Color.WHITE);
+    }
+
+    private float renderSettings(SpriteBatch sb, float top) {
+        float p=32;
+        settingLabel(sb,"搜索",top);
+        segmented(sb,top,new String[]{"标准","高速","连胜"},highSpeed?1:streakMode?2:0,this::setSearchTier); top+=p;
+        settingLabel(sb,"自动换药",top); onOff(sb,top,autoPotionRewards,this::togglePotionRewards); top+=p;
+        if(canCreditRest()) {
+            settingLabel(sb,"羽毛回血",top);
+            segmented(sb,top,new String[]{"是","仅必经火堆"},nextRest?0:1,index -> { nextRest=index==0; recalculate("rest_setting"); }); top+=p;
+        }
+        settingLabel(sb,"Boss 快速收尾",top); onOff(sb,top,bossFastFinishEnabled,this::toggleBossFinish); top+=p;
+        settingLabel(sb,"辉眼模式",top); onOff(sb,top,Foresight.brightEyeMode,this::toggleBrightEye); top+=p;
+        settingLabel(sb,"持续记录",top); onOff(sb,top,backend.runLog(),this::toggleRunLog); top+=p;
+        settingLabel(sb,"语言",top);
+        boolean english="en".equals(I18n.language());
+        segmented(sb,top,new String[]{"简体中文","English"},english?1:0,index -> toggleLanguage()); top+=p;
+        settingLabel(sb,"界面缩放",top);
+        float right=WIDTH-PAD;
+        canvas.button(sb,right-28,top,28,26,SECONDARY,"＋",.8f,Color.WHITE,() -> changeScale(canvas.uiScale+.1f));
+        canvas.button(sb,right-90,top,58,26,null,Math.round(canvas.uiScale*100)+"%",.78f,Color.WHITE,() -> changeScale(1));
+        canvas.button(sb,right-122,top,28,26,SECONDARY,"−",.8f,Color.WHITE,() -> changeScale(canvas.uiScale-.1f)); top+=p;
+        settingLabel(sb,"自动战斗快捷键",top);
+        canvas.button(sb,right-64,top,64,26,SECONDARY,bindingKey?"…":Input.Keys.toString(autoKey),.76f,ACCENT,() -> bindingKey=true); top+=p;
+        if(bindingKey) top=lines(sb,I18n.t("按 F1-F12 绑定；F6/F7/F8/F9 保留；Esc 取消"),top-4,.72f,ACCENT);
+        settingLabel(sb,"SuperFastMode",top);
+        String fast=Loader.isModLoaded("superfastmode")?"×"+superFastShown():I18n.t("未安装");
+        float fw=canvas.textWidth(fast,.78f);
+        canvas.label(sb,fast,right-fw,top+5,fw+2,.78f,superFastSpeed()>SUPER_FAST_TESTED?DANGER:MUTED); top+=p;
+        canvas.line(sb,PAD,top,WIDTH-2*PAD);
+        return lines(sb,I18n.t("F6 导出日志 · F8 收起 · F9 停止")+" · "+Input.Keys.toString(autoKey)+" "+I18n.t("执行整场"),top+8,.72f,MUTED);
     }
 
     /** 1 when SuperFastMode is absent or its multiplier is off. */
@@ -1390,136 +1602,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             : I18n.t("已兼容 SuperFastMode（当前 ×") + shown + I18n.t("，建议不超过 ×10）");
     }
 
-    private void renderCombatBody(SpriteBatch sb, float w, String note) {
-        float inner=ROUTE_LEFT-48;
-        canvas.box(sb,16,BODY_TOP,ROUTE_LEFT-28,BODY_ROWS*BODY_ROW-4,SURFACE);
-        if (busy) {
-            long seconds=(System.currentTimeMillis()-sentAt)/1000;
-            long now = System.currentTimeMillis();
-            canvas.label(sb,I18n.backend(backendPhase),26,86,inner,.9f,ACCENT);
-            canvas.label(sb,I18n.t("总等待 ")+seconds+I18n.t(" 秒 · 本阶段 ")+((now-phaseAt)/1000)+I18n.t(" 秒"),26,116,inner,.8f,MUTED);
-            canvas.label(sb,now-lastProgressAt>5000
-                ? I18n.t("已 ")+((now-lastProgressAt)/1000)+I18n.t(" 秒无进度 · F9 停止")
-                :progressRows==null?I18n.t("请求 #")+activeId+I18n.t(" · F9 停止"):progressSummary(),26,142,inner,.8f,MUTED);
-        } else if (result != null) {
-            boolean won=result.get("won").getAsBoolean();
-            canvas.label(sb,won?I18n.t("预测胜利"):I18n.t("当前路线未找到胜利"),26,84,inner,.9f,won?ACCENT:DANGER);
-            canvas.label(sb,I18n.t("战后 HP"),26,108,90,.75f,MUTED);
-            canvas.label(sb,I18n.t("等效战损"),126,108,90,.75f,MUTED);
-            canvas.label(sb,result.get("hp").getAsString(),26,124,90,1.5f,Color.WHITE);
-            canvas.label(sb,result.get("loss").getAsString(),126,124,90,1.5f,ACCENT);
-            canvas.line(sb,26,164,inner);
-            canvas.label(sb,I18n.t("下一步  ")+commandLabel(),26,172,inner,.85f,Color.WHITE);
-            String healing=I18n.t("战后恢复：")+result.get("recovery").getAsInt();
-            if(result.getAsJsonArray("recovery_notes").size()>0)
-                healing+=" · "+I18n.backend(result.getAsJsonArray("recovery_notes").get(0).getAsString());
-            canvas.label(sb,healing,26,198,inner,.75f,MUTED);
-        } else {
-            // This column is 200 units wide; the mode guidance sits in the 360-unit list area instead.
-            canvas.label(sb,error.isEmpty()?I18n.t("仅建议，点按钮才出牌"):I18n.backend(error),26,90,inner,.8f,error.isEmpty()?ACCENT:DANGER);
-            if(!error.isEmpty())canvas.label(sb,I18n.t("详细原因已写入后台日志"),26,124,inner,.8f,MUTED);
-        }
-        List<String> foresight=transformPreview!=null?transformPreview.lines():combat()?Collections.<String>emptyList():Foresight.lines();
-        String heading=transformPreview!=null?(transformPreview.upgrade?I18n.t("星盘"):I18n.t("变化"))+I18n.t("试选 ") + transformPreview.selected.size() + "/"+transformPreview.count+I18n.t(" · 点击此处关闭")
-            :Foresight.previewCount()>0?I18n.t("变化预览 · 点击此处打开试选列表")
-            :branchPicker?I18n.t("点击路线，或输入 0～10 后回车：[")+branchInput+"]"
-            :busy&&progressRows!=null?I18n.t("搜索过程 · 已完成路线可点击执行")
-            :!foresight.isEmpty()?I18n.t("随机结果预测 · 滚轮翻页")
-            :result!=null && result.has("manual_choice") && result.get("manual_choice").getAsBoolean()
-                ?I18n.t("抢劫怪路线 · 可手动或自动执行")
-            :(fightAuto() || auto) && result!=null && result.has("branch") && !result.get("branch").getAsString().equals("no-potion")
-                ?I18n.t("自动战斗已采纳用药路线 · 点击或 F9 可接管")
-            :result!=null && auto?I18n.t("推荐行动顺序 · 自动执行中，F9 停止")
-            :I18n.t("推荐行动顺序 · 点击执行整条路线");
-        canvas.label(sb,heading,ROUTE_LEFT,60,w-ROUTE_LEFT-16,.74f,Color.WHITE);
-        float rowWidth=w-ROUTE_LEFT-16, textWidth=rowWidth-16;
-        String hint="";
-        Color hintColor=MUTED;
-        if (transformPreview != null) {
-            scroll=Math.max(0,Math.min(scroll,Math.max(0,foresight.size()-BODY_ROWS)));
-            for (int i=scroll;i<Math.min(foresight.size(),scroll+BODY_ROWS);i++) {
-                canvas.button(sb,ROUTE_LEFT,BODY_TOP+(i-scroll)*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE);
-                canvas.label(sb,foresight.get(i),ROUTE_LEFT+8,BODY_TOP+5+(i-scroll)*BODY_ROW,textWidth,.85f,i<transformPreview.selected.size()?ACCENT:MUTED);
-            }
-            hint=I18n.t("仅试选 · 滚轮翻页 · 点击已选项撤回"); hintColor=ACCENT;
-        } else if (branchPicker && result!=null) {
-            JsonArray branches=result.getAsJsonArray("branches");
-            scroll=Math.max(0,Math.min(scroll,Math.max(0,branches.size()-BODY_ROWS)));
-            for(int i=scroll;i<Math.min(branches.size(),scroll+BODY_ROWS);i++) {
-                JsonObject branch=branches.get(i).getAsJsonObject();
-                boolean available=branch.get("available").getAsBoolean();
-                // Result first so a long bottle list can only truncate the route name.
-                String summary=available?(branch.get("won").getAsBoolean()?I18n.t("损 ")+branch.get("loss").getAsInt():I18n.t("未胜")):I18n.t("不可用");
-                String revival = revivalWarning(branch);
-                if (!revival.isEmpty()) summary = revival + " · " + summary;
-                if(available && branch.has("lost_gold") && branch.get("lost_gold").getAsInt()>0)
-                    summary+=I18n.t(" / 金 -")+branch.get("lost_gold").getAsInt();
-                if(available && branch.has("potion_gain") && branch.get("potion_gain").getAsInt()>0)
-                    summary+=I18n.t(" / 补 ")+branch.get("potion_gain").getAsInt()+I18n.t(" 药");
-                if(available) canvas.button(sb,ROUTE_LEFT,BODY_TOP+(i-scroll)*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE);
-                else canvas.box(sb,ROUTE_LEFT,BODY_TOP+(i-scroll)*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE);
-                canvas.label(sb,i+" "+summary+" · "+I18n.backend(branch.get("name").getAsString()),ROUTE_LEFT+8,BODY_TOP+5+(i-scroll)*BODY_ROW,
-                    textWidth,.85f,!revival.isEmpty()?DANGER:available?ACCENT:MUTED);
-            }
-            hint=result.has("manual_choice") && result.get("manual_choice").getAsBoolean()
-                ?I18n.t("空回车：选推荐路线；选后可开自动")
-                :branches.size()>0 && branches.get(0).getAsJsonObject().get("id").getAsString().equals("no-potion")
-                ?I18n.t("0 / 空回车：不交药；无输入则等待"):I18n.t("0 / 空回车：选 0 号路线；无输入则等待");
-        } else if (result != null) {
-            JsonArray rows=result.getAsJsonArray("route");
-            scroll=Math.max(0,Math.min(scroll,Math.max(0,rows.size()-BODY_ROWS)));
-            for (int i=scroll;i<Math.min(rows.size(),scroll+BODY_ROWS);i++) {
-                JsonObject row=rows.get(i).getAsJsonObject();
-                String label=row.get("text").getAsString();
-                if (row.has("label")) label=row.get("label").getAsString();
-                float top=BODY_TOP+(i-scroll)*BODY_ROW;
-                if(!auto) canvas.button(sb,ROUTE_LEFT,top,rowWidth,BODY_ROW-4,SURFACE);
-                else canvas.box(sb,ROUTE_LEFT,top,rowWidth,BODY_ROW-4,SURFACE);
-                canvas.label(sb,String.format("%02d",i+1),ROUTE_LEFT+8,top+5,28,.8f,i==0?ACCENT:MUTED);
-                canvas.label(sb,I18n.backend(label),ROUTE_LEFT+40,top+4,rowWidth-88,.9f,i==0?Color.WHITE:MUTED);
-                canvas.label(sb,"T"+row.get("turn").getAsInt(),w-56,top+5,36,.75f,MUTED);
-            }
-        } else if (busy && progressRows != null) {
-            for (int i=0;i<Math.min(progressRows.size(),BODY_ROWS);i++) {
-                JsonObject row=progressRows.get(i).getAsJsonObject();
-                int best=row.get("best_hp").getAsInt();
-                String line=(best>0?"HP "+best:I18n.t("未胜"))+" · T"+row.get("turn").getAsInt()+" · "
-                    +SearchStatus.phase(row)+" · "+(row.has("transitions") && (row.get("phase").getAsString().equals("beam") || row.get("phase").getAsString().equals("cycle"))
-                        ? count(row.get("transitions").getAsLong())+I18n.t("步") : count(row.get("simulations").getAsLong())+I18n.t("次"))
-                    +" · "+I18n.backend(row.get("name").getAsString());
-                boolean ready=row.has("ready") && row.get("ready").getAsBoolean();
-                String revival=ready?revivalWarning(row):"";
-                if(!revival.isEmpty()) line=revival+" · "+line;
-                if(ready) canvas.button(sb,ROUTE_LEFT,BODY_TOP+i*BODY_ROW,rowWidth,BODY_ROW-4,SURFACE); // finished routes can be clicked
-                canvas.label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+i*BODY_ROW,textWidth,.85f,!revival.isEmpty()?DANGER:ready?ACCENT:MUTED);
-            }
-        } else if (!foresight.isEmpty()) {
-            scroll=Math.max(0,Math.min(scroll,Math.max(0,foresight.size()-BODY_ROWS)));
-            for (int i=scroll;i<Math.min(foresight.size(),scroll+BODY_ROWS);i++) {
-                String line=foresight.get(i);
-                canvas.label(sb,line,ROUTE_LEFT+8,BODY_TOP+5+(i-scroll)*BODY_ROW,textWidth,.85f,line.startsWith(" ")?MUTED:ACCENT);
-            }
-        } else {
-            boolean idle=result==null&&!busy;
-            float top=BODY_TOP+10;
-            if(idle) {
-                canvas.label(sb,I18n.t("自己构筑请开【战斗全自动】"),ROUTE_LEFT+8,top,textWidth,.8f,MUTED);
-                canvas.label(sb,I18n.t("或点【AI全自动】随时完全托管"),ROUTE_LEFT+8,top+BODY_ROW,textWidth,.8f,MUTED);
-                top+=BODY_ROW*2;
-            }
-            canvas.label(sb,I18n.t(standbyWaiting()?"待命：点【重新计算】才开始搜索":"发牌和动画结算后自动生成建议"),ROUTE_LEFT+8,top,textWidth,.8f,MUTED);
-            canvas.label(sb,I18n.t("奖励牌 / 地图 / 商店始终由你操作"),ROUTE_LEFT+8,top+BODY_ROW,textWidth,.8f,MUTED);
-        }
-        if(hint.isEmpty() && result!=null && !busy && !auto && !branchPicker && transformPreview==null)
-            hint=I18n.t(RunMode.combatAutomatic(mode())?"点击列表或回车：继续自动打完本场":"点击列表打完本场 · 回车走一步");
-        if(fightAuto() && hint.isEmpty() && result!=null && result.has("auto_recommendation")) {
-            JsonObject advice=result.getAsJsonObject("auto_recommendation");
-            hint=I18n.backend(autoReason)+" · "+I18n.backend(advice.getAsJsonObject("assessment").get("summary").getAsString());
-            hintColor=ACCENT;
-        }
-        if(!note.isEmpty())canvas.label(sb,note,16,NOTE_TOP,ROUTE_LEFT-28,.75f,exports.messageError?DANGER:ACCENT);
-        if(!hint.isEmpty())canvas.label(sb,hint,ROUTE_LEFT,NOTE_TOP,w-ROUTE_LEFT-16,.75f,hintColor);
-    }
     /** Clicks on the compact pilot card, in card units. */
     private void pilotInput(float lx, float ly, boolean click, float mx, float my) {
         if(pilot.listInput(ly,click) || !click)return;
@@ -1536,11 +1618,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             case OutsidePilot.NO_BUTTON: break;
             case 3: if(pilot.packet!=null)pilot.confirm=true; break;
             case 0: stopAll(); break;
-            case -1: chooseOutsideMode(1); break;
-            case -2:
-                chooseOutsideMode(0);
-                if (!runAuto) toggleRunAuto();
-                break;
+            case -1: pilot.select(0); setMode(RunMode.STANDBY); break;
+            case -2: pilot.select(0); setMode(RunMode.COMBAT_AUTO); break;
             default: chooseOutsideMode(action);
         }
     }
