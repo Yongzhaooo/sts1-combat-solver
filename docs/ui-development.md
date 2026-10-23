@@ -1,6 +1,6 @@
 # 面板与模式开发说明
 
-适用于改求解器面板、游玩模式和按键交互的贡献者，包括用 AI 编程助手开发的人。要做成什么样，先看[产品 spec](product.md) 的 “Play modes and player control” 一节；标了 `(proposed)` 的条目还没最终确定，开工前在 issue 里确认。
+适用于改求解器面板、游玩模式和按键交互的贡献者，包括用 AI 编程助手开发的人。要做成什么样，先看[产品 spec](product.md) 的 “Play modes and player control” 和 “Combat panel” 两节；标了 `(proposed)` 的条目还没最终确定，开工前在 issue 里确认。
 
 ## 给 AI 助手的规则
 
@@ -19,12 +19,12 @@
 | 位置 | 内容 |
 |---|---|
 | `overlay/src/sts1solver/SolverMod.java` | 模式切换、战斗自动执行（请求、回复、逐步执行）、按键和点击分发、战斗面板的内容。界面改动大多在这里 |
-| `overlay/src/sts1solver/PanelCanvas.java` | 面板位置、缩放、拖动、配色、字体和绘制函数（`box`、`label`、`line`） |
-| `overlay/src/sts1solver/OutsidePilot.java` | 局外：打分、AI全自动执行、人工逐步确认、地图路线，以及战斗外的小卡片 |
+| `overlay/src/sts1solver/PanelCanvas.java` | 面板位置、缩放、拖动、配色、字体、绘制函数（`box`、`label`、`line`、`button`、`badge`）和点击区域（`hit`、`click`） |
+| `overlay/src/sts1solver/OutsidePilot.java` | 局外：打分、AI全自动执行、Agent 确认、地图路线，以及战斗外的小卡片 |
 | `overlay/src/sts1solver/BackendClient.java` | 后台进程和收发通道；请求内容由 `SolverMod.send` 组装 |
 | `overlay/src/sts1solver/CombatReadiness.java` | 是否在战斗中、局面是否稳定到可以读取和执行 |
 | `AgentBridge.java`、`DeckWatch.java`、`RunExports.java` | Agent 文件通道；卡组变化提示；F6/F7 导出、崩溃记录 |
-| `overlay/src/sts1solver/RunMode.java` | 三种模式（`MANUAL` 人工逐步、`COMBAT_AUTO` 战斗全自动、`PILOT` AI全自动）以及按钮切换规则，纯逻辑 |
+| `overlay/src/sts1solver/RunMode.java` | 三种模式（`STANDBY` 待命、`COMBAT_AUTO` 战斗全自动、`PILOT` AI全自动）以及 F9 的去向，纯逻辑 |
 | `overlay/src/sts1solver/PanelSize.java`、`SearchStatus.java` | 面板尺寸、搜索超时，纯逻辑 |
 | `overlay/src/sts1solver/I18n.java`，`overlay/resources/localization/en.tsv` | 中英文切换；英文表是“中文<TAB>英文” |
 | `overlay/backend.py` | 后台入口：接收面板请求、导入战斗、调用搜索、返回路线 |
@@ -39,7 +39,7 @@
 下面这些地方没有拆开，是有意的。改动时照现状写，不要顺手“解耦”；确实要拆，先开 issue 说明终态。
 
 - **模式切换留在 `SolverMod`。** `stopAll()`、`chooseOutsideMode()`、`startAgentMode()`、`fail()` 要同时改局外（`OutsidePilot`）和战斗自动执行的状态，必须一次改完，所以放在两者之上的 `SolverMod` 里。`OutsidePilot` 只提供各自那一半（`stop`、`select`、`pause`、`close`）。
-- **战斗状态由三处共用。** `busy`、`result`、`auto`、`paused`、`branchPicker`、`branchConfirmed`、`heldThisFight` 等字段，按键（`input`、`branchKeyboard`）、绘制（`renderCombatBody`）和后台回复处理（`update`）都要读写。拆开需要先设计一个战斗状态对象和它的规则，不是搬代码能解决的。
+- **战斗状态由三处共用。** `busy`、`result`、`auto`、`paused`、`branchPicker`、`branchConfirmed`、`heldThisFight` 等字段，按键（`input`、`branchKeyboard`）、绘制（`renderBody` 及各状态的 `renderPlan`、`renderPicker` 等）和后台回复处理（`update`）都要读写。拆开需要先设计一个战斗状态对象和它的规则，不是搬代码能解决的。
 - **`OutsidePilot` 的部分字段是包内可见的。** `SolverMod` 直接读写 `pilot.mode`、`pilot.notice`、`pilot.packet`、`pilot.scores`、`pilot.confirm`，`AgentBridge` 直接写 `pilot.chosen` 和 `pilot.confirm`。依赖关系看得见，但没有封装成方法。
 - **局外反向调用只走 `OutsidePilot.Host`。** 局外需要战斗这一侧时，只能用这四个方法：读局面（`capture`）、写诊断（`record`）、新一局开始（`runStarted`）、局外失败时停掉战斗自动（`failed`）。需要更多时扩展这个接口，不要把 `SolverMod` 传进去。
 - **设置还在 `SolverMod` 里。** 读写 `SpireConfig` 的默认值和各个开关（构造函数和 `saveSetting`、`saveAutomation` 等），以及奖励界面的自动换药（`updatePotionRewards`），都还没有单独成类。这是下一步可以拆的地方。
@@ -50,7 +50,7 @@
 
 | 字段 | 含义 |
 |---|---|
-| `pilot.mode` | 局外（`OutsidePilot.mode`）：0 不给建议，1 每步给建议、玩家确认，2 AI全自动 |
+| `pilot.mode` | 局外（`OutsidePilot.mode`）：0 不给建议，1 Agent 确认每一步，2 AI全自动 |
 | `runAuto` | 整局的战斗都自动打（战斗全自动和 AI全自动） |
 | `heldThisFight` | 玩家用“执行一步”“执行整场”或 F10 接管了这一场；下一场照常自动。`fightAuto()` = `runAuto` 且未接管 |
 | `auto` | 当前这场正在自动执行 |
@@ -62,19 +62,27 @@
 | `chosenBranch` | 选定的路线 id，`"no-potion"` 表示不用药 |
 | `runAfterBranch` | 玩家按了 F10，选完路线后直接打完整场 |
 | `highSpeed`、`streakMode` | 搜索档位：高速、连胜；都为 false 时是标准 |
-| `standby`、`armed` | 待命模式：不在战斗全自动和 AI全自动时，面板保持折叠，玩家点“计算”、F10 或“重新计算”后（`armed`）才搜索这一场；战斗结束清掉 `armed` 并折叠 |
+| `armed` | 待命（`standby()` 即 `!runAuto`）时，玩家点“计算”、F10 或“重新计算”后才搜索这一场；战斗结束清掉 `armed` 并折叠 |
+| `playOrderOpen`、`progressOpen` | “出牌顺序”和“搜索过程”是否展开；整局保持玩家上次的选择 |
 
-模式由 `RunMode.of(pilot.mode, runAuto)` 推出来。面板上的“战斗全自动”和“AI全自动”按钮分别调用 `toggleCombatMode()` 和 `togglePilotMode()`；`stopAll()`（F9）停下并回到人工逐步。
+模式由 `RunMode.of(pilot.mode, runAuto)` 推出来：`pilot.mode` 为 2 是 AI全自动，否则 `runAuto` 为 true 是战斗全自动，其余是待命。Agent 模式（局外 1、战斗自动）算战斗全自动。面板上的三段切换调用 `setMode(目标)`；`stopAll()`（F9）停下并回到待命。
 
 一场战斗的流程：
 
-1. 进入战斗或局面变化，`send("solve", capture())` 请求后台计算。
+1. 进入战斗或局面变化，`send("solve", capture())` 请求后台计算。待命时要等玩家点“计算”（`armed`）。
 2. 后台回复 `status: "ready"`，写进 `result`。
-3. `routeChoice(result, 人工)` 为 true 时（后台要求确认，或人工逐步下有两条以上可用路线），进入 `requestBranches()`：
+3. 玩家点“执行整场”“执行一步”或按 F10 时，先看 `approved(result, branchConfirmed, 待命)`。不通过就进入 `requestBranches()`：
    - 战斗全自动（`fightAuto()` 且未暂停）调用 `chooseAutomaticBranch()`，按后台的 `auto_recommendation` 选一条；
-   - 人工逐步则把 `branchPicker` 设为 true，面板列出路线，玩家输入编号或回车（`branchKeyboard()`）。
+   - 待命则把 `branchPicker` 设为 true，面板展开并列出路线，玩家点击或输入编号回车（`branchKeyboard()`）。选完面板折叠，等玩家再点“执行”。
+   - 只有一条可用路线时，点“执行”本身就算批准。
 4. `chooseBranch(id)` 发出 `send("choose", ...)`，后台按选定路线重算。
-5. 执行：`executeStep()` 每次走一步，执行后 `send("advance", ...)` 让后台核对实际结果；`auto` 为 true 时连续执行。
+5. 执行：`executeStep()` 每次走一步，执行后 `send("advance", ...)` 让后台核对实际结果；`auto` 为 true 时连续执行。待命下回车不做事，出牌顺序里的行只供查看。
+
+### 面板的绘制和点击
+
+战斗面板宽 420，高度随内容变化。`renderPanel` 每帧先用 `canvas.dry=true` 量一遍 `renderBody` 的高度（只算尺寸，不画也不登记点击），再画背景和正文。`renderBody` 依次画标题栏（导出、设置、折叠）、三段模式切换，然后按状态只画一种正文：局外（`renderOutside`）、出错（`renderError`）、选路线（`renderPicker`）、搜索中（`renderSearch`）、有路线（`renderPlan`）或空闲（`renderIdle`）。
+
+能点的控件用 `canvas.button(..., action)` 画，绘制时同时登记点击区域；`input()` 用 `canvas.click(lx, ly)` 执行上一帧登记在该点的动作。点到标题栏空白处才开始拖动。新增控件只需要在绘制处传入动作，不要再在 `input()` 里按坐标判断。
 
 ## 面板和后台之间的消息
 
@@ -99,9 +107,9 @@
 ## 改动的位置（对应产品 spec 里的提议）
 
 - **战斗全自动的“不用药”开关**：设置项照 `registerConfigPanel()` 里的写法加，用 `saveSetting` 保存；在 `chooseAutomaticBranch()` 里，开关打开时只接受 `no-potion` 路线，这条赢不了就调用 `fail(...)` 停下。判断写成 `static` 方法，在 `overlay/test/ModeCheck.java` 里加断言。
-- **人工逐步时总显示路线列表**：已完成，见 `SolverMod.routeChoice`；判断放在面板这一侧，后台的 `needs_confirmation` 不变，因为战斗全自动也依赖它。
+- **待命时总显示路线列表**：已完成，见 `SolverMod.routeChoice` 和 `approved`；判断放在面板这一侧，后台的 `needs_confirmation` 不变，因为战斗全自动也依赖它。
 - **限定可用药水**：需要后台新增请求字段，并在 `backend.py` 生成用药路线时使用；属于面板和后台一起改的情况，要加 Python 检查。
-- **列表的显示格式**：`renderCombatBody()` 里 `branchPicker` 分支；面板尺寸见 `PanelSize`，改了尺寸要更新 `PanelSizeCheck`。能点的框用 `canvas.button`（悬停变亮），不能点的用 `canvas.box`。
+- **列表的显示格式**：`renderPicker()`；面板尺寸见 `PanelSize`，改了尺寸要更新 `PanelSizeCheck`。能点的框用带动作的 `canvas.button`（悬停变亮），不能点的用 `canvas.box`。
 
 ## 开发环境
 
@@ -140,7 +148,8 @@ python -m venv .venv
 2. 用 ModTheSpire 启动，勾选 BaseMod 和本 Mod。
 3. 按改动逐项试，并在 PR 里写清楚试了什么：
    - 每种模式各打一场战斗；
-   - 切换模式、按 F9 停止，确认不会多走一步，也不会卡住；
+   - 待命走完一遍：开战时折叠、点“计算”才搜索、多条路线时展开、选一条后折叠、点“执行”打完、战斗结束折叠；回车没有反应，点出牌顺序的行不会出牌；
+   - 切换模式、按 F9 停止，确认不会多走一步，也不会卡住，F9 后回到待命；
    - 中英文各看一次面板，文字没有溢出；
    - 出问题时按 F6 或点标题栏的“导出”导出诊断，附在 issue 里。
 4. 测完把 `mods` 目录里的 JAR 移走，恢复工坊版。

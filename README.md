@@ -16,16 +16,17 @@ QQ community group: **232459269**. Share your experience and report issues.
 
 ## Use
 
-- **Three modes, chosen when a run starts:** **Manual (step by step):** in combat `Enter` or a click on the route runs one step; outside combat you confirm the solver's suggestion. **Combat auto:** every fight runs automatically, including potions, and you make the other decisions. **AI autopilot:** the solver climbs and fights. `F9` or Stop returns to Manual at any time.
-- **Search effort:** set automatically by act and room. On an older PC, switch the panel to **High-speed mode**: every fight uses 1/20 of the search, which is faster but wins less often and loses more HP. For win streaks, switch to **Streak mode**: acts 1-3 keep the full search, which is slower.
-- **Other switches:** Auto potion swap (post-combat pickup and swaps; see the [potion policy](POTION_POLICY.zh-CN.md)); Boss fast finish (Settings, off by default: stop searching once a potion-free win costs at most half your HP), sizing, language and Glowing Eye on the Settings page; Feed mode, test mode and route marks in Mods → Config. If the game stutters, lower `searchWorkers` in ModTheSpire's `STS1CombatSolver/config.properties` (default 0, automatic).
+- **Three modes, chosen when a run starts and switchable on the panel at any time:** **Standby:** the panel stays folded; press Solve to search this fight and Play to run all of it. When several potion plans are usable the panel opens for you to pick one, and nothing plays until you do. Outside combat you decide. **Combat auto:** every fight runs automatically, including potions, and you make the other decisions. **AI autopilot:** the solver climbs and fights. `F9` returns to Standby at any time.
+- **Combat panel:** shows the outcome and the next action; the play order and search progress open on click.
+- **Search effort:** set automatically by act and room. On an older PC, switch Settings to **High speed**: every fight uses 1/20 of the search, which is faster but wins less often and loses more HP. For win streaks, switch to **Streak**: acts 1-3 keep the full search, which is slower.
+- **Other switches:** in Settings, Auto potion swap (post-combat pickup and swaps; see the [potion policy](POTION_POLICY.zh-CN.md)), Feather heal, Boss fast finish (Settings, off by default: stop searching once a potion-free win costs at most half your HP), sizing, language and Glowing Eye on the Settings page; Feed mode, test mode and route marks in Mods → Config. If the game stutters, lower `searchWorkers` in ModTheSpire's `STS1CombatSolver/config.properties` (default 0, automatic).
 - **Keys:**
 
   | Key | Action |
   | --- | --- |
-  | `Enter` | Manual: run one step or confirm the outside suggestion; automatic modes: resume this fight's automation |
-  | `F10` (rebindable) | Run the solved route for this fight |
-  | `F9` | Stop and return to Manual |
+  | `Enter` | Confirm a typed potion-plan number; automatic modes: resume this fight's automation; nothing in Standby |
+  | `F10` (rebindable) | Play or pause this fight, solving it first if needed |
+  | `F9` | Stop and return to Standby |
   | `F8` | Fold or unfold the panel |
   | `F7` | Save this act's map with the planned route as a PNG on the desktop |
   | `F6` | Export a diagnostic archive (`Shift+F6` finalizes experience parts when recording is on) |
