@@ -24,6 +24,7 @@ struct Path {
     unsigned bits;
     int card = -1, turn = -1;
     CardId id = CardId::INVALID;
+    int length = 1;  // actions from the root, this one included
 };
 struct Node {
     std::shared_ptr<BattleContext> state;
@@ -43,6 +44,7 @@ inline bool rescuePlateau = false;
 
 inline std::shared_ptr<const Path> append(const Node &node, search::Action action) {
     auto path = std::make_shared<Path>(Path{node.path, action.bits});
+    if (node.path) path->length = node.path->length + 1;
     if (action.getActionType() == search::ActionType::CARD) {
         const auto &card = node.state->cards.hand[action.getSourceIdx()];
         path->card = card.uniqueId;
@@ -199,6 +201,14 @@ struct Best {
     std::vector<int> actions;
 };
 
+// Equal results, fewest actions: a win replaces the best one with a higher value, or the same value in fewer actions.
+// With a floor (shorten() for the Heart, where the run ends on victory) any win keeping that much HP counts as equal.
+inline bool better(const Best &best, double v, const std::shared_ptr<const Path> &path, int hp, int floor) {
+    const bool shorter = path && (!best.found || path->length < int(best.actions.size()));
+    if (floor >= 0) return hp >= floor && shorter;
+    return !best.found || v > best.value || (v == best.value && shorter);
+}
+
 inline const std::string &bucketKey(Node &n) {
     if (n.key.empty()) n.key = bucket(*n.state);
     return n.key;
@@ -206,7 +216,8 @@ inline const std::string &bucketKey(Node &n) {
 
 // One beam pass of the given width; stops at `cap` total transitions (stats.transitions) or when cancelled().
 template <class Value, class Cancel>
-void pass(const BattleContext &root, int width, long long cap, Value value, Cancel cancelled, Best &best, bool macros = false) {
+void pass(const BattleContext &root, int width, long long cap, Value value, Cancel cancelled, Best &best, bool macros = false,
+          double playWeight = 0, int winFloor = -1) {
     if (root.loopCount >= BattleContext::ACTION_EXECUTION_LIMIT) return;
     search::BattleScumSearcher2 enumerator(root);
     enumerator.preservePotions = true;
@@ -216,6 +227,11 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
         return legalActions.edges;
     };
     auto stop = [&]() { return stats.transitions >= cap || cancelled(); };
+    // playWeight charges each play this turn on every lane (shorten() only); 0 leaves the ranking unchanged.
+    auto rank = [&](Node &n) {
+        const double charge = playWeight * n.state->player.cardsPlayedThisTurn;
+        n.scores = {score(n, 0) - charge, score(n, 1) - charge, score(n, 2) - charge};
+    };
     std::vector<Node> frontier{{std::make_shared<BattleContext>(root), nullptr, 0}};
     // Only a per-turn damage cap (Invincible: the Heart) makes a loop worthless before the turn ends; elsewhere the
     // per-turn quota below stays off and the search is unchanged.
@@ -274,7 +290,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                         if (b.outcome == Outcome::UNDECIDED && b.player.curHp > 0
                                 && b.turn < 100 && b.inputState == InputState::PLAYER_NORMAL
                                 && b.loopCount < BattleContext::ACTION_EXECUTION_LIMIT) {
-                            child.scores = {score(child, 0), score(child, 1), score(child, 2)};
+                            rank(child);
                             candidates.push_back(std::move(child));
                             if (candidates.size() > compactAt) compact();
                         }
@@ -283,12 +299,12 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                     auto &b = *child.state;
                     if (b.outcome == Outcome::PLAYER_VICTORY && b.player.curHp > 0) {
                         double v = value(b);
-                        if (!best.found || v > best.value) { best = {true, v, child.state, actions(child.path)}; }
+                        if (better(best, v, child.path, b.player.curHp, winFloor)) { best = {true, v, child.state, actions(child.path)}; }
                         if (best.state->player.curHp >= root.player.curHp) return;
                     } else if (child.path != parent.path && b.outcome == Outcome::UNDECIDED
                             && b.player.curHp > 0 && b.turn < 100 && b.inputState == InputState::PLAYER_NORMAL
                             && b.loopCount < BattleContext::ACTION_EXECUTION_LIMIT) {
-                        child.scores = {score(child, 0), score(child, 1), score(child, 2)};
+                        rank(child);
                         candidates.push_back(std::move(child));
                         if (candidates.size() > compactAt) compact();
                     }
@@ -308,12 +324,12 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                     auto &b = *child.state;
                     if (b.outcome == Outcome::PLAYER_VICTORY && b.player.curHp > 0) {
                         double v = value(b);
-                        if (!best.found || v > best.value) { best.found = true; best.value = v; best.state = child.state; best.actions = actions(child.path); }
+                        if (better(best, v, child.path, b.player.curHp, winFloor)) { best.found = true; best.value = v; best.state = child.state; best.actions = actions(child.path); }
                     } else if (b.outcome == Outcome::UNDECIDED && b.player.curHp > 0 && b.turn < 100
                             && b.loopCount < BattleContext::ACTION_EXECUTION_LIMIT) {
                         // turn < 100: stalling lines (end turn behind block forever) otherwise reach the engine's 500-turn limit, which throws
                         if (b.inputState == InputState::PLAYER_NORMAL) {
-                            child.scores = {score(child, 0), score(child, 1), score(child, 2)};
+                            rank(child);
                             candidates.push_back(std::move(child));
                             if (candidates.size() > compactAt) compact();
                         }
@@ -389,6 +405,15 @@ Best portfolio(const BattleContext &root, long long cap, Value value, Cancel can
         ++stats.passes;
         if (best.found && best.state->player.curHp >= root.player.curHp) break;
     }
+    return best;
+}
+// A long win often keeps replaying a loop that no longer changes the result (past the Heart's damage cap, extra circuits
+// only reshuffle). One extra pass charges every play this turn, without loop macros, seeded with that win; better() keeps
+// the seed unless a line wins with a higher value or the same value in fewer actions, so the result never gets worse;
+// with winFloor >= 0 any shorter win keeping at least winFloor HP replaces it.
+template <class Value, class Cancel>
+Best shorten(const BattleContext &root, Best best, long long budget, Value value, Cancel cancelled, int winFloor = -1) {
+    pass(root, 128, stats.transitions + budget, value, cancelled, best, false, 1.0, winFloor);
     return best;
 }
 }  // namespace loop_beam

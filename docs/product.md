@@ -22,6 +22,8 @@ Players of *Slay the Spire 1* install one local Mod and get bounded combat plann
 - Every supported character uses the Ironclad contract: bounded search, a plan in the panel, optional execution, and verification of each observed result. Execution stops on disagreement.
 - Character state that affects combat (orbs and their values, Focus, stance, mantra, retained cards, scry and discard choices) is captured from the game, imported into the simulator and verified the same way as HP, block and piles.
 - Card and relic behavior follows the original game's Java logic. When a contributor's description and the Java behavior disagree, Java wins.
+- A finished plan carries no action that can be dropped while the fight still ends in the same victory with the same HP, bottles, relic counters and growth. Long looping plans get one full reduction pass, which may add about one second per 50 actions per pass; a 1,100-action Heart line takes about 15 seconds longer (maintainer decision 2026-10-23). Reduction never changes the predicted result.
+- Among wins with the same result the search keeps the one with the fewest actions. A win longer than 64 actions gets one more search pass that charges every play in a turn and replaces it only with a shorter line of at least the same result. Against the Heart, whose victory ends the run (no run fights a second Heart), any shorter win counts as the same result, and a win still longer than 150 actions is searched again at the deep budget, past the loop macro shortcut, keeping the shorter win; a dozen more seconds of search beat hundreds of plays to watch (user, 2026-10-24).
 
 ### Truth calibration and fixtures
 
@@ -37,19 +39,35 @@ Players of *Slay the Spire 1* install one local Mod and get bounded combat plann
 
 ### Play modes and player control
 
-Player request (七月流火, 2026-10-21), cleaned. Items marked (proposed) are not yet decided; the rest the maintainer decided on 2026-10-21.
+Player request (七月流火, 2026-10-21), cleaned, and the maintainer's decisions of 2026-10-21 and 2026-10-23. Items marked (proposed) are not yet decided.
 
-- Three modes map to the existing `RunMode`: AI autopilot (route, rewards and fights automatic), Combat auto (the player owns route, rewards, shops and events; fights run automatically) and Manual (the player approves each fight's plan). The mode is chosen at run start and switched with the panel's Combat auto and AI autopilot buttons; F9 always stops and returns to Manual. Switching never advances an action by itself (proposed).
+- There are three modes, exactly one active: Standby (the player starts each fight's search and approves its plan), Combat auto (the player owns route, rewards, shops and events; fights run automatically) and AI autopilot (route, rewards and fights automatic). Standby replaces the former Manual step-by-step mode; there is no separate standby setting.
+- The mode is chosen at run start (Standby, Combat auto or AI autopilot) and can be switched at any time with one click on a three-way switch in the combat panel. F10 plays or pauses the current fight in every mode. F9 always stops and returns to Standby. Switching never advances an action by itself (proposed).
 - Search tier (Standard, High-speed, Streak) is independent of the mode; changing one leaves the other unchanged (proposed).
 - In Combat auto, a "no potions" switch makes the solver search and execute only potion-free lines. The potion slots after the fight equal those before it. When no potion-free line wins, execution stops before the first action and the panel says so; it never falls back to a potion line (proposed).
-- In Manual, whenever more than one plan is usable, the panel lists them before any action: the potion-free line, plus potion lines, each with predicted HP loss, win or not, revivals spent and bottles gained. Listing executes nothing and consumes nothing. A potion-free win without HP loss is not interrupted: the search does not try bottles then, so there is nothing to choose. Combat auto keeps choosing by itself.
-- Finished plans are clickable while the search continues; a click plays that plan and keeps the current mode. After F9 the plan found so far stays on the panel.
-- In Manual, a click on the plan list plays the whole fight, Enter plays one step, and F9 stops. In Combat auto, Step, Pause auto or F10 take over the current fight only; the next fight runs automatically again, and the Combat auto button stays on.
+- Standby in combat: when a fight starts the panel is folded and nothing is searched. Solve (or F10) starts the search; the panel stays folded and then shows the predicted result with Play. Play runs the whole fight; Pause stops it. When the fight ends the panel folds again and the next fight waits for Solve.
+- Standby never plays an unapproved plan. With one usable plan, Play is the approval. Whenever more than one plan is usable, the panel unfolds and lists them before any action: the potion-free line, plus potion lines, each with predicted HP loss, win or not, revivals spent and bottles gained. Nothing runs until the player picks one (a click, or its number then Enter); the panel then folds back and Play runs the picked plan. Listing executes nothing and consumes nothing. A potion-free win without HP loss is not interrupted: the search does not try bottles then, so there is nothing to choose. Combat auto and AI autopilot keep choosing by themselves.
+- Finished plans are clickable while the search continues. In Standby a click stops the search and picks that plan, which then waits for Play; in Combat auto and AI autopilot it plays that plan and keeps the mode. After F9 the plan found so far stays on the panel.
+- In Standby, Enter does nothing; Step in the unfolded panel plays one action. In Combat auto, Step, Pause auto or F10 take over the current fight only; the next fight runs automatically again and the mode stays Combat auto.
+- Standby outside combat: route, rewards, shops and events are the player's; no suggestion card appears.
 - Every clickable control and plan row brightens under the pointer; rows that cannot be clicked do not.
-- Standby (a setting, maintainer request 2026-10-23): outside Combat auto and the pilot, the panel stays folded and a fight is not searched until the player asks. The folded panel shows Solve, then the predicted result with Play, then Pause while the fight runs; F10 and Recalculate also start the search. When the fight ends the panel folds again and the next fight waits.
 - Warnings about other mods (incompatible save/undo mods, RNG-changing mods, SuperFastMode above the tested speed) stay on screen in red, whole, in their own box under the panel, in every panel state.
 - After the player approves a plan, the solver plays the fight under that plan's potion constraint. A divergence from the prediction re-plans under the same constraint without asking again; an approved potion-free plan never drinks a bottle (proposed).
+- A plan that drinks an Entropic Brew may also drink the bottles the Brew makes, at every search tier. The simulator knows the brewed bottles exactly, so the plan can empty other slots first (an Elixir, say) to brew more of them (user, 2026-10-24).
 - The player can restrict the usable bottles for a fight, and the listed plans respect it. The search already accepts potion permissions; the panel has no control for it (proposed).
+
+### Combat panel
+
+Maintainer decisions of 2026-10-23: the combat panel shows as little as possible, details open on request, and each action has one way in. Visual language follows shadcn/ui (neutral card, one primary button, secondary and ghost buttons, badges, disclosure rows), drawn with the game's own font.
+
+- The panel is 420 units wide and as tall as its content. Its header holds the title, Export log, Settings and fold; under it sits the three-way mode switch.
+- The folded panel is one row: title, one status badge (Standby, searching with seconds, predicted result, auto playing) and at most one action (Solve, Stop, Play, Pause).
+- While a search runs, a bar fills with the time waited, folded or unfolded: half at 8 seconds, never full. It reassures that the search is alive and does not measure progress; the panel shows no percentage.
+- Unfolded, the panel shows the outcome in one line (win or not, final HP, equivalent HP loss), the next action, and a "Play order · N steps" row that is closed by default. Opening it lists the steps with their turn; the rows are for reading and execute nothing. The open or closed state lasts for the run.
+- At most three action buttons show, chosen by state: with a plan, Play, Step and Recalculate; while playing, Pause; while searching, Stop search; on an error, Recalculate under a red box that shows the whole message.
+- Search tier, automatic potion swap and the feather-heal choice live in Settings with the other switches; the panel has no row of toggles and no hint line. Keys are listed at the foot of Settings.
+- Every text in the panel shows whole or wraps; Chinese wraps between characters and English between words.
+- Export log (or F6) writes the current seed's record as one file on the desktop. The record says why each re-search started: the player, a changed game state, a stale route under automation, the Smoke Bomb opening, or a settings change (maintainer request 2026-10-23).
 
 ## Non-goals
 
@@ -66,7 +84,7 @@ Player request (七月流火, 2026-10-21), cleaned. Items marked (proposed) are 
 - Whether the new characters get full autopilot, and with what evaluation. Blocks outside-combat rule and model work for them.
 - Size and composition of each character's acceptance set. Blocks turning on that character's support switch.
 - Scope of the Combat auto "no potions" switch: this fight or the whole run, and whether it covers elites and Bosses. Blocks where the switch lives and whether it is saved.
-- Which constraints Manual plans vary beyond potion use (relic counters, Feed, fewest turns, keeping a bottle). Each adds a search before the fight starts. Blocks the size of the Manual plan list.
-- What approval covers: the whole fight before it starts (today) or each turn. Blocks the Manual interaction and any new keys.
-- Whether a re-plan after a divergence needs a new approval. Blocks the Manual execution flow.
+- Which constraints Standby plans vary beyond potion use (relic counters, Feed, fewest turns, keeping a bottle). Each adds a search before the fight starts. Blocks the size of the Standby plan list.
+- Whether a re-plan after a divergence needs a new approval. Blocks the Standby execution flow.
+- Whether fights other than the Heart may trade HP for a much shorter line. A long loop turn often rerolls the next draw through extra shuffles, so a shorter line of exactly the same result rarely exists. Blocks shorter loop turns outside the Heart.
 - Who implements the play-mode changes: an outside contributor or the maintainer. Blocks whether a panel state and protocol guide is written for contributors.

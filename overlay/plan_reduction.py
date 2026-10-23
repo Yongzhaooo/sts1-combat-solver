@@ -29,20 +29,27 @@ def locate(b, t):
     return a if b.turn == t['turn'] and a.is_valid(b) else None
 
 
+def caps(length, attempts):
+    """Limits for one reduction pass. They grow with the plan, so a long looping line (a Heart turn of 500 plays)
+    still gets one full pass instead of stopping after a few dozen attempts; plans up to 50 actions keep the old limits."""
+    return dict(attempts=max(attempts, attempts * length // 64), executions=max(50000, 1000 * length),
+                seconds=max(2, length / 50))
+
+
 def reduce_plan(initial, actions):
-    start = time.monotonic()
+    start = time.monotonic(); cap = caps(len(actions), 128)
     end, states, tokens, before_desc = replay_single(initial.clone(), actions)
     original_end = end.clone(); original = list(actions)
     if end.outcome != S.Outcome.PLAYER_VICTORY:
         return dict(actions=actions, seconds=time.monotonic()-start, attempts=0, executions=len(actions), accepted=[], reason='not_victory')
     attempts = 0; executions = len(actions); changes = []; i = 0
-    while i < len(actions) and attempts < 128 and executions < 50000 and time.monotonic()-start < 2:
+    while i < len(actions) and attempts < cap['attempts'] and executions < cap['executions'] and time.monotonic()-start < cap['seconds']:
         if not tokens[i]['card']:
             i += 1; continue
         attempts += 1; b = states[i].clone(); candidate = list(actions[:i]); removed = []
         for j in range(i+1, len(tokens)):
             if b.outcome != S.Outcome.UNDECIDED: break
-            if executions >= 50000 or time.monotonic()-start >= 2: break
+            if executions >= cap['executions'] or time.monotonic()-start >= cap['seconds']: break
             a = locate(b, tokens[j])
             if a is None:
                 removed.append(j); continue
@@ -60,7 +67,7 @@ def reduce_plan(initial, actions):
     assert len(actions) <= len(original)
     return dict(actions=actions, seconds=time.monotonic()-start, attempts=attempts, executions=executions,
                 accepted=changes, rng_changed=[k for k in end.rng_states if end.rng_states[k] != original_end.rng_states[k]],
-                cap_reached=attempts>=128 or executions>=50000 or time.monotonic()-start>=2)
+                cap_reached=attempts>=cap['attempts'] or executions>=cap['executions'] or time.monotonic()-start>=cap['seconds'])
 
 
 def replay(root,actions):
@@ -120,22 +127,22 @@ def drop_potions(root, actions):
 
 
 def reduce_blocks(root,actions):
-    start=time.monotonic();original=end=replay(root,actions)[0]
+    start=time.monotonic();original=end=replay(root,actions)[0];cap=caps(len(actions),512)
     attempts=0;executions=len(actions);changes=[];i=0
     if end.outcome!=S.Outcome.PLAYER_VICTORY:
         return dict(actions=actions,seconds=time.monotonic()-start,attempts=0,executions=executions,accepted=[])
     end,states,tokens,groups,desc=replay(root,actions);executions+=len(actions)
-    while i<len(groups) and attempts<512 and executions<50000 and time.monotonic()-start<2:
+    while i<len(groups) and attempts<cap['attempts'] and executions<cap['executions'] and time.monotonic()-start<cap['seconds']:
         accepted=False
         for j in range(i+1,min(i+6,len(groups))):
             first=groups[i][0]
             if tokens[first]['turn']!=tokens[groups[j][0]]['turn']:break
-            if attempts>=512 or executions>=50000 or time.monotonic()-start>=2:break
+            if attempts>=cap['attempts'] or executions>=cap['executions'] or time.monotonic()-start>=cap['seconds']:break
             attempts+=1;drop=set(groups[i]+groups[j]);b=states[first].clone();candidate=list(actions[:first]);valid=True
             for k in range(first,len(tokens)):
                 if k in drop:continue
                 if b.outcome!=S.Outcome.UNDECIDED:break
-                if executions>=50000 or time.monotonic()-start>=2:valid=False;break
+                if executions>=cap['executions'] or time.monotonic()-start>=cap['seconds']:valid=False;break
                 t=tokens[k];a=S.SearchAction.from_bits(t['bits']&0xffffffff)
                 if 'uid' in t:
                     matches=[n for n,c in enumerate(b.hand) if c.unique_id==t['uid'] and int(c.id)==t['id']]
@@ -151,7 +158,7 @@ def reduce_blocks(root,actions):
                 accepted=True;break
         if not accepted:i+=1
     return dict(actions=actions,seconds=time.monotonic()-start,attempts=attempts,executions=executions,accepted=changes,
-                cap_reached=attempts>=512 or executions>=50000 or time.monotonic()-start>=2)
+                cap_reached=attempts>=cap['attempts'] or executions>=cap['executions'] or time.monotonic()-start>=cap['seconds'])
 
 
 def postprocess(root, actions):

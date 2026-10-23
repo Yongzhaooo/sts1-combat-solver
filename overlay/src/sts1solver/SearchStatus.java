@@ -4,7 +4,7 @@ import com.google.gson.*;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
-/** Shared deadline contract and stage labels; counts are work units, never a percentage. */
+/** Shared deadline contract and stage labels; counts are work units, never a percentage. The search bar is reassurance only. */
 final class SearchStatus {
     private static final JsonObject CONTRACT;
     static {
@@ -22,6 +22,11 @@ final class SearchStatus {
         return (seconds + CONTRACT.get("client_grace_seconds").getAsLong()) * 1000;
     }
     static boolean expired(long now, long sentAt, long timeoutMillis) { return now - sentAt > timeoutMillis; }
+    /** Search bar fill from elapsed time alone: half at 8 s, never past 95 %. It shows the search is alive, not how far it is. */
+    static float waitingFill(long elapsedMillis) {
+        float seconds = Math.max(0, elapsedMillis) / 1000f;
+        return Math.min(.95f, seconds / (seconds + 8));
+    }
     static String phase(JsonObject row) {
         String phase = row.has("phase") ? row.get("phase").getAsString() : "mcts";
         switch (phase) {
