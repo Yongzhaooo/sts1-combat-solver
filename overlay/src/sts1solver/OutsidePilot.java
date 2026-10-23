@@ -33,8 +33,8 @@ final class OutsidePilot {
         void failed();
     }
 
-    static final float PILOT_WIDTH = 440, PILOT_LIST_TOP = 72, PILOT_ROW = 30;
-    static final float EXPORT_LEFT = PILOT_WIDTH-240, EXPORT_WIDTH = 64;  // header button between the title and the mode chip
+    static final float PILOT_WIDTH = 440, PILOT_LIST_TOP = 72, PILOT_ROW = 30, NOTICE_ROW = 20;
+    static final float EXPORT_LEFT = PILOT_WIDTH-276, EXPORT_WIDTH = 100;  // header button between the title and the mode chip
     static final int PILOT_ROWS = 5;
     static final int NO_BUTTON = Integer.MIN_VALUE;
 
@@ -42,6 +42,7 @@ final class OutsidePilot {
     boolean prompt, confirm;
     boolean pilotRun, failed; // the compact pilot card replaces the panel outside combat.
     String notice = "";
+    private int noticeRows = 1; // set while drawing; the list and buttons sit below the wrapped notice
     OutsidePacket packet;
     Distill2.Result scores;
     int chosen;
@@ -59,12 +60,12 @@ final class OutsidePilot {
     private boolean shopLeft;
     private com.badlogic.gdx.graphics.g2d.TextureRegion routePixel;
 
-    /** F9 / Stop: drop the pending decision; {@code manual} keeps the card in step mode. */
-    void stop(boolean manual) {
+    /** F9: drop the pending decision and hand outside decisions to the player (Standby has no card). */
+    void stop() {
         prompt=false; packet=null; statePacket=null; scores=null;
         confirm=false; awaiting=false; failed=false;
-        mode=manual?1:0; pilotRun=manual;
-        notice=I18n.t(manual?"已停止 · 人工逐步：每一步回车或点击确认":"全自动已停止；现在由你接管");
+        mode=0; pilotRun=false;
+        notice=I18n.t("已停止 · 待命：局外由你决定，战斗点【计算】才搜索");
     }
 
     void select(int newMode) {
@@ -72,7 +73,7 @@ final class OutsidePilot {
         confirm=false; awaiting=false; failed=false;
         if(newMode==0) { pilotRun=false; notice=I18n.t("局外决策由你操作"); return; }
         pilotRun=true;
-        notice=newMode==1?I18n.t("人工逐步：求解器和 AI 给出建议，每一步回车或点击确认")
+        notice=newMode==1?I18n.t("Agent 确认每一步局外选择")
             :I18n.t("全自动爬塔已开启 · F9 随时接管");
     }
 
@@ -118,7 +119,7 @@ final class OutsidePilot {
             player=AbstractDungeon.player; prompt=true; mode=0;
             packet=null; statePacket=null; scores=null; awaiting=false;
             pilotRun=false; failed=false;
-            notice=I18n.t("新一局：选【人工逐步】每步确认，【战斗全自动】只自动打战斗，或【AI全自动】完全托管");
+            notice=I18n.t("新一局：选【待命】每场点了才算，【战斗全自动】只自动打战斗，或【AI全自动】完全托管");
             host.runStarted();
         }
         if(prompt) return;
@@ -275,30 +276,32 @@ final class OutsidePilot {
             ? Math.min(PILOT_ROWS,packet.choices.size()) : 0;
     }
 
+    private float listTop() { return PILOT_LIST_TOP+(noticeRows-1)*NOTICE_ROW; }
+
     private float buttonsTop() {
         int rows=listRows();
-        return PILOT_LIST_TOP+rows*PILOT_ROW+(rows>0?8:0);
+        return listTop()+rows*PILOT_ROW+(rows>0?8:0);
     }
 
     float cardHeight() { return buttonsTop()+38+14; }
 
-    /** Buttons as {action, label}; actions: 2 auto, 1 step, 0 take over, 3 confirm, -1 start manual, -2 auto combat only. */
+    /** Buttons as {action, label}; actions: 2 pilot, 0 take over, 3 confirm (agent play), -1 Standby, -2 Combat auto. */
     private String[][] buttons() {
-        if(prompt) return new String[][]{{"-1","人工逐步"},{"-2","战斗全自动"},{"2","AI全自动"}};
-        if(mode==2) return new String[][]{{"0","人工逐步"}};
-        if(mode==1) return new String[][]{{"3","确认这一步（回车）"},{"-2","战斗全自动"},{"2","AI全自动"}};
-        return new String[][]{{"2","继续AI全自动"},{"1","人工逐步"}};
+        if(prompt) return new String[][]{{"-1","待命"},{"-2","战斗全自动"},{"2","AI全自动"}};
+        if(mode==2) return new String[][]{{"0","待命"}};
+        if(mode==1) return new String[][]{{"3","确认（回车）"},{"-2","战斗全自动"},{"2","AI全自动"}};
+        return new String[][]{{"2","继续AI全自动"},{"-1","待命"}};
     }
 
     /** Scrolls or picks in the step-mode list; true when the pointer is over the list. */
     boolean listInput(float ly, boolean click) {
         int rows=listRows();
-        if(rows<=0 || ly<PILOT_LIST_TOP || ly>=PILOT_LIST_TOP+rows*PILOT_ROW)return false;
+        if(rows<=0 || ly<listTop() || ly>=listTop()+rows*PILOT_ROW)return false;
         int last=Math.max(0,packet.choices.size()-rows);
         if(InputHelper.scrolledDown)scroll=Math.min(last,scroll+1);
         if(InputHelper.scrolledUp)scroll=Math.max(0,scroll-1);
         if(click) {
-            int index=scroll+(int)((ly-PILOT_LIST_TOP)/PILOT_ROW);
+            int index=scroll+(int)((ly-listTop())/PILOT_ROW);
             if(index<packet.choices.size())chosen=index;
         }
         return true;
@@ -321,21 +324,24 @@ final class OutsidePilot {
         canvas.box(sb,1,1,PILOT_WIDTH-2,height-2,PanelCanvas.BACKGROUND);
         canvas.label(sb,I18n.t("自动爬塔"),16,10,140,1.05f,Color.WHITE);
         canvas.button(sb,EXPORT_LEFT,9,EXPORT_WIDTH,24,PanelCanvas.SURFACE);
-        canvas.label(sb,I18n.t("导出"),EXPORT_LEFT+8,13,EXPORT_WIDTH-12,.78f,PanelCanvas.ACCENT);
-        String chip=prompt?"新一局":mode==2?"AI全自动中":mode==1?"人工逐步"
+        canvas.label(sb,I18n.t("导出日志"),EXPORT_LEFT+8,13,EXPORT_WIDTH-12,.78f,PanelCanvas.ACCENT);
+        String chip=prompt?"新一局":mode==2?"AI全自动中":mode==1?"Agent"
             :failed?"已暂停":"已接管";
         Color chipColor=mode==2?PanelCanvas.ACCENT:failed?PanelCanvas.DANGER:mode==1?Color.WHITE:PanelCanvas.MUTED;
         canvas.box(sb,PILOT_WIDTH-170,9,120,24,PanelCanvas.SURFACE);
         canvas.label(sb,I18n.t(chip),PILOT_WIDTH-160,13,100,.78f,chipColor);
         if(!prompt)canvas.label(sb,"×",PILOT_WIDTH-32,9,20,1,PanelCanvas.MUTED);
-        canvas.label(sb,notice,16,46,PILOT_WIDTH-32,.78f,failed?PanelCanvas.DANGER:PanelCanvas.MUTED);
+        java.util.List<String> lines=canvas.wrap(notice,PILOT_WIDTH-32,.78f);
+        noticeRows=Math.max(1,lines.size());
+        for(int i=0;i<lines.size();i++)
+            canvas.label(sb,lines.get(i),16,46+i*NOTICE_ROW,PILOT_WIDTH-32,.78f,failed?PanelCanvas.DANGER:PanelCanvas.MUTED);
         int rows=listRows();
         for(int row=0;row<rows;row++) {
             int i=scroll+row;
             if(i>=packet.choices.size())break;
-            float top=PILOT_LIST_TOP+row*PILOT_ROW;
+            float top=listTop()+row*PILOT_ROW;
             boolean selected=i==chosen;
-            canvas.button(sb,16,top,PILOT_WIDTH-32,PILOT_ROW-4,selected?new Color(.17f,.29f,.32f,1):PanelCanvas.SURFACE);
+            canvas.button(sb,16,top,PILOT_WIDTH-32,PILOT_ROW-4,selected?PanelCanvas.ACCENT_SOFT:PanelCanvas.SURFACE);
             canvas.label(sb,(selected?"● ":"  ")+packet.choices.get(i).label,24,top+5,PILOT_WIDTH-130,.8f,
                 selected?PanelCanvas.ACCENT:Color.WHITE);
             canvas.label(sb,String.format(java.util.Locale.ROOT,"%.3f",scores.scores[i]),
