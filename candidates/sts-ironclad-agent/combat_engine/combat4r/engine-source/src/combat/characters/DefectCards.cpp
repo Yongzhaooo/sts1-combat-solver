@@ -221,7 +221,7 @@ namespace sts {
                 for (int i = 0; i < count; ++i) {
                     bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
                 }
-                bc.addToBot(Actions::EmptyEnergy());
+                bc.addToBot(Actions::EmptyEnergy(bc.curCardQueueItem.freeToPlay || c.freeToPlayOnce));
                 return true;
             }
 
@@ -313,7 +313,7 @@ namespace sts {
                 const int times = item.energyOnUse + (up ? 1 : 0)
                     + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
                 bc.addToBot(Actions::MultiCastAction(times));
-                bc.addToBot(Actions::EmptyEnergy());
+                bc.addToBot(Actions::EmptyEnergy(bc.curCardQueueItem.freeToPlay || c.freeToPlayOnce));
                 return true;
             }
 
@@ -331,7 +331,7 @@ namespace sts {
                 for (int i = 0; i < times; ++i) {
                     bc.addToBot(Actions::GainBlock(block));
                 }
-                bc.addToBot(Actions::EmptyEnergy());
+                bc.addToBot(Actions::EmptyEnergy(bc.curCardQueueItem.freeToPlay || c.freeToPlayOnce));
                 return true;
             }
 

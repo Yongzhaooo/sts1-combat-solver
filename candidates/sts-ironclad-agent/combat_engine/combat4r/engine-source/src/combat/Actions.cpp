@@ -653,13 +653,17 @@ Action Actions::DoubleEnergy() {
     }};
 }
 
-Action Actions::EmptyEnergy() {
-    return {[] (BattleContext &bc) {
-        // AbstractCard.useCard() for an X card: costForTurn is -1, so nothing is
-        // paid at the cost check and the card empties the pool itself.
-        if (bc.player.energy > 0) {
-            bc.player.useEnergy(bc.player.energy);
+Action Actions::EmptyEnergy(bool freeToPlay) {
+    return {[=] (BattleContext &bc) {
+        // TempestAction/MulticastAction/ReinforcedBodyAction.update(): the energy
+        // pool is emptied at the very end of the action, and only when the card
+        // was not played for free (bytecode guard `freeToPlayOnce != 0 -> skip`).
+        // AbstractCard.useCard() pays nothing for an X card, so this is the whole
+        // energy cost of the card.
+        if (freeToPlay) {
+            return;
         }
+        bc.player.useEnergy(bc.player.energy);
     }};
 }
 
@@ -996,7 +1000,7 @@ Action Actions::JackOfAllTradesAction(bool upgraded) {
     }};
 }
 
-Action Actions::TransmutationAction(bool upgraded, int energy, bool) {
+Action Actions::TransmutationAction(bool upgraded, int energy, bool freeToPlay) {
     return {[=] (BattleContext &bc) {
         const auto effectAmount = energy + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
 
@@ -1012,6 +1016,12 @@ Action Actions::TransmutationAction(bool upgraded, int energy, bool) {
            cards.push_back(c);
        }
        bc.addToBot( Actions::MakeTempCardsInHand(cards) );
+
+       // TransmutationAction.update() empties the pool after queueing the cards,
+       // and only when the card was not played for free.
+       if (!freeToPlay) {
+           bc.player.useEnergy(bc.player.energy);
+       }
 
     }};
 }
@@ -1679,8 +1689,15 @@ Action Actions::SpotWeaknessAction(int target, int strength) {
     }};
 }
 
-Action Actions::WhirlwindAction(DamageMatrix damageMatrix, int energy, bool) {
+Action Actions::WhirlwindAction(DamageMatrix damageMatrix, int energy, bool freeToPlay) {
     return {[=] (BattleContext &bc) {
+        // WhirlwindAction.update(): the hits are queued first, then the pool is
+        // emptied unless freeToPlayOnce was set (the bytecode guard at the end of
+        // update() skips EnergyManager.use entirely when the card was free).
+        if (!freeToPlay) {
+            bc.player.useEnergy(bc.player.energy);
+        }
+
         const auto effectAmount = energy + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
         // Whirlwind appends its hits after already queued on-use effects.
         for (int i = 0; i < effectAmount; ++i) {

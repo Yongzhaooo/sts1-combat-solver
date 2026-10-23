@@ -116,7 +116,7 @@ namespace sts {
         static Action UnnamedEndOfTurnAction();
         static Action MonsterStartTurnAction();
         static Action DoubleEnergy(); // DoubleEnergyAction: double the current energy
-        static Action EmptyEnergy(); // X cards: AbstractCard.useCard() zeroes the energy pool
+        static Action EmptyEnergy(bool freeToPlay); // X cards: the action drains the pool unless freeToPlayOnce
         static Action MultiCastAction(int times); // MulticastAction: evoke the oldest orb N times, consume once
         static Action TriggerStartOfTurnOrbsAction();
         static Action TriggerOrbPassiveAction(int orbIdx); // Loop: one orb's full passive
