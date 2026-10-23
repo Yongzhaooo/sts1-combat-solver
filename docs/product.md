@@ -23,6 +23,7 @@ Players of *Slay the Spire 1* install one local Mod and get bounded combat plann
 - Character state that affects combat (orbs and their values, Focus, stance, mantra, retained cards, scry and discard choices) is captured from the game, imported into the simulator and verified the same way as HP, block and piles.
 - Card and relic behavior follows the original game's Java logic. When a contributor's description and the Java behavior disagree, Java wins.
 - A finished plan carries no action that can be dropped while the fight still ends in the same victory with the same HP, bottles, relic counters and growth. Long looping plans get one full reduction pass, which may add about one second per 50 actions per pass; a 1,100-action Heart line takes about 15 seconds longer (maintainer decision 2026-10-23). Reduction never changes the predicted result.
+- Among wins with the same result the search keeps the one with the fewest actions. A win longer than 64 actions gets one more search pass that charges every play in a turn and replaces it only with a shorter line of at least the same result. Against the Heart, whose victory ends the run, any shorter win that keeps half of max HP (at most the found line's HP) counts as the same result: the 2026-10-23 Heart test went from 1,092 actions and 75 HP to 196 actions and 60 HP (maintainer decision 2026-10-23).
 
 ### Truth calibration and fixtures
 
@@ -70,5 +71,5 @@ Player request (七月流火, 2026-10-21), cleaned. Items marked (proposed) are 
 - Which constraints Manual plans vary beyond potion use (relic counters, Feed, fewest turns, keeping a bottle). Each adds a search before the fight starts. Blocks the size of the Manual plan list.
 - What approval covers: the whole fight before it starts (today) or each turn. Blocks the Manual interaction and any new keys.
 - Whether a re-plan after a divergence needs a new approval. Blocks the Manual execution flow.
-- Whether the search should prefer fewer actions when the result is equal. A loop turn of hundreds of plays cannot be shortened after the search, because every dropped play changes later shuffles; cutting the turn and searching again only moves the loop to the next turn (Heart test 2026-10-23). Blocks shorter loop turns; the change belongs to the loop search.
+- Whether fights other than the Heart may trade HP for a much shorter line. A long loop turn often rerolls the next draw through extra shuffles, so a shorter line of exactly the same result rarely exists. Blocks shorter loop turns outside the Heart.
 - Who implements the play-mode changes: an outside contributor or the maintainer. Blocks whether a panel state and protocol guide is written for contributors.
