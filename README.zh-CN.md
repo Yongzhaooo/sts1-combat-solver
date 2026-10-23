@@ -30,7 +30,7 @@ QQ 交流群：**232459269**。欢迎交流使用经验、反馈问题。
   | `F7` | 把本幕地图和计划路线存成桌面 PNG |
   | `F6` | 导出诊断包（开启经验录制后，`Shift+F6` 封存经验分卷） |
 
-- **反馈问题：** 按 `F6` 导出诊断包，发到 QQ 群或 GitHub Issues。数据只存在本机（Windows `%LOCALAPPDATA%\STS1CombatSolver`，Mac `~/Library/Application Support/STS1CombatSolver`），不会自动上传，分享前请先看[隐私说明](PRIVACY.zh-CN.md)。
+- **反馈问题：** 按 `F6`（或面板标题栏的“导出”）导出诊断包，发到 QQ 群或 GitHub Issues。数据只存在本机（Windows `%LOCALAPPDATA%\STS1CombatSolver`，Mac `~/Library/Application Support/STS1CombatSolver`），不会自动上传，分享前请先看[隐私说明](PRIVACY.zh-CN.md)。
 
 ## 全自动爬塔（早期版本）
 
