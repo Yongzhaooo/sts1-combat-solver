@@ -17,6 +17,14 @@ public class PanelSizeCheck {
             }
         }
         check(PanelSize.fit(1,2,3840,2160,880,612)==2);
+        // Mod warnings wrap whole: every line fits, nothing is dropped, words stay together when they can.
+        java.util.function.ToDoubleFunction<String> chars = text -> text.length();
+        String warning = "Incompatible mod detected (SaveStateMod / Undo): disrupts selection and combat sync";
+        java.util.List<String> lines = PanelSize.wrap(warning, chars, 30);
+        check(lines.size() == 4 && String.join(" ", lines).equals(warning));
+        for (String line : lines) check(line.length() <= 30);
+        check(PanelSize.wrap("检测到不兼容模组会破坏同步", chars, 5).equals(java.util.Arrays.asList("检测到不兼", "容模组会破", "坏同步")));
+        check(PanelSize.wrap("", chars, 5).isEmpty() && PanelSize.wrap("toolongword", chars, 3).size() == 4);
         System.out.println("PASS: panel sizes, invalid settings, viewport fit and pointer scaling");
     }
 }

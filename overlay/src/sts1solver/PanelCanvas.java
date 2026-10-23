@@ -125,6 +125,16 @@ final class PanelCanvas {
         } finally { font.getData().setScale(oldX,oldY); }
     }
 
+    /** Splits text into lines that label() draws whole at this width and size. */
+    java.util.List<String> wrap(String value, float width, float size) {
+        BitmapFont font=font();
+        float oldX=font.getData().scaleX, oldY=font.getData().scaleY;
+        try {
+            font.getData().setScale(scale()/fontScale*size);
+            return PanelSize.wrap(I18n.t(value), text -> { measure.setText(font,text); return measure.width/scale(); }, width);
+        } finally { font.getData().setScale(oldX,oldY); }
+    }
+
     /** Shadowed text at screen coordinates, for captions on the map and the deck. */
     void caption(SpriteBatch sb, String value, float left, float baseline, Color color) {
         BitmapFont font=font();
