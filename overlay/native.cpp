@@ -447,7 +447,11 @@ PYBIND11_MODULE(overlay_search, m) {
                 loop_beam::pass(root,8,std::min(beamCap/32,40000LL),value,cancelled,quick,true);
                 ++loop_beam::stats.passes;
             }
-            if (quick.found && loop_beam::stats.macroActions > 0 && macroFinish(root,*quick.state)) {
+            // Any Heart win passes macroFinish, so the deep budget (a long win or a loss at the standard one) skips the
+            // shortcut and runs MCTS; the macro win stays a candidate below.
+            const bool heartDeep=heartFight && simulations>=128000;
+            const loop_beam::Best macroLine=heartDeep && loop_beam::stats.macroActions>0 ? quick : loop_beam::Best{};
+            if (quick.found && loop_beam::stats.macroActions > 0 && macroFinish(root,*quick.state) && !heartDeep) {
                 predicted=*quick.state; result.actions=quick.actions; result.bestHp=predicted.player.curHp;
                 macroUsed=beamUsed=true;
                 fastReady=heartFight;
@@ -497,12 +501,18 @@ PYBIND11_MODULE(overlay_search, m) {
                     }
                 }
             }
+            // Of the deep Heart MCTS line and the macro win, the shorter win is kept.
+            if(macroLine.found && macroFinish(root,*macroLine.state)
+                    && (predicted.outcome!=Outcome::PLAYER_VICTORY || macroLine.actions.size()<result.actions.size())) {
+                predicted=*macroLine.state; result.actions=macroLine.actions; result.bestHp=predicted.player.curHp;
+                macroUsed=beamUsed=true;
+            }
             // Equal results, fewest actions: a long win gets one shortening pass; it never lowers the end value. A Heart
-            // victory ends the run, so there a shorter win keeping half of max HP (at most the found line's HP) is equal.
+            // victory ends the run and no run fights a second Heart, so there any shorter win is equal (user, 2026-10-24).
             if(predicted.outcome==Outcome::PLAYER_VICTORY && result.actions.size()>64 && !overlayInterrupted()) {
                 loop_beam::Best seed{true,value(predicted),std::make_shared<BattleContext>(predicted),
                                      result.actions};
-                const int floor=heartFight ? std::min(predicted.player.curHp,root.player.maxHp/2) : -1;
+                const int floor=heartFight ? 1 : -1;
                 auto shorter=loop_beam::shorten(root,std::move(seed),std::min(LOOP_BEAM_PER_SIM*simulations,2000000LL),
                                                 value,cancelled,floor);
                 if(shorter.actions.size()<result.actions.size()) {

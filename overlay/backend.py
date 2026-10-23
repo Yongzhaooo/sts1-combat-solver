@@ -40,6 +40,9 @@ sys.path.insert(0, str(REPO))
 # coverage in the engine and the same entry in SolverMod.SUPPORTED.
 SUPPORTED_CLASSES = {'IRONCLAD': '战士'}
 COVERAGE_MANIFEST = Path(__file__).with_name('coverage_manifest.json')
+# A Heart win longer than this many actions is searched again at the deep budget, past the loop macro shortcut, and the
+# shorter win is kept: any Heart win ends the run, and hundreds of plays are a poor watch (user, 2026-10-24).
+LONG_HEART_ACTIONS = 150
 # Bottle sets are compared only when no single bottle wins within this effective loss.
 MULTI_POTION_LOSS = 6
 # After a Boss the next act heals (boss_heal): bottles are searched only past this loss or without a win.
@@ -266,10 +269,12 @@ class Advisor:
             try:
                 self.plan = dict(self.native_search.plan(self.root, budget,
                     list(names), 0, 0, False, True))
-                if self.plan['outcome'] != 1 and budget < DEEP_BUDGET and not self.interrupt.is_set():
+                long_win = self.plan['outcome'] == 1 and len(self.plan['actions']) > LONG_HEART_ACTIONS
+                if (self.plan['outcome'] != 1 or long_win) and budget < DEEP_BUDGET and not self.interrupt.is_set():
                     refined = dict(self.native_search.plan(self.root, DEEP_BUDGET,
                         list(names), 0, 0, False, True))
-                    if refined['value'] > self.plan['value']:
+                    if (refined['value'] > self.plan['value'] if not long_win else
+                            refined['outcome'] == 1 and len(refined['actions']) < len(self.plan['actions'])):
                         self.plan = refined
                 self.plan = self.finalize_plan(self.root, self.plan)
                 replay = self.root.clone()
