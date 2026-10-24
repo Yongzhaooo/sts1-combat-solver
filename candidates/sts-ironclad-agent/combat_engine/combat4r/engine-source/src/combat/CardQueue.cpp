@@ -28,7 +28,7 @@ void CardQueue::clear() {
 }
 
 void CardQueue::pushFront(CardQueueItem item) {
-    if (size == capacity) throw std::length_error("card queue overflow"); // a search branch is dropped, not the process aborted
+    if (size == capacity) throw std::length_error("card queue overflow"); // nothing catches it: the solve fails with a message instead of an abort
     --frontIdx;
     ++size;
     if (frontIdx < 0) {

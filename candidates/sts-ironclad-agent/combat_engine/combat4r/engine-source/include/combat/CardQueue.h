@@ -43,7 +43,7 @@ namespace sts {
 
     struct CardQueue {
         // Java's card queue is an unbounded ArrayList: Mayhem 11 queues its 11 top cards before any of them plays
-        // (seed 8981829751574833072 asserted at 10). 32 covers Mayhem stacks seen in search; beyond it push throws.
+        // (seed 8981829751574833072 asserted at 10). 32 is a practical bound, not a proof; beyond it push throws.
         static constexpr int capacity = 32;
         int size = 0;
         int backIdx = 0;
