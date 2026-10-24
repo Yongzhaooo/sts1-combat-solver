@@ -7,6 +7,7 @@
 #include <array>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <map>
 #include <memory>
@@ -218,9 +219,13 @@ inline double score(const Node &n, int lane, const Features &f) {
 inline double score(const Node &n, int lane) { return score(n, lane, features(*n.state)); }
 
 inline std::string bucket(const BattleContext &b) {
-    std::string s;
-    s.reserve(128 + 20 * (b.cards.cardsInHand + b.cards.drawPile.size() + b.cards.discardPile.size()));
-    const auto scalar = [&](auto value) { s.append(reinterpret_cast<const char *>(&value), sizeof(value)); };
+    // Written into a reused buffer and copied out once; the bound covers every field below (at most 8 bytes each).
+    static thread_local std::vector<char> buffer;
+    const std::size_t bound = 256 + 16 * b.player.powerOrder.size() + 80 * std::size_t(b.monsters.monsterCount)
+        + 20 * (b.cards.cardsInHand + b.cards.drawPile.size() + b.cards.discardPile.size());
+    if (buffer.size() < bound) buffer.resize(bound);
+    char *out = buffer.data();
+    const auto scalar = [&](auto value) { std::memcpy(out, &value, sizeof(value)); out += sizeof(value); };
     scalar(b.turn); scalar(b.player.curHp); scalar(b.player.block); scalar(b.player.energy);
     scalar(b.player.statusBits0); scalar(b.player.statusBits1); scalar(b.player.strength);
     scalar(int(b.player.sundialCounter)); scalar(b.player.cardsPlayedThisTurn);
@@ -244,7 +249,8 @@ inline std::string bucket(const BattleContext &b) {
     };
     const auto write = [&](std::uint64_t k) {
         const int key[5] = {int(k >> 33 & 0xFFFF), int(k >> 32 & 1), int(k >> 24 & 0xFF) - 128, int(k >> 16 & 0xFF) - 128, int(k & 0xFFFF) - 32768};
-        s.append(reinterpret_cast<const char *>(key), sizeof(key));
+        std::memcpy(out, key, sizeof(key));
+        out += sizeof(key);
     };
     std::array<std::uint64_t,10> hand;
     for (int i = 0; i < b.cards.cardsInHand; ++i) hand[i] = pack(b.cards.hand[i]);
@@ -259,7 +265,7 @@ inline std::string bucket(const BattleContext &b) {
     std::sort(discard.begin(), discard.end());
     scalar(discard.size());
     for (const auto &c : discard) write(c);
-    return s;
+    return std::string(buffer.data(), out - buffer.data());
 }
 
 struct Best {
@@ -316,7 +322,8 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
     std::vector<Node> candidates, survivors, next;
     std::vector<std::size_t> order;
     std::vector<char> keep;
-    std::vector<std::pair<double, std::size_t>> keyed;
+    struct Ranked { double score; std::uint32_t pos, index; };
+    std::vector<Ranked> keyed;
     KeySet seen;
     // Only a per-turn damage cap (Invincible: the Heart) makes a loop worthless before the turn ends; elsewhere the
     // per-turn quota below stays off and the search is unchanged.
@@ -335,11 +342,12 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
         // every kept state then stays in that turn until its HP runs out. So under a damage cap each later turn also keeps
         // its own leaders, ranked on lane 0 against states of the same turn only.
         // Stable sort of an index list by one lane's score, on packed (score, index) pairs: the same permutation as sorting the indices.
+        // The position in the incoming order breaks score ties, which is what the stable sort did; std::sort needs no temporary buffer.
         auto sortByLane = [&](std::vector<std::size_t> &idx, int lane) {
             keyed.resize(idx.size());
-            for (std::size_t i = 0; i < idx.size(); ++i) keyed[i] = {candidates[idx[i]].scores[lane], idx[i]};
-            std::stable_sort(keyed.begin(), keyed.end(), [](const auto &x, const auto &y) { return x.first > y.first; });
-            for (std::size_t i = 0; i < idx.size(); ++i) idx[i] = keyed[i].second;
+            for (std::size_t i = 0; i < idx.size(); ++i) keyed[i] = {candidates[idx[i]].scores[lane], std::uint32_t(i), std::uint32_t(idx[i])};
+            std::sort(keyed.begin(), keyed.end(), [](const Ranked &x, const Ranked &y) { return x.score > y.score || (x.score == y.score && x.pos < y.pos); });
+            for (std::size_t i = 0; i < idx.size(); ++i) idx[i] = keyed[i].index;
         };
         auto byTurn = [&]() {
             std::map<int, std::vector<std::size_t>> groups;
