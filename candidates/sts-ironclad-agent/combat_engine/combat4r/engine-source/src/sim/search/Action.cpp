@@ -191,8 +191,14 @@ bool isValidSingleCardSelectAction(const BattleContext &bc, const search::Action
             return bc.cards.drawPile[a.getSelectIdx()].getType() == CardType::ATTACK;
         }
 
-        case CardSelectTask::SEEK:
-            return a.getSelectIdx() >= 0 && a.getSelectIdx() < bc.cards.drawPile.size();
+        case CardSelectTask::SEEK: {
+            if (a.getSelectIdx() < 0 || a.getSelectIdx() >= bc.cards.drawPile.size()) return false;
+            // Seek's grid keeps every card on screen and only moves the picked
+            // ones once the last pick is made, so a card already taken off the
+            // grid cannot be picked twice.
+            const auto &chosen = bc.cardSelectInfo.selectedIndices;
+            return std::find(chosen.begin(), chosen.end(), a.getSelectIdx()) == chosen.end();
+        }
 
         case CardSelectTask::EXHAUST_MANY:
         case CardSelectTask::GAMBLE:
@@ -409,14 +415,28 @@ void executeSingleCardSelectActionHelper(BattleContext &bc, search::Action a) {
             break;
 
         case CardSelectTask::SEEK: {
-            bc.chooseDrawToHandCards(&idx, 1);
-            // Seek picks 1 (2) cards; reopen the screen while picks remain.
+            // Seek's screen stays up while picks remain and only moves the picked
+            // cards when the last one is made: BetterDrawPileToHandAction reads
+            // GridCardSelectScreen.selectedCards on the frame after the confirm.
+            // Moving each pick immediately left the picked cards out of the pile
+            // the game still showed, so every later index pointed at the wrong
+            // card and the live mapper reported a changed identity.
+            bc.cardSelectInfo.selectedIndices.push_back(idx);
             const int remaining = bc.cardSelectInfo.pickCount - 1;
-            if (remaining > 0 && !bc.cards.drawPile.empty()) {
-                bc.openSimpleCardSelectScreen(CardSelectTask::SEEK, remaining);
+            if (remaining > 0 && static_cast<int>(bc.cards.drawPile.size()) > remaining) {
+                bc.cardSelectInfo.pickCount = remaining;
+                bc.inputState = InputState::CARD_SELECT;
             } else {
-                // The pick is done. Clear the task as well as the count so that
-                // a later clone cannot see a CARD_SELECT state offering nothing.
+                // The picks are done. The game walks its selectedCards list, which
+                // holds the click order, so collect in that order first and only
+                // then remove: removing earlier would shift the later indices.
+                std::vector<CardInstance> picked;
+                picked.reserve(bc.cardSelectInfo.selectedIndices.size());
+                for (int pick : bc.cardSelectInfo.selectedIndices) picked.push_back(bc.cards.drawPile[pick]);
+                std::vector<int> dropOrder = bc.cardSelectInfo.selectedIndices;
+                std::sort(dropOrder.begin(), dropOrder.end(), [](int a, int b) { return b < a; });
+                for (int pick : dropOrder) bc.cards.removeFromDrawPileAtIdx(pick);
+                for (const auto &card : picked) bc.moveToHandHelper(card);
                 bc.cardSelectInfo.selectedIndices.clear();
                 bc.cardSelectInfo.pickCount = 0;
                 bc.cardSelectInfo.cardSelectTask = CardSelectTask::INVALID;
@@ -643,8 +663,13 @@ std::vector<search::Action> search::Action::enumerateCardSelectActions(const Bat
             break;
 
         case CardSelectTask::SEEK:
-            // One pick per action; the executor reopens the screen while picks remain.
-            setupCardOptionsHelper(actions, bc.cards.drawPile.begin(), bc.cards.drawPile.end());
+            // One pick per action; the executor keeps the screen up while picks
+            // remain. The grid keeps showing every card, so a card picked on an
+            // earlier pick is still on it but must not be offered again.
+            for (int i = 0; i < static_cast<int>(bc.cards.drawPile.size()); ++i) {
+                search::Action a(search::ActionType::SINGLE_CARD_SELECT, i);
+                if (a.isValidAction(bc)) actions.push_back(a);
+            }
             break;
 
         default:

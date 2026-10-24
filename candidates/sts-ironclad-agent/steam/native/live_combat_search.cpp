@@ -88,18 +88,39 @@ PYBIND11_MODULE(live_combat_search, m) {
             else if(selectTask=="SEEK")b.cardSelectInfo.cardSelectTask=CardSelectTask::SEEK;
             else throw std::invalid_argument("unsupported mid-turn select task");
             b.cardSelectInfo.pickCount=d["pick_count"].cast<int>();
+            if(d.contains("selected_indices"))
+                b.cardSelectInfo.selectedIndices=d["selected_indices"].cast<std::vector<int>>();
             {
                 const auto pickTask=b.cardSelectInfo.cardSelectTask;
-                const int count=pickTask==CardSelectTask::RECYCLE?b.cards.cardsInHand:
-                    pickTask==CardSelectTask::HOLOGRAM?(int)b.cards.discardPile.size():(int)b.cards.drawPile.size();
                 auto offered=d["cards"].cast<std::vector<CardId>>();
-                if((int)offered.size()!=count)
-                    throw std::invalid_argument("mid-turn picker offers a different number of cards");
-                for(int i=0;i<count;i++) {
-                    const auto &card=pickTask==CardSelectTask::RECYCLE?b.cards.hand[i]:
-                        pickTask==CardSelectTask::HOLOGRAM?b.cards.discardPile[i]:b.cards.drawPile[i];
-                    if(card.id!=offered[i])
+                if(pickTask==CardSelectTask::SEEK) {
+                    // Seek's grid shows the draw pile sorted by name and rarity, so
+                    // its order differs from the pile's. Only the multiset has to
+                    // agree; the plan's index stays a draw pile index and the
+                    // caller translates it to a grid position by identity.
+                    if(offered.size()!=b.cards.drawPile.size())
+                        throw std::invalid_argument("mid-turn picker offers a different number of cards");
+                    auto sorted=[&] (std::vector<CardId> cards) {
+                        std::sort(cards.begin(),cards.end(),
+                            [] (CardId a,CardId b) { return static_cast<int>(a)<static_cast<int>(b); });
+                        return cards;
+                    };
+                    std::vector<CardId> pile;
+                    pile.reserve(b.cards.drawPile.size());
+                    for(const auto &card:b.cards.drawPile) pile.push_back(card.id);
+                    if(sorted(offered)!=sorted(pile))
                         throw std::invalid_argument("mid-turn picker offers different cards");
+                } else {
+                    const int count=pickTask==CardSelectTask::RECYCLE?b.cards.cardsInHand:
+                        pickTask==CardSelectTask::HOLOGRAM?(int)b.cards.discardPile.size():(int)b.cards.drawPile.size();
+                    if((int)offered.size()!=count)
+                        throw std::invalid_argument("mid-turn picker offers a different number of cards");
+                    for(int i=0;i<count;i++) {
+                        const auto &card=pickTask==CardSelectTask::RECYCLE?b.cards.hand[i]:
+                            pickTask==CardSelectTask::HOLOGRAM?b.cards.discardPile[i]:b.cards.drawPile[i];
+                        if(card.id!=offered[i])
+                            throw std::invalid_argument("mid-turn picker offers different cards");
+                    }
                 }
             }
         } else throw std::invalid_argument("unsupported start selection");

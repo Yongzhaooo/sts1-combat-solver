@@ -111,13 +111,27 @@ def mid_turn_selection(comparator, view):
     if not isinstance(card, dict) or card.get('id') not in MID_TURN_TASKS:
         raise ValueError('unsupported mid-turn picker after ' + str(
             card.get('id') if isinstance(card, dict) else None))
-    if screen.get('selected') or screen.get('num_cards') != 1:
-        raise ValueError('mid-turn picker is not an untouched single-card choice')
+    task = MID_TURN_TASKS[card['id']]
     if not screen.get('cards'):
         raise ValueError('mid-turn picker has no candidates')
-    return dict(task='MID_TURN', select_task=MID_TURN_TASKS[card['id']], pick_count=1,
-                cards=[comparator.sts.CardId(comparator.bridge.card_snapshot(c)['id'])
-                       for c in screen['cards']])
+    cards = [comparator.sts.CardId(comparator.bridge.card_snapshot(c)['id']) for c in screen['cards']]
+    if task == 'SEEK':
+        # Seek's grid keeps the picked cards on screen and only moves them when the
+        # last pick is confirmed, so a partly picked grid is a normal state: the
+        # remaining picks are num_cards minus what is already selected. Its order
+        # is the draw pile sorted by name and rarity, not the pile order, so the
+        # already picked cards travel as draw pile indices instead of positions.
+        picked = [c['uuid'] for c in screen.get('selected_cards') or []]
+        pile = [c['uuid'] for c in game['combat_state']['draw_pile']]
+        if len(set(picked)) != len(picked) or any(uuid not in pile for uuid in picked):
+            raise ValueError('Seek picker selects a card the draw pile does not hold')
+        if len(pile) != len(cards):
+            raise ValueError('Seek picker does not show the whole draw pile')
+        return dict(task='MID_TURN', select_task=task, pick_count=screen['num_cards'] - len(picked),
+                    cards=cards, selected_indices=[pile.index(uuid) for uuid in picked])
+    if screen.get('selected') or screen.get('num_cards') != 1:
+        raise ValueError('mid-turn picker is not an untouched single-card choice')
+    return dict(task='MID_TURN', select_task=task, pick_count=1, cards=cards)
 
 
 def start_selection(comparator, view):

@@ -673,12 +673,23 @@ namespace sts {
                 return true;
 
             case CardId::SEEK:
-                // Seek.java: pick 1 (2) cards from the draw pile into hand.
+                // Seek.java: BetterDrawPileToHandAction(1), upgraded 2. That action
+                // moves the whole pile straight to hand when the pile holds no more
+                // cards than it asks for, and only opens the grid otherwise.
                 bc.addToBot({[=] (BattleContext &bc) {
+                    const int want = up ? 2 : 1;
                     if (bc.cards.drawPile.empty()) {
                         return;
                     }
-                    bc.openSimpleCardSelectScreen(CardSelectTask::SEEK, up ? 2 : 1);
+                    if (static_cast<int>(bc.cards.drawPile.size()) <= want) {
+                        const int count = static_cast<int>(bc.cards.drawPile.size());
+                        std::vector<CardInstance> taken(bc.cards.drawPile.begin(),
+                                                        bc.cards.drawPile.begin() + count);
+                        for (int i = count - 1; i >= 0; --i) bc.cards.removeFromDrawPileAtIdx(i);
+                        for (const auto &card : taken) bc.moveToHandHelper(card);
+                        return;
+                    }
+                    bc.openSimpleCardSelectScreen(CardSelectTask::SEEK, want);
                 }});
                 return true;
 

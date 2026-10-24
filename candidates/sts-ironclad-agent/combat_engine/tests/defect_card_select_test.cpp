@@ -100,18 +100,34 @@ int main() {
     }
 
     {
-        // Seek pulls one card from the draw pile; the executor reopens for Seek+.
+        // Seek's action moves the whole pile straight to hand when the pile holds
+        // no more cards than it asks for, so a one-card pile never opens a grid.
         BattleContext bc = fresh();
         bc.player.energy = 5;
         bc.cards.drawPile.push_back(CardInstance(CardId::CLASH));
+        const int handBefore = bc.cards.cardsInHand;
+        playCard(bc, CardId::SEEK);
+        check(bc.cardSelectInfo.cardSelectTask != CardSelectTask::SEEK,
+              "Seek should not open a grid when the pile fits in one hand's worth");
+        check(bc.inputState == InputState::PLAYER_NORMAL, "the straight-to-hand path should not open a picker");
+        check(bc.cards.cardsInHand == handBefore + 1, "the whole pile should join the hand");
+        check(bc.cards.drawPile.empty(), "the draw pile should be emptied");
+    }
+
+    {
+        // With more cards than it asks for, Seek opens the grid instead.
+        BattleContext bc = fresh();
+        bc.player.energy = 5;
+        bc.cards.drawPile.push_back(CardInstance(CardId::CLASH));
+        bc.cards.drawPile.push_back(CardInstance(CardId::BASH));
         playCard(bc, CardId::SEEK);
         check(bc.cardSelectInfo.cardSelectTask == CardSelectTask::SEEK,
-              "playing Seek should open its select");
+              "playing Seek should open its select when the pile is larger than the ask");
         const auto actions = enumerate(bc);
         check(!actions.empty(), "Seek must enumerate draw pile options");
         actions.front().execute(bc);
         check(bc.cards.cardsInHand >= 1, "the sought card should join the hand");
-        check(bc.cards.drawPile.empty(), "the draw pile should be emptied");
+        check(bc.cards.drawPile.size() == 1, "only the sought card should leave the pile");
     }
 
     {
@@ -177,10 +193,13 @@ int main() {
         // resolves what it queued before asking for the next decision.
         check(bc.inputState == InputState::CARD_SELECT,
               "a two-pick SEEK should keep its screen open for the second pick");
-        check(bc.cards.cardsInHand == handBefore + 1, "the first sought card should join the hand");
+        check(bc.cards.cardsInHand == handBefore,
+              "a pick that is still on screen must not join the hand yet");
         check(bc.cardSelectInfo.pickCount == 1, "the reopened screen should ask for the one remaining pick");
         actions = enumerate(bc);
-        check(actions.size() == 1, "the reopened screen should list the remaining draw pile");
+        check(actions.size() == 1, "a card already picked must not be offered a second time");
+        check(actions.front().getSelectIdx() != 0,
+              "the remaining pick should be the card still on the grid");
         actions.front().execute(bc);
         check(bc.inputState == InputState::PLAYER_NORMAL, "the last pick should close the screen");
         check(bc.cards.cardsInHand == handBefore + 2, "both sought cards should join the hand");

@@ -635,7 +635,13 @@ void enumerateCardSelectActionsImpl(NodeLike &node,
             break;
 
         case CardSelectTask::SEEK:
-            setupCardOptionsHelper(node, bc.cards.drawPile.begin(), bc.cards.drawPile.end());
+            // The grid keeps showing every card until the last pick, so a card
+            // already picked is still on screen but no longer selectable.
+            for (int i = 0; i < static_cast<int>(bc.cards.drawPile.size()); ++i) {
+                const auto &chosen = bc.cardSelectInfo.selectedIndices;
+                if (std::find(chosen.begin(), chosen.end(), i) != chosen.end()) continue;
+                node.edges.push_back({Action(search::ActionType::SINGLE_CARD_SELECT, i)});
+            }
             break;
 
         default:
