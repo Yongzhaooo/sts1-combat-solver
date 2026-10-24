@@ -765,7 +765,8 @@ void BattleContext::executeActions() {
             continue;
         }
 
-        if (outcome != Outcome::UNDECIDED) {
+        // Java keeps playing the card queue after the kill; only the end-turn card Time Warp queued on the killing card is modelled.
+        if (outcome != Outcome::UNDECIDED && !(endTurnAfterVictory && outcome == Outcome::PLAYER_VICTORY && !cardQueue.isEmpty())) {
             break;
         }
 
@@ -2185,6 +2186,7 @@ void BattleContext::callEndTurnEarlySequence() {
             addToBot( Actions::TimeEaterPlayCardQueueItem(item) );
         }
     }
+    endTurnAfterVictory = outcome == Outcome::PLAYER_VICTORY;
     addToTopCard(CardQueueItem::endTurnItem());
     endTurnQueued = true;
 }
