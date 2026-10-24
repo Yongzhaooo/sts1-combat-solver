@@ -83,6 +83,7 @@ namespace sts {
 
         bool isBattleOver = false;
         bool endTurnQueued = false;
+        bool endTurnAfterVictory = false; // Time Warp ended the turn on the killing card; Java still plays the queued end-turn card
         bool turnHasEnded = false;
         bool skipMonsterTurn = false;
 
