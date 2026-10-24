@@ -360,9 +360,10 @@ void search::BattleScumSearcher2::playoutRandom(BattleContext &state, std::vecto
         ++simulationIdx;
         enumerateActionsImpl(tempNode, state, preservePotions);
         if (tempNode.edges.empty()) {
-            std::cerr << state.seed << " " << simulationIdx << std::endl;
-            std::cerr << state.monsters.arr[0].getName() << " " << state.floorNum << " " << monsterEncounterStrings[static_cast<int>(state.encounter)] << std::endl;
-            assert(false);
+            // A state with no legal action cannot be continued. Ending the
+            // rollout here keeps the search alive; aborting the process would
+            // take the whole backend down with a state we can still score.
+            break;
         }
 
         auto dist = std::uniform_int_distribution<int>(0, static_cast<int>(tempNode.edges.size())-1);

@@ -415,7 +415,11 @@ void executeSingleCardSelectActionHelper(BattleContext &bc, search::Action a) {
             if (remaining > 0 && !bc.cards.drawPile.empty()) {
                 bc.openSimpleCardSelectScreen(CardSelectTask::SEEK, remaining);
             } else {
+                // The pick is done. Clear the task as well as the count so that
+                // a later clone cannot see a CARD_SELECT state offering nothing.
+                bc.cardSelectInfo.selectedIndices.clear();
                 bc.cardSelectInfo.pickCount = 0;
+                bc.cardSelectInfo.cardSelectTask = CardSelectTask::INVALID;
                 bc.inputState = InputState::EXECUTING_ACTIONS;
             }
             break;

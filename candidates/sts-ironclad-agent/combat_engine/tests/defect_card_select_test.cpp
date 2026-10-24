@@ -184,6 +184,26 @@ int main() {
         actions.front().execute(bc);
         check(bc.inputState == InputState::PLAYER_NORMAL, "the last pick should close the screen");
         check(bc.cards.cardsInHand == handBefore + 2, "both sought cards should join the hand");
+        // A closed picker must not leave a task behind: a copy taken here used
+        // to enumerate nothing, which aborted the whole search process.
+        check(bc.cardSelectInfo.cardSelectTask == CardSelectTask::INVALID,
+              "the closed SEEK screen should clear its task");
+        check(bc.cardSelectInfo.pickCount == 0, "the closed SEEK screen should clear its count");
+    }
+
+    {
+        // The same shape at the end of the pile: the second pick is moot once
+        // the draw pile ran out, and the screen still has to close cleanly.
+        BattleContext bc = fresh();
+        bc.cards.drawPile.push_back(CardInstance(CardId::CLASH));
+        bc.openSimpleCardSelectScreen(CardSelectTask::SEEK, 2);
+        auto actions = enumerate(bc);
+        check(actions.size() == 1, "a one-card pile should offer the single card");
+        actions.front().execute(bc);
+        check(bc.inputState == InputState::PLAYER_NORMAL,
+              "an emptied draw pile should close the screen instead of reopening it");
+        check(bc.cardSelectInfo.cardSelectTask == CardSelectTask::INVALID,
+              "the emptied SEEK screen should clear its task");
     }
 
     std::cout << "Defect card select enumeration holds\n";
