@@ -32,7 +32,7 @@ static BattleContext advanced(MonsterEncounter encounter, int steps) {
 }
 
 int main() {
-    const auto a = advanced(MonsterEncounter::CULTIST, 5), b = advanced(MonsterEncounter::JAW_WORM, 9);
+    const auto a = advanced(MonsterEncounter::CULTIST, 5), b = advanced(MonsterEncounter::CULTIST, 9);
     loop_beam::StatePool pool(8);
     // A recycled object (dirtied by a different state first) equals a plain copy.
     for (int round = 0; round < 3; ++round) {
