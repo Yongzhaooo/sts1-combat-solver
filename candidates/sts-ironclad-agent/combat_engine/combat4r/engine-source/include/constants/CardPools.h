@@ -145,43 +145,238 @@ namespace sts {
 
     }
 
+    // The game fills its in-combat pools by walking the class card list -- a HashMap,
+    // so one fixed order -- keeping the cards whose type and rarity match, reversing
+    // each rarity group and, for the per-type pool, splitting by type first; cards
+    // tagged HEALING never enter. The arrays below are that order verbatim, read out
+    // of CardLibrary through CardLibrary.addXCards and cross-checked against the game.
     namespace CombatTypeCardPool {
 
-        static constexpr CardId cardBlob[] = {CardId::SWORD_BOOMERANG, CardId::PERFECTED_STRIKE, CardId::HEAVY_BLADE, CardId::WILD_STRIKE, CardId::HEADBUTT, CardId::CLOTHESLINE, CardId::TWIN_STRIKE, CardId::POMMEL_STRIKE, CardId::THUNDERCLAP, CardId::CLASH, CardId::BODY_SLAM, CardId::IRON_WAVE, CardId::CLEAVE, CardId::ANGER, CardId::UPPERCUT, CardId::DROPKICK, CardId::CARNAGE, CardId::SEARING_BLOW, CardId::WHIRLWIND, CardId::SEVER_SOUL, CardId::RAMPAGE, CardId::PUMMEL, CardId::BLOOD_FOR_BLOOD, CardId::HEMOKINESIS, CardId::RECKLESS_CHARGE, CardId::BLUDGEON, CardId::FIEND_FIRE, CardId::IMMOLATE,};
-        static constexpr CardId skills[] = {CardId::HAVOC, CardId::ARMAMENTS, CardId::SHRUG_IT_OFF, CardId::TRUE_GRIT, CardId::FLEX, CardId::WARCRY, CardId::GHOSTLY_ARMOR, CardId::BLOODLETTING, CardId::SECOND_WIND, CardId::BATTLE_TRANCE, CardId::SENTINEL, CardId::ENTRENCH, CardId::RAGE, CardId::DISARM, CardId::SEEING_RED, CardId::SHOCKWAVE, CardId::BURNING_PACT, CardId::FLAME_BARRIER, CardId::INTIMIDATE, CardId::INFERNAL_BLADE, CardId::DUAL_WIELD, CardId::POWER_THROUGH, CardId::SPOT_WEAKNESS, CardId::DOUBLE_TAP, CardId::LIMIT_BREAK, CardId::IMPERVIOUS, CardId::EXHUME, CardId::OFFERING,};
-        static constexpr CardId powers[] = {CardId::EVOLVE, CardId::FIRE_BREATHING, CardId::RUPTURE, CardId::FEEL_NO_PAIN, CardId::DARK_EMBRACE, CardId::COMBUST, CardId::METALLICIZE, CardId::INFLAME, CardId::DEMON_FORM, CardId::CORRUPTION, CardId::BARRICADE, CardId::BERSERK, CardId::JUGGERNAUT, CardId::BRUTALITY,};
+        static constexpr CardId red_attack[] = {
+                CardId::SWORD_BOOMERANG, CardId::PERFECTED_STRIKE, CardId::HEAVY_BLADE, CardId::WILD_STRIKE,
+                CardId::HEADBUTT, CardId::CLOTHESLINE, CardId::TWIN_STRIKE, CardId::POMMEL_STRIKE,
+                CardId::THUNDERCLAP, CardId::CLASH, CardId::BODY_SLAM, CardId::IRON_WAVE, CardId::CLEAVE,
+                CardId::ANGER, CardId::UPPERCUT, CardId::DROPKICK, CardId::CARNAGE, CardId::SEARING_BLOW,
+                CardId::WHIRLWIND, CardId::SEVER_SOUL, CardId::RAMPAGE, CardId::PUMMEL,
+                CardId::BLOOD_FOR_BLOOD, CardId::HEMOKINESIS, CardId::RECKLESS_CHARGE, CardId::BLUDGEON,
+                CardId::FIEND_FIRE, CardId::IMMOLATE
+        };
 
-        static constexpr int getPoolSize(CharacterClass cc, CardType type) {
-            return type == CardType::POWER ? 14 : 28;
+        static constexpr CardId red_skill[] = {
+                CardId::HAVOC, CardId::ARMAMENTS, CardId::SHRUG_IT_OFF, CardId::TRUE_GRIT, CardId::FLEX,
+                CardId::WARCRY, CardId::GHOSTLY_ARMOR, CardId::BLOODLETTING, CardId::SECOND_WIND,
+                CardId::BATTLE_TRANCE, CardId::SENTINEL, CardId::ENTRENCH, CardId::RAGE, CardId::DISARM,
+                CardId::SEEING_RED, CardId::SHOCKWAVE, CardId::BURNING_PACT, CardId::FLAME_BARRIER,
+                CardId::INTIMIDATE, CardId::INFERNAL_BLADE, CardId::DUAL_WIELD, CardId::POWER_THROUGH,
+                CardId::SPOT_WEAKNESS, CardId::DOUBLE_TAP, CardId::LIMIT_BREAK, CardId::IMPERVIOUS,
+                CardId::EXHUME, CardId::OFFERING
+        };
+
+        static constexpr CardId red_power[] = {
+                CardId::EVOLVE, CardId::FIRE_BREATHING, CardId::RUPTURE, CardId::FEEL_NO_PAIN,
+                CardId::DARK_EMBRACE, CardId::COMBUST, CardId::METALLICIZE, CardId::INFLAME,
+                CardId::DEMON_FORM, CardId::CORRUPTION, CardId::BARRICADE, CardId::BERSERK,
+                CardId::JUGGERNAUT, CardId::BRUTALITY
+        };
+
+        static constexpr CardId green_attack[] = {
+                CardId::FLYING_KNEE, CardId::SUCKER_PUNCH, CardId::SLICE, CardId::QUICK_SLASH,
+                CardId::POISONED_STAB, CardId::DAGGER_THROW, CardId::BANE, CardId::DAGGER_SPRAY,
+                CardId::SNEAKY_STRIKE, CardId::PREDATOR, CardId::ALL_OUT_ATTACK, CardId::MASTERFUL_STAB,
+                CardId::FLECHETTES, CardId::BACKSTAB, CardId::DASH, CardId::EVISCERATE, CardId::HEEL_HOOK,
+                CardId::FINISHER, CardId::SKEWER, CardId::RIDDLE_WITH_HOLES, CardId::ENDLESS_AGONY,
+                CardId::CHOKE, CardId::DIE_DIE_DIE, CardId::UNLOAD, CardId::GLASS_KNIFE,
+                CardId::GRAND_FINALE
+        };
+
+        static constexpr CardId green_skill[] = {
+                CardId::DODGE_AND_ROLL, CardId::PIERCING_WAIL, CardId::PREPARED, CardId::OUTMANEUVER,
+                CardId::BACKFLIP, CardId::ACROBATICS, CardId::DEFLECT, CardId::BLADE_DANCE,
+                CardId::DEADLY_POISON, CardId::CLOAK_AND_DAGGER, CardId::DISTRACTION, CardId::CONCENTRATE,
+                CardId::BOUNCING_FLASK, CardId::REFLEX, CardId::TERROR, CardId::ESCAPE_PLAN,
+                CardId::CALCULATED_GAMBLE, CardId::SETUP, CardId::BLUR, CardId::EXPERTISE,
+                CardId::TACTICIAN, CardId::CATALYST, CardId::LEG_SWEEP, CardId::CRIPPLING_CLOUD,
+                CardId::CORPSE_EXPLOSION, CardId::MALAISE, CardId::PHANTASMAL_KILLER, CardId::ADRENALINE,
+                CardId::DOPPELGANGER, CardId::BURST, CardId::NIGHTMARE, CardId::BULLET_TIME,
+                CardId::STORM_OF_STEEL
+        };
+
+        static constexpr CardId green_power[] = {
+                CardId::FOOTWORK, CardId::ACCURACY, CardId::INFINITE_BLADES, CardId::NOXIOUS_FUMES,
+                CardId::WELL_LAID_PLANS, CardId::CALTROPS, CardId::ENVENOM, CardId::WRAITH_FORM,
+                CardId::TOOLS_OF_THE_TRADE, CardId::AFTER_IMAGE, CardId::A_THOUSAND_CUTS
+        };
+
+        static constexpr CardId blue_attack[] = {
+                CardId::COLD_SNAP, CardId::BEAM_CELL, CardId::SWEEPING_BEAM, CardId::CLAW, CardId::REBOUND,
+                CardId::BARRAGE, CardId::COMPILE_DRIVER, CardId::STREAMLINE, CardId::BALL_LIGHTNING,
+                CardId::GO_FOR_THE_EYES, CardId::DOOM_AND_GLOOM, CardId::SCRAPE, CardId::BULLSEYE,
+                CardId::RIP_AND_TEAR, CardId::FTL, CardId::MELTER, CardId::BLIZZARD, CardId::SUNDER,
+                CardId::HYPERBEAM, CardId::THUNDER_STRIKE, CardId::METEOR_STRIKE, CardId::ALL_FOR_ONE,
+                CardId::CORE_SURGE
+        };
+
+        static constexpr CardId blue_skill[] = {
+                CardId::STEAM_BARRIER, CardId::LEAP, CardId::HOLOGRAM, CardId::CHARGE_BATTERY,
+                CardId::TURBO, CardId::COOLHEADED, CardId::STACK, CardId::RECURSION, CardId::WHITE_NOISE,
+                CardId::SKIM, CardId::RECYCLE, CardId::REPROGRAM, CardId::AUTO_SHIELDS,
+                CardId::REINFORCED_BODY, CardId::DOUBLE_ENERGY, CardId::DARKNESS, CardId::FORCE_FIELD,
+                CardId::EQUILIBRIUM, CardId::TEMPEST, CardId::BOOT_SEQUENCE, CardId::CHILL, CardId::CHAOS,
+                CardId::AGGREGATE, CardId::FUSION, CardId::CONSUME, CardId::GLACIER, CardId::OVERCLOCK,
+                CardId::GENETIC_ALGORITHM, CardId::MULTI_CAST, CardId::RAINBOW, CardId::SEEK,
+                CardId::REBOOT, CardId::AMPLIFY, CardId::FISSION
+        };
+
+        static constexpr CardId blue_power[] = {
+                CardId::DEFRAGMENT, CardId::CAPACITOR, CardId::HEATSINKS, CardId::STATIC_DISCHARGE,
+                CardId::LOOP, CardId::HELLO_WORLD, CardId::STORM, CardId::BIASED_COGNITION,
+                CardId::MACHINE_LEARNING, CardId::ELECTRODYNAMICS, CardId::BUFFER, CardId::ECHO_FORM,
+                CardId::CREATIVE_AI
+        };
+
+        static constexpr CardId purple_attack[] = {
+                CardId::EMPTY_FIST, CardId::CRUSH_JOINTS, CardId::FOLLOW_UP, CardId::CUT_THROUGH_FATE,
+                CardId::SASH_WHIP, CardId::FLURRY_OF_BLOWS, CardId::JUST_LUCKY, CardId::FLYING_SLEEVES,
+                CardId::BOWLING_BASH, CardId::CONSECRATE, CardId::SIGNATURE_MOVE, CardId::WEAVE,
+                CardId::TANTRUM, CardId::CONCLUDE, CardId::SANDS_OF_TIME, CardId::FEAR_NO_EVIL,
+                CardId::REACH_HEAVEN, CardId::WALLOP, CardId::CARVE_REALITY, CardId::WINDMILL_STRIKE,
+                CardId::TALK_TO_THE_HAND, CardId::WHEEL_KICK, CardId::BRILLIANCE, CardId::RAGNAROK
+        };
+
+        static constexpr CardId purple_skill[] = {
+                CardId::PROSTRATE, CardId::EVALUATE, CardId::PRESSURE_POINTS, CardId::EMPTY_BODY,
+                CardId::TRANQUILITY, CardId::CRESCENDO, CardId::THIRD_EYE, CardId::PROTECT, CardId::HALT,
+                CardId::PRAY, CardId::EMPTY_MIND, CardId::WORSHIP, CardId::SWIVEL, CardId::PERSEVERANCE,
+                CardId::MEDITATE, CardId::WAVE_OF_THE_HAND, CardId::DECEIVE_REALITY, CardId::INNER_PEACE,
+                CardId::COLLECT, CardId::WREATH_OF_FLAME, CardId::FOREIGN_INFLUENCE, CardId::INDIGNATION,
+                CardId::SANCTITY, CardId::SIMMERING_FURY, CardId::JUDGMENT, CardId::CONJURE_BLADE,
+                CardId::BLASPHEMY, CardId::SCRAWL, CardId::VAULT, CardId::ALPHA, CardId::OMNISCIENCE,
+                CardId::SPIRIT_SHIELD, CardId::DEUS_EX_MACHINA
+        };
+
+        static constexpr CardId purple_power[] = {
+                CardId::NIRVANA, CardId::STUDY, CardId::MENTAL_FORTRESS, CardId::RUSHDOWN, CardId::FASTING,
+                CardId::LIKE_WATER, CardId::BATTLE_HYMN, CardId::FORESIGHT, CardId::MASTER_REALITY,
+                CardId::DEVOTION, CardId::ESTABLISHMENT, CardId::DEVA_FORM
+        };
+
+        static const CardId * const pools[4][3] = {
+                {red_attack, red_skill, red_power},
+                {green_attack, green_skill, green_power},
+                {blue_attack, blue_skill, blue_power},
+                {purple_attack, purple_skill, purple_power},
+        };
+
+        static constexpr int sizes[4][3] = {
+                {28, 28, 14},
+                {26, 33, 11},
+                {23, 34, 13},
+                {24, 33, 12},
+        };
+
+        static int getPoolSize(CharacterClass cc, CardType type) {
+            return sizes[static_cast<int>(cc)][static_cast<int>(type)];
         }
 
-        static constexpr CardId getCardAt(CharacterClass cc, CardType type, int offset) {
-            if (type == CardType::ATTACK) {
-                return cardBlob[offset];
-
-            } else if (type == CardType::SKILL) {
-                return skills[offset];
-
-            } else if (type == CardType::POWER) {
-                return powers[offset];
-
-            } else {
-                return powers[offset];
-            }
+        static CardId getCardAt(CharacterClass cc, CardType type, int offset) {
+            return pools[static_cast<int>(cc)][static_cast<int>(type)][offset];
         }
 
     }
 
     namespace CombatCardPool {
-        static constexpr CardId cardBlob[] = {CardId::SWORD_BOOMERANG, CardId::PERFECTED_STRIKE, CardId::HEAVY_BLADE, CardId::WILD_STRIKE, CardId::HEADBUTT, CardId::HAVOC, CardId::ARMAMENTS, CardId::CLOTHESLINE, CardId::TWIN_STRIKE, CardId::POMMEL_STRIKE, CardId::THUNDERCLAP, CardId::CLASH, CardId::SHRUG_IT_OFF, CardId::TRUE_GRIT, CardId::BODY_SLAM, CardId::IRON_WAVE, CardId::FLEX, CardId::WARCRY, CardId::CLEAVE, CardId::ANGER, CardId::EVOLVE, CardId::UPPERCUT, CardId::GHOSTLY_ARMOR, CardId::FIRE_BREATHING, CardId::DROPKICK, CardId::CARNAGE, CardId::BLOODLETTING, CardId::RUPTURE, CardId::SECOND_WIND, CardId::SEARING_BLOW, CardId::BATTLE_TRANCE, CardId::SENTINEL, CardId::ENTRENCH, CardId::RAGE, CardId::FEEL_NO_PAIN, CardId::DISARM, CardId::SEEING_RED, CardId::DARK_EMBRACE, CardId::COMBUST, CardId::WHIRLWIND, CardId::SEVER_SOUL, CardId::RAMPAGE, CardId::SHOCKWAVE, CardId::METALLICIZE, CardId::BURNING_PACT, CardId::PUMMEL, CardId::FLAME_BARRIER, CardId::BLOOD_FOR_BLOOD, CardId::INTIMIDATE, CardId::HEMOKINESIS, CardId::RECKLESS_CHARGE, CardId::INFERNAL_BLADE, CardId::DUAL_WIELD, CardId::POWER_THROUGH, CardId::INFLAME, CardId::SPOT_WEAKNESS, CardId::DOUBLE_TAP, CardId::DEMON_FORM, CardId::BLUDGEON, CardId::LIMIT_BREAK, CardId::CORRUPTION, CardId::BARRICADE, CardId::FIEND_FIRE, CardId::BERSERK, CardId::IMPERVIOUS, CardId::JUGGERNAUT, CardId::BRUTALITY, CardId::EXHUME, CardId::OFFERING, CardId::IMMOLATE,};
 
-        static constexpr int getPoolSize(CharacterClass cc) {
-            return 70;
+        static constexpr CardId red_all[] = {
+                CardId::SWORD_BOOMERANG, CardId::PERFECTED_STRIKE, CardId::HEAVY_BLADE, CardId::WILD_STRIKE,
+                CardId::HEADBUTT, CardId::HAVOC, CardId::ARMAMENTS, CardId::CLOTHESLINE,
+                CardId::TWIN_STRIKE, CardId::POMMEL_STRIKE, CardId::THUNDERCLAP, CardId::CLASH,
+                CardId::SHRUG_IT_OFF, CardId::TRUE_GRIT, CardId::BODY_SLAM, CardId::IRON_WAVE, CardId::FLEX,
+                CardId::WARCRY, CardId::CLEAVE, CardId::ANGER, CardId::EVOLVE, CardId::UPPERCUT,
+                CardId::GHOSTLY_ARMOR, CardId::FIRE_BREATHING, CardId::DROPKICK, CardId::CARNAGE,
+                CardId::BLOODLETTING, CardId::RUPTURE, CardId::SECOND_WIND, CardId::SEARING_BLOW,
+                CardId::BATTLE_TRANCE, CardId::SENTINEL, CardId::ENTRENCH, CardId::RAGE,
+                CardId::FEEL_NO_PAIN, CardId::DISARM, CardId::SEEING_RED, CardId::DARK_EMBRACE,
+                CardId::COMBUST, CardId::WHIRLWIND, CardId::SEVER_SOUL, CardId::RAMPAGE, CardId::SHOCKWAVE,
+                CardId::METALLICIZE, CardId::BURNING_PACT, CardId::PUMMEL, CardId::FLAME_BARRIER,
+                CardId::BLOOD_FOR_BLOOD, CardId::INTIMIDATE, CardId::HEMOKINESIS, CardId::RECKLESS_CHARGE,
+                CardId::INFERNAL_BLADE, CardId::DUAL_WIELD, CardId::POWER_THROUGH, CardId::INFLAME,
+                CardId::SPOT_WEAKNESS, CardId::DOUBLE_TAP, CardId::DEMON_FORM, CardId::BLUDGEON,
+                CardId::LIMIT_BREAK, CardId::CORRUPTION, CardId::BARRICADE, CardId::FIEND_FIRE,
+                CardId::BERSERK, CardId::IMPERVIOUS, CardId::JUGGERNAUT, CardId::BRUTALITY, CardId::EXHUME,
+                CardId::OFFERING, CardId::IMMOLATE
+        };
+
+        static constexpr CardId green_all[] = {
+                CardId::FLYING_KNEE, CardId::DODGE_AND_ROLL, CardId::SUCKER_PUNCH, CardId::PIERCING_WAIL,
+                CardId::PREPARED, CardId::OUTMANEUVER, CardId::BACKFLIP, CardId::SLICE, CardId::QUICK_SLASH,
+                CardId::ACROBATICS, CardId::POISONED_STAB, CardId::DAGGER_THROW, CardId::DEFLECT,
+                CardId::BLADE_DANCE, CardId::BANE, CardId::DAGGER_SPRAY, CardId::DEADLY_POISON,
+                CardId::SNEAKY_STRIKE, CardId::CLOAK_AND_DAGGER, CardId::PREDATOR, CardId::ALL_OUT_ATTACK,
+                CardId::DISTRACTION, CardId::FOOTWORK, CardId::ACCURACY, CardId::MASTERFUL_STAB,
+                CardId::FLECHETTES, CardId::CONCENTRATE, CardId::BOUNCING_FLASK, CardId::BACKSTAB,
+                CardId::DASH, CardId::EVISCERATE, CardId::REFLEX, CardId::INFINITE_BLADES,
+                CardId::NOXIOUS_FUMES, CardId::HEEL_HOOK, CardId::TERROR, CardId::WELL_LAID_PLANS,
+                CardId::FINISHER, CardId::ESCAPE_PLAN, CardId::CALCULATED_GAMBLE, CardId::SKEWER,
+                CardId::RIDDLE_WITH_HOLES, CardId::ENDLESS_AGONY, CardId::SETUP, CardId::BLUR,
+                CardId::CALTROPS, CardId::CHOKE, CardId::EXPERTISE, CardId::TACTICIAN, CardId::CATALYST,
+                CardId::LEG_SWEEP, CardId::CRIPPLING_CLOUD, CardId::CORPSE_EXPLOSION, CardId::MALAISE,
+                CardId::PHANTASMAL_KILLER, CardId::DIE_DIE_DIE, CardId::ADRENALINE, CardId::ENVENOM,
+                CardId::DOPPELGANGER, CardId::BURST, CardId::WRAITH_FORM, CardId::TOOLS_OF_THE_TRADE,
+                CardId::NIGHTMARE, CardId::UNLOAD, CardId::AFTER_IMAGE, CardId::BULLET_TIME,
+                CardId::STORM_OF_STEEL, CardId::GLASS_KNIFE, CardId::A_THOUSAND_CUTS, CardId::GRAND_FINALE
+        };
+
+        static constexpr CardId blue_all[] = {
+                CardId::STEAM_BARRIER, CardId::COLD_SNAP, CardId::LEAP, CardId::BEAM_CELL, CardId::HOLOGRAM,
+                CardId::CHARGE_BATTERY, CardId::SWEEPING_BEAM, CardId::TURBO, CardId::COOLHEADED,
+                CardId::CLAW, CardId::REBOUND, CardId::STACK, CardId::BARRAGE, CardId::COMPILE_DRIVER,
+                CardId::RECURSION, CardId::STREAMLINE, CardId::BALL_LIGHTNING, CardId::GO_FOR_THE_EYES,
+                CardId::DOOM_AND_GLOOM, CardId::DEFRAGMENT, CardId::CAPACITOR, CardId::WHITE_NOISE,
+                CardId::SKIM, CardId::RECYCLE, CardId::SCRAPE, CardId::BULLSEYE, CardId::REPROGRAM,
+                CardId::AUTO_SHIELDS, CardId::REINFORCED_BODY, CardId::DOUBLE_ENERGY, CardId::DARKNESS,
+                CardId::RIP_AND_TEAR, CardId::FTL, CardId::FORCE_FIELD, CardId::EQUILIBRIUM,
+                CardId::TEMPEST, CardId::HEATSINKS, CardId::STATIC_DISCHARGE, CardId::BOOT_SEQUENCE,
+                CardId::CHILL, CardId::LOOP, CardId::MELTER, CardId::CHAOS, CardId::BLIZZARD,
+                CardId::AGGREGATE, CardId::FUSION, CardId::CONSUME, CardId::GLACIER, CardId::SUNDER,
+                CardId::HELLO_WORLD, CardId::OVERCLOCK, CardId::GENETIC_ALGORITHM, CardId::STORM,
+                CardId::MULTI_CAST, CardId::HYPERBEAM, CardId::THUNDER_STRIKE, CardId::BIASED_COGNITION,
+                CardId::MACHINE_LEARNING, CardId::ELECTRODYNAMICS, CardId::BUFFER, CardId::RAINBOW,
+                CardId::SEEK, CardId::METEOR_STRIKE, CardId::ECHO_FORM, CardId::ALL_FOR_ONE, CardId::REBOOT,
+                CardId::AMPLIFY, CardId::CREATIVE_AI, CardId::FISSION, CardId::CORE_SURGE
+        };
+
+        static constexpr CardId purple_all[] = {
+                CardId::EMPTY_FIST, CardId::PROSTRATE, CardId::EVALUATE, CardId::CRUSH_JOINTS,
+                CardId::PRESSURE_POINTS, CardId::FOLLOW_UP, CardId::CUT_THROUGH_FATE, CardId::SASH_WHIP,
+                CardId::EMPTY_BODY, CardId::TRANQUILITY, CardId::CRESCENDO, CardId::THIRD_EYE,
+                CardId::PROTECT, CardId::FLURRY_OF_BLOWS, CardId::JUST_LUCKY, CardId::HALT,
+                CardId::FLYING_SLEEVES, CardId::BOWLING_BASH, CardId::CONSECRATE, CardId::PRAY,
+                CardId::SIGNATURE_MOVE, CardId::WEAVE, CardId::EMPTY_MIND, CardId::NIRVANA, CardId::TANTRUM,
+                CardId::CONCLUDE, CardId::WORSHIP, CardId::SWIVEL, CardId::PERSEVERANCE, CardId::MEDITATE,
+                CardId::STUDY, CardId::WAVE_OF_THE_HAND, CardId::SANDS_OF_TIME, CardId::FEAR_NO_EVIL,
+                CardId::REACH_HEAVEN, CardId::MENTAL_FORTRESS, CardId::DECEIVE_REALITY, CardId::RUSHDOWN,
+                CardId::INNER_PEACE, CardId::COLLECT, CardId::WREATH_OF_FLAME, CardId::WALLOP,
+                CardId::CARVE_REALITY, CardId::FASTING, CardId::LIKE_WATER, CardId::FOREIGN_INFLUENCE,
+                CardId::WINDMILL_STRIKE, CardId::INDIGNATION, CardId::BATTLE_HYMN, CardId::TALK_TO_THE_HAND,
+                CardId::SANCTITY, CardId::FORESIGHT, CardId::SIMMERING_FURY, CardId::WHEEL_KICK,
+                CardId::JUDGMENT, CardId::CONJURE_BLADE, CardId::MASTER_REALITY, CardId::BRILLIANCE,
+                CardId::DEVOTION, CardId::BLASPHEMY, CardId::RAGNAROK, CardId::SCRAWL, CardId::VAULT,
+                CardId::ALPHA, CardId::OMNISCIENCE, CardId::ESTABLISHMENT, CardId::SPIRIT_SHIELD,
+                CardId::DEVA_FORM, CardId::DEUS_EX_MACHINA
+        };
+
+        static const CardId * const pools[4] = {red_all, green_all, blue_all, purple_all};
+
+        static constexpr int sizes[4] = {70, 70, 70, 69};
+
+        static int getPoolSize(CharacterClass cc) {
+            return sizes[static_cast<int>(cc)];
         }
 
-        static constexpr CardId getCardAt(CharacterClass cc, int offset) {
-            return cardBlob[offset];
+        static CardId getCardAt(CharacterClass cc, int offset) {
+            return pools[static_cast<int>(cc)][offset];
         }
+
     }
 
     namespace CombatColorlessCardPool {

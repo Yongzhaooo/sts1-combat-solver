@@ -11,6 +11,29 @@ static void check(bool value, const char *why) {
 }
 
 namespace {
+    // The thirteen Powers CardLibrary.addBlueCards hands out, so a test can tell a
+    // Defect Power from one of the Ironclad ones the pools used to leak in.
+    bool isDefectPower(CardId id) {
+        switch (id) {
+            case CardId::STORM:
+            case CardId::DEFRAGMENT:
+            case CardId::CAPACITOR:
+            case CardId::STATIC_DISCHARGE:
+            case CardId::CREATIVE_AI:
+            case CardId::ECHO_FORM:
+            case CardId::ELECTRODYNAMICS:
+            case CardId::LOOP:
+            case CardId::MACHINE_LEARNING:
+            case CardId::HEATSINKS:
+            case CardId::HELLO_WORLD:
+            case CardId::BUFFER:
+            case CardId::BIASED_COGNITION:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     // Fresh player-turn battle vs a single Cultist, empty hand, 3 energy.
     BattleContext freshBattle(MonsterEncounter encounter = MonsterEncounter::CULTIST) {
         GameContext game(CharacterClass::DEFECT, 123, 0);
@@ -720,6 +743,9 @@ int main() {
         check(bc.cards.cardsInHand == 1, "White Noise should add one card");
         check(bc.cards.hand[0].getType() == CardType::POWER, "White Noise should add a Power card");
         check(bc.cards.hand[0].costForTurn == 0, "White Noise should make the card free this turn");
+        // AbstractDungeon.returnTrulyRandomCardInCombat walks the class pools, so a
+        // Defect battle may only ever see the thirteen Defect Powers.
+        check(isDefectPower(bc.cards.hand[0].getId()), "White Noise should add a Defect Power");
     }
     {
         // Creative AI: at turn start, add one random Power card.
