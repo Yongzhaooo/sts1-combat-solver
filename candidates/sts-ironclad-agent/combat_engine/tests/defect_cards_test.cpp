@@ -635,18 +635,51 @@ int main() {
         check(bc.cards.cardsInHand == 3, "Fission should draw 1 card per orb removed");
     }
     {
-        // FTL: damage plus a draw while fewer than 3 cards were played this turn.
+        // FTL: damage plus a draw while fewer than magicNumber cards were played
+        // this turn. FTLAction reads cardsPlayedThisTurn.size() *after* this card
+        // was appended and compares size()-1 < cardPlayCount, where cardPlayCount
+        // is the magicNumber: 3 base, 4 upgraded. A live Defect run diverged on
+        // the upgraded card because the engine hard-coded the base threshold.
         BattleContext bc = freshBattle();
         bc.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
+        bc.cards.createTempCardInDrawPile(1, CardInstance(CardId::STRIKE_BLUE));
         const int hp = bc.monsters.arr[0].curHp;
         playCard(bc, CardId::FTL);
         check(hp - bc.monsters.arr[0].curHp == 5, "FTL should deal 5");
         check(bc.cards.cardsInHand == 1, "FTL should draw a card on an early turn play");
+
+        // The base card stops drawing once three cards were already played.
         BattleContext bc2 = freshBattle();
-        bc2.player.cardsPlayedThisTurn = 5;
+        bc2.player.cardsPlayedThisTurn = 3;
         bc2.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
         playCard(bc2, CardId::FTL);
-        check(bc2.cards.cardsInHand == 0, "FTL should not draw after 4 or more cards");
+        check(bc2.cards.cardsInHand == 0, "base FTL should not draw on the fourth card");
+
+        BattleContext bc3 = freshBattle();
+        bc3.player.cardsPlayedThisTurn = 2;
+        bc3.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
+        playCard(bc3, CardId::FTL);
+        check(bc3.cards.cardsInHand == 1, "base FTL should still draw on the third card");
+
+        // The upgraded card deals 6 and draws through the fourth card.
+        BattleContext up = freshBattle();
+        up.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
+        const int upHp = up.monsters.arr[0].curHp;
+        playCard(up, CardId::FTL, 1);
+        check(upHp - up.monsters.arr[0].curHp == 6, "upgraded FTL should deal 6");
+        check(up.cards.cardsInHand == 1, "upgraded FTL should draw on an early turn play");
+
+        BattleContext up2 = freshBattle();
+        up2.player.cardsPlayedThisTurn = 3;
+        up2.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
+        playCard(up2, CardId::FTL, 1);
+        check(up2.cards.cardsInHand == 1, "upgraded FTL should still draw on the fourth card");
+
+        BattleContext up3 = freshBattle();
+        up3.player.cardsPlayedThisTurn = 4;
+        up3.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
+        playCard(up3, CardId::FTL, 1);
+        check(up3.cards.cardsInHand == 0, "upgraded FTL should not draw on the fifth card");
     }
     {
         // Buffer: one stack absorbs the next HP loss.

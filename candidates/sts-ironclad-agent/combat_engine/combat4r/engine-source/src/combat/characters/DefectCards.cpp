@@ -396,12 +396,16 @@ namespace sts {
                 return true;
 
             case CardId::FTL:
-                // FTL.java: damage, then draw 1 when fewer than 3 cards were played
-                // this turn. The engine counts this card before dispatch, so the
-                // 1-based equivalent of size() < 3 is cardsPlayedThisTurn <= 3.
+                // FTL.java: damage, then draw 1 when fewer than magicNumber cards
+                // were played this turn. FTLAction.update() reads
+                // cardsPlayedThisTurn.size() *after* this card was appended, so the
+                // game compares size()-1 < cardPlayCount, and cardPlayCount is the
+                // magicNumber the constructor sets: 3 base, 4 upgraded. The engine
+                // also counts this card before dispatch, so the equivalent is
+                // cardsPlayedThisTurn - 1 < (up ? 4 : 3).
                 bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 6 : 5)));
                 bc.addToBot({[=] (BattleContext &bc) {
-                    if (bc.player.cardsPlayedThisTurn <= 3) {
+                    if (bc.player.cardsPlayedThisTurn - 1 < (up ? 4 : 3)) {
                         bc.addToBot(Actions::DrawCards(1));
                     }
                 }});
