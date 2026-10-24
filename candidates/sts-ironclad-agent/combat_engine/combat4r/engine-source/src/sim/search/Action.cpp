@@ -414,6 +414,9 @@ void executeSingleCardSelectActionHelper(BattleContext &bc, search::Action a) {
             const int remaining = bc.cardSelectInfo.pickCount - 1;
             if (remaining > 0 && !bc.cards.drawPile.empty()) {
                 bc.openSimpleCardSelectScreen(CardSelectTask::SEEK, remaining);
+            } else {
+                bc.cardSelectInfo.pickCount = 0;
+                bc.inputState = InputState::EXECUTING_ACTIONS;
             }
             break;
         }
@@ -522,6 +525,12 @@ void search::Action::execute(BattleContext &bc) const {
             break;
     }
 
+    // A pick can reopen its own screen (Seek, Forethought and friends). The game
+    // resolves those picks one update at a time, so leave the reopened screen for
+    // the caller's next execute instead of draining it here.
+    if (bc.inputState == InputState::CARD_SELECT) {
+        return;
+    }
     bc.inputState = InputState::EXECUTING_ACTIONS;
     bc.executeActions();
 }

@@ -88,6 +88,38 @@ def queued_power(comparator, view, action):
                 source_monster=action.get('source', {}).get('kind') == 'monster')
 
 
+MID_TURN_TASKS = {
+    # A Defect card opens these pickers after its own use has resolved. The card
+    # itself already sits in the pile the picker reads from, so the simulator
+    # only needs the task and the pick count; no queued action is replayed.
+    'Hologram': 'HOLOGRAM',
+    'Recycle': 'RECYCLE',
+    'Seek': 'SEEK',
+}
+
+
+def mid_turn_selection(comparator, view):
+    """The spec for a picker a card opened in the middle of a turn.
+
+    Unlike the battle-start pickers below there is no queue left to rebuild: the
+    card that opened this screen finished resolving before the click, and the
+    screen already lists the cards the simulator keeps in that pile.
+    """
+    game = view['game']
+    screen = game['screen_state']
+    card = game['combat_state'].get('card_in_play')
+    if not isinstance(card, dict) or card.get('id') not in MID_TURN_TASKS:
+        raise ValueError('unsupported mid-turn picker after ' + str(
+            card.get('id') if isinstance(card, dict) else None))
+    if screen.get('selected') or screen.get('num_cards') != 1:
+        raise ValueError('mid-turn picker is not an untouched single-card choice')
+    if not screen.get('cards'):
+        raise ValueError('mid-turn picker has no candidates')
+    return dict(task='MID_TURN', select_task=MID_TURN_TASKS[card['id']], pick_count=1,
+                cards=[comparator.sts.CardId(comparator.bridge.card_snapshot(c)['id'])
+                       for c in screen['cards']])
+
+
 def start_selection(comparator, view):
     g, r = view['game'], view['live_run']
     screen = g['screen_type']
@@ -95,7 +127,7 @@ def start_selection(comparator, view):
     if screen == 'GRID' and current == 'DiscardPileToTopOfDeckAction':
         return headbutt_selection(comparator, view)
     if g['combat_state']['turn'] != 1:
-        raise ValueError('only battle-start queues are supported')
+        return mid_turn_selection(comparator, view)
     relics = {a['id'] for a in g['relics']}
     if screen == 'CARD_REWARD' and 'Toolbox' in relics:
         if current != 'ChooseOneColorless':

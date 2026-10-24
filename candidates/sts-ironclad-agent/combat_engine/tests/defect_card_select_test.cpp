@@ -160,6 +160,32 @@ int main() {
         check(bc.cards.cardsInHand == 1, "Recycle should exhaust the picked card");
     }
 
+    {
+        // A picker a card opened mid-turn is restored by the bridge instead of
+        // by replaying a queue: the game shows the pile and the simulator has to
+        // agree on it. Two picks means the executor reopens the screen, which is
+        // the upgraded Seek case.
+        BattleContext bc = fresh();
+        bc.cards.drawPile.push_back(CardInstance(CardId::CLASH));
+        bc.cards.drawPile.push_back(CardInstance(CardId::BASH));
+        bc.openSimpleCardSelectScreen(CardSelectTask::SEEK, 2);
+        const int handBefore = bc.cards.cardsInHand;
+        auto actions = enumerate(bc);
+        check(actions.size() == 2, "an opened SEEK screen should list the whole draw pile");
+        actions.front().execute(bc);
+        // The executor leaves the screen open while picks remain; the caller
+        // resolves what it queued before asking for the next decision.
+        check(bc.inputState == InputState::CARD_SELECT,
+              "a two-pick SEEK should keep its screen open for the second pick");
+        check(bc.cards.cardsInHand == handBefore + 1, "the first sought card should join the hand");
+        check(bc.cardSelectInfo.pickCount == 1, "the reopened screen should ask for the one remaining pick");
+        actions = enumerate(bc);
+        check(actions.size() == 1, "the reopened screen should list the remaining draw pile");
+        actions.front().execute(bc);
+        check(bc.inputState == InputState::PLAYER_NORMAL, "the last pick should close the screen");
+        check(bc.cards.cardsInHand == handBefore + 2, "both sought cards should join the hand");
+    }
+
     std::cout << "Defect card select enumeration holds\n";
     } catch (const std::exception &error) {
         std::cout << error.what() << "\n";
