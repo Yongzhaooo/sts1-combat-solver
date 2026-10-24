@@ -925,13 +925,16 @@ int main() {
     }
 
     {
-        // Scrape: draws 4 and discards every drawn card costing 2 or more.
+        // Scrape: draws 4 and discards every drawn card that does not cost 0.
         BattleContext bc = freshBattle();
         bc.cards.createTempCardInDrawPile(0, CardInstance(CardId::EQUILIBRIUM)); // costs 2
         bc.cards.createTempCardInDrawPile(1, CardInstance(CardId::STRIKE_BLUE)); // costs 1
+        bc.cards.createTempCardInDrawPile(2, CardInstance(CardId::FTL));         // costs 0
         playCard(bc, CardId::SCRAPE);
-        check(bc.cards.cardsInHand == 1, "Scrape should keep only the 1-cost card");
-        check(bc.cards.hand[0].getId() == CardId::STRIKE_BLUE, "the kept card should be the 1-cost one");
+        check(bc.cards.cardsInHand == 1, "Scrape should keep only the 0-cost card");
+        check(bc.cards.hand[0].getId() == CardId::FTL, "the kept card should be the 0-cost one");
+        check(bc.cards.discardPile.size() == 3,
+              "Scrape should discard itself and the two cards it drew that cost something");
     }
     {
         // Hologram: 3 block and a discard-pile pick; the base card exhausts.

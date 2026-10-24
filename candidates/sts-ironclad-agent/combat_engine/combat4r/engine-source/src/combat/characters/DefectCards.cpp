@@ -619,27 +619,48 @@ namespace sts {
                 bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(c.specialData)));
                 return true;
 
-            case CardId::SCRAPE:
-                // Scrape.java: damage, draw 4 (5), then discard every drawn card
-                // that costs 2 or more. Drawn cards land at the end of the hand.
+            case CardId::SCRAPE: {
+                // Scrape.java: damage, then DrawCardAction(4|5) with a
+                // ScrapeFollowUpAction behind it. The follow-up walks
+                // DrawCardAction.drawnCards in draw order once the draw is over
+                // and discards every card whose turn cost is not 0, so the drawn
+                // cards sit in hand while the rest of the draw happens and only
+                // then leave, in the order they were drawn.
+                const int drawCount = up ? 5 : 4;
+                // The hand can change between queueing and resolving (the card
+                // itself leaves, earlier actions draw), so the mark is taken by
+                // an action that runs immediately before the draw.
+                auto handMark = std::make_shared<int>(0);
                 bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 10 : 7)));
-                bc.addToBot({[=] (BattleContext &bc) {
-                    // ScrapeAction draws one card at a time and discards it right
-                    // away when its cost is 2 or more.
-                    for (int i = 0; i < (up ? 5 : 4); ++i) {
-                        if (bc.cards.drawPile.empty()) {
-                            break;
+                bc.addToBot({[handMark] (BattleContext &bc) {
+                    *handMark = bc.cards.cardsInHand;
+                }});
+                bc.addToBot(Actions::DrawCards(drawCount));
+                bc.addToBot({[handMark] (BattleContext &bc) {
+                    const int handBefore = *handMark;
+                    std::vector<CardInstance> toDiscard;
+                    for (int i = handBefore; i < bc.cards.cardsInHand; ++i) {
+                        const auto &card = bc.cards.hand[i];
+                        if (card.costForTurn == 0 || card.freeToPlayOnce) {
+                            continue;
                         }
-                        const int before = bc.cards.cardsInHand;
-                        bc.drawCards(1);
-                        const int handIdx = bc.cards.cardsInHand - 1;
-                        if (bc.cards.cardsInHand > before && bc.cards.hand[handIdx].cost >= 2) {
-                            bc.cards.moveToDiscardPile(bc.cards.hand[handIdx]);
-                            bc.cards.removeFromHandAtIdx(handIdx);
+                        toDiscard.push_back(card);
+                    }
+                    for (int i = bc.cards.cardsInHand - 1; i >= handBefore; --i) {
+                        const auto &card = bc.cards.hand[i];
+                        if (card.costForTurn == 0 || card.freeToPlayOnce) {
+                            continue;
                         }
+                        bc.cards.removeFromHandAtIdx(i);
+                    }
+                    for (const auto &card : toDiscard) {
+                        bc.cards.moveToDiscardPile(card);
+                        ++bc.player.cardsDiscardedThisTurn;
+                        bc.onManualDiscard(card);
                     }
                 }});
                 return true;
+            }
 
             case CardId::HOLOGRAM:
                 // Hologram.java: 3 (5) block, then return one card from the discard

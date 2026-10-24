@@ -81,6 +81,13 @@ namespace {
         }
     }
 
+    // FTL costs 0, so it is the pile a draw-and-discard-what-costs card keeps.
+    void addFreeDrawPile(BattleContext &battle, int count) {
+        for (int i = 0; i < count; ++i) {
+            battle.cards.createTempCardInDrawPile(i, CardInstance(CardId::FTL));
+        }
+    }
+
     void addDiscardPile(BattleContext &battle, int count) {
         for (int i = 0; i < count; ++i) {
             battle.cards.createTempCardInDiscard(CardInstance(CardId::STRIKE_BLUE));
@@ -601,14 +608,18 @@ namespace {
                   tagged(CardId::SEEK, upgrades) + " should pick its printed count");
         }
 
-        // Scrape draws 4 (5) and throws away the cards that cost 2 or more; the
-        // strikes it draws cost 1, so they stay in hand.
-        check(([&] { BattleContext b = emptyBattle(); addDrawPile(b, 6);
+        // Scrape draws 4 (5) and throws away every card drawn that does not cost
+        // 0 this turn, so a pile of free cards stays in hand and a pile of
+        // one-cost cards leaves nothing behind.
+        check(([&] { BattleContext b = emptyBattle(); addFreeDrawPile(b, 6);
                      play(b, CardId::SCRAPE, 0); return b.cards.cardsInHand; })() == 4,
               "Scrape should draw 4");
-        check(([&] { BattleContext b = emptyBattle(); addDrawPile(b, 6);
+        check(([&] { BattleContext b = emptyBattle(); addFreeDrawPile(b, 6);
                      play(b, CardId::SCRAPE, 1); return b.cards.cardsInHand; })() == 5,
               "Scrape+ should draw 5");
+        check(([&] { BattleContext b = emptyBattle(); addDrawPile(b, 6);
+                     play(b, CardId::SCRAPE, 0); return b.cards.cardsInHand; })() == 0,
+              "Scrape should throw away every drawn card that costs something");
 
         // X cards read the energy pool when they resolve, so the count is the
         // energy in the pool plus 1 when upgraded. Multi-Cast evokes the oldest
