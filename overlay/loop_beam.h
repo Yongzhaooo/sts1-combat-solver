@@ -79,6 +79,35 @@ inline void materialize(Node &n) {
     n.deferred = false;
 }
 
+// Recycles the BattleContext copies of one pass: a dropped state returns to a free list and the next copy assigns into it
+// (vector capacities survive) instead of paying a malloc/free pair per edge. Single-threaded: a pass owns its pool, and every
+// state cloned from it dies before the pass returns (a stored win is copied out), so the deleters may hold a raw pointer.
+class StatePool {
+public:
+    explicit StatePool(std::size_t limit) : limit_(limit) {}
+    StatePool(const StatePool &) = delete;
+    StatePool &operator=(const StatePool &) = delete;
+    ~StatePool() { for (auto *p : free_) delete p; }
+    std::shared_ptr<BattleContext> clone(const BattleContext &src) {
+        if (free_.empty()) return std::shared_ptr<BattleContext>(new BattleContext(src), Release{this});
+        BattleContext *p = free_.back();
+        free_.pop_back();
+        std::shared_ptr<BattleContext> out(p, Release{this});  // back to the pool should the assignment throw
+        *p = src;
+        return out;
+    }
+private:
+    struct Release {
+        StatePool *pool;
+        void operator()(BattleContext *p) const {
+            if (pool->free_.size() < pool->limit_) pool->free_.push_back(p);
+            else delete p;
+        }
+    };
+    std::vector<BattleContext *> free_;
+    std::size_t limit_;
+};
+
 // Root gate (layer 1): a known loop family is present (loop_gate.h). Off means no quick loop pass and no macros.
 inline bool cyclePotential(const BattleContext &b) { return loop_gate::matches(b) != 0; }
 
@@ -253,6 +282,7 @@ template <class Value, class Cancel>
 void pass(const BattleContext &root, int width, long long cap, Value value, Cancel cancelled, Best &best, bool macros = false,
           double playWeight = 0, int winFloor = -1) {
     if (root.loopCount >= BattleContext::ACTION_EXECUTION_LIMIT) return;
+    StatePool pool(16 * std::size_t(width) + 1024);  // declared first: it outlives every state cloned from it
     search::BattleScumSearcher2 enumerator(root);
     enumerator.preservePotions = true;
     search::RolloutNode legalActions;
@@ -363,7 +393,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                 for (auto edge : legal(*current.state)) {
                     if (stop()) break;
                     const auto a = edge.action;
-                    Node child{std::make_shared<BattleContext>(*current.state), nullptr, current.powers};
+                    Node child{pool.clone(*current.state), nullptr, current.powers};
                     child.base = current.path; child.step = stepOf(current, a); child.deferred = true;
                     if (a.getActionType() == search::ActionType::CARD &&
                         current.state->cards.hand[a.getSourceIdx()].getType() == CardType::POWER) child.powers += 1;
@@ -372,7 +402,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                     if (b.outcome == Outcome::PLAYER_VICTORY && b.player.curHp > 0) {
                         materialize(child);
                         double v = value(b);
-                        if (better(best, v, child.path, b.player.curHp, winFloor)) { best.found = true; best.value = v; best.state = child.state; best.actions = actions(child.path); }
+                        if (better(best, v, child.path, b.player.curHp, winFloor)) { best.found = true; best.value = v; best.state = std::make_shared<BattleContext>(*child.state); best.actions = actions(child.path); }
                     } else if (b.outcome == Outcome::UNDECIDED && b.player.curHp > 0 && b.turn < 100
                             && b.loopCount < BattleContext::ACTION_EXECUTION_LIMIT) {
                         // turn < 100: stalling lines (end turn behind block forever) otherwise reach the engine's 500-turn limit, which throws
