@@ -703,6 +703,24 @@ int main() {
         up3.cards.createTempCardInDrawPile(0, CardInstance(CardId::STRIKE_BLUE));
         playCard(up3, CardId::FTL, 1);
         check(up3.cards.cardsInHand == 0, "upgraded FTL should not draw on the fifth card");
+
+        // The draw is queued with addToTop, so it resolves while FTL is still the
+        // card in play and cannot reshuffle FTL itself back into the hand. A live
+        // run at floor 22 of seed 4402950014057457101 caught the engine drawing
+        // from the bottom of the queue: with an empty draw pile the reshuffle put
+        // FTL back in and the discard pile came out one card short.
+        BattleContext empty = freshBattle();
+        empty.cards.discardPile.push_back(CardInstance(CardId::STRIKE_BLUE));
+        check(empty.cards.drawPile.empty(), "the FTL draw-order case starts on an empty draw pile");
+        const int handBefore = empty.cards.cardsInHand;
+        playCard(empty, CardId::FTL);
+        check(empty.cards.cardsInHand == handBefore + 1,
+              "FTL should draw from the reshuffled pile when the draw pile is empty");
+        bool ftlInDiscard = false;
+        for (int i = 0; i < empty.cards.discardPile.size(); ++i) {
+            if (empty.cards.discardPile[i].getId() == CardId::FTL) ftlInDiscard = true;
+        }
+        check(ftlInDiscard, "FTL should be in the discard pile, not reshuffled back into hand");
     }
     {
         // Buffer: one stack absorbs the next HP loss.
