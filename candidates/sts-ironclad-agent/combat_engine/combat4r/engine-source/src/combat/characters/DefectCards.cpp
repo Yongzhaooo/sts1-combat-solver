@@ -403,10 +403,16 @@ namespace sts {
                 // magicNumber the constructor sets: 3 base, 4 upgraded. The engine
                 // also counts this card before dispatch, so the equivalent is
                 // cardsPlayedThisTurn - 1 < (up ? 4 : 3).
+                //
+                // FTLAction queues its DrawCardAction with addToTop, so the draw
+                // resolves before UseCardAction has moved FTL itself into the
+                // discard pile. That matters when the draw pile is empty: the
+                // reshuffle then cannot include FTL, which is where it would be if
+                // the draw waited for the queue to drain.
                 bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 6 : 5)));
                 bc.addToBot({[=] (BattleContext &bc) {
                     if (bc.player.cardsPlayedThisTurn - 1 < (up ? 4 : 3)) {
-                        bc.addToBot(Actions::DrawCards(1));
+                        bc.addToTop(Actions::DrawCards(1));
                     }
                 }});
                 return true;
