@@ -6,7 +6,6 @@
  · F9 停止| · F9 stop
  · 战后回 | · heal 
  · 最佳 HP | · best HP 
- · 点击此处关闭| · click to close
  · 等待领取确认| · awaiting confirmation
  张| card(s)
  秒| s
@@ -17,24 +16,19 @@
 0 / 空回车：不交药；无输入则等待|0 / Enter: keep potions; waits for input
 Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted potion-free win; search complete
 [STS1Solver] 诊断写入失败：|[STS1Solver] diagnostic write failed: 
-下一步  |Next: 
 下层走火堆计羽毛回血：|Next campfire Feather healing: 
 不可用|Unavailable
 仅必经火堆|Forced
-仅建议，点按钮才出牌|Advice only; you play
 仅试选 · 滚轮翻页 · 点击已选项撤回|Preview only · scroll · click a pick to undo
 停止|Stop
-关|Off
 决策记录失败：|Decision recording failed: 
 动作未产生可执行的完成状态，请手动检查。|Action did not finish; check the game manually.
 动作未完成，已停止；请手动操作或重新计算。|Action incomplete; stopped. Play manually or recalculate.
 动作未提交|Action not submitted
-发牌和动画结算后自动生成建议|Advice appears once the deal ends
 变化|Transform
 变化预览 · 点击此处打开试选列表|Transform preview · click to try picks
 后台求解器未响应，请重新计算。详情见数据目录中的 backend.log。|Backend not responding. Recalculate; see backend.log in the data directory.
 后台连接中断：|Backend disconnected: 
-奖励牌 / 地图 / 商店始终由你操作|You choose rewards, map and shop
 小精灵×|Fairy ×
 局面发生未预期变化，已停止自动执行：|Unexpected state change; auto stopped: 
 局面已变化 · 请重新计算|State changed · recalculate
@@ -46,7 +40,6 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 已停止 · 需要重新计算|Stopped · recalculate required
 已模拟 |Simulated 
 建议 · |Advice · 
-开|On
 开场选牌：规划并自动选择（不用药路线）|Opening selection: planning potion-free route
 当前路线未找到胜利|No win on this route
 录音启动失败：|Recording failed to start: 
@@ -70,9 +63,6 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 损 |Loss 
 换药未出现空栏，停止领取|No empty slot after discard; pickup stopped
 换药未能提交弃药|Potion discard could not be submitted
-推荐行动顺序 · 点击执行整条路线|Suggested actions · click to play route
-搜索过程 · 已完成路线可点击执行|Search progress · click a completed route
-搜索：|Search: 
 标准|Standard
 连胜|Streak
 连胜模式：前三幕不降预算，搜索更慢|Streak: full search in acts 1-3, slower
@@ -104,10 +94,8 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 自动已关闭 · 保留建议|Auto off · advice retained
 自动开关保存失败：|Auto preference save failed: 
 自动战斗|Auto combat
-自动战斗已采纳用药路线 · 点击或 F9 可接管|Potion route · click or F9 to take over
 自动执行已开启 · 仅本场战斗|Auto execution on · this fight only
 自动换药失败：|Auto potion swap failed: 
-自动换药：|Auto potion swap: 
 自动模式未找到获胜路线，请手动检查|Auto found no win; check manually
 自动用药＋跨场战斗已开启|Auto potions + continuous combat enabled
 自动用药＋跨场战斗：关 [点击开启]|Auto potions + continuous combat: Off [enable]
@@ -126,7 +114,6 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 路线已就绪 · 等待你的操作|Route ready · waiting for you
 路线已结束 · 可手动操作或重新计算|Route ended · play manually or recalculate
 跳过战斗选牌|Skip combat selection
-辉眼模式：|Foresight: 
 选牌与路线由你决定|You choose cards and map routes
 重新计算|Recalc
 随机结果预测 · 滚轮翻页|RNG predictions · scroll
@@ -321,13 +308,10 @@ F6 导出错误报告|F6 Export bug report
 预测胜利|Victory predicted
 战后 HP|Final HP
 等效战损|Equiv. loss
-战后恢复：|Recovery:
-自动战斗快捷键：|Auto battle key:
-语言：|Language:
+战后恢复：|Recovery: 
 拖动标题栏移动 · 右上角调整大小|Drag title to move · Resize at top right
 设置|Settings
 返回|Back
-羽毛回血：|Feather heal: 
 
 规则推荐下一步|Rule-recommended next node
 开幕偏好规划 · 状态变化后可改道|Opening preferences; replan when the state changes
@@ -336,11 +320,9 @@ F6 导出错误报告|F6 Export bug report
 持续记录已开启|Continuous recording on
 持续记录已关闭|Continuous recording off
 已导出到桌面：|Exported to desktop: 
-持续记录：|Run recording:
-导出|Export
+导出日志|Export log
 导出到桌面 · F6|Export to desktop · F6
 按种子记录牌组、战斗与选择，仅保存到本机|Per-seed record of decks, fights and choices; stays on this PC
-F6 导出记录到桌面，发这一个文件即可|F6 exports the record to your desktop; send that one file
 检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用|Incompatible mod (SaveStateMod / Undo): disable it, it breaks state sync
 求解器内部错误，已记录：|Solver internal error, logged: 
 涅奥：掉血删两张牌|Neow: lose HP, remove two cards
@@ -355,10 +337,6 @@ AI全自动中|AI running
 
 第三幕最后宝箱：开箱取得蓝钥匙|Last Act 3 chest: open it for the Sapphire Key
 第三幕最后宝箱：蓝钥匙最高优先级|Last Act 3 chest: Sapphire Key takes priority
-人工逐步|Manual (step)
-新一局：选【人工逐步】每步确认，【战斗全自动】只自动打战斗，或【AI全自动】完全托管|New run: pick [Manual (step)] to confirm every step, [Combat auto] to automate fights only, or [AI autopilot] for everything
-自己构筑请开【战斗全自动】|Turn on [Combat auto] to build yourself
-或点【AI全自动】随时完全托管|or click [AI autopilot] anytime
 这些 Mod 会影响随机数（RNG），求解器计算可能不准确，建议关闭：|These mods affect the game RNG, so solver results may be inaccurate; consider disabling: 
 SuperFastMode 速度 ×|SuperFastMode speed x
  超出已测试的 ×10，如自动执行异常请调低| exceeds the tested x10; lower it if automation misbehaves
@@ -367,9 +345,7 @@ SuperFastMode 速度 ×|SuperFastMode speed x
 Boss 快速收尾：|Boss fast finish: 
 Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同|Boss fast finish: stop at a potion-free win; faster, may cost more HP
 未安装|not installed
-确认这一步（回车）|Confirm this step (Enter)
-已停止 · 人工逐步：每一步回车或点击确认|Stopped · Manual: every step waits for Enter or a click
-人工逐步：求解器和 AI 给出建议，每一步回车或点击确认|Manual: the solver and the AI suggest; every step waits for Enter or a click
+确认（回车）|Confirm
 自动爬塔|Autopilot
 新一局|New run
 已暂停|Paused
@@ -387,23 +363,42 @@ Boss 快速收尾：找到不交药的胜利路线就停止搜索|Boss fast fini
 开局逃跑候选|Opening escape candidates
 追加深搜|Deeper search
 基础搜索|Base search
-本轮模拟 |Current simulations:
-次 · 循环展开 |; loop transitions:
+本轮模拟 |Simulations 
+次 · 循环展开 | · loop 
 步|steps
 次|simulations
 Agent 模式：局外由 agent 决定，战斗自动执行 · F9 接管|Agent mode: an agent makes outside choices; fights run automatically · F9 takes over
 Agent 通道读写失败：|Agent channel read/write failed: 
-已停止 · 点击路线打完本场，回车走一步|Stopped · click the route to finish the fight, Enter for one step
-点击路线，或输入 0～10 后回车：[|Click a route, or type 0–10 and Enter: [
-推荐行动顺序 · 自动执行中，F9 停止|Suggested actions · running, F9 to stop
-点击列表打完本场 · 回车走一步|Click the list to finish · Enter for one step
-点击列表或回车：继续自动打完本场|Click the list or Enter: auto-finish the fight
 0 / 空回车：选 0 号路线；无输入则等待|0 / Enter: route 0; waits for input
 计算|Solve
 执行|Play
 暂停|Pause
-待命模式：|Standby: 
 待命 · 点【计算】开始搜索|Standby · click [Solve] to search
 待命：点【重新计算】才开始搜索|Standby: click [Recalc] to search
-待命模式：面板保持折叠，战斗中点【计算】才搜索，打完自动收起|Standby: the panel stays folded; click [Solve] to search a fight; it folds again afterwards
-待命模式已关闭|Standby off
+待命|Standby
+已停止 · 待命：局外由你决定，战斗点【计算】才搜索|Stopped · Standby: you decide outside fights; a fight is searched after [Solve]
+Agent 确认每一步局外选择|The agent confirms each outside step
+新一局：选【待命】每场点了才算，【战斗全自动】只自动打战斗，或【AI全自动】完全托管|New run: pick [Standby] to solve each fight on request, [Combat auto] to automate fights only, or [AI autopilot] for everything
+Boss 快速收尾|Boss fast finish
+F6 导出日志 · F8 收起 · F9 停止|F6 export log · F8 fold · F9 stop
+下一步|Next
+停止搜索|Stop search
+出牌顺序|Play order
+已停止 · 点【执行整场】继续|Stopped · press [Fight] to continue
+战损|loss
+持续记录|Continuous log
+搜索|Search
+搜索中|Searching
+搜索过程|Search progress
+条已完成|finished
+点【计算】开始搜索本场|Press [Solve] to search this fight
+界面缩放|Panel scale
+秒|s
+羽毛回血|Feather heal
+自动战斗已采纳用药路线|Combat auto took a potion plan
+自动战斗快捷键|Combat auto key
+自动执行中|Playing
+自动换药|Auto potion swap
+语言|Language
+辉眼模式|Bright Eye mode
+选择用药路线|Pick a potion plan

@@ -40,6 +40,9 @@ sys.path.insert(0, str(REPO))
 # coverage in the engine and the same entry in SolverMod.SUPPORTED.
 SUPPORTED_CLASSES = {'IRONCLAD': '战士'}
 COVERAGE_MANIFEST = Path(__file__).with_name('coverage_manifest.json')
+# A Heart win longer than this many actions is searched again at the deep budget, past the loop macro shortcut, and the
+# shorter win is kept: any Heart win ends the run, and hundreds of plays are a poor watch (user, 2026-10-24).
+LONG_HEART_ACTIONS = 150
 # Bottle sets are compared only when no single bottle wins within this effective loss.
 MULTI_POTION_LOSS = 6
 # After a Boss the next act heals (boss_heal): bottles are searched only past this loss or without a win.
@@ -82,6 +85,13 @@ def record_parity(op: str, view: dict, ok: bool, detail: str = '') -> None:
 
 def heart_fight(game):
     return any(m['id'] == 'CorruptHeart' for m in game['combat_state']['monsters'])
+
+
+def generated_potions(game, slots, budget):
+    """Deep plans may drink bottles made in combat; a branch drinking an Entropic Brew may at any budget, since the brew
+    is worth only what it makes (F16 Slime Boss 2026-10-24: Elixir then Brew kept 27 HP at 8k without the new bottles,
+    36 with them)."""
+    return budget >= DEEP_BUDGET or any(game['potions'][slot]['id'] == 'EntropicBrew' for slot in slots)
 
 
 def toolbox_selection(game):
@@ -290,10 +300,12 @@ class Advisor:
             try:
                 self.plan = dict(self.native_search.plan(self.root, budget,
                     list(names), 0, 0, False, True))
-                if self.plan['outcome'] != 1 and budget < DEEP_BUDGET and not self.interrupt.is_set():
+                long_win = self.plan['outcome'] == 1 and len(self.plan['actions']) > LONG_HEART_ACTIONS
+                if (self.plan['outcome'] != 1 or long_win) and budget < DEEP_BUDGET and not self.interrupt.is_set():
                     refined = dict(self.native_search.plan(self.root, DEEP_BUDGET,
                         list(names), 0, 0, False, True))
-                    if refined['value'] > self.plan['value']:
+                    if (refined['value'] > self.plan['value'] if not long_win else
+                            refined['outcome'] == 1 and len(refined['actions']) < len(self.plan['actions'])):
                         self.plan = refined
                 self.plan = self.finalize_plan(self.root, self.plan)
                 replay = self.root.clone()
@@ -378,7 +390,7 @@ class Advisor:
                         continue
                     futures[slots] = pool.submit(self.search_plan, self.root, budget,
                                                  list(slots), credit, index, False,
-                                                 budget >= DEEP_BUDGET,
+                                                 generated_potions(view['game'], slots, budget),
                                                  **({'initial_plan': initial_plan}
                                                     if not slots and initial_plan is not None else {}))
                 if () in futures:
@@ -509,7 +521,7 @@ class Advisor:
                     self.searching = searching
                     futures.extend(pool.submit(self.search_plan, self.root, budget,
                                                list(other_option), credit, other_index, other_forced,
-                                               budget >= DEEP_BUDGET and bool(other_option))
+                                               bool(other_option) and generated_potions(view['game'], other_option, budget))
                                    for other_index, (_, _, other_forced, other_option) in enumerate(jobs[1:], 1))
                 future = futures[index]
                 try:
@@ -573,7 +585,7 @@ class Advisor:
         s.mapper = ActionMapper(s.comparator, s.battle, view)
 
     def potion_branch(self, slots, names, future, started, view, budget):
-        """Validate initial bottles; deep plans may also use generated bottles."""
+        """Validate initial bottles; deep and brew plans may also use generated bottles."""
         s = self.search
         branch_id = 'potion-' + '+'.join(map(str, slots))
         name = ' + '.join(names[i] for i in slots)
@@ -588,7 +600,7 @@ class Advisor:
                 action = s.sts.SearchAction.from_bits(bits & 0xffffffff)
                 if action.action_type == s.sts.SearchActionType.POTION:
                     slot = int(action.source_idx)
-                    generated = budget >= DEEP_BUDGET and (
+                    generated = generated_potions(view['game'], slots, budget) and (
                         view['game']['potions'][slot]['id'] == 'Potion Slot'
                         or replay.potions[slot] != self.root.potions[slot]
                         or slot in initial_slots_used)
@@ -1019,6 +1031,7 @@ ALLOWED_DIAGNOSTIC_EVENTS = {
     'error',
     'state_changed',
     'combat_end',
+    'recalculate',
 }
 
 
