@@ -754,6 +754,10 @@ void BattleContext::executeActions() {
             break;
         }
 
+        if (outcome == Outcome::PLAYER_VICTORY && killCurHp < 0) {
+            killCurHp = player.curHp;
+        }
+
         if (outcome == Outcome::PLAYER_LOSS) {
             break;
         }
