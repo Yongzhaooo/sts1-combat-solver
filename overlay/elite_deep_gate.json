@@ -151,6 +151,7 @@
  ],
  "tau": 0.10077860178401948,
  "potion_price": 10,
+ "work_seconds": {"sims": 8.897e-06, "beam": 3.143e-06, "const": 0.0, "fit": "r13 no-potion plans, 210 wins on idle CCM 2026-10-24, 1/y-weighted least squares on simulations and loop_beam_transitions; log-rmse 0.32, 5-fold 0.33"},
  "train": {
   "rows": 2773,
   "seeds": 258

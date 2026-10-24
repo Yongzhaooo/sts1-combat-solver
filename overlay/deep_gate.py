@@ -4,6 +4,10 @@ The model is a JSON file fitted offline on recorded standard/deep call pairs (ri
 the chosen route would lose without this deep call, divided by its estimated seconds). A deep call is
 skipped when that rate is at or below the fitted cutoff. Only standard routes that already win are
 gated; a losing standard route always gets its refinement.
+
+The seconds input is the measured wall time of the standard call by default (the mod's player waits real time).
+With work_clock it is estimated from the plan's native work counters (model key work_seconds), so a root gives
+the same decision on any machine or load; the headless base enables it with STS_ELITE_GATE_CLOCK=work.
 """
 import json
 import math
@@ -17,10 +21,18 @@ NAMES = dict(GremlinNob='Gremlin Nob', SlaverBlue='Slaver', SlaverRed='Slaver', 
 
 
 class DeepGate:
-    def __init__(self, path):
+    def __init__(self, path, work_clock=False):
         m = json.loads(open(path, encoding='utf-8').read())
         self.names, self.encs, self.mu, self.sd = m['names'], m['encs'], m['mu'], m['sd']
         self.wg, self.ws, self.tau = m['wg'], m['ws'], m['tau']
+        self.work = m['work_seconds'] if work_clock else None
+
+    def seconds(self, plan, measured):
+        """Gate seconds of a standard plan: the measured wall time, or a pure function of its work counters."""
+        if self.work is None:
+            return measured
+        w = self.work
+        return max(1e-3, w['sims'] * plan['simulations'] + w['beam'] * (plan.get('loop_beam_transitions') or 0) + w['const'])
 
     def score(self, f):
         """f: act, hp0, s_loss, s_value, s_turns, s_tail, s_fairy, s_sims, s_sec, n_slots, n_br, own_sc, pgap_b, enc."""
@@ -47,7 +59,7 @@ class DeepGate:
             return self.score(dict(
                 act=game['act'], hp0=hp0, s_loss=hp0 - plan['hp'], s_value=plan['value'], s_turns=plan['turns'],
                 s_tail=plan.get('used_tail'), s_fairy=plan.get('used_fairy', 0), s_sims=plan['simulations'],
-                s_sec=base_seconds if seconds is None else seconds, n_slots=len(slots), n_br=n_pot, own_sc=own,
+                s_sec=self.seconds(plan, base_seconds if seconds is None else seconds), n_slots=len(slots), n_br=n_pot, own_sc=own,
                 pgap_b=own - base_sc if slots and base_sc is not None else 0.0, enc=enc)) <= self.tau
         return skip
 
