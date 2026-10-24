@@ -4,6 +4,8 @@
 
 #include "combat/CardQueue.h"
 
+#include <stdexcept>
+
 using namespace sts;
 
 
@@ -26,7 +28,7 @@ void CardQueue::clear() {
 }
 
 void CardQueue::pushFront(CardQueueItem item) {
-    assert(size != arr.size());
+    if (size == capacity) throw std::length_error("card queue overflow"); // nothing catches it: the solve fails with a message instead of an abort
     --frontIdx;
     ++size;
     if (frontIdx < 0) {
@@ -36,7 +38,7 @@ void CardQueue::pushFront(CardQueueItem item) {
 }
 
 void CardQueue::pushBack(CardQueueItem item) {
-    assert(size != capacity);
+    if (size == capacity) throw std::length_error("card queue overflow");
     arr.at(backIdx) = std::move(item);
     ++backIdx;
     ++size;
