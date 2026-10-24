@@ -95,6 +95,9 @@ final class OutsidePacket {
         else if (screen.equals("GRID") && (bool(object(game, "screen_state"), "confirm_up") || packet.gridFull()))
             packet.directChoice("confirm", "Confirm");
         else if (screen.equals("GRID")) packet.selectChoices();
+        // A battle the solver ends itself (a smoke bomb escape) leaves the game on no screen for a
+        // frame or two before the rewards open. That is a moment to wait for, not an unknown screen.
+        else if (screen.equals("NONE")) throw new NotReady("Outside screen is still settling");
         else throw new IllegalArgumentException("Student screen not mapped yet: " + screen);
         packet.potionChoices();
         if (packet.choices.isEmpty()) throw new IllegalArgumentException("No legal student choices");

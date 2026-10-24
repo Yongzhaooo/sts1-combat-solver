@@ -436,6 +436,17 @@ public final class OutsidePacketCheck {
         if (purge.choices.size() != 2 || !purge.choices.get(0).command.equals("choose 2")
                 || !purge.choices.get(1).command.equals("choose 3"))
             throw new AssertionError("Event removal must offer only starter cards and curses");
+        // A battle the solver ended itself leaves the game on no screen for a frame or two before
+        // the rewards open; the pilot must wait for that, not stop the whole run.
+        visible.addProperty("screen_type", "NONE");
+        try {
+            OutsidePacket.build(Distill2.load(), state, visible);
+            throw new AssertionError("A screen-less moment must read as not ready");
+        } catch (OutsidePacket.NotReady settling) {
+        } catch (RuntimeException unknown) {
+            throw new AssertionError("A screen-less moment must not read as an unknown screen: "
+                + unknown.getMessage());
+        }
         System.out.printf("PASS: map packet, reviewed rule route to boss (%.0f ms) and Neow stages%n", planMs);
     }
 }
