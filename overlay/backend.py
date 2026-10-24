@@ -1208,14 +1208,9 @@ _RESCUE_ARGS = (_RESCUE.get('per_sim', 160), _RESCUE.get('per_sim_nogate', _RESC
 # STS_ELITE_DEEP_GATE: model JSON (relative to this directory) that lets acts 1-3 elites skip the standard
 # search's deep refinement when it is predicted to buy little HP per second; see deep_gate.py.
 _ELITE_DEEP_GATE = None
-# STS_ELITE_GATE_CLOCK=work feeds the gate seconds estimated from the plan's native work counters instead of the wall
-# clock, so a root decides the same on any load (the headless base sets it; the mod keeps real time).
 if _tier('STS_ELITE_DEEP_GATE'):
     from deep_gate import DeepGate
-    if _tier('STS_ELITE_GATE_CLOCK') not in ('', 'work'):
-        raise ValueError('STS_ELITE_GATE_CLOCK must be empty or "work"')
-    _ELITE_DEEP_GATE = DeepGate(str(_TIERS_FILE.parent / _tier('STS_ELITE_DEEP_GATE')),
-                                work_clock=_tier('STS_ELITE_GATE_CLOCK') == 'work')
+    _ELITE_DEEP_GATE = DeepGate(str(_TIERS_FILE.parent / _tier('STS_ELITE_DEEP_GATE')))
 # Beam alone (no MCTS), transitions per simulation: STS_BEAM_ONLY for all rooms in every act, STS_BEAM_ONLY_ROOMS (JSON)
 # per room type in acts 1-3 only, e.g. {"MonsterRoomBoss": 160} (the Heart keeps MCTS: the beam alone cost more there).
 _BEAM_ONLY = int(_tier('STS_BEAM_ONLY') or 0)
