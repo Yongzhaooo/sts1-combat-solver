@@ -39,6 +39,7 @@ struct Node {
     double powers = 0;
     std::array<double, 3> scores{};
     std::string key;
+    std::size_t keyHash = 0;
     std::shared_ptr<const Path> base;  // deferred: parent path of `step`; `path` is null until materialize()
     Step step;
     bool deferred = false;
@@ -234,23 +235,27 @@ inline std::string bucket(const BattleContext &b) {
         scalar(m.curHp); scalar(m.block); scalar(int(m.moveHistory[0]));
         scalar(m.uniquePower0); scalar(m.uniquePower1); scalar(m.strength); scalar(m.vulnerable);
     }
-    using CardKey = std::array<int,5>;
-    const auto card = [](const CardInstance &c) -> CardKey {
-        return {int(c.getId()), int(c.isUpgraded()), int(c.cost), int(c.costForTurn), int(c.specialData)};
+    // A card is the five ints (id, upgraded, cost, costForTurn, specialData). Packed most significant first with the signed fields
+    // offset, the unsigned order of the pack is the lexicographic order of the five ints, so sorting packs sorts the keys.
+    const auto pack = [](const CardInstance &c) -> std::uint64_t {
+        return std::uint64_t(std::uint16_t(c.getId())) << 33 | std::uint64_t(c.isUpgraded()) << 32
+            | std::uint64_t(std::int32_t(c.cost) + 128) << 24 | std::uint64_t(std::int32_t(c.costForTurn) + 128) << 16
+            | std::uint64_t(std::int32_t(c.specialData) + 32768);
     };
-    const auto write = [&](const CardKey &c) {
-        s.append(reinterpret_cast<const char *>(c.data()), 5 * sizeof(int));
+    const auto write = [&](std::uint64_t k) {
+        const int key[5] = {int(k >> 33 & 0xFFFF), int(k >> 32 & 1), int(k >> 24 & 0xFF) - 128, int(k >> 16 & 0xFF) - 128, int(k & 0xFFFF) - 32768};
+        s.append(reinterpret_cast<const char *>(key), sizeof(key));
     };
-    std::array<CardKey,10> hand;
-    for (int i = 0; i < b.cards.cardsInHand; ++i) hand[i] = card(b.cards.hand[i]);
+    std::array<std::uint64_t,10> hand;
+    for (int i = 0; i < b.cards.cardsInHand; ++i) hand[i] = pack(b.cards.hand[i]);
     std::sort(hand.begin(), hand.begin() + b.cards.cardsInHand);
     scalar(b.cards.cardsInHand);
     for (int i = 0; i < b.cards.cardsInHand; ++i) write(hand[i]);
     scalar(b.cards.drawPile.size());
-    for (const auto &c : b.cards.drawPile) write(card(c));
-    static thread_local std::vector<CardKey> discard;
+    for (const auto &c : b.cards.drawPile) write(pack(c));
+    static thread_local std::vector<std::uint64_t> discard;
     discard.clear();
-    for (const auto &c : b.cards.discardPile) discard.push_back(card(c));
+    for (const auto &c : b.cards.discardPile) discard.push_back(pack(c));
     std::sort(discard.begin(), discard.end());
     scalar(discard.size());
     for (const auto &c : discard) write(c);
@@ -273,9 +278,18 @@ inline bool better(const Best &best, double v, const std::shared_ptr<const Path>
 }
 
 inline const std::string &bucketKey(Node &n) {
-    if (n.key.empty()) n.key = bucket(*n.state);
+    if (n.key.empty()) { n.key = bucket(*n.state); n.keyHash = std::hash<std::string_view>{}(n.key); }
     return n.key;
 }
+// A bucket key in a set: the hash is computed once per node, strings are compared only on equal hashes.
+struct KeyRef {
+    const std::string *key;
+    std::size_t hash;
+};
+struct KeyHash { std::size_t operator()(const KeyRef &r) const { return r.hash; } };
+struct KeyEq { bool operator()(const KeyRef &a, const KeyRef &b) const { return a.hash == b.hash && *a.key == *b.key; } };
+using KeySet = std::unordered_set<KeyRef, KeyHash, KeyEq>;
+inline KeyRef keyRef(Node &n) { bucketKey(n); return {&n.key, n.keyHash}; }
 
 // One beam pass of the given width; stops at `cap` total transitions (stats.transitions) or when cancelled().
 template <class Value, class Cancel>
@@ -303,7 +317,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
     std::vector<std::size_t> order;
     std::vector<char> keep;
     std::vector<std::pair<double, std::size_t>> keyed;
-    std::unordered_set<std::string_view> seen;
+    KeySet seen;
     // Only a per-turn damage cap (Invincible: the Heart) makes a loop worthless before the turn ends; elsewhere the
     // per-turn quota below stays off and the search is unchanged.
     const bool payHp = loop_gate::pseudo(loop_gate::matches(root));
@@ -341,7 +355,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                 sortByLane(order, lane);
                 seen.clear();
                 for (std::size_t k = 0; k < order.size() && seen.size() < std::size_t(lane + 1) * width; ++k)
-                    if (seen.insert(std::string_view(bucketKey(candidates[order[k]]))).second) keep[order[k]] = 1;
+                    if (seen.insert(keyRef(candidates[order[k]])).second) keep[order[k]] = 1;
             }
             // Each turn's leaders for the per-turn quota below. Later candidates only add turns, so the final quota is no
             // larger; keeping more would let stalling lines over many turns refill the layer past compactAt.
@@ -350,7 +364,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
             for (auto &group : groups) {
                 seen.clear();
                 for (std::size_t k = 0; k < group.second.size() && seen.size() < quota; ++k)
-                    if (seen.insert(std::string_view(bucketKey(candidates[group.second[k]]))).second) keep[group.second[k]] = 1;
+                    if (seen.insert(keyRef(candidates[group.second[k]])).second) keep[group.second[k]] = 1;
             }
             survivors.clear();
             for (std::size_t i = 0; i < candidates.size(); ++i) if (keep[i]) survivors.push_back(std::move(candidates[i]));
@@ -427,7 +441,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
             int kept = 0;
             for (std::size_t k = 0; k < order.size() && kept < width; ++k) {
                 auto &n = candidates[order[k]];
-                if (seen.insert(std::string_view(bucketKey(n))).second) { advance(n); ++kept; }
+                if (seen.insert(keyRef(n)).second) { advance(n); ++kept; }
             }
         }
         if (damageCap && !candidates.empty()) {
@@ -437,7 +451,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
             for (auto &group : groups)
                 for (std::size_t k = 0, kept = 0; k < group.second.size() && kept < std::size_t(quota); ++k) {
                     auto &n = candidates[group.second[k]];
-                    if (seen.insert(std::string_view(bucketKey(n))).second) { advance(n); ++kept; }
+                    if (seen.insert(keyRef(n)).second) { advance(n); ++kept; }
                 }
         }
         frontier.swap(next);
