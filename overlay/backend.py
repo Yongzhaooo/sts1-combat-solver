@@ -293,8 +293,13 @@ class Advisor:
             s.mapper = ActionMapper(s.comparator, s.battle, view)
             self.root = s.battle.clone()
             self.root_game = copy.deepcopy(view['game'])
-            self.plan = dict(actions=list(s.actions), outcome=0, value=0, hp=0,
-                             seconds=0.0, mid_turn_pick=True)
+            # The picker itself decides nothing about the fight, so the plan's
+            # numbers are the state the picker was opened in: no HP moves and
+            # nothing is spent by answering it.
+            hp = int(s.battle.player.cur_hp)
+            self.plan = dict(actions=list(s.actions), outcome=0, value=0, hp=hp,
+                             post_hp=hp, max_hp=int(s.battle.player.max_hp),
+                             simulations=0, seconds=0.0, mid_turn_pick=True)
             self.branches = {'mid-turn': self.plan}
             self.branch_info = []
             self.selected_branch = 'mid-turn'
