@@ -206,6 +206,27 @@ int main() {
               "the emptied SEEK screen should clear its task");
     }
 
+    {
+        // Only Seek reopens its own screen. Every other picker closes on its
+        // pick, and chooseDiscoveryCard is one of the helpers that never touches
+        // inputState, so the reset after execute() is the only thing that closes
+        // it. The live floor-18 run ran out of memory because a rollout kept
+        // picking Discovery forever: the screen stayed open, the discard pile
+        // grew past two thousand cards and the turn never ended.
+        BattleContext bc = fresh();
+        bc.openDiscoveryScreen(
+            std::array<CardId, 3>{CardId::FLAME_BARRIER, CardId::IMPERVIOUS, CardId::BATTLE_TRANCE}, 1);
+        check(bc.cardSelectInfo.cardSelectTask == CardSelectTask::DISCOVERY,
+              "the opened Discovery screen should carry its task");
+        auto actions = enumerate(bc);
+        check(actions.size() == 3, "a Discovery screen should list its three cards");
+        const int handBefore = bc.cards.cardsInHand;
+        actions.front().execute(bc);
+        check(bc.inputState == InputState::PLAYER_NORMAL,
+              "a one-pick Discovery should close its screen on the pick");
+        check(bc.cards.cardsInHand == handBefore + 1, "the discovered card should join the hand");
+    }
+
     std::cout << "Defect card select enumeration holds\n";
     } catch (const std::exception &error) {
         std::cout << error.what() << "\n";

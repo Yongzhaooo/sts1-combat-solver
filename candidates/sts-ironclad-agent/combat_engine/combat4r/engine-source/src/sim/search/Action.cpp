@@ -529,10 +529,13 @@ void search::Action::execute(BattleContext &bc) const {
             break;
     }
 
-    // A pick can reopen its own screen (Seek, Forethought and friends). The game
-    // resolves those picks one update at a time, so leave the reopened screen for
-    // the caller's next execute instead of draining it here.
-    if (bc.inputState == InputState::CARD_SELECT) {
+    // Seek reopens its own screen while picks remain, and the game resolves those
+    // picks one update at a time, so leave that screen for the caller's next
+    // execute instead of draining it here. Every other task closes on its pick:
+    // most choose* helpers never touch inputState, so the reset below is what
+    // ends their screen. Returning for them would leave the picker open forever
+    // and let a rollout loop on it.
+    if (bc.inputState == InputState::CARD_SELECT && bc.cardSelectInfo.cardSelectTask == CardSelectTask::SEEK) {
         return;
     }
     bc.inputState = InputState::EXECUTING_ACTIONS;
