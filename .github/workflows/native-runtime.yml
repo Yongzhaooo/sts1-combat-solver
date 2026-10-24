@@ -48,6 +48,7 @@ jobs:
       - run: python overlay/check_debug_export.py
       - run: python overlay/check_worker_policy.py
       - run: python tools/check_release_assets.py
+      - run: python tools/check_workshop_previews.py
       - run: python overlay/check_run_log.py
       - run: python overlay/check_incense.py
       - run: python tools/build_solver_runtime.py

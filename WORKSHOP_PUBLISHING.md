@@ -57,6 +57,12 @@ java -jar mod-uploader.jar upload -w sts1-combat-solver-workshop
 
 游戏的上传器是发布入口，不需要为这个模组另外开发 Steamworks 上传服务。通用的可见性、条目更新与用户协议机制见 [Valve Workshop 实现文档](https://partner.steamgames.com/doc/features/workshop/implementation)。Steam 提示需要接受 Workshop 协议时，在账号内完成。上传流程的社区交叉参考是[尖塔 1 上传指南](https://steamcommunity.com/sharedfiles/filedetails/?id=1767940979)。
 
+上传器、SteamCMD 和社区上传工具都只能设置主预览图。主图下方的附加图片用 `tools/workshop_previews.py`（通过 Steamworks flat API 调 `AddItemPreviewFile`/`RemoveItemPreview`，适用于任意游戏和条目）：`list` 查看，`sync IMG...` 让附加图片与给定文件按顺序一致，已一致时不提交。每张图须是 PNG、JPEG 或 GIF，不超过 1 MiB。本条目的附加图片是 `docs/images/panel-zh.png` 和 `panel-en.png`，面板截图更新后重新 `sync`。2026-10-24 v0.9.4 上传后，本条目的 `list` 能读，但任何 `SubmitItemUpdate`（包括只改标题）都返回 EResult 15（AccessDenied），两小时内重试 12 次未恢复，写入路径尚未在真实条目上跑通；遇到同样情况时改用条目页“添加/编辑图片和视频”：
+
+```powershell
+python tools/workshop_previews.py --item 3814773843 --note "战斗面板截图 / Combat panel screenshots" sync docs/images/panel-zh.png docs/images/panel-en.png
+```
+
 ## 当前原生包
 
 Windows 原生包已解决冷启动，随包包含 Python 3.14.8 与 C++ 扩展，不再依赖 WSL 或开发 checkout。安装与验证记录见 [WINDOWS_PORTABLE.md](WINDOWS_PORTABLE.md)。下节为此前开发版的分发缺口记录。
