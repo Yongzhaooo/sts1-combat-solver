@@ -131,10 +131,11 @@ int main() {
         // One queued lightning hit for the main pass plus one for the relic.
         check(bc.actionQueue.size - queuedBefore == 2,
               "Cables must defer its extra passive as its own queued action");
-        // Only the main pass may roll here; the relic's target comes later, when
-        // the queue reaches its own action and the first hit has resolved.
-        check(bc.cardRandomRng.counter - rollsBefore == 1,
-              "the end-of-turn trigger must not roll the Cables target up front");
+        // Neither target may be rolled here: LightningOrb.onEndOfTurn queues a
+        // LightningOrbPassiveAction whose update() rolls, so both hits pick their
+        // monster only when the queue reaches them, one after the other.
+        check(bc.cardRandomRng.counter == rollsBefore,
+              "the end-of-turn trigger must not roll any target up front");
         check(bc.monsters.arr[0].curHp == hp,
               "nothing should resolve while the end-of-turn trigger is queued");
 

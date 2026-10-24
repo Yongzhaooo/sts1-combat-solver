@@ -126,6 +126,40 @@ int main() {
                   "two evokes of the orb already in the bar deal 16");
         }
 
+        // The same ordering rule applies to the end-of-turn passives. Lightning
+        // orb onEndOfTurn queues a LightningOrbPassiveAction to the bottom, and
+        // that action rolls its target in update(), i.e. only once the previous
+        // passives' damage has resolved. A live run diverged because the engine
+        // rolled all three targets while every monster was still alive: the game
+        // hit monsters 0, 1 and 2, the engine hit 1, 2 and 2, so two of the
+        // three rolls landed on the same slime and one of them was wasted.
+        {
+            BattleContext bc = freshBattle();
+            // Cracked Core already filled slot 0; two channels fill the other two.
+            for (int i = 0; i < 2; ++i) {
+                Actions::ChannelOrb(Orb::LIGHTNING).actFunc(bc);
+            }
+            check(bc.player.orbs.size() == 3, "the bar should hold three Lightning orbs");
+            // Three Lightning passives deal 3 each, so a 3-HP board lets every
+            // hit kill its target and forces each later roll onto the shrinking
+            // candidate list.
+            for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                bc.monsters.arr[i].curHp = 3;
+            }
+            drain(bc);
+            const int aliveBefore = aliveCount(bc);
+            const int hpBefore = totalMonsterHp(bc);
+
+            Actions::TriggerEndOfTurnOrbsAction().actFunc(bc);
+            drain(bc);
+
+            check(hpBefore - totalMonsterHp(bc) == 9,
+                  "three end-of-turn Lightning passives must each land their 3 damage");
+            check(aliveBefore - aliveCount(bc) == 3,
+                  "each of the three passives must kill its own target, which requires "
+                  "every roll to happen after the previous one resolved");
+        }
+
         std::cout << "orb_evoke_target: ok\n";
         return 0;
     } catch (const std::exception &e) {

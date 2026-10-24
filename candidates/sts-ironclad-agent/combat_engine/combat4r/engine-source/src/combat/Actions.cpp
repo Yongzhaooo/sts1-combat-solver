@@ -441,10 +441,17 @@ namespace {
                             }
                         }
                     } else {
-                        const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
-                        if (target >= 0) {
-                            bc.addToBot(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
-                        }
+                        // LightningOrb.onEndOfTurn queues LightningOrbPassiveAction to
+                        // the bottom; that action rolls its target in update(), so the
+                        // roll happens after every damage already queued has resolved.
+                        // Rolling here instead would pick from a candidate list that
+                        // still holds monsters the earlier passives just killed.
+                        bc.addToBot({[damage] (BattleContext &bc) {
+                            const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                            if (target >= 0) {
+                                bc.addToTop(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
+                            }
+                        }});
                     }
                 }
                 break;
