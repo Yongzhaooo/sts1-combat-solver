@@ -241,6 +241,8 @@ void CardManager::moveDiscardPileIntoToDrawPile() {
     if (drawPile.empty()) {
         drawPileBloodCardCount = discardPileBloodCardCount;
         drawPile = discardPile;
+        // Java Soul.update (DRAW_PILE landing) clearPowers: costForTurn = cost, e.g. an Apotheosis upgraded under Corruption.
+        for (auto &c : drawPile) c.costForTurn = c.cost;
 
     } else {
         for (const auto &c : discardPile) {
