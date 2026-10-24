@@ -711,12 +711,31 @@ Action Actions::EvokeOrbAction(int orbIdx, int times) {
         if (orbIdx < 0 || orbIdx >= bc.player.orbs.size()) {
             return;
         }
-        const auto orb = bc.player.orbs[orbIdx];
-        for (int i = 0; i < times; ++i) {
-            fireEvokeEffects(bc, orb);
+        if (times <= 1) {
+            fireEvokeEffects(bc, bc.player.orbs[orbIdx]);
+            // Evoking consumes the orb, after all triggered instances resolve.
+            bc.player.orbs.remove(orbIdx);
+            return;
         }
-        // Evoking consumes the orb, after all triggered instances resolve.
-        bc.player.orbs.remove(orbIdx);
+        // EvokeOrbAction.update() evokes `times` orbs in one update, and every
+        // LightningOrbEvokeAction it queues is addToTop'd, so that action resolves
+        // before the loop continues. Each evoke therefore observes the monsters
+        // the previous one killed: AbstractDungeon.getRandomMonster() filters
+        // halfDead/isDying/isEscaping, so the candidate list can shrink between
+        // the rolls. Queue one evoke per slot to reproduce that ordering; rolling
+        // all `times` targets up front would pick from a stale candidate list.
+        for (int i = 0; i < times; ++i) {
+            const bool last = i == times - 1;
+            bc.addToBot({[=] (BattleContext &bc) {
+                if (orbIdx < 0 || orbIdx >= bc.player.orbs.size()) {
+                    return;
+                }
+                fireEvokeEffects(bc, bc.player.orbs[orbIdx]);
+                if (last) {
+                    bc.player.orbs.remove(orbIdx);
+                }
+            }});
+        }
     }};
 }
 
