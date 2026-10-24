@@ -86,12 +86,26 @@ print('PASS: hand-access and long-fight bottles (Gambler Brew by its game id) co
 
 if not args.native_root:
     raise SystemExit(0)
-from backend import Advisor
+from backend import Advisor, TERMINAL_PENDING, unexplained_differences
 advisor = Advisor()
 engine = advisor.search.sts
 native = advisor.native_search
 potion = engine.potion_id_from_name
 card = engine.card_id_from_name
+
+# The recorded F48 smoke-bomb fault: the engine escapes the instant the potion lands and
+# the game still reports UNDECIDED while the haze plays. That is a gap, not a divergence,
+# so the rest of the plan is dropped instead of raising 实际状态偏离预测.
+escape = {'differences': [{'path': '/outcome', 'kind': 'value',
+                           'original': 'UNDECIDED', 'simulator': 'PLAYER_ESCAPE'}],
+          'gaps': [{'kind': TERMINAL_PENDING}], 'observed_match': False}
+assert unexplained_differences(escape) == []
+assert len(unexplained_differences({**escape, 'gaps': []})) == 1  # the same loss without the gap still stops
+assert len(unexplained_differences({**escape, 'differences':
+    escape['differences'] + [{'path': '/player/hp', 'kind': 'value', 'original': 75, 'simulator': 70}]})) == 2
+assert unexplained_differences({'differences': [{'path': '/rng/card_random/0'}], 'gaps': []}) == []
+assert unexplained_differences({'differences': [], 'gaps': [{'kind': TERMINAL_PENDING}]}) == []
+print('PASS: a predicted terminal outcome the original battle is still playing is a gap, not a divergence')
 
 def snapshot(hand=(), *, turn=1, played=0, damaged=0, hp=20, enemy_hp=50,
              potions=('SMOKE_BOMB', 'FAIRY_POTION', 'EMPTY_POTION_SLOT'), powers=(), enemy_powers=(),
