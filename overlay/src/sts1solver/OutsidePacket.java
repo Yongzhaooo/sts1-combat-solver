@@ -471,12 +471,14 @@ final class OutsidePacket {
         return new Distill2.Result(scores,best);
     }
 
-    /** Removal and transform targets: removable curses, Strikes, Bash, Defends, then other attacks.
-     * The Bonfire Spirits offering is the network's choice over the whole legal grid: no hand order breaks a key card. */
+    /** Removal and transform targets: removable curses, Strikes, Bash, Defends, then other attacks; a transform skips curses
+     * (a curse only becomes another curse). The Bonfire Spirits offering is the network's choice over the whole legal grid:
+     * no hand order breaks a key card. */
     private Distill2.Result removalRule(Distill2.Result student) {
         JsonObject screen=object(game,"screen_state");
         if(bonfireOffering() || bool(screen,"confirm_up") || !(bool(screen,"for_purge") || bool(screen,"for_transform")))return null;
         JsonArray cards=array(screen,"cards");
+        boolean transform=bool(screen,"for_transform");
         int best=-1,bestTier=9;
         for(int i=0;i<choices.size();i++) {
             Choice choice=choices.get(i);
@@ -485,6 +487,7 @@ final class OutsidePacket {
             if(index<0 || index>=cards.size())continue;
             JsonObject card=cards.get(index).getAsJsonObject();
             int tier=EventRules.removalTier(string(card,"id"),string(card,"type"));
+            if(transform && tier==0)continue;
             if(tier<bestTier || (tier==bestTier && best>=0 && student.scores[i]>student.scores[best])) { bestTier=tier; best=i; }
         }
         String[] names={"诅咒","打击","痛击","防御","其他攻击牌"};
@@ -909,19 +912,20 @@ final class OutsidePacket {
         int type = bool(screen, "for_purge") ? 4 : bool(screen, "for_upgrade") ? 3
             : bool(screen, "for_transform") ? 1 : 6;
         // The student ranks removal/transform targets mostly by grid position, so a rare card listed
-        // first would be lost. Every removal or transform is limited to curses and starter cards;
-        // events fall back to the full grid when none is left (the shop never offers that case).
+        // first would be lost. Every removal or transform is limited to curses and starter cards (a transform
+        // leaves out curses: a curse only becomes another curse); events fall back to the full grid when none
+        // is left (the shop never offers that case).
         boolean restricted = (type == 4 || type == 1) && !bonfireOffering();
         if (restricted && !bool(visible, "grid_from_shop")) {
             boolean any = false;
             for (JsonElement item : cards)
-                any |= gridRemoval(string(item.getAsJsonObject(), "id"), string(item.getAsJsonObject(), "type"), bool(visible, "grid_from_shop"));
+                any |= gridRemoval(string(item.getAsJsonObject(), "id"), string(item.getAsJsonObject(), "type"), bool(visible, "grid_from_shop"), type == 1);
             restricted = any;
         }
         for (int i = 0; i < cards.size(); i++) {
             JsonObject card = cards.get(i).getAsJsonObject();
             if (gridSelected(screen, card)) continue;
-            if (restricted && !gridRemoval(string(card, "id"), string(card, "type"), bool(visible, "grid_from_shop"))) continue;
+            if (restricted && !gridRemoval(string(card, "id"), string(card, "type"), bool(visible, "grid_from_shop"), type == 1)) continue;
             Choice choice = choice(i, "choose " + i, string(card, "name"), 4, 18, i, 0);
             choice.descriptor[model.offset("OFF_SELECTION_TYPE")+type] = 1;
             encodeCard(choice, card);
@@ -966,7 +970,8 @@ final class OutsidePacket {
         return false;
     }
     /** Grid candidates: starter cards and curses, plus other attacks (last in the removal order) outside the shop. */
-    private static boolean gridRemoval(String id, String type, boolean shop) {
+    private static boolean gridRemoval(String id, String type, boolean shop, boolean transform) {
+        if (transform && type.equals("CURSE")) return false;
         return allowedRemoval(id, type) || (!shop && type.equals("ATTACK"));
     }
     private static boolean allowedRemoval(String id, String type) {
