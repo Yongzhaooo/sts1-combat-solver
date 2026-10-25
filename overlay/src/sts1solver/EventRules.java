@@ -1,9 +1,16 @@
 package sts1solver;
 
+import com.megacrit.cardcrawl.cards.AbstractCard;
+import com.megacrit.cardcrawl.cards.CardGroup;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.events.AbstractEvent;
+import com.megacrit.cardcrawl.helpers.CardLibrary;
 import com.megacrit.cardcrawl.random.Random;
+import com.megacrit.cardcrawl.relics.AbstractRelic;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Hand-written event policy that overrides the student network (docs/event-rules.md).
@@ -16,13 +23,18 @@ final class EventRules {
 
     /**
      * The only events whose live reads may run (docs/outside-rules.md, SL-visible pre-reads): each read replays the current
-     * room's own draws on an RNG copy, from the latest save point and without crossing the next one. Rewards handed out after
-     * an event fight, map rooms ahead and results that reroll on load are not SL-visible and must never be added here.
+     * room's own draws on an RNG copy (inside a Sandbox when the replay draws cards from the pools), from the latest save
+     * point and without crossing the next one. Rewards handed out after an event fight, map rooms ahead and results that reroll on load are not SL-visible and must never be added here.
      */
     static final java.util.Set<String> SL_PREREAD = java.util.Collections.unmodifiableSet(new java.util.HashSet<String>(
-        java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust")));
+        java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust",
+            "SensoryStone", "The Library", "Transmorgrifier", "Drug Dealer", "Match and Keep!",
+            "Shining Light", "World of Goop",
+            "The Mausoleum", "Cursed Tome")));
 
     static final int UNKNOWN = -1, SAFE_SEARCH = 0, ELITE_SEARCH = 1;
+    /** SensoryStone HP loss by tier (number of colorless groups taken). */
+    static final int[] SENSORY_COST = {0, 0, 5, 10};
     static final String MANUAL = "人工规则";
 
     static final class Context {
@@ -46,6 +58,26 @@ final class EventRules {
         int adventurerNext = UNKNOWN, adventurerEnemy = UNKNOWN;
         /** Hidden information: Face Trader's trade gives a good face (1) or not (0); the Joust owner wins (1) or loses (0). */
         int goodFace = UNKNOWN, ownerWins = UNKNOWN;
+        /** Card pre-reads scored by CardWant. SensoryStone: bit k-1 set when the model takes a card from colorless group k (the
+         * groups are scored in order, each pick added to the deck). The Library, Transmorgrifier, Drug Dealer: 1 when the model
+         * wants a read card / the transform results, 0 when not. */
+        int sensoryWants = UNKNOWN, cardsWanted = UNKNOWN;
+        /** Danger ahead on the planned route (DangerAhead), or null when no route is known. */
+        DangerAhead danger;
+        /** Shining Light pre-read: deck indices of the upgradable cards and of the (up to) two the light upgrades. */
+        int[] lightUpgradable, lightTargets;
+        /** How many light targets the campfire upgrade grid ranks among its top UPGRADE_TOP_K distinct cards (OutsidePacket). */
+        int worthyUpgrades = UNKNOWN;
+        /** World of Goop pre-read: gold lost by leaving (the constructor's roll, already capped by current gold). */
+        int goopLoss = UNKNOWN;
+        boolean ectoplasm;
+        /** Hidden information: opening the Mausoleum brings Writhe (1) or not (0). */
+        int mausoleumCurse = UNKNOWN;
+        /** Hidden information: the Cursed Tome's final book (relic id), and the HP still to pay from this page to get it. */
+        String tomeBook;
+        int tomeCost = UNKNOWN;
+        /** Base price of the next shop removal (ShopScreen.purgeCost, public purge_base_cost). */
+        int purgeCost = 75;
         /** What readLive pre-read on this decision (event and values), for the decision note; null when nothing was read. */
         String preread;
     }
@@ -94,6 +126,15 @@ final class EventRules {
 
     private static boolean healthy(Context c, double fraction) { return c.hp >= fraction * c.maxHp; }
 
+    /** Shining Light: a target is worth upgrading when the upgrade grid ranks it among this many distinct cards, about the
+     * smiths one act's route affords. Hand-set, uncalibrated. */
+    static final int UPGRADE_TOP_K = 3;
+    /** Shining Light: HP left after the light at or above this share of max HP is "too healthy to use up". Hand-set, uncalibrated. */
+    static final double LIGHT_SPARE = .7;
+    /** World of Goop: gather needs at least this much gold swing (75 gained + loss avoided) per HP paid. Hand-set, uncalibrated. */
+    static final int GOOP_GOLD_PER_HP = 3;
+    static final int GOOP_DAMAGE = 11, GOOP_GOLD = 75;
+
     /** Null means "no rule: ask the network". */
     /** Ruby Key: smith first, recall only at the second-to-last campfire (or the last one). {@code left} counts the
      * campfires still ahead on the shortest route. Decision index is -1 (network picks) with recall avoided until then. */
@@ -122,6 +163,14 @@ final class EventRules {
             case "Shining Light": {
                 if (n != 2) return null;
                 int damage = Math.round(c.maxHp * (c.ascension >= 15 ? .3f : .2f));
+                if (c.worthyUpgrades != UNKNOWN && c.danger != null) {
+                    int left = c.hp - damage;
+                    if (left <= 0) return pick(1, "闪耀之光：失 " + damage + " 血会致死，离开");
+                    if (left >= LIGHT_SPARE * c.maxHp) return pick(0, "闪耀之光：失 " + damage + " 血后仍很健康，进入");
+                    if (c.worthyUpgrades == 0) return pick(1, "闪耀之光：预读的升级牌都不在升级前 " + UPGRADE_TOP_K + "，离开");
+                    return c.danger.high(left) ? pick(1, "闪耀之光：" + c.danger.describe(left) + "，离开")
+                        : pick(0, "闪耀之光：" + c.worthyUpgrades + " 张预读牌值得升级，" + c.danger.describe(left) + "，进入");
+                }
                 return c.hp - damage >= .55 * c.maxHp ? pick(0, "闪耀之光：升级两张牌") : pick(1, "闪耀之光：血量不足，离开");
             }
             case "The Cleric": {
@@ -138,9 +187,12 @@ final class EventRules {
                 return pay && c.removable > 0 ? pick(0, "乞丐：付钱删牌") : pick(n - 1, "乞丐：离开");
             }
             case "Addict": {
+                // pay 0 (85 gold, listed when affordable), steal 1 (Shame), leave; never steal
                 boolean pay = c.gold >= 85;
                 if (n != (pay ? 3 : 2)) return null;
-                return pay ? pick(0, "瘾君子：付钱买遗物") : pick(n - 1, "瘾君子：离开"); // never steal
+                if (pay && c.removable == 0) return pick(0, "瘾君子：没有要删的牌，付钱买遗物");
+                return pay && c.gold - 85 >= c.purgeCost ? pick(0, "瘾君子：付钱后仍够商店删牌，买遗物")
+                    : pick(n - 1, "瘾君子：留钱给商店删牌，离开");
             }
             case "Ghosts":
                 return n == 2 ? pick(1, MANUAL + "：AI 大牌组打法不适配，拒绝幽灵") : null;
@@ -157,7 +209,10 @@ final class EventRules {
                     : pick(1, "死去的冒险者：下一次遇精英，血量不够，离开");
             case "Drug Dealer":
                 // J.A.X. 0, transform 1 (only listed with two transformable cards), Mutagenic Strength 2.
-                if (n == 3) return c.artifactRelic ? pick(2, "药贩：自带人工制品，突变力量") : pick(1, "药贩：变形两张牌");
+                if (n == 3 && c.artifactRelic) return pick(2, "药贩：自带人工制品，突变力量");
+                if (n == 3 && c.cardsWanted != UNKNOWN) return c.cardsWanted == 1
+                    ? pick(1, "药贩：预读两张变形结果都想要，变形两张牌") : pick(2, "药贩：预读变形结果不全想要，突变力量");
+                if (n == 3) return pick(1, "药贩：变形两张牌");
                 return n == 2 ? pick(1, "药贩：不选 J.A.X.") : null;
             case "Living Wall":
                 if (n != 2 && n != 3) return null;
@@ -165,6 +220,8 @@ final class EventRules {
             case "Purifier":
                 return n == 2 ? (c.removable > 0 ? pick(0, "净化祭坛：删牌") : pick(1, "净化祭坛：无牌可删")) : null;
             case "Transmorgrifier":
+                if (n == 2 && c.cardsWanted != UNKNOWN)
+                    return c.cardsWanted == 1 ? pick(0, "变形祭坛：预读变形结果想要，变形") : pick(1, "变形祭坛：预读变形结果不想要，离开");
                 return n == 2 ? (c.removable > 0 ? pick(0, "变形祭坛：变形") : pick(1, "变形祭坛：无牌可变")) : null;
             case "Upgrade Shrine":
             case "Duplicator":
@@ -179,6 +236,15 @@ final class EventRules {
             case "Big Fish":
                 return n == 3 ? (healthy(c, .55) ? pick(1, "大鱼：甜甜圈 +5 最大血") : pick(0, "大鱼：香蕉回血")) : null;
             case "World of Goop":
+                if (n == 2 && c.goopLoss != UNKNOWN && c.danger != null) {
+                    // gather 0: +75 gold (none with Ectoplasm), lose 11 HP; leave 1: lose goopLoss gold
+                    int left = c.hp - GOOP_DAMAGE, swing = (c.ectoplasm ? 0 : GOOP_GOLD) + c.goopLoss;
+                    if (left <= 0) return pick(1, "泥坑：失 11 血会致死，离开（失 " + c.goopLoss + " 金币）");
+                    if (c.danger.high(left)) return pick(1, "泥坑：" + c.danger.describe(left) + "，离开（失 " + c.goopLoss + " 金币）");
+                    return swing >= GOOP_GOLD_PER_HP * GOOP_DAMAGE
+                        ? pick(0, "泥坑：" + c.danger.describe(left) + "，收集金币（金币差 " + swing + "）")
+                        : pick(1, "泥坑：金币差 " + swing + " 不值 11 血，离开");
+                }
                 return n == 2 ? (healthy(c, .35) ? pick(0, "泥坑：收集金币") : pick(1, "泥坑：血量不足，离开")) : null;
             case "Mushrooms":
                 return n == 2 ? pick(0, "蘑菇：战斗（不吃寄生诅咒）") : null;
@@ -186,7 +252,10 @@ final class EventRules {
             case "Liars Game":
                 return n == 2 ? pick(1, "说谎者：不拿疑虑诅咒") : null;
             case "The Mausoleum":
-                return n == 2 ? pick(1, "陵墓：不冒悔恨诅咒的险，离开") : null;
+                // open 0 (relic; Writhe on a coin flip, always at A15+), leave 1
+                if (n != 2) return null;
+                if (c.ascension < 15 && c.mausoleumCurse == 0) return pick(0, "陵墓：预读到不出诅咒，打开");
+                return pick(1, c.mausoleumCurse == 1 ? "陵墓：预读到苦恼诅咒，离开" : "陵墓：不冒苦恼诅咒的险，离开");
             case "Forgotten Altar": {
                 // [offer the Golden Idol,] sacrifice, desecrate (Decay). No leave button exists.
                 if (n != 2 && n != 3) return null;
@@ -207,8 +276,13 @@ final class EventRules {
                 // simplicity 0 (remove a card), elegance 1 (upgrade Strikes and Defends)
                 return n == 2 ? (c.removable > 0 ? pick(0, "古老文字：删牌") : pick(1, "古老文字：没有可删的牌，升级打防")) : null;
             case "Cursed Tome":
-                // read 0, leave 1; on the last page take 0 (10-15 HP, random book) or stop 1: both times the second button
-                return n == 2 ? pick(1, "诅咒之书：不读，不赌随机书") : null;
+                // read 0, leave 1; on the last page take 0 (10, A15+ 15 HP, the book) or stop 1 (3 HP). Pages 1-3 have one button.
+                // Necronomicon brings Necronomicurse, so it is refused like every curse offer.
+                if (n != 2) return null;
+                if (c.tomeBook != null && !c.tomeBook.equals("Necronomicon") && c.tomeCost != UNKNOWN && c.hp > c.tomeCost)
+                    return pick(0, "诅咒之书：预读到 " + c.tomeBook + "，读完还要 " + c.tomeCost + " 血，读");
+                return pick(1, c.tomeBook == null ? "诅咒之书：不读，不赌随机书"
+                    : "诅咒之书：预读到 " + c.tomeBook + (c.tomeBook.equals("Necronomicon") ? "（带诅咒）" : "，血量不够") + "，不读");
             case "Vampires":
                 return n == 2 || n == 3 ? pick(n - 1, "吸血鬼：拒绝（噬咬牌质量低，还要删光打击）") : null;
             case "Masked Bandits":
@@ -219,9 +293,17 @@ final class EventRules {
             case "Tomb of Lord Red Mask":
                 // with the Red Mask: wear it for 222 gold (0), leave; without: pay all gold for it, leave
                 return n == 2 ? (c.redMask ? pick(0, "红面具陵墓：戴上红面具拿 222 金币") : pick(1, "红面具陵墓：不花光金币买面具，离开")) : null;
-            case "SensoryStone":
+            case "SensoryStone": {
                 // recall 1 colorless card, 5 HP for 2, 10 HP for 3
-                return n == 3 ? (healthy(c, .6) ? pick(2, "感知石：血量够，拿三张无色牌") : pick(0, "感知石：血量不足，只拿一张")) : null;
+                if (n != 3) return null;
+                if (c.sensoryWants == UNKNOWN)
+                    return healthy(c, .6) ? pick(2, "感知石：血量够，拿三张无色牌") : pick(0, "感知石：血量不足，只拿一张");
+                // The last wanted group among the tiers whose HP loss is not lethal; no other HP floor.
+                int tier = 1;
+                for (int k = 2; k <= 3; k++) if ((c.sensoryWants >> (k - 1) & 1) != 0 && c.hp > SENSORY_COST[k]) tier = k;
+                return tier == 1 ? pick(0, "感知石：预读后两组没有想要的牌（或付血致死），只拿第一组")
+                    : pick(tier - 1, "感知石：预读想要第 " + tier + " 组的牌，付 " + SENSORY_COST[tier] + " 血拿 " + tier + " 组");
+            }
             case "FaceTrader":
                 // touch (lose 10% HP, gold), trade (a random face, read ahead), leave
                 if (n != 3) return null;
@@ -230,6 +312,9 @@ final class EventRules {
                     : pick(2, "换脸商：血量不足，离开");
             case "The Library":
                 // read 0 (pick one of twenty cards), sleep 1 (heal)
+                // the pre-read only adds "nothing worth reading -> sleep"; under 40% HP the heal still wins (cards do not price it)
+                if (n == 2 && c.cardsWanted == 0) return pick(1, "图书馆：预读 20 张都不想要，睡觉回血");
+                if (n == 2 && c.cardsWanted == 1 && healthy(c, .4)) return pick(0, "图书馆：预读 20 张里有想要的牌，读书");
                 return n == 2 ? (healthy(c, .4) ? pick(0, "图书馆：读书选牌") : pick(1, "图书馆：血量低于 40%，睡觉回血")) : null;
             case "The Joust":
                 // bet on the murderer 0 (100 gold if he wins), on the owner 1 (250 gold); the fight is decided by a read-ahead draw
@@ -293,14 +378,163 @@ final class EventRules {
                 case "Dead Adventurer": adventurer(event, c);
                     c.preread = "next=" + (c.adventurerNext == SAFE_SEARCH ? "safe" : "elite") + " enemy=" + c.adventurerEnemy; break;
                 case "FaceTrader": c.goodFace = goodFace(); c.preread = "goodFace=" + c.goodFace; break;
+                case "Shining Light": light(c); break;
+                case "World of Goop":
+                    c.goopLoss = intField(event, "goldLoss");
+                    c.ectoplasm = AbstractDungeon.player.hasRelic("Ectoplasm");
+                    c.preread = "goldLoss=" + c.goopLoss;
+                    expect(c.event, AbstractDungeon.player.gold, c.goopLoss, null);
+                    break;
                 case "The Joust": c.ownerWins = AbstractDungeon.miscRng.copy().randomBoolean(0.3f) ? 1 : 0;
                     c.preread = "ownerWins=" + c.ownerWins; break;
+                case "SensoryStone": if (c.shown == 3) sensoryStone(c); break;
+                case "The Library": if (c.shown == 2) library(c); break;
+                case "Transmorgrifier": if (c.shown == 2) transmogrify(c); break;
+                case "Drug Dealer": if (c.shown == 3 && !c.artifactRelic) drugDealer(c); break;
+                case "The Mausoleum": // TheMausoleum.buttonEffect: miscRng.randomBoolean(), forced to a curse at A15+
+                    c.mausoleumCurse = AbstractDungeon.miscRng.copy().randomBoolean() || AbstractDungeon.ascensionLevel >= 15 ? 1 : 0;
+                    c.preread = "curse=" + c.mausoleumCurse; expectOutcome(c.event, c.mausoleumCurse == 1 ? "Writhe" : "none"); break;
+                case "Cursed Tome": // pages 1-3 take 1+2+3 HP (damageTaken counts them), the last page finalDmg
+                    c.tomeBook = tomeBook();
+                    c.tomeCost = intField(event, "finalDmg") + Math.max(0, 6 - intField(event, "damageTaken"));
+                    c.preread = "book=" + c.tomeBook + " cost=" + c.tomeCost; expectOutcome(c.event, c.tomeBook); break;
                 default: break;
             }
             if (c.preread != null) c.preread = c.event + ": " + c.preread;
         } catch (Throwable ignored) {
             // Stay UNKNOWN: the caller falls back to the network.
         }
+    }
+
+    /** Replays ShiningLight.upgradeCards on a copy of miscRng (same order as EventForesight.shiningLight): the upgradable
+     * cards in deck order, shuffled with java.util.Random(miscRng.randomLong()), first two. */
+    private static void light(Context c) {
+        java.util.ArrayList<AbstractCard> deck = AbstractDungeon.player.masterDeck.group;
+        java.util.List<Integer> upgradable = new java.util.ArrayList<Integer>();
+        for (int i = 0; i < deck.size(); i++) if (deck.get(i).canUpgrade()) upgradable.add(i);
+        if (upgradable.isEmpty()) return;
+        java.util.List<Integer> order = new java.util.ArrayList<Integer>(upgradable);
+        java.util.Collections.shuffle(order, new java.util.Random(AbstractDungeon.miscRng.copy().randomLong()));
+        order = order.subList(0, Math.min(2, order.size()));
+        c.lightUpgradable = new int[upgradable.size()];
+        for (int i = 0; i < c.lightUpgradable.length; i++) c.lightUpgradable[i] = upgradable.get(i);
+        c.lightTargets = new int[order.size()];
+        java.util.Set<java.util.UUID> predicted = new java.util.HashSet<java.util.UUID>();
+        StringBuilder names = new StringBuilder();
+        for (int i = 0; i < c.lightTargets.length; i++) {
+            AbstractCard card = deck.get(c.lightTargets[i] = order.get(i));
+            predicted.add(card.uuid);
+            names.append(i == 0 ? "" : ",").append(card.cardID);
+        }
+        c.preread = "targets=" + names;
+        expect(c.event, 0, 0, predicted);
+    }
+
+    // ---- runtime self-check: the pre-read against what the game did (logged with the result page's click) ----
+
+    private static String checkEvent;
+    private static int checkFloor, checkGold, checkLoss;
+    private static java.util.Set<java.util.UUID> checkCards;
+    private static java.util.Map<java.util.UUID, Integer> checkUpgrades;
+
+    private static void expect(String event, int gold, int loss, java.util.Set<java.util.UUID> cards) {
+        checkEvent = event; checkFloor = AbstractDungeon.floorNum; checkGold = gold; checkLoss = loss; checkCards = cards;
+        checkUpgrades = new java.util.HashMap<java.util.UUID, Integer>();
+        for (AbstractCard card : AbstractDungeon.player.masterDeck.group) checkUpgrades.put(card.uuid, card.timesUpgraded);
+    }
+
+    /** On the event's result page: "preread ok" / "preread MISMATCH ..." for the option actually taken, or null when there
+     * is nothing to compare (another event, the other option, live off). Idempotent, so a re-scored page logs it again. */
+    static String selfCheck(String event) {
+        if (!live || checkEvent == null) return null;
+        try {
+            if (!checkEvent.equals(event) || checkFloor != AbstractDungeon.floorNum) return null;
+            if (checkCards != null) {
+                java.util.Set<java.util.UUID> upgraded = new java.util.HashSet<java.util.UUID>();
+                StringBuilder names = new StringBuilder();
+                for (AbstractCard card : AbstractDungeon.player.masterDeck.group) {
+                    Integer before = checkUpgrades.get(card.uuid);
+                    if (before != null && card.timesUpgraded > before) {
+                        upgraded.add(card.uuid);
+                        names.append(names.length() == 0 ? "" : ",").append(card.cardID);
+                    }
+                }
+                if (upgraded.isEmpty()) return null; // left the light
+                return event + ": preread " + (upgraded.equals(checkCards) ? "ok" : "MISMATCH") + " upgraded=" + names;
+            }
+            int lost = checkGold - AbstractDungeon.player.gold;
+            if (lost <= 0) return null; // gathered
+            return event + ": preread " + (lost == checkLoss ? "ok" : "MISMATCH predicted=" + checkLoss) + " goldLost=" + lost;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    static final String[] TOME_BOOKS = {"Necronomicon", "Enchiridion", "Nilry's Codex"};
+
+    /**
+     * CursedTome.randomBook on a copy of miscRng: an unowned book (Circlet when all are owned). Nothing between the intro and
+     * the last page draws from miscRng (the pages only deal HP_LOSS), so the intro read equals the draw.
+     */
+    private static String tomeBook() {
+        java.util.ArrayList<String> books = new java.util.ArrayList<String>();
+        for (String id : TOME_BOOKS) if (!AbstractDungeon.player.hasRelic(id)) books.add(id);
+        return books.isEmpty() ? "Circlet" : books.get(AbstractDungeon.miscRng.copy().random(books.size() - 1));
+    }
+
+    // ---- runtime self-check: compare a preread with what the run actually got ------------------
+
+    private static String outcomeEvent, outcomeExpect;
+    private static Object outcomePlayer;
+    private static int outcomeFloor, checkWrithe, checkRelics, checkOmamori;
+    private static boolean[] checkBooks;
+
+    /** Remembers the outcome a Mausoleum or Cursed Tome preread expects; {@link #outcomeCheck} logs it once it is visible. */
+    private static void expectOutcome(String event, String outcome) {
+        outcomeEvent = event; outcomeExpect = outcome; outcomePlayer = AbstractDungeon.player; outcomeFloor = AbstractDungeon.floorNum;
+        checkWrithe = writhes(); checkRelics = AbstractDungeon.player.relics.size(); checkOmamori = omamori();
+        checkBooks = new boolean[TOME_BOOKS.length];
+        for (int i = 0; i < TOME_BOOKS.length; i++) checkBooks[i] = AbstractDungeon.player.hasRelic(TOME_BOOKS[i]);
+    }
+
+    /**
+     * Called before every outside decision (game thread). The Mausoleum is judged on the next floor, when the Writhe soul has
+     * reached the deck; the Cursed Tome when its book is on the reward screen or newly owned. Untaken outcomes log nothing.
+     */
+    static void outcomeCheck() {
+        if (!live || outcomeEvent == null) return;
+        try {
+            if (AbstractDungeon.player != outcomePlayer) { outcomeEvent = null; return; }
+            boolean nextFloor = AbstractDungeon.floorNum != outcomeFloor;
+            String actual = null;
+            if (outcomeEvent.equals("The Mausoleum")) {
+                if (!nextFloor) return;
+                if (AbstractDungeon.player.relics.size() > checkRelics) // opened: the relic comes with or without the curse
+                    actual = writhes() > checkWrithe || omamori() < checkOmamori ? "Writhe" : "none";
+            } else {
+                for (com.megacrit.cardcrawl.rewards.RewardItem reward : AbstractDungeon.getCurrRoom().rewards)
+                    if (reward.relic != null && (reward.relic.relicId.equals("Circlet")
+                            || java.util.Arrays.asList(TOME_BOOKS).contains(reward.relic.relicId))) actual = reward.relic.relicId;
+                if (actual == null && !nextFloor) return;
+                for (int i = 0; actual == null && i < TOME_BOOKS.length; i++)
+                    if (!checkBooks[i] && AbstractDungeon.player.hasRelic(TOME_BOOKS[i])) actual = TOME_BOOKS[i];
+            }
+            if (actual != null) System.err.println("[STS1Solver] " + (actual.equals(outcomeExpect) ? "preread ok: " + outcomeEvent + " " + actual
+                : "preread MISMATCH: " + outcomeEvent + " preread " + outcomeExpect + ", actual " + actual));
+        } catch (Throwable ignored) {
+            // the self-check never affects play
+        }
+        outcomeEvent = null;
+    }
+
+    private static int writhes() {
+        int count = 0;
+        for (com.megacrit.cardcrawl.cards.AbstractCard card : AbstractDungeon.player.masterDeck.group) if (card.cardID.equals("Writhe")) count++;
+        return count;
+    }
+
+    private static int omamori() {
+        return AbstractDungeon.player.hasRelic("Omamori") ? AbstractDungeon.player.getRelic("Omamori").counter : 0;
     }
 
     /** Replays the event's own draws on a copy of miscRng (same order as EventForesight.scrapOoze). */
@@ -331,6 +565,133 @@ final class EventRules {
         c.adventurerEnemy = intField(event, "enemy");
         Random rng = AbstractDungeon.miscRng.copy();
         c.adventurerNext = rng.random(0, 99) < chance ? ELITE_SEARCH : SAFE_SEARCH;
+    }
+
+    // ---- card pre-reads: the replays run in a Sandbox; CardWant scores the cards as the real reward screen would ----------
+
+    /** SensoryStone.reward(n): n x RewardItem(COLORLESS), each getColorlessRewardCards() on cardRng and onPreviewObtainCard
+     * from every relic; memory k gets the first k groups of one sequence (getRandomMemory draws only miscRng). */
+    private static void sensoryStone(Context c) {
+        List<List<AbstractCard>> groups = new ArrayList<>();
+        try (Sandbox ignored = new Sandbox()) {
+            for (int k = 0; k < 3; k++) {
+                List<AbstractCard> cards = AbstractDungeon.getColorlessRewardCards();
+                for (AbstractCard card : cards) previewObtain(card);
+                groups.add(cards);
+            }
+        }
+        int wants = 0;
+        List<AbstractCard> added = new ArrayList<>();
+        List<List<String>> faces = new ArrayList<>();
+        StringBuilder note = new StringBuilder();
+        for (int k = 0; k < 3; k++) {
+            List<AbstractCard> group = groups.get(k);
+            int pick = CardWant.choose(group, added);
+            if (pick >= 0) { wants |= 1 << k; added.add(group.get(pick)); }
+            faces.add(faces(group));
+            note.append(k == 0 ? "" : " | ").append(names(group)).append(" -> ").append(pick >= 0 ? group.get(pick).name : "skip");
+        }
+        c.sensoryWants = wants;
+        c.preread = note.toString();
+        PrereadCheck.expect(c.event, AbstractDungeon.floorNum, PrereadCheck.rewardGroups(c.event, faces));
+    }
+
+    /** TheLibrary read: 20 x getCard(rollRarity()).makeCopy() on cardRng, re-rolling ids already listed, then onPreviewObtainCard.
+     * The grid has no cancel button (gridSelectScreen.open(group, 1, tip, false)), so reading commits to one card: read when the
+     * model wants any of the 20 as a single-card reward, its skip standing for sleep. */
+    private static void library(Context c) {
+        List<AbstractCard> cards = new ArrayList<>();
+        try (Sandbox ignored = new Sandbox()) {
+            for (int i = 0; i < 20; i++) {
+                AbstractCard card = AbstractDungeon.getCard(AbstractDungeon.rollRarity()).makeCopy();
+                for (boolean dupe = true; dupe; ) {
+                    dupe = false;
+                    for (AbstractCard have : cards) if (have.cardID.equals(card.cardID)) { dupe = true; break; }
+                    if (dupe) card = AbstractDungeon.getCard(AbstractDungeon.rollRarity()).makeCopy();
+                }
+                previewObtain(card);
+                cards.add(card);
+            }
+        }
+        List<AbstractCard> wanted = new ArrayList<>();
+        for (AbstractCard card : cards)
+            if (CardWant.choose(Collections.singletonList(card), Collections.<AbstractCard>emptyList()) == 0) wanted.add(card);
+        c.cardsWanted = wanted.isEmpty() ? 0 : 1;
+        c.preread = names(cards) + " -> " + (wanted.isEmpty() ? "none wanted" : "wants " + names(wanted));
+        if (!wanted.isEmpty()) PrereadCheck.expect(c.event, AbstractDungeon.floorNum, PrereadCheck.grid(c.event, faces(cards)));
+    }
+
+    /** Transmogrifier: the for_transform grid of purgeable cards without bottled ones; one transformCard(target, false, miscRng). */
+    private static void transmogrify(Context c) {
+        transforms(c, CardGroup.getGroupWithoutBottledCards(AbstractDungeon.player.masterDeck.getPurgeableCards()).group, 1, true);
+    }
+
+    /** DrugDealer: a grid of all purgeable cards (bottled included, for_transform off, so no removal order); two selections,
+     * transformed in selection order on miscRng. */
+    private static void drugDealer(Context c) {
+        transforms(c, AbstractDungeon.player.masterDeck.getPurgeableCards().group, 2, false);
+    }
+
+    /** The targets are the cards the real GRID decision selects (CardWant.gridChoose: same packet and hand rules); a result
+     * depends on its target through the color and the excluded id. Wanted: every target is a non-curse card the removal order
+     * reaches and the model wants every result (after onPreviewObtainCard: the eggs upgrade it on obtain), in order. */
+    private static void transforms(Context c, List<AbstractCard> grid, int count, boolean forTransform) {
+        List<AbstractCard> targets = new ArrayList<>();
+        for (int i = 0; i < count; i++) targets.add(grid.get(CardWant.gridChoose(grid, targets, count, forTransform)));
+        List<AbstractCard> results = new ArrayList<>();
+        try (Sandbox ignored = new Sandbox()) {
+            for (AbstractCard target : targets) {
+                AbstractCard result = transformed(target, AbstractDungeon.miscRng);
+                previewObtain(result);
+                results.add(result);
+            }
+        }
+        boolean wanted = true;
+        List<AbstractCard> added = new ArrayList<>();
+        StringBuilder note = new StringBuilder();
+        for (int i = 0; i < count; i++) {
+            AbstractCard target = targets.get(i), result = results.get(i);
+            boolean reachable = target.type != AbstractCard.CardType.CURSE
+                && removalTier(target.cardID, target.type.name()) <= LAST_REMOVAL_TIER;
+            boolean want = reachable && CardWant.choose(Collections.singletonList(result), added) == 0;
+            wanted &= want;
+            added.add(result);
+            note.append(i == 0 ? "" : ", ").append(target.name).append(" -> ").append(result.name)
+                .append(want ? " (wanted)" : reachable ? " (not wanted)" : " (target outside the removal order)");
+        }
+        c.cardsWanted = wanted ? 1 : 0;
+        c.preread = note.toString();
+        if (wanted) {
+            java.util.Set<String> uuids = new java.util.HashSet<>();
+            for (AbstractCard target : targets) uuids.add(target.uuid.toString());
+            PrereadCheck.expect(c.event, AbstractDungeon.floorNum,
+                PrereadCheck.transform(c.event, uuids, faces(results), faces(AbstractDungeon.player.masterDeck.group)));
+        }
+    }
+
+    /** AbstractDungeon.transformCard(card, false, rng) without its seen-card bookkeeping (UnlockTracker writes the profile). */
+    private static AbstractCard transformed(AbstractCard card, Random rng) {
+        switch (card.color) {
+            case COLORLESS: return AbstractDungeon.returnTrulyRandomColorlessCardFromAvailable(card, rng).makeCopy();
+            case CURSE: return CardLibrary.getCurse(card, rng).makeCopy();
+            default: return AbstractDungeon.returnTrulyRandomCardFromAvailable(card, rng).makeCopy();
+        }
+    }
+
+    private static void previewObtain(AbstractCard card) {
+        for (AbstractRelic relic : AbstractDungeon.player.relics) relic.onPreviewObtainCard(card);
+    }
+
+    private static List<String> faces(List<AbstractCard> cards) {
+        List<String> out = new ArrayList<>();
+        for (AbstractCard card : cards) out.add(card.cardID + "+" + card.timesUpgraded);
+        return out;
+    }
+
+    private static String names(List<AbstractCard> cards) {
+        List<String> out = new ArrayList<>();
+        for (AbstractCard card : cards) out.add(card.name);
+        return String.join("/", out);
     }
 
     private static int intField(Object target, String name) throws ReflectiveOperationException {

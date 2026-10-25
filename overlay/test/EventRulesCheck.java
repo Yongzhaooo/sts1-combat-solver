@@ -118,7 +118,21 @@ public final class EventRulesCheck {
 
         // Curse events: never the curse option.
         check(index(c("Liars Game", 2, 70, 80, 0)) == 1, "serpent: disagree");
-        check(index(c("The Mausoleum", 2, 70, 80, 0)) == 1, "mausoleum: leave");
+        check(index(c("The Mausoleum", 2, 70, 80, 0)) == 1, "mausoleum: unread (live off) leaves");
+        EventRules.Context tomb0 = c("The Mausoleum", 2, 70, 80, 0);
+        tomb0.mausoleumCurse = 0;
+        check(index(tomb0) == 0, "mausoleum: preread no curse opens");
+        tomb0.mausoleumCurse = 1;
+        check(index(tomb0) == 1, "mausoleum: preread curse leaves");
+        tomb0.mausoleumCurse = 0; tomb0.ascension = 15;
+        check(index(tomb0) == 1, "mausoleum: A15 always curses, leave");
+        check(index(c("The Mausoleum", 1, 70, 80, 0)) == -99, "mausoleum result page is not ruled");
+        for (String event : new String[]{"The Mausoleum", "Cursed Tome"}) {
+            EventRules.Context offline = c(event, 2, 70, 80, 0);
+            EventRules.readLive(offline); EventRules.outcomeCheck();
+            check(offline.preread == null && offline.mausoleumCurse == EventRules.UNKNOWN && offline.tomeBook == null
+                && index(offline) == 1, event + ": live off reads nothing and keeps the old rule");
+        }
         check(index(c("Mushrooms", 2, 5, 80, 0)) == 0, "mushrooms: fight even when hurt");
         check(index(c("Accursed Blacksmith", 3, 70, 80, 0)) == 0 && index(c("Accursed Blacksmith", 2, 70, 80, 0)) == 1, "blacksmith");
         check(index(c("Forgotten Altar", 2, 70, 80, 0)) == 0 && index(c("Forgotten Altar", 3, 70, 80, 0)) == 0, "altar");
@@ -173,7 +187,31 @@ public final class EventRulesCheck {
         check(index(basics) == 0, "back to basics: remove");
         basics.removable = 0;
         check(index(basics) == 1, "back to basics: upgrade when nothing to remove");
-        check(index(c("Cursed Tome", 2, 70, 80, 0)) == 1, "tome: leave");
+        check(index(c("Cursed Tome", 2, 70, 80, 0)) == 1, "tome: unread (live off) leaves");
+        EventRules.Context tome = c("Cursed Tome", 2, 17, 80, 0);
+        tome.tomeBook = "Enchiridion"; tome.tomeCost = 16; // intro below A15: 1+2+3 pages + 10
+        check(index(tome) == 0, "tome: a non-Necronomicon book within HP reads");
+        tome.hp = 16;
+        check(index(tome) == 1, "tome: a cost equal to HP is lethal, don't read");
+        tome.hp = 70; tome.tomeBook = "Necronomicon";
+        check(index(tome) == 1, "tome: Necronomicon (Necronomicurse) is refused");
+        tome.tomeBook = "Circlet"; tome.tomeCost = 15; tome.hp = 16; // last page at A15: only the 15 HP book page is left
+        check(index(tome) == 0, "tome: last page takes a safe book");
+        tome.tomeCost = EventRules.UNKNOWN;
+        check(index(tome) == 1, "tome: unknown cost falls back to don't read");
+
+        // Addict: pay only when the shop removal stays affordable, or nothing is left to remove; never steal.
+        EventRules.Context addict = c("Addict", 3, 70, 80, 160);
+        check(index(addict) == 0, "addict: gold-85 == purge cost pays");
+        addict.gold = 159;
+        check(index(addict) == 2, "addict: one gold short of the purge leaves");
+        addict.purgeCost = 100; addict.gold = 185;
+        check(index(addict) == 0, "addict: follows the shop's current purge price");
+        addict.gold = 184;
+        check(index(addict) == 2, "addict: below the raised purge price leaves");
+        addict.gold = 85; addict.removable = 0;
+        check(index(addict) == 0, "addict: nothing removable pays");
+        check(index(c("Addict", 2, 70, 80, 84)) == 1, "addict: cannot pay, leave (never steal)");
         check(index(c("Vampires", 3, 70, 80, 0)) == 2 && index(c("Vampires", 2, 70, 80, 0)) == 1, "vampires: refuse");
         check(index(c("Masked Bandits", 2, 60, 80, 99)) == 1 && index(c("Masked Bandits", 2, 5, 80, 99)) == 1, "bandits: never pay");
         check(index(c("SecretPortal", 2, 70, 80, 0)) == 1, "portal: leave");
@@ -195,6 +233,7 @@ public final class EventRulesCheck {
         joust.ownerWins = 0;
         check(index(joust) == 0, "joust: murderer wins");
         check(index(c("The Library", 2, 33, 80, 0)) == 0 && index(c("The Library", 2, 30, 80, 0)) == 1, "library reads from 40%");
+        cardPrereads();
         check(index(c("The Moai Head", 3, 70, 80, 0)) == 1 && index(c("The Moai Head", 2, 70, 80, 0)) == 1
             && index(c("The Moai Head", 2, 20, 80, 0)) == 0, "moai head");
         check(index(c("Mysterious Sphere", 2, 70, 80, 0)) == 0 && index(c("Mysterious Sphere", 2, 30, 80, 0)) == 1, "sphere");
@@ -204,7 +243,59 @@ public final class EventRulesCheck {
         check(index(c("Designer", 2, 70, 80, 45)) == 0 && index(c("Designer", 1, 70, 80, 10)) == -99, "designer adjust or nothing");
 
         packetChecks(args[0]);
+        dangerChecks(args[0]);
         System.out.println("PASS: event rules and removal order");
+    }
+
+    /** Card pre-reads (CardWant verdicts in sensoryWants / cardsWanted); UNKNOWN is the live-off or failed read: old rules. */
+    static void cardPrereads() {
+        // SensoryStone: the last wanted group picks the tier; a tier whose HP loss (5 / 10) is lethal is never taken.
+        int[][] stone = {  // wants bits (group k = bit k-1), hp, expected button
+            {0b100, 70, 2}, {0b111, 70, 2}, {0b011, 70, 1}, {0b010, 70, 1}, {0b001, 70, 0}, {0, 70, 0},
+            {0b100, 10, 0},   // the violating case: only group 3 wanted at 10 HP must not pay 10
+            {0b110, 10, 1}, {0b110, 11, 2}, {0b010, 5, 0}, {0b010, 6, 1}, {0b100, 11, 2}, {0b111, 3, 0}};
+        for (int[] row : stone) {
+            EventRules.Context s = c("SensoryStone", 3, row[1], 80, 0);
+            s.sensoryWants = row[0];
+            check(index(s) == row[2], "sensory stone wants " + Integer.toBinaryString(row[0]) + " at hp " + row[1] + ": " + index(s));
+        }
+        EventRules.Context lowStone = c("SensoryStone", 3, 20, 80, 0);
+        lowStone.sensoryWants = 0b100;
+        check(index(lowStone) == 2, "sensory stone: no HP floor besides the lethal guard (20/80 HP takes tier 3)");
+        check(index(c("SensoryStone", 3, 20, 80, 0)) == 0, "sensory stone unread: old 60% rule");
+        EventRules.Context stoneIntro = c("SensoryStone", 1, 70, 80, 0);
+        stoneIntro.sensoryWants = 0b100;
+        check(index(stoneIntro) == -99, "sensory stone intro page is not ruled");
+
+        // The Library: sleep when nothing is wanted; read a wanted card from 40% HP, below it the heal still wins.
+        for (int hp : new int[]{20, 70}) {
+            EventRules.Context lib = c("The Library", 2, hp, 80, 0);
+            lib.cardsWanted = 1;
+            check(index(lib) == (hp >= 32 ? 0 : 1), "library with a wanted card at hp " + hp);
+            lib.cardsWanted = 0;
+            check(index(lib) == 1, "library sleeps when nothing is wanted at hp " + hp);
+        }
+        // Transmorgrifier: transform only for a wanted result; unread keeps the removable rule.
+        EventRules.Context trans = c("Transmorgrifier", 2, 70, 80, 0);
+        trans.cardsWanted = 1;
+        check(index(trans) == 0, "transmogrifier transforms into a wanted card");
+        trans.cardsWanted = 0;
+        check(index(trans) == 1, "transmogrifier leaves an unwanted result");
+        trans.cardsWanted = EventRules.UNKNOWN;
+        check(index(trans) == 0, "transmogrifier unread: transform while something is removable");
+        trans.removable = 0;
+        check(index(trans) == 1, "transmogrifier unread: nothing removable, leave");
+        // Drug Dealer: an artifact relic still takes Mutagenic Strength; both results wanted transforms, else Mutagenic Strength.
+        EventRules.Context dealer = c("Drug Dealer", 3, 70, 80, 0);
+        dealer.cardsWanted = 1;
+        check(index(dealer) == 1, "drug dealer transforms two wanted results");
+        dealer.cardsWanted = 0;
+        check(index(dealer) == 2, "drug dealer takes Mutagenic Strength when a result is unwanted");
+        dealer.artifactRelic = true; dealer.cardsWanted = 1;
+        check(index(dealer) == 2, "drug dealer artifact relic rule comes first");
+        dealer.artifactRelic = false; dealer.cardsWanted = EventRules.UNKNOWN;
+        check(index(dealer) == 1, "drug dealer unread: transform");
+        check(index(c("Drug Dealer", 2, 70, 80, 0)) == 1, "drug dealer without the transform button: not J.A.X.");
     }
 
     static JsonObject copy(JsonObject value) {
@@ -314,6 +405,139 @@ public final class EventRulesCheck {
         game.add("screen_state", screen);
         visible.addProperty("screen_type", "GRID");
         visible.remove("choices");
+        return OutsidePacket.build(model, state, visible);
+    }
+
+    /** Danger ahead, Shining Light and World of Goop (executor C). Pre-read fields are set by hand; readLive needs the game. */
+    static void dangerChecks(String fixturePath) throws Exception {
+        // Danger: expected HP to the next rest site against the HP left after the event.
+        DangerAhead calm = new DangerAhead(1, 1, 0, 0, false), elite = new DangerAhead(1, 1, 1, 0, false);
+        check(calm.expectedLoss == 6 && !calm.high(9) && calm.high(8), "danger: one act-1 monster needs 1.5 x 6 HP");
+        check(elite.expectedLoss == 24 && elite.high(35) && !elite.high(36), "danger: monster + elite needs 36 HP");
+        check(new DangerAhead(1, 0, 0, 0, false).high(0) && !new DangerAhead(1, 0, 0, 0, false).high(1), "danger: rest next is low unless dead");
+        check(new DangerAhead(3, 1, 1, 0, false).expectedLoss == 42, "danger: act 3 prices");
+
+        // Shining Light (80 max HP, below A15: 16 HP). live=false leaves worthyUpgrades unknown: the old 55% rule.
+        EventRules.Context light = c("Shining Light", 2, 50, 80, 0);
+        check(index(light) == 1, "light offline: 34 left is under 55%, leave");
+        light.hp = 61;
+        check(index(light) == 0, "light offline: 45 left enters");
+        light.danger = calm;
+        check(index(light) == 0, "light: danger alone (no pre-read) keeps the old rule");
+        light.hp = 50; light.worthyUpgrades = 1;
+        check(index(light) == 0, "light: one worthy card and low danger enters at moderate HP");
+        light.danger = elite;
+        check(index(light) == 1, "light: high danger and moderate HP leaves");
+        light.hp = 72;
+        check(index(light) == 0, "light: 56 left of 80 is too healthy to use up, enters despite danger");
+        light.worthyUpgrades = 0;
+        check(index(light) == 0, "light: very healthy enters even without a worthy card");
+        light.hp = 50; light.danger = calm;
+        check(index(light) == 1, "light: no worthy card and moderate HP leaves");
+        light.worthyUpgrades = 2; light.danger = new DangerAhead(1, 0, 0, 0, false);
+        light.hp = 17;
+        check(index(light) == 0, "light: rest next, 1 HP left is allowed (no extra floor)");
+        light.hp = 16;
+        check(index(light) == 1, "light: never lethal");
+        light.ascension = 15; light.hp = 25; light.danger = calm;
+        check(index(light) == 1, "light A15: 30% (24) of 80, 1 HP left after a monster is high danger");
+        light.danger = calm; light.hp = 34;
+        check(index(light) == 0, "light A15: 10 left covers one monster");
+
+        // World of Goop: gather 0 (+75 gold, -11 HP), leave 1 (-goldLoss). Offline: the old 35% rule.
+        EventRules.Context goop = c("World of Goop", 2, 30, 80, 100);
+        check(index(goop) == 0 && index(c("World of Goop", 2, 27, 80, 100)) == 1, "goop offline: 35% rule");
+        goop.danger = elite; goop.goopLoss = 40;
+        check(index(goop) == 1, "goop: high danger, keep the HP and pay 40 gold");
+        goop.danger = calm;
+        check(index(goop) == 0, "goop: low danger, gather (115 gold swing)");
+        goop.hp = 11;
+        check(index(goop) == 1, "goop: never lethal");
+        goop.hp = 12; goop.danger = new DangerAhead(1, 0, 0, 0, false);
+        check(index(goop) == 0, "goop: rest next, gather down to 1 HP");
+        goop.hp = 60; goop.ectoplasm = true; goop.goopLoss = 20;
+        check(index(goop) == 1, "goop: Ectoplasm gains nothing, 20 gold is not worth 11 HP");
+        goop.goopLoss = 40;
+        check(index(goop) == 0, "goop: Ectoplasm, avoiding a 40 gold loss is worth 11 HP");
+
+        JsonObject fixture;
+        try (InputStreamReader reader = new InputStreamReader(new FileInputStream(fixturePath), StandardCharsets.UTF_8)) {
+            fixture = new JsonParser().parse(reader).getAsJsonObject();
+        }
+        Distill2 model = Distill2.load();
+        // Planned route on a one-column map: M at row 3, E at 4, rest at 5 -> one monster, one elite before the fire.
+        JsonObject game = copy(fixture.getAsJsonObject("state")).getAsJsonObject("game_state");
+        JsonObject visible = copy(fixture.getAsJsonObject("visible"));
+        visible.addProperty("x", 0); visible.addProperty("y", 2);
+        game.add("map", column("MM?MERMMMMMMMMR"));
+        DangerAhead route = DangerAhead.of(game, visible);
+        check(route != null && route.monsters == 1 && route.elites == 1 && route.unknowns == 0 && !route.boss,
+            "danger: route stops at the first rest site");
+        JsonObject dripper = new JsonObject(); dripper.addProperty("id", "Coffee Dripper");
+        game.getAsJsonArray("relics").add(dripper);
+        DangerAhead tired = DangerAhead.of(game, visible);
+        check(tired != null && tired.boss && tired.elites == 1 && tired.monsters == 9,
+            "danger: Coffee Dripper walks on to the boss");
+        visible.addProperty("y", 14);
+        check(DangerAhead.of(game, visible) == null, "danger: no route known falls back (null)");
+
+        // Worth upgrading = the campfire upgrade grid's ranking (same packet and model), over distinct cards.
+        OutsidePacket light80 = event(model, fixture, "Shining Light", 50, 80, 2);
+        JsonArray deck = fixture.getAsJsonObject("state").getAsJsonObject("game_state").getAsJsonArray("deck");
+        int[] upgradable = new int[deck.size() - 1];
+        for (int i = 1; i < deck.size(); i++) upgradable[i - 1] = i; // index 0 is Ascender's Bane
+        OutsidePacket grid = upgradeGrid(model, fixture, upgradable);
+        Distill2.Result scored = grid.score();
+        int top = upgradable[Integer.parseInt(grid.choices.get(scored.best).command.substring(7))];
+        check(light80.worthyUpgrades(upgradable, new int[]{top}, 1) == 1, "the grid's own best card is top-1");
+        check(light80.worthyUpgrades(upgradable, new int[]{1, 6}, 0) == 0, "top-0 admits nothing");
+        check(light80.worthyUpgrades(upgradable, new int[]{1, 6}, 5) == 2, "five distinct faces: top-5 admits everything");
+        int strikes = light80.worthyUpgrades(upgradable, new int[]{1, 2}, 1);
+        check(strikes == 0 || strikes == 2, "duplicate copies rank together: " + strikes);
+        // live=false through the packet: the old rule and note.
+        check(light80.policyScore().best == 1 && light80.ruleNote.equals("闪耀之光：血量不足，离开"), "light packet offline unchanged");
+        OutsidePacket goopPacket = event(model, fixture, "World of Goop", 30, 80, 2);
+        check(goopPacket.policyScore().best == 0 && goopPacket.ruleNote.equals("泥坑：收集金币"), "goop packet offline unchanged");
+        // The result page carries no self-check while live is off.
+        OutsidePacket done = event(model, fixture, "World of Goop", 30, 80, 1);
+        done.policyScore();
+        check(done.prereadNote == null, "no self-check offline");
+    }
+
+    /** One map column at x=0, rows 0..14 with the given room symbols. */
+    static JsonArray column(String symbols) {
+        JsonArray map = new JsonArray();
+        for (int y = 0; y < 15; y++) {
+            JsonObject node = new JsonObject();
+            node.addProperty("x", 0); node.addProperty("y", y);
+            node.addProperty("symbol", String.valueOf(symbols.charAt(y)));
+            JsonArray children = new JsonArray();
+            JsonObject child = new JsonObject();
+            child.addProperty("x", 0); child.addProperty("y", y + 1);
+            children.add(child);
+            node.add("children", children);
+            node.add("parents", new JsonArray());
+            map.add(node);
+        }
+        return map;
+    }
+
+    /** A real campfire upgrade grid of the given deck cards, built like CommunicationMod does. */
+    static OutsidePacket upgradeGrid(Distill2 model, JsonObject fixture, int[] indices) {
+        JsonObject state = copy(fixture.getAsJsonObject("state")), visible = copy(fixture.getAsJsonObject("visible"));
+        JsonObject game = state.getAsJsonObject("game_state");
+        JsonArray deck = game.getAsJsonArray("deck"), cards = new JsonArray();
+        for (int i : indices) cards.add(deck.get(i));
+        game.addProperty("current_hp", 50); game.addProperty("max_hp", 80); game.addProperty("gold", 100);
+        game.addProperty("screen_type", "GRID"); game.addProperty("room_type", "RestRoom");
+        JsonObject screen = new JsonObject();
+        screen.addProperty("for_upgrade", true); screen.addProperty("for_purge", false); screen.addProperty("for_transform", false);
+        screen.addProperty("confirm_up", false); screen.addProperty("any_number", false); screen.addProperty("num_cards", 1);
+        screen.add("cards", cards); screen.add("selected_cards", new JsonArray());
+        game.add("screen_state", screen);
+        JsonArray commands = new JsonArray(); commands.add("choose"); commands.add("cancel");
+        state.add("available_commands", commands);
+        visible.addProperty("screen_type", "GRID"); visible.remove("choices"); visible.addProperty("grid_from_shop", false);
         return OutsidePacket.build(model, state, visible);
     }
 }
