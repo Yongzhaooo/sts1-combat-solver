@@ -109,13 +109,17 @@ class Comparator:
         card-granted bonus, Dark holds its accumulated damage, and Focus is a
         player field. Rebuilding the displayed amounts here is what makes a wrong
         Focus or a wrong derived bonus visible instead of silently accepted.
+
+        Both amounts are floored at zero, like the game does in
+        AbstractOrb.applyFocus (``max(0, base + Focus)``): a Focus of -3 or lower
+        drives Lightning's passive to 0 rather than to a negative number.
         """
         name = orb["id"]
         passive, evoke = ORB_PASSIVE_EVOKE[name]
         if name in ORB_IGNORES_FOCUS:
             focus = 0
-        return {"id": name, "passive": passive + focus,
-                "evoke": orb["dark_counter"] if name == "DARK" else evoke + focus}
+        evoke = orb["dark_counter"] if name == "DARK" else evoke + focus
+        return {"id": name, "passive": max(0, passive + focus), "evoke": max(0, evoke)}
 
     def import_battle(self, view: dict, *, require_search_state=False):
         game = copy.deepcopy(view["game"])

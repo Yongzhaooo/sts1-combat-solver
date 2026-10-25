@@ -98,6 +98,10 @@ def main():
     check(defect_view([("Zap", 1)], {"draw_pile": [], "discard_pile": [], "exhaust_pile": []},
                       [orb("Lightning", 1, 6), orb("Frost", 0, 3), orb("Plasma", 1, 2),
                        orb("Dark", 4, 12)], -2), what="negative Focus")
+    # The game floors both amounts at zero (AbstractOrb.applyFocus), so a Focus below the base
+    # reads as 0 and not as a negative number the simulator would then report as a difference.
+    check(defect_view([("Zap", 1)], {"draw_pile": [], "discard_pile": [], "exhaust_pile": []},
+                      [orb("Lightning", 0, 4), orb("Frost", 0, 1)], -4), what="Focus below the orb base")
     check(defect_view([("Zap", 1)], {"draw_pile": [], "discard_pile": [], "exhaust_pile": []},
                       [orb("Lightning", 5, 10), orb("Frost", 4, 7), orb("Plasma", 1, 2)], 2),
           what="positive Focus")

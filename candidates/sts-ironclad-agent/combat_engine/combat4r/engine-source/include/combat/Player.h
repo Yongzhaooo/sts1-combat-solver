@@ -48,9 +48,9 @@ namespace sts {
 
         Stance stance = Stance::NEUTRAL;
         int8_t orbSlots = 0;
-        // Defect orb bar. Only orb identity plus a per-orb evoke bonus (e.g. upgraded Zap's
-        // +3) is stored; passive/evoke values are computed from the orb type, focus and this
-        // bonus at settlement time (same pattern as stance effects).
+        // Defect orb bar. Only orb identity and, for Dark, its accumulated counter are
+        // stored; passive/evoke values are computed from the orb type and focus at
+        // settlement time (same pattern as stance effects).
         // Inline storage is copied with each independent MCTS battle state.
         //
         // Vanilla caps orb slots at 10 (AbstractPlayer.MAX_ORBS); increaseOrbSlots
