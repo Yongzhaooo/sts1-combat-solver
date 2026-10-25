@@ -312,8 +312,9 @@ final class EventRules {
                     : pick(2, "换脸商：血量不足，离开");
             case "The Library":
                 // read 0 (pick one of twenty cards), sleep 1 (heal)
-                if (n == 2 && c.cardsWanted != UNKNOWN)
-                    return c.cardsWanted == 1 ? pick(0, "图书馆：预读 20 张里有想要的牌，读书") : pick(1, "图书馆：预读 20 张都不想要，睡觉回血");
+                // the pre-read only adds "nothing worth reading -> sleep"; under 40% HP the heal still wins (cards do not price it)
+                if (n == 2 && c.cardsWanted == 0) return pick(1, "图书馆：预读 20 张都不想要，睡觉回血");
+                if (n == 2 && c.cardsWanted == 1 && healthy(c, .4)) return pick(0, "图书馆：预读 20 张里有想要的牌，读书");
                 return n == 2 ? (healthy(c, .4) ? pick(0, "图书馆：读书选牌") : pick(1, "图书馆：血量低于 40%，睡觉回血")) : null;
             case "The Joust":
                 // bet on the murderer 0 (100 gold if he wins), on the owner 1 (250 gold); the fight is decided by a read-ahead draw

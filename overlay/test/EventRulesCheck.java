@@ -267,11 +267,11 @@ public final class EventRulesCheck {
         stoneIntro.sensoryWants = 0b100;
         check(index(stoneIntro) == -99, "sensory stone intro page is not ruled");
 
-        // The Library: read when a card is wanted, else sleep, whatever the HP.
+        // The Library: sleep when nothing is wanted; read a wanted card from 40% HP, below it the heal still wins.
         for (int hp : new int[]{20, 70}) {
             EventRules.Context lib = c("The Library", 2, hp, 80, 0);
             lib.cardsWanted = 1;
-            check(index(lib) == 0, "library reads a wanted card at hp " + hp);
+            check(index(lib) == (hp >= 32 ? 0 : 1), "library with a wanted card at hp " + hp);
             lib.cardsWanted = 0;
             check(index(lib) == 1, "library sleeps when nothing is wanted at hp " + hp);
         }
