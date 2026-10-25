@@ -241,9 +241,9 @@ void CardManager::moveDiscardPileIntoToDrawPile() {
     if (drawPile.empty()) {
         drawPileBloodCardCount = discardPileBloodCardCount;
         drawPile = discardPile;
-        for (auto &c : drawPile) {
-            resetCostForTurn(c);
-        }
+        // Java Soul.update (DRAW_PILE landing) clearPowers: costForTurn = cost, e.g. an Apotheosis upgraded under Corruption.
+        // resetCostForTurn keeps the -1 sentinel X-cost cards need, so it is the form to use here.
+        for (auto &c : drawPile) resetCostForTurn(c);
 
     } else {
         for (const auto &c : discardPile) {

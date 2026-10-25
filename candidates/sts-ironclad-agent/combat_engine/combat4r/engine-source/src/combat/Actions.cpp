@@ -365,6 +365,7 @@ Action Actions::DiscardNoTriggerCard() {
             return;
         }
         bc.cards.moveToDiscardPile(c);
+        bc.onCardDrawOrDiscard(); // UseCardAction -> CardGroup.moveToDiscardPile: Corruption frees the other hand skills
     }};
 }
 

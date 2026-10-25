@@ -76,6 +76,9 @@ namespace sts {
 
         int ascension = 0;
         Outcome outcome = Outcome::UNDECIDED;
+        // Player HP when the last monster died. Actions queued behind the kill still run here; Java's endBattle() drops
+        // whatever has not started when the death animations end, so a terminal HP check needs this point too.
+        int killCurHp = -1;
         InputState inputState = InputState::EXECUTING_ACTIONS;
         CardSelectInfo cardSelectInfo;
 
@@ -83,6 +86,7 @@ namespace sts {
 
         bool isBattleOver = false;
         bool endTurnQueued = false;
+        bool endTurnAfterVictory = false; // Time Warp ended the turn on the killing card; Java still plays the queued end-turn card
         bool turnHasEnded = false;
         bool skipMonsterTurn = false;
 

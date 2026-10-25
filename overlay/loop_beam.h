@@ -7,12 +7,14 @@
 #include <array>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <map>
 #include <memory>
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_set>
 #include <vector>
@@ -26,12 +28,22 @@ struct Path {
     CardId id = CardId::INVALID;
     int length = 1;  // actions from the root, this one included
 };
+// The Path fields of an action, kept until a node survives (Node::deferred) so that dropped candidates never allocate one.
+struct Step {
+    unsigned bits = 0;
+    int card = -1, turn = -1;
+    CardId id = CardId::INVALID;
+};
 struct Node {
     std::shared_ptr<BattleContext> state;
     std::shared_ptr<const Path> path;
     double powers = 0;
     std::array<double, 3> scores{};
     std::string key;
+    std::size_t keyHash = 0;
+    std::shared_ptr<const Path> base;  // deferred: parent path of `step`; `path` is null until materialize()
+    Step step;
+    bool deferred = false;
 };
 struct Stats {
     long long transitions = 0, macroActions = 0;
@@ -42,17 +54,61 @@ thread_local Stats stats;
 inline int rescueMaxWidth = 2048;
 inline bool rescuePlateau = false;
 
-inline std::shared_ptr<const Path> append(const Node &node, search::Action action) {
-    auto path = std::make_shared<Path>(Path{node.path, action.bits});
-    if (node.path) path->length = node.path->length + 1;
+inline Step stepOf(const Node &node, search::Action action) {
+    Step step;
+    step.bits = action.bits;
     if (action.getActionType() == search::ActionType::CARD) {
         const auto &card = node.state->cards.hand[action.getSourceIdx()];
-        path->card = card.uniqueId;
-        path->id = card.id;
-        path->turn = node.state->turn;
+        step.card = card.uniqueId;
+        step.id = card.id;
+        step.turn = node.state->turn;
     }
+    return step;
+}
+inline std::shared_ptr<const Path> makePath(std::shared_ptr<const Path> parent, const Step &step) {
+    auto path = std::make_shared<Path>(Path{parent, step.bits});
+    if (parent) path->length = parent->length + 1;
+    path->card = step.card;
+    path->id = step.id;
+    path->turn = step.turn;
     return path;
 }
+inline std::shared_ptr<const Path> append(const Node &node, search::Action action) { return makePath(node.path, stepOf(node, action)); }
+inline void materialize(Node &n) {
+    if (!n.deferred) return;
+    n.path = makePath(std::move(n.base), n.step);
+    n.base.reset();
+    n.deferred = false;
+}
+
+// Recycles the BattleContext copies of one pass: a dropped state returns to a free list and the next copy assigns into it
+// (vector capacities survive) instead of paying a malloc/free pair per edge. Single-threaded: a pass owns its pool, and every
+// state cloned from it dies before the pass returns (a stored win is copied out), so the deleters may hold a raw pointer.
+class StatePool {
+public:
+    explicit StatePool(std::size_t limit) : limit_(limit) {}
+    StatePool(const StatePool &) = delete;
+    StatePool &operator=(const StatePool &) = delete;
+    ~StatePool() { for (auto *p : free_) delete p; }
+    std::shared_ptr<BattleContext> clone(const BattleContext &src) {
+        if (free_.empty()) return std::shared_ptr<BattleContext>(new BattleContext(src), Release{this});
+        BattleContext *p = free_.back();
+        free_.pop_back();
+        std::shared_ptr<BattleContext> out(p, Release{this});  // back to the pool should the assignment throw
+        *p = src;
+        return out;
+    }
+private:
+    struct Release {
+        StatePool *pool;
+        void operator()(BattleContext *p) const {
+            if (pool->free_.size() < pool->limit_) pool->free_.push_back(p);
+            else delete p;
+        }
+    };
+    std::vector<BattleContext *> free_;
+    std::size_t limit_;
+};
 
 // Root gate (layer 1): a known loop family is present (loop_gate.h). Off means no quick loop pass and no macros.
 inline bool cyclePotential(const BattleContext &b) { return loop_gate::matches(b) != 0; }
@@ -128,19 +184,26 @@ inline std::vector<int> actions(std::shared_ptr<const Path> path) {
     return out;
 }
 
-inline double score(const Node &n, int lane) {
-    const auto &b = *n.state;
-    int enemy = 0, incoming = 0;
+// The lane-independent part of score(): total enemy HP and incoming damage, computed once per node.
+struct Features { int enemy = 0, incoming = 0; };
+inline Features features(const BattleContext &b) {
+    Features f;
     for (int i = 0; i < b.monsters.monsterCount; ++i) {
         const auto &m = b.monsters.arr[i];
-        enemy += std::max(0, m.curHp);
+        f.enemy += std::max(0, m.curHp);
         // Phase 1 revives at full HP: count phase 2 too, so killing phase 1 scores as progress rather than a 300+ HP regress.
-        if (m.id == MonsterId::AWAKENED_ONE && !m.miscInfo) enemy += m.maxHp;
+        if (m.id == MonsterId::AWAKENED_ONE && !m.miscInfo) f.enemy += m.maxHp;
         if (m.curHp > 0) {
             auto d = m.getMoveBaseDamage(b);
-            incoming += d.attackCount * m.calculateDamageToPlayer(b, d.damage);
+            f.incoming += d.attackCount * m.calculateDamageToPlayer(b, d.damage);
         }
     }
+    return f;
+}
+
+inline double score(const Node &n, int lane, const Features &f) {
+    const auto &b = *n.state;
+    const int enemy = f.enemy, incoming = f.incoming;
     // Separate preferences retain setup, immediate progress, and survival alternatives.
     const double hpWeight[] = {4, 2, 8};
     const double setupWeight[] = {10, 3, 5};
@@ -153,10 +216,18 @@ inline double score(const Node &n, int lane) {
         + 0.4 * std::min(incoming + 8, b.player.block) - 12 * b.turn;
 }
 
+inline double score(const Node &n, int lane) { return score(n, lane, features(*n.state)); }
+
 inline std::string bucket(const BattleContext &b) {
-    std::string s;
-    s.reserve(128 + 20 * (b.cards.cardsInHand + b.cards.drawPile.size() + b.cards.discardPile.size()));
-    const auto scalar = [&](auto value) { s.append(reinterpret_cast<const char *>(&value), sizeof(value)); };
+    // Written into a reused buffer and copied out once; the bound covers every field below (at most 8 bytes each).
+    // One thread_local per function: MSVC v142 emits a duplicate guard for a second one in an inline function (C2086).
+    static thread_local struct { std::vector<char> buffer; std::vector<std::uint64_t> discard; } scratch;
+    std::vector<char> &buffer = scratch.buffer;
+    const std::size_t bound = 256 + 16 * b.player.powerOrder.size() + 80 * std::size_t(b.monsters.monsterCount)
+        + 20 * (b.cards.cardsInHand + b.cards.drawPile.size() + b.cards.discardPile.size());
+    if (buffer.size() < bound) buffer.resize(bound);
+    char *out = buffer.data();
+    const auto scalar = [&](auto value) { std::memcpy(out, &value, sizeof(value)); out += sizeof(value); };
     scalar(b.turn); scalar(b.player.curHp); scalar(b.player.block); scalar(b.player.energy);
     scalar(b.player.statusBits0); scalar(b.player.statusBits1); scalar(b.player.strength);
     scalar(int(b.player.sundialCounter)); scalar(b.player.cardsPlayedThisTurn);
@@ -171,27 +242,32 @@ inline std::string bucket(const BattleContext &b) {
         scalar(m.curHp); scalar(m.block); scalar(int(m.moveHistory[0]));
         scalar(m.uniquePower0); scalar(m.uniquePower1); scalar(m.strength); scalar(m.vulnerable);
     }
-    using CardKey = std::array<int,5>;
-    const auto card = [](const CardInstance &c) -> CardKey {
-        return {int(c.getId()), int(c.isUpgraded()), int(c.cost), int(c.costForTurn), int(c.specialData)};
+    // A card is the five ints (id, upgraded, cost, costForTurn, specialData). Packed most significant first with the signed fields
+    // offset, the unsigned order of the pack is the lexicographic order of the five ints, so sorting packs sorts the keys.
+    const auto pack = [](const CardInstance &c) -> std::uint64_t {
+        return std::uint64_t(std::uint16_t(c.getId())) << 33 | std::uint64_t(c.isUpgraded()) << 32
+            | std::uint64_t(std::int32_t(c.cost) + 128) << 24 | std::uint64_t(std::int32_t(c.costForTurn) + 128) << 16
+            | std::uint64_t(std::int32_t(c.specialData) + 32768);
     };
-    const auto write = [&](const CardKey &c) {
-        s.append(reinterpret_cast<const char *>(c.data()), 5 * sizeof(int));
+    const auto write = [&](std::uint64_t k) {
+        const int key[5] = {int(k >> 33 & 0xFFFF), int(k >> 32 & 1), int(k >> 24 & 0xFF) - 128, int(k >> 16 & 0xFF) - 128, int(k & 0xFFFF) - 32768};
+        std::memcpy(out, key, sizeof(key));
+        out += sizeof(key);
     };
-    std::array<CardKey,10> hand;
-    for (int i = 0; i < b.cards.cardsInHand; ++i) hand[i] = card(b.cards.hand[i]);
+    std::array<std::uint64_t,10> hand;
+    for (int i = 0; i < b.cards.cardsInHand; ++i) hand[i] = pack(b.cards.hand[i]);
     std::sort(hand.begin(), hand.begin() + b.cards.cardsInHand);
     scalar(b.cards.cardsInHand);
     for (int i = 0; i < b.cards.cardsInHand; ++i) write(hand[i]);
     scalar(b.cards.drawPile.size());
-    for (const auto &c : b.cards.drawPile) write(card(c));
-    std::vector<CardKey> discard;
-    discard.reserve(b.cards.discardPile.size());
-    for (const auto &c : b.cards.discardPile) discard.push_back(card(c));
+    for (const auto &c : b.cards.drawPile) write(pack(c));
+    std::vector<std::uint64_t> &discard = scratch.discard;
+    discard.clear();
+    for (const auto &c : b.cards.discardPile) discard.push_back(pack(c));
     std::sort(discard.begin(), discard.end());
     scalar(discard.size());
     for (const auto &c : discard) write(c);
-    return s;
+    return std::string(buffer.data(), out - buffer.data());
 }
 
 struct Best {
@@ -210,15 +286,25 @@ inline bool better(const Best &best, double v, const std::shared_ptr<const Path>
 }
 
 inline const std::string &bucketKey(Node &n) {
-    if (n.key.empty()) n.key = bucket(*n.state);
+    if (n.key.empty()) { n.key = bucket(*n.state); n.keyHash = std::hash<std::string_view>{}(n.key); }
     return n.key;
 }
+// A bucket key in a set: the hash is computed once per node, strings are compared only on equal hashes.
+struct KeyRef {
+    const std::string *key;
+    std::size_t hash;
+};
+struct KeyHash { std::size_t operator()(const KeyRef &r) const { return r.hash; } };
+struct KeyEq { bool operator()(const KeyRef &a, const KeyRef &b) const { return a.hash == b.hash && *a.key == *b.key; } };
+using KeySet = std::unordered_set<KeyRef, KeyHash, KeyEq>;
+inline KeyRef keyRef(Node &n) { bucketKey(n); return {&n.key, n.keyHash}; }
 
 // One beam pass of the given width; stops at `cap` total transitions (stats.transitions) or when cancelled().
 template <class Value, class Cancel>
 void pass(const BattleContext &root, int width, long long cap, Value value, Cancel cancelled, Best &best, bool macros = false,
           double playWeight = 0, int winFloor = -1) {
     if (root.loopCount >= BattleContext::ACTION_EXECUTION_LIMIT) return;
+    StatePool pool(16 * std::size_t(width) + 1024);  // declared first: it outlives every state cloned from it
     search::BattleScumSearcher2 enumerator(root);
     enumerator.preservePotions = true;
     search::RolloutNode legalActions;
@@ -230,9 +316,17 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
     // playWeight charges each play this turn on every lane (shorten() only); 0 leaves the ranking unchanged.
     auto rank = [&](Node &n) {
         const double charge = playWeight * n.state->player.cardsPlayedThisTurn;
-        n.scores = {score(n, 0) - charge, score(n, 1) - charge, score(n, 2) - charge};
+        const auto f = features(*n.state);
+        n.scores = {score(n, 0, f) - charge, score(n, 1, f) - charge, score(n, 2, f) - charge};
     };
     std::vector<Node> frontier{{std::make_shared<BattleContext>(root), nullptr, 0}};
+    // Buffers reused by every layer and every compaction.
+    std::vector<Node> candidates, survivors, next;
+    std::vector<std::size_t> order;
+    std::vector<char> keep;
+    struct Ranked { double score; std::uint32_t pos, index; };
+    std::vector<Ranked> keyed;
+    KeySet seen;
     // Only a per-turn damage cap (Invincible: the Heart) makes a loop worthless before the turn ends; elsewhere the
     // per-turn quota below stays off and the search is unchanged.
     const bool payHp = loop_gate::pseudo(loop_gate::matches(root));
@@ -240,7 +334,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
     for (int i = 0; i < root.monsters.monsterCount; ++i) damageCap |= root.monsters.arr[i].hasStatus<MS::INVINCIBLE>();
     // The transition cap bounds a pass; 256 actions did not reach the end of long loop fights (Awakened One, 320+300 HP).
     for (int depth = 0; depth < 4096 && !frontier.empty() && !stop(); ++depth) {
-        std::vector<Node> candidates;
+        candidates.clear();
         // One layer can hold ~10^5 full states (3.1 GB: an OOM kill on a held-out boss). Compact past 12x width: lanes are ranked
         // in turn on one index order (as below), and lane L only ever picks among its first (L+1)*width distinct buckets, so
         // keeping those, in arrival order, leaves the final selection unchanged.
@@ -249,36 +343,43 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
         // attack and always ranks below another loop in the old turn. With an unbounded loop past the Heart's damage cap
         // every kept state then stays in that turn until its HP runs out. So under a damage cap each later turn also keeps
         // its own leaders, ranked on lane 0 against states of the same turn only.
+        // Stable sort of an index list by one lane's score, on packed (score, index) pairs: the same permutation as sorting the indices.
+        // The position in the incoming order breaks score ties, which is what the stable sort did; std::sort needs no temporary buffer.
+        auto sortByLane = [&](std::vector<std::size_t> &idx, int lane) {
+            keyed.resize(idx.size());
+            for (std::size_t i = 0; i < idx.size(); ++i) keyed[i] = {candidates[idx[i]].scores[lane], std::uint32_t(i), std::uint32_t(idx[i])};
+            std::sort(keyed.begin(), keyed.end(), [](const Ranked &x, const Ranked &y) { return x.score > y.score || (x.score == y.score && x.pos < y.pos); });
+            for (std::size_t i = 0; i < idx.size(); ++i) idx[i] = keyed[i].index;
+        };
         auto byTurn = [&]() {
             std::map<int, std::vector<std::size_t>> groups;
             for (std::size_t i = 0; i < candidates.size(); ++i) groups[candidates[i].state->turn].push_back(i);
-            for (auto &group : groups)
-                std::stable_sort(group.second.begin(), group.second.end(),
-                                 [&](auto x, auto y) { return candidates[x].scores[0] > candidates[y].scores[0]; });
+            for (auto &group : groups) sortByLane(group.second, 0);
             return groups;
         };
         auto compact = [&]() {
-            std::vector<std::size_t> order(candidates.size());
+            order.resize(candidates.size());
             std::iota(order.begin(), order.end(), 0);
-            std::vector<char> keep(candidates.size(), 0);
+            keep.assign(candidates.size(), 0);
             for (int lane = 0; lane < 3; ++lane) {
-                std::stable_sort(order.begin(), order.end(), [&](auto x, auto y) { return candidates[x].scores[lane] > candidates[y].scores[lane]; });
-                std::unordered_set<std::string> seen;
+                sortByLane(order, lane);
+                seen.clear();
                 for (std::size_t k = 0; k < order.size() && seen.size() < std::size_t(lane + 1) * width; ++k)
-                    if (seen.insert(bucketKey(candidates[order[k]])).second) keep[order[k]] = 1;
+                    if (seen.insert(keyRef(candidates[order[k]])).second) keep[order[k]] = 1;
             }
             // Each turn's leaders for the per-turn quota below. Later candidates only add turns, so the final quota is no
             // larger; keeping more would let stalling lines over many turns refill the layer past compactAt.
             auto groups = damageCap ? byTurn() : decltype(byTurn()){};
             const std::size_t quota = std::max<std::size_t>(1, width / std::max<std::size_t>(1, groups.size() - 1));
             for (auto &group : groups) {
-                std::unordered_set<std::string> seen;
+                seen.clear();
                 for (std::size_t k = 0; k < group.second.size() && seen.size() < quota; ++k)
-                    if (seen.insert(bucketKey(candidates[group.second[k]])).second) keep[group.second[k]] = 1;
+                    if (seen.insert(keyRef(candidates[group.second[k]])).second) keep[group.second[k]] = 1;
             }
-            std::vector<Node> kept;
-            for (std::size_t i = 0; i < candidates.size(); ++i) if (keep[i]) kept.push_back(std::move(candidates[i]));
-            candidates.swap(kept);
+            survivors.clear();
+            for (std::size_t i = 0; i < candidates.size(); ++i) if (keep[i]) survivors.push_back(std::move(candidates[i]));
+            candidates.swap(survivors);
+            survivors.clear();
         };
         for (auto &parent : frontier) {
             if (macros && !stop() && !parent.state->player.hasStatus<PS::NO_DRAW>()) {
@@ -316,15 +417,16 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                 for (auto edge : legal(*current.state)) {
                     if (stop()) break;
                     const auto a = edge.action;
-                    Node child{std::make_shared<BattleContext>(*current.state),
-                               append(current, a), current.powers};
+                    Node child{pool.clone(*current.state), nullptr, current.powers};
+                    child.base = current.path; child.step = stepOf(current, a); child.deferred = true;
                     if (a.getActionType() == search::ActionType::CARD &&
                         current.state->cards.hand[a.getSourceIdx()].getType() == CardType::POWER) child.powers += 1;
                     a.execute(*child.state); ++stats.transitions;
                     auto &b = *child.state;
                     if (b.outcome == Outcome::PLAYER_VICTORY && b.player.curHp > 0) {
+                        materialize(child);
                         double v = value(b);
-                        if (better(best, v, child.path, b.player.curHp, winFloor)) { best.found = true; best.value = v; best.state = child.state; best.actions = actions(child.path); }
+                        if (better(best, v, child.path, b.player.curHp, winFloor)) { best.found = true; best.value = v; best.state = std::make_shared<BattleContext>(*child.state); best.actions = actions(child.path); }
                     } else if (b.outcome == Outcome::UNDECIDED && b.player.curHp > 0 && b.turn < 100
                             && b.loopCount < BattleContext::ACTION_EXECUTION_LIMIT) {
                         // turn < 100: stalling lines (end turn behind block forever) otherwise reach the engine's 500-turn limit, which throws
@@ -333,21 +435,23 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                             candidates.push_back(std::move(child));
                             if (candidates.size() > compactAt) compact();
                         }
-                        else pending.push_back(std::move(child));
+                        else { materialize(child); pending.push_back(std::move(child)); }
                     }
                 }
             }
         }
-        std::vector<std::size_t> order(candidates.size());
+        order.resize(candidates.size());
         std::iota(order.begin(), order.end(), 0);
-        std::unordered_set<std::string> buckets;
-        std::vector<Node> next;
+        seen.clear();
+        next.clear();
+        // Only survivors get a Path; the next layer needs neither their scores nor their keys.
+        const auto advance = [&](Node &n) { materialize(n); next.push_back(Node{n.state, n.path, n.powers}); };
         for (int lane = 0; lane < 3; ++lane) {
-            std::stable_sort(order.begin(), order.end(), [&](auto x, auto y) { return candidates[x].scores[lane] > candidates[y].scores[lane]; });
+            sortByLane(order, lane);
             int kept = 0;
             for (std::size_t k = 0; k < order.size() && kept < width; ++k) {
                 auto &n = candidates[order[k]];
-                if (buckets.insert(bucketKey(n)).second) { next.push_back(n); ++kept; }
+                if (seen.insert(keyRef(n)).second) { advance(n); ++kept; }
             }
         }
         if (damageCap && !candidates.empty()) {
@@ -357,10 +461,11 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
             for (auto &group : groups)
                 for (std::size_t k = 0, kept = 0; k < group.second.size() && kept < std::size_t(quota); ++k) {
                     auto &n = candidates[group.second[k]];
-                    if (buckets.insert(bucketKey(n)).second) { next.push_back(n); ++kept; }
+                    if (seen.insert(keyRef(n)).second) { advance(n); ++kept; }
                 }
         }
-        frontier = std::move(next);
+        frontier.swap(next);
+        next.clear();
         stats.layers = std::max(stats.layers, depth + 1);
     }
 }
