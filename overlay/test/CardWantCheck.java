@@ -151,9 +151,10 @@ public final class CardWantCheck {
         List<JsonObject> grid = Arrays.asList(card("Defend_R", "SKILL"), card("Hemokinesis", "ATTACK"), card("Bash", "ATTACK"),
             card("Strike_R", "ATTACK"), card("Injury", "CURSE"));
         List<JsonObject> none = Collections.emptyList();
-        // Transform grid: the real GRID rule (removal order) picks the curse, then the Strike.
-        check(CardWant.gridPick(model, page[0], page[1], grid, none, 1, true) == 4, "transform grid takes the curse first");
-        check(CardWant.gridPick(model, page[0], page[1], grid.subList(0, 4), none, 1, true) == 3, "then the Strike");
+        // Transform grid: the real GRID rule (removal order) skips the curse (it only becomes another curse): Strike, then Bash.
+        check(CardWant.gridPick(model, page[0], page[1], grid, none, 1, true) == 3, "transform grid skips the curse for the Strike");
+        check(CardWant.gridPick(model, page[0], page[1], Arrays.asList(grid.get(0), grid.get(1), grid.get(2), grid.get(4)), none, 1, true) == 2,
+            "then the Bash, still not the curse");
         // Drug Dealer grid (for_transform off): the network's choice over the whole grid, and never the card already selected.
         int first = CardWant.gridPick(model, page[0], page[1], grid, none, 2, false);
         int second = CardWant.gridPick(model, page[0], page[1], grid, Collections.singletonList(grid.get(first)), 2, false);
