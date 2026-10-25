@@ -263,15 +263,19 @@ namespace sts {
                 return true;
 
             case CardId::GO_FOR_THE_EYES:
-                // GoForTheEyes.java: damage first, then Weak only when the target
-                // intends to attack (Java checks getIntentBaseDmg() >= 0, which the
-                // engine exposes as Monster::isAttacking()).
+                // GoForTheEyes.java: damage first, then ForTheEyesAction adds Weak only
+                // when the target intends to attack (getIntentBaseDmg() >= 0, which the
+                // engine exposes as Monster::isAttacking()). That action constructs
+                // `new WeakPower(m, amount, false)`, so the game never marks this Weak
+                // as justApplied and it does decrement at the end of the round it was
+                // applied in. isSourceMonster=true (the DebuffEnemy default) would skip
+                // that first decrement and leave the Weak one round too long.
                 bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 4 : 3)));
                 bc.addToBot({[=] (BattleContext &bc) {
                     if (t >= 0 && t < bc.monsters.monsterCount
                         && !bc.monsters.arr[t].isDeadOrEscaped()
                         && bc.monsters.arr[t].isAttacking()) {
-                        bc.addToBot(Actions::DebuffEnemy<MS::WEAK>(t, up ? 2 : 1));
+                        bc.addToBot(Actions::DebuffEnemy<MS::WEAK>(t, up ? 2 : 1, false));
                     }
                 }});
                 return true;

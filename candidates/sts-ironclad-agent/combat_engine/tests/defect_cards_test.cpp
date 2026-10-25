@@ -510,6 +510,28 @@ int main() {
               "Go for the Eyes should apply Weak only to an attacking enemy");
     }
     {
+        // Go for the Eyes must not mark its Weak as justApplied. ForTheEyesAction
+        // builds `new WeakPower(m, amount, false)`, so the game decrements this Weak
+        // at the end of the very round it lands in. The DebuffEnemy default
+        // (isSourceMonster=true) sets justApplied and skipped that decrement, which
+        // is how a spurious "WEAK 1" survived onto Gremlin Leader past the round it
+        // was applied in (F24 state_divergence). A Cultist does not attack on turn
+        // one, so use a Jaw Worm, whose opening move does.
+        BattleContext bc = freshBattle(MonsterEncounter::JAW_WORM);
+        const bool attacking = bc.monsters.arr[0].isAttacking();
+        check(attacking, "Jaw Worm should open by attacking, or this test proves nothing");
+        playCard(bc, CardId::GO_FOR_THE_EYES);
+        check(bc.monsters.arr[0].getStatus<MS::WEAK>() == 1,
+              "Go for the Eyes should apply Weak to an attacking Jaw Worm");
+        check(!bc.monsters.arr[0].wasJustApplied<MS::WEAK>(),
+              "Go for the Eyes must not mark its Weak as justApplied");
+        // ...and the end of the round really does consume it, as the game does.
+        // afterMonsterTurns() is what runs the monsters' atEndOfRound powers.
+        bc.monsters.arr[0].applyEndOfRoundPowers(bc);
+        check(bc.monsters.arr[0].getStatus<MS::WEAK>() == 0,
+              "Go for the Eyes' Weak should expire at the end of the round it was applied in");
+    }
+    {
         // Auto Shields: block only when the player has none.
         BattleContext bc = freshBattle();
         playCard(bc, CardId::AUTO_SHIELDS);
