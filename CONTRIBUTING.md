@@ -42,6 +42,7 @@ The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher
 
 - PR 必须通过 `.github/workflows/native-runtime.yml` 的全部作业（三个操作系统、两个 Python 版本）。四职业 M0 之后，其中包括覆盖清单检查和全部原生夹具的重放。
 - 不删除、不跳过已有检查。期望值只能来自已校准的真值，不能为了通过检查手改。
+- 克隆后运行一次 `python tools/install_git_hooks.py`。它安装 pre-push 钩子：向本仓库推送时，检查被推送的提交及其新历史里没有 `reports/`、`evidence/`，有就拒绝推送。
 - 提交前在本地先跑：
 
   ```bash
