@@ -220,7 +220,9 @@ inline double score(const Node &n, int lane) { return score(n, lane, features(*n
 
 inline std::string bucket(const BattleContext &b) {
     // Written into a reused buffer and copied out once; the bound covers every field below (at most 8 bytes each).
-    static thread_local std::vector<char> buffer;
+    // One thread_local per function: MSVC v142 emits a duplicate guard for a second one in an inline function (C2086).
+    static thread_local struct { std::vector<char> buffer; std::vector<std::uint64_t> discard; } scratch;
+    std::vector<char> &buffer = scratch.buffer;
     const std::size_t bound = 256 + 16 * b.player.powerOrder.size() + 80 * std::size_t(b.monsters.monsterCount)
         + 20 * (b.cards.cardsInHand + b.cards.drawPile.size() + b.cards.discardPile.size());
     if (buffer.size() < bound) buffer.resize(bound);
@@ -259,7 +261,7 @@ inline std::string bucket(const BattleContext &b) {
     for (int i = 0; i < b.cards.cardsInHand; ++i) write(hand[i]);
     scalar(b.cards.drawPile.size());
     for (const auto &c : b.cards.drawPile) write(pack(c));
-    static thread_local std::vector<std::uint64_t> discard;
+    std::vector<std::uint64_t> &discard = scratch.discard;
     discard.clear();
     for (const auto &c : b.cards.discardPile) discard.push_back(pack(c));
     std::sort(discard.begin(), discard.end());

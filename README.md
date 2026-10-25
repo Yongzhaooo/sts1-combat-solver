@@ -37,7 +37,7 @@ QQ community group: **232459269**. Share your experience and report issues.
 
 ## Full autopilot (early)
 
-A small network scores outside decisions (Neow, card rewards, campfires, shops, events, chests and boss relics), reviewed rules choose the map route, and the solver fights. In the training environment it wins 73.1% of 2,442 A20 three-key Heart runs (71.0% of 1,014 runs with the faster v0.9 search). Known weaknesses: it upgrades too rarely, its deckbuilding lacks a plan, and it walks into early elites at full HP. Removal and transforms only pick curses, Strikes, Defends and Bash.
+A small network scores outside decisions (Neow, card rewards, campfires, shops, events, chests and boss relics), reviewed rules choose the map route, and the solver fights. In the training environment it wins 73.1% of 2,442 A20 three-key Heart runs (71.0% of 1,014 runs with the faster v0.9 search). Known weaknesses: it upgrades too rarely, its deckbuilding lacks a plan, and it walks into early elites at full HP. Removal only picks curses, Strikes, Defends and Bash; transforms skip curses, which only become other curses. In events whose outcome a save-and-reload would show (Sensory Stone, The Library, Transmogrifier, Augmenter, Match and Keep, Shining Light, World of Goop, The Mausoleum, Cursed Tome and others), it reads the outcome first and then decides; Neow and the map's ? rooms are never read ahead.
 
 ## Let an AI agent play
 
