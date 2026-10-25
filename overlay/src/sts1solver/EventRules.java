@@ -62,6 +62,15 @@ final class EventRules {
          * groups are scored in order, each pick added to the deck). The Library, Transmorgrifier, Drug Dealer: 1 when the model
          * wants a read card / the transform results, 0 when not. */
         int sensoryWants = UNKNOWN, cardsWanted = UNKNOWN;
+        /** Danger ahead on the planned route (DangerAhead), or null when no route is known. */
+        DangerAhead danger;
+        /** Shining Light pre-read: deck indices of the upgradable cards and of the (up to) two the light upgrades. */
+        int[] lightUpgradable, lightTargets;
+        /** How many light targets the campfire upgrade grid ranks among its top UPGRADE_TOP_K distinct cards (OutsidePacket). */
+        int worthyUpgrades = UNKNOWN;
+        /** World of Goop pre-read: gold lost by leaving (the constructor's roll, already capped by current gold). */
+        int goopLoss = UNKNOWN;
+        boolean ectoplasm;
         /** Hidden information: opening the Mausoleum brings Writhe (1) or not (0). */
         int mausoleumCurse = UNKNOWN;
         /** Hidden information: the Cursed Tome's final book (relic id), and the HP still to pay from this page to get it. */
