@@ -232,13 +232,14 @@ public final class OutsidePacketCheck {
         JsonObject addict = new JsonObject(); addict.addProperty("event_id", "Addict");
         game.add("screen_state", addict);
         int savedGold = game.get("gold").getAsInt();
-        for(int gold : new int[]{84,85}) {
+        // 85 gold would leave nothing for the shop removal (75 when purge_base_cost is absent): leave; 160 keeps 75: pay.
+        for(int gold : new int[]{84,85,160}) {
             game.addProperty("gold", gold);
             JsonArray buttons = new JsonArray();
             if(gold>=85)buttons.add("Buy relic"); buttons.add("Steal (Shame)"); buttons.add("Leave");
             visible.add("choices", buttons);
             OutsidePacket noShame = OutsidePacket.build(Distill2.load(), state, visible);
-            int expected = gold>=85?0:1;
+            int expected = gold>=160?0:gold>=85?2:1;
             if(noShame.policyScore().best!=expected || noShame.ruleNote==null)
                 throw new AssertionError("Addict must never steal with potion actions present");
         }

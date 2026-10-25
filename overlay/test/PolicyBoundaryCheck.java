@@ -116,7 +116,8 @@ public final class PolicyBoundaryCheck {
         }
 
         // pre-reads: exactly the audited within-SL events; event-fight rewards are never pre-read
-        Set<String> audited = new HashSet<>(Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust"));
+        Set<String> audited = new HashSet<>(Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust",
+            "The Mausoleum", "Cursed Tome"));
         check(EventRules.SL_PREREAD.equals(audited), "SL pre-read allowlist changed: " + EventRules.SL_PREREAD);
         for (String beyond : new String[]{"Masked Bandits", "Mushrooms", "Mysterious Sphere"})
             check(!EventRules.SL_PREREAD.contains(beyond), beyond + " fight rewards are beyond SL");

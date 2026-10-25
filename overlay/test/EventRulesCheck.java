@@ -118,7 +118,21 @@ public final class EventRulesCheck {
 
         // Curse events: never the curse option.
         check(index(c("Liars Game", 2, 70, 80, 0)) == 1, "serpent: disagree");
-        check(index(c("The Mausoleum", 2, 70, 80, 0)) == 1, "mausoleum: leave");
+        check(index(c("The Mausoleum", 2, 70, 80, 0)) == 1, "mausoleum: unread (live off) leaves");
+        EventRules.Context tomb0 = c("The Mausoleum", 2, 70, 80, 0);
+        tomb0.mausoleumCurse = 0;
+        check(index(tomb0) == 0, "mausoleum: preread no curse opens");
+        tomb0.mausoleumCurse = 1;
+        check(index(tomb0) == 1, "mausoleum: preread curse leaves");
+        tomb0.mausoleumCurse = 0; tomb0.ascension = 15;
+        check(index(tomb0) == 1, "mausoleum: A15 always curses, leave");
+        check(index(c("The Mausoleum", 1, 70, 80, 0)) == -99, "mausoleum result page is not ruled");
+        for (String event : new String[]{"The Mausoleum", "Cursed Tome"}) {
+            EventRules.Context offline = c(event, 2, 70, 80, 0);
+            EventRules.readLive(offline); EventRules.selfCheck();
+            check(offline.preread == null && offline.mausoleumCurse == EventRules.UNKNOWN && offline.tomeBook == null
+                && index(offline) == 1, event + ": live off reads nothing and keeps the old rule");
+        }
         check(index(c("Mushrooms", 2, 5, 80, 0)) == 0, "mushrooms: fight even when hurt");
         check(index(c("Accursed Blacksmith", 3, 70, 80, 0)) == 0 && index(c("Accursed Blacksmith", 2, 70, 80, 0)) == 1, "blacksmith");
         check(index(c("Forgotten Altar", 2, 70, 80, 0)) == 0 && index(c("Forgotten Altar", 3, 70, 80, 0)) == 0, "altar");
@@ -173,7 +187,31 @@ public final class EventRulesCheck {
         check(index(basics) == 0, "back to basics: remove");
         basics.removable = 0;
         check(index(basics) == 1, "back to basics: upgrade when nothing to remove");
-        check(index(c("Cursed Tome", 2, 70, 80, 0)) == 1, "tome: leave");
+        check(index(c("Cursed Tome", 2, 70, 80, 0)) == 1, "tome: unread (live off) leaves");
+        EventRules.Context tome = c("Cursed Tome", 2, 17, 80, 0);
+        tome.tomeBook = "Enchiridion"; tome.tomeCost = 16; // intro below A15: 1+2+3 pages + 10
+        check(index(tome) == 0, "tome: a non-Necronomicon book within HP reads");
+        tome.hp = 16;
+        check(index(tome) == 1, "tome: a cost equal to HP is lethal, don't read");
+        tome.hp = 70; tome.tomeBook = "Necronomicon";
+        check(index(tome) == 1, "tome: Necronomicon (Necronomicurse) is refused");
+        tome.tomeBook = "Circlet"; tome.tomeCost = 15; tome.hp = 16; // last page at A15: only the 15 HP book page is left
+        check(index(tome) == 0, "tome: last page takes a safe book");
+        tome.tomeCost = EventRules.UNKNOWN;
+        check(index(tome) == 1, "tome: unknown cost falls back to don't read");
+
+        // Addict: pay only when the shop removal stays affordable, or nothing is left to remove; never steal.
+        EventRules.Context addict = c("Addict", 3, 70, 80, 160);
+        check(index(addict) == 0, "addict: gold-85 == purge cost pays");
+        addict.gold = 159;
+        check(index(addict) == 2, "addict: one gold short of the purge leaves");
+        addict.purgeCost = 100; addict.gold = 185;
+        check(index(addict) == 0, "addict: follows the shop's current purge price");
+        addict.gold = 184;
+        check(index(addict) == 2, "addict: below the raised purge price leaves");
+        addict.gold = 85; addict.removable = 0;
+        check(index(addict) == 0, "addict: nothing removable pays");
+        check(index(c("Addict", 2, 70, 80, 84)) == 1, "addict: cannot pay, leave (never steal)");
         check(index(c("Vampires", 3, 70, 80, 0)) == 2 && index(c("Vampires", 2, 70, 80, 0)) == 1, "vampires: refuse");
         check(index(c("Masked Bandits", 2, 60, 80, 99)) == 1 && index(c("Masked Bandits", 2, 5, 80, 99)) == 1, "bandits: never pay");
         check(index(c("SecretPortal", 2, 70, 80, 0)) == 1, "portal: leave");

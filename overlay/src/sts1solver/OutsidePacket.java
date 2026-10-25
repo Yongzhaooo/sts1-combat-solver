@@ -149,6 +149,7 @@ final class OutsidePacket {
 
     Distill2.Result policyScore() {
         ruleNote=null; prereadNote=null;
+        EventRules.selfCheck(); // preread self-check log, live game only
         return potionRule(ruleScore());
     }
 
@@ -261,6 +262,7 @@ final class OutsidePacket {
             if(EventRules.removalTier(string(card,"id"),string(card,"type"))<=EventRules.LAST_REMOVAL_TIER)c.removable++;
         }
         for(JsonElement p:array(game,"potions"))if(emptyPotion(string(p.getAsJsonObject(),"id")))c.freePotionSlots++;
+        c.purgeCost=optionalInt(visible,"purge_base_cost",c.purgeCost);
         c.sozu=hasRelic("Sozu");
         c.redMask=hasRelic("Red Mask");
         c.artifactRelic=hasRelic("ClockworkSouvenir") || hasRelic("Clockwork Souvenir");

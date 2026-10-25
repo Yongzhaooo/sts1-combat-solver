@@ -20,7 +20,8 @@ final class EventRules {
      * an event fight, map rooms ahead and results that reroll on load are not SL-visible and must never be added here.
      */
     static final java.util.Set<String> SL_PREREAD = java.util.Collections.unmodifiableSet(new java.util.HashSet<String>(
-        java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust")));
+        java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust",
+            "The Mausoleum", "Cursed Tome")));
 
     static final int UNKNOWN = -1, SAFE_SEARCH = 0, ELITE_SEARCH = 1;
     static final String MANUAL = "人工规则";
@@ -46,6 +47,13 @@ final class EventRules {
         int adventurerNext = UNKNOWN, adventurerEnemy = UNKNOWN;
         /** Hidden information: Face Trader's trade gives a good face (1) or not (0); the Joust owner wins (1) or loses (0). */
         int goodFace = UNKNOWN, ownerWins = UNKNOWN;
+        /** Hidden information: opening the Mausoleum brings Writhe (1) or not (0). */
+        int mausoleumCurse = UNKNOWN;
+        /** Hidden information: the Cursed Tome's final book (relic id), and the HP still to pay from this page to get it. */
+        String tomeBook;
+        int tomeCost = UNKNOWN;
+        /** Base price of the next shop removal (ShopScreen.purgeCost, public purge_base_cost). */
+        int purgeCost = 75;
         /** What readLive pre-read on this decision (event and values), for the decision note; null when nothing was read. */
         String preread;
     }
@@ -138,9 +146,12 @@ final class EventRules {
                 return pay && c.removable > 0 ? pick(0, "乞丐：付钱删牌") : pick(n - 1, "乞丐：离开");
             }
             case "Addict": {
+                // pay 0 (85 gold, listed when affordable), steal 1 (Shame), leave; never steal
                 boolean pay = c.gold >= 85;
                 if (n != (pay ? 3 : 2)) return null;
-                return pay ? pick(0, "瘾君子：付钱买遗物") : pick(n - 1, "瘾君子：离开"); // never steal
+                if (pay && c.removable == 0) return pick(0, "瘾君子：没有要删的牌，付钱买遗物");
+                return pay && c.gold - 85 >= c.purgeCost ? pick(0, "瘾君子：付钱后仍够商店删牌，买遗物")
+                    : pick(n - 1, "瘾君子：留钱给商店删牌，离开");
             }
             case "Ghosts":
                 return n == 2 ? pick(1, MANUAL + "：AI 大牌组打法不适配，拒绝幽灵") : null;
@@ -186,7 +197,10 @@ final class EventRules {
             case "Liars Game":
                 return n == 2 ? pick(1, "说谎者：不拿疑虑诅咒") : null;
             case "The Mausoleum":
-                return n == 2 ? pick(1, "陵墓：不冒悔恨诅咒的险，离开") : null;
+                // open 0 (relic; Writhe on a coin flip, always at A15+), leave 1
+                if (n != 2) return null;
+                if (c.ascension < 15 && c.mausoleumCurse == 0) return pick(0, "陵墓：预读到不出诅咒，打开");
+                return pick(1, c.mausoleumCurse == 1 ? "陵墓：预读到苦恼诅咒，离开" : "陵墓：不冒苦恼诅咒的险，离开");
             case "Forgotten Altar": {
                 // [offer the Golden Idol,] sacrifice, desecrate (Decay). No leave button exists.
                 if (n != 2 && n != 3) return null;
@@ -207,8 +221,13 @@ final class EventRules {
                 // simplicity 0 (remove a card), elegance 1 (upgrade Strikes and Defends)
                 return n == 2 ? (c.removable > 0 ? pick(0, "古老文字：删牌") : pick(1, "古老文字：没有可删的牌，升级打防")) : null;
             case "Cursed Tome":
-                // read 0, leave 1; on the last page take 0 (10-15 HP, random book) or stop 1: both times the second button
-                return n == 2 ? pick(1, "诅咒之书：不读，不赌随机书") : null;
+                // read 0, leave 1; on the last page take 0 (10, A15+ 15 HP, the book) or stop 1 (3 HP). Pages 1-3 have one button.
+                // Necronomicon brings Necronomicurse, so it is refused like every curse offer.
+                if (n != 2) return null;
+                if (c.tomeBook != null && !c.tomeBook.equals("Necronomicon") && c.tomeCost != UNKNOWN && c.hp > c.tomeCost)
+                    return pick(0, "诅咒之书：预读到 " + c.tomeBook + "，读完还要 " + c.tomeCost + " 血，读");
+                return pick(1, c.tomeBook == null ? "诅咒之书：不读，不赌随机书"
+                    : "诅咒之书：预读到 " + c.tomeBook + (c.tomeBook.equals("Necronomicon") ? "（带诅咒）" : "，血量不够") + "，不读");
             case "Vampires":
                 return n == 2 || n == 3 ? pick(n - 1, "吸血鬼：拒绝（噬咬牌质量低，还要删光打击）") : null;
             case "Masked Bandits":
@@ -295,12 +314,86 @@ final class EventRules {
                 case "FaceTrader": c.goodFace = goodFace(); c.preread = "goodFace=" + c.goodFace; break;
                 case "The Joust": c.ownerWins = AbstractDungeon.miscRng.copy().randomBoolean(0.3f) ? 1 : 0;
                     c.preread = "ownerWins=" + c.ownerWins; break;
+                case "The Mausoleum": // TheMausoleum.buttonEffect: miscRng.randomBoolean(), forced to a curse at A15+
+                    c.mausoleumCurse = AbstractDungeon.miscRng.copy().randomBoolean() || AbstractDungeon.ascensionLevel >= 15 ? 1 : 0;
+                    c.preread = "curse=" + c.mausoleumCurse; expect(c.event, c.mausoleumCurse == 1 ? "Writhe" : "none"); break;
+                case "Cursed Tome": // pages 1-3 take 1+2+3 HP (damageTaken counts them), the last page finalDmg
+                    c.tomeBook = tomeBook();
+                    c.tomeCost = intField(event, "finalDmg") + Math.max(0, 6 - intField(event, "damageTaken"));
+                    c.preread = "book=" + c.tomeBook + " cost=" + c.tomeCost; expect(c.event, c.tomeBook); break;
                 default: break;
             }
             if (c.preread != null) c.preread = c.event + ": " + c.preread;
         } catch (Throwable ignored) {
             // Stay UNKNOWN: the caller falls back to the network.
         }
+    }
+
+    static final String[] TOME_BOOKS = {"Necronomicon", "Enchiridion", "Nilry's Codex"};
+
+    /**
+     * CursedTome.randomBook on a copy of miscRng: an unowned book (Circlet when all are owned). Nothing between the intro and
+     * the last page draws from miscRng (the pages only deal HP_LOSS), so the intro read equals the draw.
+     */
+    private static String tomeBook() {
+        java.util.ArrayList<String> books = new java.util.ArrayList<String>();
+        for (String id : TOME_BOOKS) if (!AbstractDungeon.player.hasRelic(id)) books.add(id);
+        return books.isEmpty() ? "Circlet" : books.get(AbstractDungeon.miscRng.copy().random(books.size() - 1));
+    }
+
+    // ---- runtime self-check: compare a preread with what the run actually got ------------------
+
+    private static String checkEvent, checkExpect;
+    private static Object checkPlayer;
+    private static int checkFloor, checkWrithe, checkRelics, checkOmamori;
+    private static boolean[] checkBooks;
+
+    /** Remembers the outcome a Mausoleum or Cursed Tome preread expects; {@link #selfCheck} logs it once it is visible. */
+    private static void expect(String event, String outcome) {
+        checkEvent = event; checkExpect = outcome; checkPlayer = AbstractDungeon.player; checkFloor = AbstractDungeon.floorNum;
+        checkWrithe = writhes(); checkRelics = AbstractDungeon.player.relics.size(); checkOmamori = omamori();
+        checkBooks = new boolean[TOME_BOOKS.length];
+        for (int i = 0; i < TOME_BOOKS.length; i++) checkBooks[i] = AbstractDungeon.player.hasRelic(TOME_BOOKS[i]);
+    }
+
+    /**
+     * Called before every outside decision (game thread). The Mausoleum is judged on the next floor, when the Writhe soul has
+     * reached the deck; the Cursed Tome when its book is on the reward screen or newly owned. Untaken outcomes log nothing.
+     */
+    static void selfCheck() {
+        if (!live || checkEvent == null) return;
+        try {
+            if (AbstractDungeon.player != checkPlayer) { checkEvent = null; return; }
+            boolean nextFloor = AbstractDungeon.floorNum != checkFloor;
+            String actual = null;
+            if (checkEvent.equals("The Mausoleum")) {
+                if (!nextFloor) return;
+                if (AbstractDungeon.player.relics.size() > checkRelics) // opened: the relic comes with or without the curse
+                    actual = writhes() > checkWrithe || omamori() < checkOmamori ? "Writhe" : "none";
+            } else {
+                for (com.megacrit.cardcrawl.rewards.RewardItem reward : AbstractDungeon.getCurrRoom().rewards)
+                    if (reward.relic != null && (reward.relic.relicId.equals("Circlet")
+                            || java.util.Arrays.asList(TOME_BOOKS).contains(reward.relic.relicId))) actual = reward.relic.relicId;
+                if (actual == null && !nextFloor) return;
+                for (int i = 0; actual == null && i < TOME_BOOKS.length; i++)
+                    if (!checkBooks[i] && AbstractDungeon.player.hasRelic(TOME_BOOKS[i])) actual = TOME_BOOKS[i];
+            }
+            if (actual != null) System.err.println("[STS1Solver] " + (actual.equals(checkExpect) ? "preread ok: " + checkEvent + " " + actual
+                : "preread MISMATCH: " + checkEvent + " preread " + checkExpect + ", actual " + actual));
+        } catch (Throwable ignored) {
+            // the self-check never affects play
+        }
+        checkEvent = null;
+    }
+
+    private static int writhes() {
+        int count = 0;
+        for (com.megacrit.cardcrawl.cards.AbstractCard card : AbstractDungeon.player.masterDeck.group) if (card.cardID.equals("Writhe")) count++;
+        return count;
+    }
+
+    private static int omamori() {
+        return AbstractDungeon.player.hasRelic("Omamori") ? AbstractDungeon.player.getRelic("Omamori").counter : 0;
     }
 
     /** Replays the event's own draws on a copy of miscRng (same order as EventForesight.scrapOoze). */
