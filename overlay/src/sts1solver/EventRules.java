@@ -28,7 +28,7 @@ final class EventRules {
      */
     static final java.util.Set<String> SL_PREREAD = java.util.Collections.unmodifiableSet(new java.util.HashSet<String>(
         java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust",
-            "SensoryStone", "The Library", "Transmorgrifier", "Drug Dealer")));
+            "SensoryStone", "The Library", "Transmorgrifier", "Drug Dealer", "Match and Keep!")));
 
     static final int UNKNOWN = -1, SAFE_SEARCH = 0, ELITE_SEARCH = 1;
     /** SensoryStone HP loss by tier (number of colorless groups taken). */

@@ -282,10 +282,13 @@ final class OutsidePacket {
                 c.neowDrawback[i]=string(neow.get(i).getAsJsonObject(),"drawback");
             }
         }
+        EventRules.Decision decision;
         CardWant.bind(model,game,visible); // card pre-reads score hypothetical screens from this decision's public state
-        try { EventRules.readLive(c); } finally { CardWant.unbind(); }
+        try {
+            EventRules.readLive(c);
+            decision=c.event.equals(MatchGameRule.EVENT)?MatchGameRule.decide(c,array(visible,"choices")):EventRules.decide(c);
+        } finally { CardWant.unbind(); }
         prereadNote=c.preread;
-        EventRules.Decision decision=EventRules.decide(c);
         return decision==null?null:ruled(student,decision);
     }
 

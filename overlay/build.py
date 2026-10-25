@@ -79,6 +79,7 @@ def main():
                         str(here / 'test/OutsidePacketParityCheck.java'),
                         str(here / 'test/EventRulesCheck.java'),
                         str(here / 'test/CardWantCheck.java'),
+                        str(here / 'test/MatchGameRuleCheck.java'),
                         str(here / 'test/RngModsCheck.java'),
                         str(here / 'test/PolicyBoundaryCheck.java'),
                         str(here / 'test/ModeCheck.java'),
@@ -110,6 +111,8 @@ def main():
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
                         'sts1solver.CardWantCheck', str(here / 'test/distill2-card-parity.json'),
                         str(here / 'test/distill2-event-parity.json')], check=True)
+        subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
+                        'sts1solver.MatchGameRuleCheck', str(here / 'test/distill2-event-parity.json')], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
                         'sts1solver.PolicyBoundaryCheck', str(here / 'src/sts1solver')], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
