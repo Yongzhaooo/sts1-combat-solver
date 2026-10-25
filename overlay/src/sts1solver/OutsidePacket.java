@@ -149,10 +149,16 @@ final class OutsidePacket {
 
     Distill2.Result policyScore() {
         ruleNote=null; prereadNote=null;
-        return potionRule(ruleScore());
+        Distill2.Result result=potionRule(ruleScore());
+        String check=PrereadCheck.observe(game,visible); // runtime self-check of an earlier event pre-read
+        if(check!=null) {
+            System.err.println("[STS1Solver] "+check);
+            prereadNote=prereadNote==null?check:prereadNote+"; "+check;
+        }
+        return result;
     }
 
-    private Distill2.Result ruleScore() {
+    Distill2.Result ruleScore() {
         Distill2.Result student=score();
         String screenType=string(visible,"screen_type");
         Distill2.Result rule=screenType.equals("EVENT") ? eventRule(student)
@@ -276,7 +282,8 @@ final class OutsidePacket {
                 c.neowDrawback[i]=string(neow.get(i).getAsJsonObject(),"drawback");
             }
         }
-        EventRules.readLive(c);
+        CardWant.bind(model,game,visible); // card pre-reads score hypothetical screens from this decision's public state
+        try { EventRules.readLive(c); } finally { CardWant.unbind(); }
         prereadNote=c.preread;
         EventRules.Decision decision=EventRules.decide(c);
         return decision==null?null:ruled(student,decision);

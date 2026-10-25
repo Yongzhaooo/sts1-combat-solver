@@ -19,7 +19,10 @@ import java.util.Set;
  */
 public final class PolicyBoundaryCheck {
     /** Decision code. DecisionContext is left out: its only Foresight use is the bright_eye_mode flag in recording metadata. */
-    static final String[] POLICY = {"OutsidePacket", "Distill2", "RoutePlanner", "EventRules", "RelicScore", "PotionRewards"};
+    static final String[] POLICY = {"OutsidePacket", "Distill2", "RoutePlanner", "EventRules", "RelicScore", "PotionRewards",
+        "CardWant", "PrereadCheck"};
+    /** Sandbox only isolates the RNG streams and pools; EventRules' allow-listed card pre-reads replay the room inside one. */
+    static final java.util.Map<String, String> ALLOWED = java.util.Collections.singletonMap("EventRules.java", "Sandbox");
     /** Display-only classes and members that carry beyond-SL information. */
     static final String[] FORBIDDEN = {"Foresight", "EventForesight", "TransformPreview", "Sandbox", "brightEyeMode", "nextRooms",
         "NeowEvent", "NeowReward", "neowRows"};
@@ -112,11 +115,13 @@ public final class PolicyBoundaryCheck {
         for (int i = 1; i < args.length; i++) files.add(Paths.get(args[i]));
         for (Path file : files) {
             List<String> found = violations(new String(Files.readAllBytes(file), StandardCharsets.UTF_8));
+            found.remove(ALLOWED.get(file.getFileName().toString()));
             check(found.isEmpty(), file.getFileName() + " reaches beyond-SL display code: " + found);
         }
 
         // pre-reads: exactly the audited within-SL events; event-fight rewards are never pre-read
-        Set<String> audited = new HashSet<>(Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust"));
+        Set<String> audited = new HashSet<>(Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust",
+            "SensoryStone", "The Library", "Transmorgrifier", "Drug Dealer"));
         check(EventRules.SL_PREREAD.equals(audited), "SL pre-read allowlist changed: " + EventRules.SL_PREREAD);
         for (String beyond : new String[]{"Masked Bandits", "Mushrooms", "Mysterious Sphere"})
             check(!EventRules.SL_PREREAD.contains(beyond), beyond + " fight rewards are beyond SL");
@@ -125,6 +130,15 @@ public final class PolicyBoundaryCheck {
         c.event = "Scrap Ooze";
         EventRules.readLive(c);
         check(c.preread == null && c.oozeLoss == EventRules.UNKNOWN, "readLive is inert while live is off");
+        for (String cards : new String[]{"SensoryStone", "The Library", "Transmorgrifier", "Drug Dealer"}) {
+            EventRules.Context off = new EventRules.Context();
+            off.event = cards; off.shown = cards.equals("The Library") || cards.equals("Transmorgrifier") ? 2 : 3;
+            EventRules.readLive(off);
+            check(off.preread == null && off.sensoryWants == EventRules.UNKNOWN && off.cardsWanted == EventRules.UNKNOWN,
+                cards + ": readLive is inert while live is off");
+        }
+        // the violating case for the exemption: Sandbox stays forbidden outside EventRules
+        check(violations("void p() { try (Sandbox s = new Sandbox()) { } }").contains("Sandbox"), "Sandbox in other policy code is rejected");
         System.out.println("PolicyBoundaryCheck passed: " + files.size() + " policy sources, " + audited.size() + " SL pre-read events");
     }
 }

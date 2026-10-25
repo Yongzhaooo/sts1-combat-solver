@@ -78,6 +78,7 @@ def main():
                         str(here / 'test/RoutePlannerCheck.java'),
                         str(here / 'test/OutsidePacketParityCheck.java'),
                         str(here / 'test/EventRulesCheck.java'),
+                        str(here / 'test/CardWantCheck.java'),
                         str(here / 'test/RngModsCheck.java'),
                         str(here / 'test/PolicyBoundaryCheck.java'),
                         str(here / 'test/ModeCheck.java'),
@@ -106,6 +107,9 @@ def main():
                         'sts1solver.OutsidePacketCheck', str(here / 'test/live-root.json')], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
                         'sts1solver.EventRulesCheck', str(here / 'test/distill2-event-parity.json')], check=True)
+        subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
+                        'sts1solver.CardWantCheck', str(here / 'test/distill2-card-parity.json'),
+                        str(here / 'test/distill2-event-parity.json')], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
                         'sts1solver.PolicyBoundaryCheck', str(here / 'src/sts1solver')], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
