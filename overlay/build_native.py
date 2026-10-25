@@ -46,9 +46,9 @@ source=source.replace(counter,'thread_local '+counter,1)
 loop='''    for (std::int64_t simCount = 0; simCount < simulations; ++simCount) {
         step();'''
 assert source.count(loop)==1,'upstream search loop changed'
-source=source.replace(loop,loop+'\n        if (overlayFastReady()) break;\n        if ((simCount & 1023) == 1023 && overlaySearchTick(simCount + 1, outcomePlayerHp)) break;',1)
+source=source.replace(loop,loop+'\n        if (overlayFastReady()) break;\n        if ((simCount & 1023) == 1023 && overlaySearchTick(simCount + 1, outcomePlayerHp, static_cast<long long>(edgeArena.storageBytes()))) break;',1)
 source=source.replace('extern double overlayRecoveryBonus(const BattleContext &);',
-    'extern double overlayRecoveryBonus(const BattleContext &);\nextern bool overlaySearchTick(long long, int);\nextern double overlayRankTerminal(const BattleContext &, double);',1)
+    'extern double overlayRecoveryBonus(const BattleContext &);\nextern bool overlaySearchTick(long long, int, long long);\nextern double overlayRankTerminal(const BattleContext &, double);',1)
 # Rank the complete existing score, including failed terminals; keep UCT's scale bounded.
 ranked='double search::BattleScumSearcher2::evaluateEndState4r(const BattleContext &bc, int initialMaxHp) {'
 assert source.count(ranked)==1

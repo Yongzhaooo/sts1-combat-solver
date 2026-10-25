@@ -41,6 +41,26 @@ std::atomic<int> generation{0};
 std::atomic<bool> stopRequested{false};
 thread_local int searchGeneration=0;
 thread_local long long finishedRounds=0;  // simulations of completed replanning rounds
+// Memory budget of the whole process: the sum over all running plan() calls (potion branches search in parallel).
+// Accounted, not measured: MCTS edge-arena blocks plus the beam's BattleContext pool, so one branch stops at the same
+// point on every machine. A call that sees the sum above the budget ends like a cancel(): best route so far.
+constexpr long long DEFAULT_MEMORY_BUDGET=3LL<<30;
+// Heap behind one pooled BattleContext (card piles, action queue) on top of sizeof(BattleContext) (~20 KB on Linux):
+// RSS growth of a single beam call was 26-28 KB per pooled state, so 8 KB covers the vectors.
+constexpr long long BEAM_STATE_HEAP=8192;
+long long memoryBudget=DEFAULT_MEMORY_BUDGET;     // set under the GIL; searches only read it
+std::atomic<long long> memoryTotal{0};            // sum of every call's current accounted bytes
+thread_local long long memoryMine=0, memoryPeak=0, memoryMcts=0, memoryBeam=0;
+thread_local bool memoryCapped=false;
+// Gives this call's share back when plan() returns or throws.
+struct MemoryShare { ~MemoryShare() { memoryTotal-=memoryMine; memoryMine=0; } };
+}
+static bool memoryTick(long long bytes) {
+    const long long total=memoryTotal+=bytes-memoryMine;
+    memoryMine=bytes;
+    memoryPeak=std::max(memoryPeak,total);
+    if(total>memoryBudget)memoryCapped=true;
+    return memoryCapped;
 }
 static Progress *live() {
     return progressIndex>=0 && progressIndex<static_cast<int>(progress.size()) ? &progress[progressIndex] : nullptr;
@@ -49,14 +69,15 @@ void overlayProgress(int rounds, long long simulations, int bestHp, int turn) {
     finishedRounds=simulations;
     if(auto *p=live()){ p->rounds=rounds; p->simulations=simulations; p->bestHp=bestHp; p->turn=turn; }
 }
-bool overlaySearchTick(long long done, int roundBestHp) {
+bool overlaySearchTick(long long done, int roundBestHp, long long arenaBytes) {
     if(auto *p=live()){
         p->simulations=finishedRounds+done;
         if(roundBestHp>p->bestHp.load())p->bestHp=roundBestHp;
     }
-    return stopRequested.load() || searchGeneration!=generation.load();
+    memoryMcts=std::max(memoryMcts,arenaBytes);
+    return memoryTick(arenaBytes) || stopRequested.load() || searchGeneration!=generation.load();
 }
-bool overlayInterrupted() { return stopRequested.load() || searchGeneration!=generation.load(); }
+bool overlayInterrupted() { return memoryCapped || stopRequested.load() || searchGeneration!=generation.load(); }
 bool overlayFastReady() { return fastReady; }
 bool overlayDiscoveryReroll() { return discoveryReroll; }
 bool overlayDiscoveryFrames() { return discoveryFrames; }
@@ -261,6 +282,9 @@ static bool overlayBeamTick() {
         if (loop_beam::stats.transitions-p->transitions.load(std::memory_order_relaxed)>=256)
             p->transitions.store(loop_beam::stats.transitions,std::memory_order_relaxed);
     }
+    const long long bytes=static_cast<long long>(loop_beam::poolStates)*(static_cast<long long>(sizeof(BattleContext))+BEAM_STATE_HEAP);
+    memoryBeam=std::max(memoryBeam,bytes);
+    memoryTick(bytes);
     return overlayInterrupted();
 }
 static bool macroFinish(const BattleContext &root, const BattleContext &end) {
@@ -302,7 +326,11 @@ PYBIND11_MODULE(overlay_search, m) {
     m.def("set_rescue", [](long long perSim, long long perSimNoGate, int maxWidth, bool plateau) {
         rescuePerSim=perSim; rescuePerSimNoGate=perSimNoGate; loop_beam::rescueMaxWidth=maxWidth; loop_beam::rescuePlateau=plateau;
     });
-    m.def("set_carry_weight", [](double weight) { carryWeight=weight; });
+    m.def("set_memory_budget", [](long long bytes) {
+        if(bytes<=0)throw std::invalid_argument("memory budget must be positive");
+        memoryBudget=bytes;
+    });
+    m.def("set_carry_weight",[](double weight) { carryWeight=weight; });
     m.def("set_max_hp_gain_weight", [](double weight) { search::BattleScumSearcher2::maxHpGainWeight=weight; });
     m.def("set_incense_targets", [](const std::vector<int> &counters) {
         unsigned mask=0;
@@ -389,6 +417,8 @@ PYBIND11_MODULE(overlay_search, m) {
         initialGoldWealth=goldWealth(root);
         searchGeneration=generation.load();
         finishedRounds=0;
+        memoryPeak=memoryMcts=memoryBeam=0; memoryCapped=false;
+        MemoryShare memoryShare;
         auto &live=progress[index];
         live.simulations=0; live.rounds=0; live.turn=root.turn; live.bestHp=-1; live.done=0;
         live.phase=1; live.budget=simulations; live.transitions=0; live.transitionLimit=0;
@@ -561,6 +591,8 @@ PYBIND11_MODULE(overlay_search, m) {
         out["loop_macro_used"]=macroUsed;
         out["loop_macro_actions"]=loop_beam::stats.macroActions;
         out["loop_gate"]=loop_beam::cyclePotential(root);
+        out["memory_peak"]=memoryPeak; out["memory_mcts"]=memoryMcts; out["memory_beam"]=memoryBeam;
+        out["memory_capped"]=memoryCapped;
         return out;
     },py::arg("root"),py::arg("simulations"),py::arg("slots"),py::arg("recovery"),py::arg("index"),py::arg("kill_thieves")=false,py::arg("generated_potions")=false,py::arg("boss_fast")=false,py::arg("smoke_opening")=false,py::arg("bounded")=false,py::arg("smoke_loss_threshold")=15);
     m.def("cancel", []() { stopRequested=true; ++generation; });
