@@ -149,6 +149,7 @@ final class OutsidePacket {
 
     Distill2.Result policyScore() {
         ruleNote=null; prereadNote=null;
+        EventRules.outcomeCheck(); // Mausoleum / Cursed Tome preread self-check log, live game only
         Distill2.Result result=potionRule(ruleScore());
         String check=PrereadCheck.observe(game,visible); // runtime self-check of an earlier event pre-read
         if(check!=null) {
@@ -270,6 +271,7 @@ final class OutsidePacket {
             if(EventRules.removalTier(string(card,"id"),string(card,"type"))<=EventRules.LAST_REMOVAL_TIER)c.removable++;
         }
         for(JsonElement p:array(game,"potions"))if(emptyPotion(string(p.getAsJsonObject(),"id")))c.freePotionSlots++;
+        c.purgeCost=optionalInt(visible,"purge_base_cost",c.purgeCost);
         c.sozu=hasRelic("Sozu");
         c.redMask=hasRelic("Red Mask");
         c.artifactRelic=hasRelic("ClockworkSouvenir") || hasRelic("Clockwork Souvenir");
