@@ -57,6 +57,9 @@ namespace sts {
         // Java sets the generated card's turn cost to 0.
         static Action CreateRandomCardInHandAction(CardType type, bool commonOnly = false,
                                                    bool zeroCost = false);
+        // AbstractDungeon.getCard(rarity, rng): a random card of the player's class with
+        // that rarity and no type filter, which is what HelloPower.atStartOfTurn uses.
+        static Action CreateRandomRarityCardInHandAction(CardRarity rarity, bool zeroCost = false);
         static Action AllForOneAction(); // return every 0-cost discard pile card to hand
 
         // Per-target damage is captured when the card is used.
@@ -172,7 +175,7 @@ namespace sts {
         static Action OnAfterCardUsed(); // called UseCardAction in game
         static Action EssenceOfDarkness(int darkOrbsPerSlot); // handle sacred bark
         static Action IncreaseOrbSlots(int count);
-        static Action ChannelOrb(Orb orb, std::int8_t evokeBonus = 0, std::int16_t darkCounter = -1);
+        static Action ChannelOrb(Orb orb, std::int16_t darkCounter = -1);
         static Action EvokeOrbAction(int orbIdx, int times = 1);
 
         static Action SuicideAction(int monsterIdx, bool triggerRelics);

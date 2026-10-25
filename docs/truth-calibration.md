@@ -102,7 +102,7 @@ rng                   13 个种子随机数流的计数（Random.counter）：
 - `player.stance`：`NEUTRAL`、`CALM`、`WRATH` 或 `DIVINITY`。
 - `player.mantra`：非负整数；快照的 `powers` 里也有 Mantra 时两者必须相等。
 - `player.orb_slots`：整数，原版上限 10；更大的 mod 栏位拒绝导入。
-- `player.orbs`：宝珠列表，长度等于栏位数，空栏的 `id` 为 null。每项 `{id, passive, evoke}`：`id` 是 CommunicationMod 的宝珠名（`Lightning`、`Frost`、`Dark`、`Plasma`，也接受引擎枚举名），`passive` 和 `evoke` 是游戏里已算过 Focus 的数值。导入时按 `evoke - 基础激发值 - Focus` 反推卡牌给的激发加成（如 Zap+ 的 +3）；黑暗珠的累计伤害存在 `evoke` 里。声明了 `orb_slots` 却没有 `orbs`、宝珠数超过栏位、或激发值低于基础值与 Focus 之和，都会被拒绝。
+- `player.orbs`：宝珠列表，长度等于栏位数，空栏的 `id` 为 null。每项 `{id, passive, evoke}`：`id` 是 CommunicationMod 的宝珠名（`Lightning`、`Frost`、`Dark`、`Plasma`，也接受引擎枚举名），`passive` 和 `evoke` 是游戏里已算过 Focus 的数值。没有原版卡牌会给宝珠加激发值，所以导入要求激发值恰好等于 `max(0, 基础激发值 + Focus)`，不等就拒绝（否则 Focus 为负时被截到 0 的数值会被反推成一个凭空的加成，Focus 回升后还留着）；黑暗珠的累计伤害存在 `evoke` 里。声明了 `orb_slots` 却没有 `orbs`、宝珠数超过栏位、或激发值与基础和 Focus 不符，都会被拒绝。
 - 牌堆里的牌可带 `retain`（布尔，单次保留位）。
 
 Focus 仍写在 `powers` 里。宝珠由 CommunicationMod 导出，生产端（`steam_mcts.build_snapshot`）原样透传；姿态和真言的单项格式等 M2 再定。

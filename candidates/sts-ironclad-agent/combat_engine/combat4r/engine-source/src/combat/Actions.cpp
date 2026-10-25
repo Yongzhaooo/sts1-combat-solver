@@ -74,6 +74,18 @@ Action Actions::CreateRandomCardInHandAction(CardType type, bool commonOnly, boo
     }};
 }
 
+Action Actions::CreateRandomRarityCardInHandAction(CardRarity rarity, bool zeroCost) {
+    return {[=] (BattleContext &bc) {
+        // HelloPower.atStartOfTurn: AbstractDungeon.getCard(COMMON, cardRandomRng), which
+        // rolls over the whole rarity pool - attacks included - so it is not the
+        // type-filtered pool CreateRandomCardInHandAction draws from.
+        const auto cid = getRandomClassCardOfRarity(bc.cardRandomRng, bc.player.cc, rarity);
+        CardInstance generated = bc.createGeneratedCard(cid);
+        if (zeroCost) generated.setCostForTurn(0);
+        bc.addToTop(Actions::MakeTempCardInHand(generated));
+    }};
+}
+
 Action Actions::SunderAction(int idx, int damage) {
     return {[=] (BattleContext &bc) {
         if (bc.monsters.arr[idx].isDeadOrEscaped()) {
@@ -433,30 +445,30 @@ namespace {
                 // With Electrodynamics (ElectroPower) it hits all enemies and
                 // consumes no target roll (Lightning checks hasPower("Electro")).
                 const int damage = 3 + bc.player.focus;
-                if (damage > 0) {
-                    if (bc.player.hasStatus<PS::ELECTRO>()) {
-                        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
-                            if (!bc.monsters.arr[i].isDeadOrEscaped()) {
-                                bc.addToBot(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage), DamageType::THORNS));
-                            }
+                if (bc.player.hasStatus<PS::ELECTRO>()) {
+                    for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                        if (!bc.monsters.arr[i].isDeadOrEscaped()) {
+                            bc.addToBot(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage), DamageType::THORNS));
                         }
-                    } else {
-                        // LightningOrb.onEndOfTurn queues LightningOrbPassiveAction, whose
-                        // triggerPassiveEffect calls AbstractDungeon.getRandomMonster() as it
-                        // runs - after every passive this same pass already queued, and after
-                        // the block/settle actions in between, has resolved. Queue the roll
-                        // through addToBottom so it keeps that position in the queue: rolling
-                        // here would read a candidate list that still holds monsters an
-                        // earlier passive just killed (F30, floor 30: the roll silently ran
-                        // before the Frost passive's settle action, leaving the counter one
-                        // step behind and sending Coolheaded's evoke onto the wrong enemy).
-                        bc.addToBot({[damage] (BattleContext &bc) {
-                            const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
-                            if (target >= 0) {
-                                bc.addToBot(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
-                            }
-                        }});
                     }
+                } else {
+                    // LightningOrb.onEndOfTurn queues LightningOrbPassiveAction, whose
+                    // triggerPassiveEffect calls AbstractDungeon.getRandomMonster() as it
+                    // runs - after every passive this same pass already queued, and after
+                    // the block/settle actions in between, has resolved. Queue the roll
+                    // through addToBottom so it keeps that position in the queue: rolling
+                    // here would read a candidate list that still holds monsters an
+                    // earlier passive just killed (F30, floor 30: the roll silently ran
+                    // before the Frost passive's settle action, leaving the counter one
+                    // step behind and sending Coolheaded's evoke onto the wrong enemy).
+                    // The roll is unconditional: the action picks its target before it
+                    // looks at the damage, so Focus <= -3 still advances cardRandomRng.
+                    bc.addToBot({[damage] (BattleContext &bc) {
+                        const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                        if (target >= 0 && damage > 0) {
+                            bc.addToBot(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
+                        }
+                    }});
                 }
                 break;
             }
@@ -563,19 +575,20 @@ namespace {
             case Orb::LIGHTNING: {
                 // LightningOrb.onEvoke: deal 8 (+focus +bonus) to a random enemy, or
                 // to all enemies under Electrodynamics (no target roll in that case).
-                const int damage = 8 + bc.player.focus + orb.evokeBonus;
-                if (damage > 0) {
-                    if (bc.player.hasStatus<PS::ELECTRO>()) {
-                        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
-                            if (!bc.monsters.arr[i].isDeadOrEscaped()) {
-                                bc.addToTop(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage), DamageType::THORNS));
-                            }
+                // LightningOrbEvokeAction.update() calls getRandomMonster() before it
+                // looks at the damage, so the roll happens even at zero damage - Focus
+                // <= -8 must not shift cardRandomRng by one for the rest of the fight.
+                const int damage = 8 + bc.player.focus;
+                if (bc.player.hasStatus<PS::ELECTRO>()) {
+                    for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                        if (!bc.monsters.arr[i].isDeadOrEscaped()) {
+                            bc.addToTop(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage), DamageType::THORNS));
                         }
-                    } else {
-                        const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
-                        if (target >= 0) {
-                            bc.addToTop(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
-                        }
+                    }
+                } else {
+                    const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                    if (target >= 0 && damage > 0) {
+                        bc.addToTop(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
                     }
                 }
                 break;
@@ -621,7 +634,7 @@ namespace {
     }
 }
 
-Action Actions::ChannelOrb(Orb orb, std::int8_t evokeBonus, std::int16_t darkCounter) {
+Action Actions::ChannelOrb(Orb orb, std::int16_t darkCounter) {
     return {[=] (BattleContext &bc) {
         // ChannelAction(orb) defaults autoEvoke to true. Its update() only calls
         // AbstractPlayer.channelOrb when autoEvoke is set, or when the bar still
@@ -633,7 +646,7 @@ Action Actions::ChannelOrb(Orb orb, std::int8_t evokeBonus, std::int16_t darkCou
             return;
         }
         if (bc.player.hasEmptyOrb()) {
-            bc.player.channelOrb(orb, evokeBonus, darkCounter);
+            bc.player.channelOrb(orb, darkCounter);
             return;
         }
         // AbstractPlayer.channelOrb with no empty slot: addToTop a ChannelAction
@@ -642,7 +655,7 @@ Action Actions::ChannelOrb(Orb orb, std::int8_t evokeBonus, std::int16_t darkCou
         // fires before the new one lands at the end.
         if (!bc.player.orbs.empty()) {
             const auto pushed = bc.player.orbs[0];
-            bc.addToTop(Actions::ChannelOrb(orb, evokeBonus, darkCounter));
+            bc.addToTop(Actions::ChannelOrb(orb, darkCounter));
             fireEvokeEffects(bc, pushed);
             bc.player.orbs.remove(0);
         }
@@ -691,13 +704,21 @@ Action Actions::MultiCastAction(int times) {
     return {[=] (BattleContext &bc) {
         // MulticastAction: evoke the oldest orb N times. Every trigger except
         // the last one leaves the orb in the bar (EvokeWithoutRemovingOrbAction);
-        // the final EvokeOrbAction(1) consumes it.
-        for (int i = 0; i < times && !bc.player.orbs.empty(); ++i) {
-            const auto orb = bc.player.orbs[0];
-            fireEvokeEffects(bc, orb);
-            if (i == times - 1) {
-                bc.player.orbs.remove(0);
-            }
+        // the final EvokeOrbAction(1) consumes it. Each trigger is its own action,
+        // so a trigger's target roll sees the monsters the previous trigger killed
+        // (AbstractDungeon.getRandomMonster filters halfDead/isDying/isEscaping);
+        // rolling all N targets here would pick from a stale candidate list.
+        for (int i = 0; i < times; ++i) {
+            const bool last = i == times - 1;
+            bc.addToBot({[=] (BattleContext &bc) {
+                if (bc.player.orbs.empty()) {
+                    return;
+                }
+                fireEvokeEffects(bc, bc.player.orbs[0]);
+                if (last) {
+                    bc.player.orbs.remove(0);
+                }
+            }});
         }
     }};
 }
@@ -709,13 +730,18 @@ Action Actions::FissionAction(bool upgraded) {
         // granted. Queued bottom-up so removal resolves before the rewards.
         const int count = static_cast<int>(bc.player.orbs.size());
         if (upgraded) {
-            bc.addToBot({[] (BattleContext &bc) {
-                while (!bc.player.orbs.empty()) {
-                    const auto orb = bc.player.orbs[0];
-                    fireEvokeEffects(bc, orb);
+            // EvokeAllOrbsAction addToTop's one EvokeOrbAction per orb, so each
+            // evoke's target roll sees the monsters the previous evoke killed.
+            // One evoke per orb, queued in order, reproduces that.
+            for (int i = 0; i < count; ++i) {
+                bc.addToBot({[] (BattleContext &bc) {
+                    if (bc.player.orbs.empty()) {
+                        return;
+                    }
+                    fireEvokeEffects(bc, bc.player.orbs[0]);
                     bc.player.orbs.remove(0);
-                }
-            }});
+                }});
+            }
         } else {
             bc.addToBot({[] (BattleContext &bc) {
                 bc.player.orbs.clear();

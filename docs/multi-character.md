@@ -46,7 +46,7 @@ Last confirmed: 2026-10-15，基于分支 `fix/search-timeout-handling`（6dc1e8
 | 弃牌钩子（静默） | 只有手动弃牌时 Tactician、Reflex 的触发和本回合弃牌计数 | `BattleContext.cpp:2861`，`Player.h:102` |
 | 弃牌选择（静默） | 缺：`CHOOSE_DISCARD_CARDS` 在枚举里但无处理；Tools of the Trade 的弃牌被注释掉 | `ES/include/combat/InputState.h:21`，`Player.cpp:804-806` |
 | Accuracy | 状态在枚举里，注释 `todo implement` | `PlayerStatusEffects.h:58` |
-| 宝珠（机器人） | 已有：`OrbState` 数组（类型、激发加成、黑暗累计）、channel（满栏先激发最旧）、栏位增减、四种宝珠的被动与激发、集中可正可负 | `Player.h`、`Player.cpp` |
+| 宝珠（机器人） | 已有：`OrbState` 数组（类型、黑暗累计）、channel（满栏先激发最旧）、栏位增减、四种宝珠的被动与激发、集中可正可负 | `Player.h`、`Player.cpp` |
 | 宝珠相关动作 | `ChannelOrb`、`EvokeOrbAction`、`IncreaseOrbSlots`、`EssenceOfDarkness`、`TriggerStartOfTurnOrbsAction`、`TriggerEndOfTurnOrbsAction`、`ImpulseAction`、`DarkImpulseAction` 均已实现 | `Actions.cpp` |
 | 回合开始宝珠、Loop | 已接入：等离子在回合开始给能量；Loop 每层触发最旧珠的完整被动 | `BattleContext.cpp`、`Player.cpp` |
 | 集中 Focus | 已有字段和状态，可加减 | `Player.h:59`、`217`、`353` |

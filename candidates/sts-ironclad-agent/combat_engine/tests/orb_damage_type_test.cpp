@@ -103,7 +103,7 @@ int main() {
         // Dark's evoke is the other THORNS-typed attack.
         BattleContext bc = freshBattle();
         bc.player.orbs.clear();
-        bc.player.channelOrb(Orb::DARK, 0, 9);
+        bc.player.channelOrb(Orb::DARK, 9);
         Actions::EvokeOrbAction(0, 1).actFunc(bc);
         drain(bc);
         check(bc.monsters.arr[0].hasStatus<MS::CURL_UP>(),

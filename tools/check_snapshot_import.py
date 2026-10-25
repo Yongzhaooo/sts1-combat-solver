@@ -54,27 +54,36 @@ assert load(lambda v: v['player'].update(orb_slots=3)).orb_slots == 3
 assert load(lambda v: v['player'].update(orbs=[])).orb_slots == 0
 
 # Orbs: CommunicationMod exports every slot, a null id for an empty one, with the
-# focus-applied passive and evoke amounts. The importer derives the card-granted
-# evoke bonus from the evoke amount and keeps Dark's accumulated counter.
+# focus-applied passive and evoke amounts. No card raises an orb's evoke amount, so
+# the importer insists on evoke == max(0, base + focus) and keeps only Dark's
+# accumulated counter.
 lightning = {'id': 'Lightning', 'passive': 3, 'evoke': 8}
 frost = {'id': 'Frost', 'passive': 2, 'evoke': 5}
 dark = {'id': 'Dark', 'passive': 6, 'evoke': 12}
 plasma = {'id': 'Plasma', 'passive': 1, 'evoke': 2}
 empty = {'id': None, 'passive': 0, 'evoke': 0}
 assert load(lambda v: v['player'].update(orbs=[lightning], orb_slots=3)).orbs == [
-    {'id': 'LIGHTNING', 'evoke_bonus': 0, 'dark_counter': 0}]
-assert load(lambda v: v['player'].update(orbs=[{'id': 'Lightning', 'passive': 3, 'evoke': 11}], orb_slots=3)).orbs == [
-    {'id': 'LIGHTNING', 'evoke_bonus': 3, 'dark_counter': 0}], 'Zap+ adds 3 to the evoke amount'
+    {'id': 'LIGHTNING', 'dark_counter': 0}]
+assert refused(lambda v: v['player'].update(orbs=[{'id': 'Lightning', 'passive': 3, 'evoke': 11}], orb_slots=3)), \
+    'no card adds an evoke bonus, so 11 must not import over base 8'
 assert load(lambda v: v['player'].update(orbs=[frost, dark, plasma, empty], orb_slots=4)).orbs == [
-    {'id': 'FROST', 'evoke_bonus': 0, 'dark_counter': 0},
-    {'id': 'DARK', 'evoke_bonus': 0, 'dark_counter': 12},
-    {'id': 'FUSION', 'evoke_bonus': 0, 'dark_counter': 0}]
+    {'id': 'FROST', 'dark_counter': 0},
+    {'id': 'DARK', 'dark_counter': 12},
+    {'id': 'FUSION', 'dark_counter': 0}]
 assert load(lambda v: v['player'].update(orbs=[empty, empty], orb_slots=2)).orbs == []
 assert load(lambda v: (v['player']['powers'].append({'id': int(sts.PlayerStatus.FOCUS), 'amount': 2}),
-                       v['player'].update(orbs=[{'id': 'Lightning', 'passive': 5, 'evoke': 13}], orb_slots=3))).orbs == [
-    {'id': 'LIGHTNING', 'evoke_bonus': 3, 'dark_counter': 0}], 'focus is part of the exported evoke amount'
+                       v['player'].update(orbs=[{'id': 'Lightning', 'passive': 5, 'evoke': 10}], orb_slots=3))).orbs == [
+    {'id': 'LIGHTNING', 'dark_counter': 0}], 'focus is part of the exported evoke amount'
 assert refused(lambda v: v['player'].update(orbs=[{'id': 'Lightning', 'passive': 3, 'evoke': 7}], orb_slots=3)), \
     'an evoke amount below base plus focus must not import'
+# At negative Focus the game clamps an orb's evoke amount at 0, so 0 is the only
+# value base + focus can produce there; it must import as 0, never as a bonus.
+assert load(lambda v: (v['player']['powers'].append({'id': int(sts.PlayerStatus.FOCUS), 'amount': -9}),
+                       v['player'].update(orbs=[{'id': 'Lightning', 'passive': 0, 'evoke': 0}], orb_slots=3))).orbs == [
+    {'id': 'LIGHTNING', 'dark_counter': 0}], 'a clamped evoke at negative focus imports as it is'
+assert refused(lambda v: (v['player']['powers'].append({'id': int(sts.PlayerStatus.FOCUS), 'amount': -9}),
+                          v['player'].update(orbs=[{'id': 'Lightning', 'passive': 0, 'evoke': 5}], orb_slots=3))), \
+    'an evoke above the clamped base + focus must not import as a bonus'
 assert refused(lambda v: v['player'].update(orbs=[{'id': 'Nope', 'passive': 1, 'evoke': 1}], orb_slots=3))
 assert refused(lambda v: v['player'].update(orbs=[lightning, frost], orb_slots=1))
 assert load(lambda v: (v['player'].update(orbs=[lightning, frost]), v['player'].pop('orb_slots'))).orb_slots == 2
@@ -102,8 +111,8 @@ orbed = s.comparator.bridge.build_snapshot(with_orbs)
 assert orbed['player']['orb_slots'] == 3
 assert [orb['id'] for orb in orbed['player']['orbs']] == ['Lightning', None, 'Dark']
 assert sts.BattleContext.from_snapshot(orbed, seed).player.orbs == [
-    {'id': 'LIGHTNING', 'evoke_bonus': 0, 'dark_counter': 0},
-    {'id': 'DARK', 'evoke_bonus': 0, 'dark_counter': 18}]
+    {'id': 'LIGHTNING', 'dark_counter': 0},
+    {'id': 'DARK', 'dark_counter': 18}]
 
 # Defect powers that the game exports under a different id, or folds into another
 # field. Machine Learning applies the game's DrawPower, whose id is "Draw"; the

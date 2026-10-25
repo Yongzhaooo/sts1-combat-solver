@@ -71,7 +71,7 @@ int main() {
     check(zap.isValidAction(battle), "Zap should be playable");
     zap.execute(battle);
     check(battle.player.orbs.size() == 3 && battle.player.orbs.back().type == Orb::LIGHTNING
-          && battle.player.orbs.back().evokeBonus == 0, "Zap should channel a plain lightning orb");
+          && battle.player.orbs.back().darkCounter == 0, "Zap should channel a plain lightning orb");
 
     // Dualcast evokes the oldest orb twice and consumes it once. Here the oldest
     // is a Frost orb: two evokes grant 10 block and deal no damage.

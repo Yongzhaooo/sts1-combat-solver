@@ -333,20 +333,22 @@ namespace {
                 if (!orb.contains("evoke"))
                     throw std::invalid_argument("snapshot orb " + name + " is missing its evoke amount");
                 const int evoke = py::cast<int>(orb["evoke"]);
-                std::int8_t evokeBonus = 0;
                 std::int16_t darkCounter = 0;
                 if (type == Orb::DARK) {
                     darkCounter = static_cast<std::int16_t>(evoke);
                 } else if (type != Orb::FUSION) {
-                    // evokeAmount = base + focus + card bonus (Zap+ adds 3).
+                    // No vanilla card raises an orb's evoke amount, so the game's value
+                    // is exactly max(0, base + focus). Anything else means the snapshot
+                    // and the exported Focus disagree - refuse it instead of inventing
+                    // a per-orb bonus (the game would show a Zap+ the game never grants,
+                    // and Focus climbing back would keep it).
                     const int baseEvoke = type == Orb::LIGHTNING ? 8 : 5;
-                    const int bonus = evoke - baseEvoke - bc.player.focus;
-                    if (bonus < 0)
-                        throw std::invalid_argument("snapshot orb " + name +
-                            " evoke amount disagrees with the exported Focus");
-                    evokeBonus = static_cast<std::int8_t>(bonus);
+                    const int expected = std::max(0, baseEvoke + static_cast<int>(bc.player.focus));
+                    if (evoke != expected)
+                        throw std::invalid_argument("snapshot orb " + name + " evokes for " +
+                            std::to_string(evoke) + " but base + focus is " + std::to_string(expected));
                 }
-                bc.player.orbs.push_back(Player::OrbState{type, evokeBonus, darkCounter});
+                bc.player.orbs.push_back(Player::OrbState{type, darkCounter});
             }
             if (static_cast<int>(bc.player.orbs.size()) > bc.player.orbSlots)
                 throw std::invalid_argument("snapshot has more orbs than orb slots");
@@ -1655,7 +1657,6 @@ PYBIND11_MODULE(slaythespire, m) {
             for (const auto &orb : p.orbs) {
                 pybind11::dict item;
                 item["id"] = std::string(names[static_cast<int>(orb.type)]);
-                item["evoke_bonus"] = static_cast<int>(orb.evokeBonus);
                 item["dark_counter"] = static_cast<int>(orb.darkCounter);
                 result.append(item);
             }

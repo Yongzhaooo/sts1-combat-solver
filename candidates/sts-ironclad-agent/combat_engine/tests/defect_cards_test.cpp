@@ -57,7 +57,6 @@ namespace {
         }
         play.execute(battle);
     }
-
     bool discardContains(const BattleContext &battle, CardId id) {
         for (const auto &card : battle.cards.discardPile) {
             if (card.getId() == id) {
@@ -564,6 +563,50 @@ int main() {
         check(CardInstance(CardId::DOUBLE_ENERGY, true).cost == 0, "upgraded Double Energy is free");
     }
     {
+        // Multi-Cast's N evokes are N separate actions, so each one rolls its
+        // target against the board the previous evoke left behind. Three 3-HP
+        // slimes with two energy: 8 does not fit in one slime, so both target
+        // rolls are free picks, and each evoke's roll must be spent here, not in
+        // a batch before the first one resolved.
+        BattleContext bc = freshBattle(ME::LOTS_OF_SLIMES);
+        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+            bc.monsters.arr[i].curHp = 3;
+        }
+        bc.player.orbs.clear();
+        bc.player.orbs.push_back({Orb::LIGHTNING, 0});
+        bc.player.energy = 2;
+        const auto before = bc.cardRandomRng.counter;
+        playCard(bc, CardId::MULTI_CAST);
+        check(bc.cardRandomRng.counter == before + 2,
+              "Multi-Cast should spend one target roll per evoke");
+        check(bc.player.energy == 0, "Multi-Cast should spend all energy");
+    }
+    {
+        // Fission+ evokes every orb one at a time (EvokeAllOrbsAction addToTop's one
+        // EvokeOrbAction per orb), so three Lightning orbs against three 3-HP slimes
+        // spend three target rolls and kill three slimes.
+        BattleContext bc = freshBattle(ME::LOTS_OF_SLIMES);
+        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+            bc.monsters.arr[i].curHp = 3;
+        }
+        bc.player.orbs.clear();
+        for (int i = 0; i < 3; ++i) {
+            bc.player.orbs.push_back({Orb::LIGHTNING, 0});
+        }
+        const auto before = bc.cardRandomRng.counter;
+        playCard(bc, CardId::FISSION, 1);
+        int alive = 0;
+        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+            if (!bc.monsters.arr[i].isDeadOrEscaped()) {
+                ++alive;
+            }
+        }
+        check(bc.cardRandomRng.counter == before + 3,
+              "Fission+ should spend one target roll per evoked orb");
+        check(alive == bc.monsters.monsterCount - 3,
+              "Fission+ should evoke every orb separately and kill three slimes");
+    }
+    {
         // Multi-Cast: evoke the oldest orb X times, consume it once, spend all energy.
         BattleContext bc = freshBattle();
         const int hp = bc.monsters.arr[0].curHp;
@@ -951,7 +994,10 @@ int main() {
             bc.actionQueue.popFront()(bc);
         }
         check(bc.cards.cardsInHand == 1, "Hello World should add one card");
-        check(bc.cards.hand[0].getType() == CardType::SKILL, "Hello World should add a Skill");
+        // HelloPower.atStartOfTurn draws AbstractDungeon.getCard(COMMON, rng), i.e. the
+        // whole Common pool, not just Skills, so attacks are fair game too.
+        check(getCardRarity(bc.cards.hand[0].getId()) == CardRarity::COMMON,
+              "Hello World should add a Common card");
         // HelloPower.atStartOfTurn never lowers the cost; only White Noise does.
         check(bc.cards.hand[0].costForTurn == bc.cards.hand[0].cost,
               "Hello World should add the card at its printed cost");
@@ -1092,7 +1138,7 @@ int main() {
         playCard(bc, CardId::ZAP, 1);
         check(bc.player.orbs.size() == 1 && bc.player.orbs[0].type == Orb::LIGHTNING,
               "Zap+ should channel one Lightning orb");
-        check(bc.player.orbs[0].evokeBonus == 0, "Zap+ should not add an evoke bonus");
+        check(bc.player.orbs[0].type == Orb::LIGHTNING, "Zap+ should channel a plain lightning orb");
     }
 
     {

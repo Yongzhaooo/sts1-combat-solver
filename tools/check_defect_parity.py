@@ -102,9 +102,15 @@ def main():
                       [orb("Lightning", 5, 10), orb("Frost", 4, 7), orb("Plasma", 1, 2)], 2),
           what="positive Focus")
 
-    # An evoke bonus the card grants (the Zap+ shape) must survive the round trip.
-    check(defect_view([("Zap", 1)], {"draw_pile": [], "discard_pile": [], "exhaust_pile": []},
-                      [orb("Lightning", 3, 11), EMPTY, EMPTY], 0), what="evoke bonus")
+    # No card raises an orb's evoke amount, so the importer insists on
+    # evoke == max(0, base + Focus); a Zap+ shape must be refused, not stored.
+    try:
+        check(defect_view([("Zap", 1)], {"draw_pile": [], "discard_pile": [], "exhaust_pile": []},
+                          [orb("Lightning", 3, 11), EMPTY, EMPTY], 0), expect_difference=True,
+              what="an evoke amount no card can produce")
+        raise AssertionError("an invented evoke bonus must not import")
+    except ValueError as error:
+        assert "base + focus" in str(error), error
 
     # Negatives: each of these must be reported, never silently accepted.
     # The passive amount only depends on Focus, so a Focus the importer read
@@ -116,19 +122,22 @@ def main():
     found, _ = check(broken, expect_difference=True, what="Focus not applied to the orb bar")
     assert "/player/orbs/0/passive" in [d["path"] for d in found], found
 
-    # An evoke below base + Focus is refused outright rather than approximated.
+    # An evoke that disagrees with base + Focus in either direction is refused
+    # outright rather than approximated.
     impossible = defect_view([("Zap", 1)], {"draw_pile": [], "discard_pile": [], "exhaust_pile": []},
                              [orb("Lightning", 3, 8), EMPTY, EMPTY], 0)
     impossible["game"]["combat_state"]["player"]["powers"] = [{"id": "Focus", "name": "Focus", "amount": 2}]
     try:
-        check(impossible, expect_difference=True, what="evoke below base + Focus")
+        check(impossible, expect_difference=True, what="evoke disagreeing with base + Focus")
     except ValueError as error:
-        assert "Focus" in str(error), error
+        assert "base + focus" in str(error), error
 
     # The orb type table is checked against the amounts, not against the id: a
-    # Frost carrying Lightning's numbers must be reported.
+    # Frost carrying Lightning's passive must be reported. Its evoke has to stay
+    # self-consistent, because the importer refuses an evoke that base + focus
+    # cannot produce (Frost base 5 + focus 2 = 7).
     mistyped = defect_view([("Zap", 1)], {"draw_pile": [], "discard_pile": [], "exhaust_pile": []},
-                           [orb("Frost", 5, 10)], 2)
+                           [orb("Frost", 5, 7)], 2)
     found, _ = check(mistyped, expect_difference=True, what="orb type disagrees with its amounts")
     assert any(d["path"].startswith("/player/orbs/0/") for d in found), found
 

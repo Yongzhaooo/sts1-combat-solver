@@ -64,9 +64,10 @@ namespace sts {
         static constexpr int ORB_STORAGE_CAPACITY = 16;
         struct OrbState {
             Orb type = Orb::EMPTY;
-            std::int8_t evokeBonus = 0;
             // Dark orbs accumulate their damage counter here (starts at 6 and
             // grows by max(0, 6 + focus) per end of turn). Other orbs keep it 0.
+            // There is no per-orb evoke bonus: no card raises an orb's evoke amount,
+            // so it is always max(0, base + focus).
             std::int16_t darkCounter = 0;
         };
         fixed_list<OrbState, ORB_STORAGE_CAPACITY> orbs;
@@ -195,7 +196,7 @@ namespace sts {
         void useEnergy(int amount);
         void gainEnergy(int amount);
         void increaseOrbSlots(int amount);
-        void channelOrb(Orb orb, std::int8_t evokeBonus = 0, std::int16_t darkCounter = -1);
+        void channelOrb(Orb orb, std::int16_t darkCounter = -1);
         [[nodiscard]] bool hasEmptyOrb() const;
 
         void applyEndOfTurnPowers(BattleContext &bc);

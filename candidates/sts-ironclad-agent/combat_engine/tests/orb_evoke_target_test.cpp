@@ -264,6 +264,23 @@ int main() {
             check(aliveCount(bc) >= 1, "both monsters start alive and the passive kills one at most");
         }
 
+        // LightningOrb.evoke queues LightningOrbEvokeAction, whose update() calls
+        // AbstractDungeon.getRandomMonster() before it looks at the damage, so a
+        // Focus that drops the evoke to zero still spends the target roll.
+        {
+            BattleContext bc = freshBattle();
+            bc.player.orbs.clear();
+            bc.player.focus = -8;
+            channel_now(bc, Orb::LIGHTNING);
+            const auto before = bc.cardRandomRng.counter;
+            const int hpBefore = totalMonsterHp(bc);
+            Actions::EvokeOrbAction(0, 1).actFunc(bc);
+            drain(bc);
+            check(bc.cardRandomRng.counter == before + 1,
+                  "a zero-damage Lightning evoke still spends its target roll");
+            check(totalMonsterHp(bc) == hpBefore, "a zero-damage Lightning evoke deals nothing");
+        }
+
         std::cout << "orb_evoke_target: ok\n";
         return 0;
     } catch (const std::exception &e) {

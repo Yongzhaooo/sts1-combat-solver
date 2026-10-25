@@ -115,7 +115,7 @@ class Comparator:
         if name in ORB_IGNORES_FOCUS:
             focus = 0
         return {"id": name, "passive": passive + focus,
-                "evoke": orb["dark_counter"] if name == "DARK" else evoke + focus + orb["evoke_bonus"]}
+                "evoke": orb["dark_counter"] if name == "DARK" else evoke + focus}
 
     def import_battle(self, view: dict, *, require_search_state=False):
         game = copy.deepcopy(view["game"])

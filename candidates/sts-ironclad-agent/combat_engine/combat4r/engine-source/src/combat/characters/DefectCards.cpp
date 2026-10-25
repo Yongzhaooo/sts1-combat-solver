@@ -18,7 +18,7 @@ namespace sts {
                 const auto evoked = bc.player.orbs[0];
                 Actions::EvokeOrbAction(0).actFunc(bc);
                 if (evoked.type != Orb::EMPTY) {
-                    bc.player.channelOrb(evoked.type, evoked.evokeBonus, evoked.darkCounter);
+                    bc.player.channelOrb(evoked.type, evoked.darkCounter);
                 }
             }};
         }

@@ -191,7 +191,7 @@ void Player::increaseOrbSlots(int amount) {
     }
 }
 
-void Player::channelOrb(Orb orb, std::int8_t evokeBonus, std::int16_t darkCounter) {
+void Player::channelOrb(Orb orb, std::int16_t darkCounter) {
     // Requires an open slot: the caller (Actions::ChannelOrb) owns the vanilla
     // policy of evoking the oldest orb when the bar is full, and of doing
     // nothing at all when no slots exist.
@@ -203,7 +203,7 @@ void Player::channelOrb(Orb orb, std::int8_t evokeBonus, std::int16_t darkCounte
         // constructor); Recursion passes the evoked orb's counter through.
         darkCounter = orb == Orb::DARK ? 6 : 0;
     }
-    orbs.push_back(OrbState{orb, evokeBonus, darkCounter});
+    orbs.push_back(OrbState{orb, darkCounter});
     if (orb == Orb::LIGHTNING) {
         ++lightningChanneledThisCombat;
     } else if (orb == Orb::FROST) {
@@ -764,9 +764,10 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
             case PS::HELLO_WORLD:
                 // HelloPower.atStartOfTurn: one random Common card per stack, at its
                 // printed cost (the power never lowers it). It is a permanent power,
-                // not a one-shot.
+                // not a one-shot, and the pool is the whole Common pool, not just
+                // Skills - the game calls AbstractDungeon.getCard(COMMON, rng).
                 for (int i = 0; i < pair.second; ++i) {
-                    bc.addToBot(Actions::CreateRandomCardInHandAction(CardType::SKILL, true));
+                    bc.addToBot(Actions::CreateRandomRarityCardInHandAction(CardRarity::COMMON));
                 }
                 break;
 
