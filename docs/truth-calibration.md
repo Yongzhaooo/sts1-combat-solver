@@ -202,6 +202,10 @@ calibration.rng         {aiRng, cardRng, cardRandomRng, eventRng, mapRng, mercha
 
 公开 CI 运行 `python tools/truth_calibration/run.py --check fixtures/calibration`，只检查每个已提交用例的格式和观测字段，不需要真值。
 
+`run.py --check fixtures/native/<职业>` 同理只校验格式，不重放。真正把原生夹具和模拟器对起来的是 `python tools/check_coverage_gaps.py`：它把每个检查点的观测喂给快照导入器，用 `sim_patch/parity/core.py` 的严格比较逐字段核对，只需要构建好的运行时，不需要真值。夹具里 `fixtures/native/DEFECT` 那 8 个跨回合、多怪、负 Focus 的窗口是必过项；同目录更早的卡牌扫描夹具用的是 9999 HP 假怪，首个战斗检查点是 `intent: DEBUG, move: -1`，导入器无法重建，只能计为不可用而不是通过，任何能导入却不一致的检查点仍然是失败。
+
+原生夹具由真值侧的录制器产出，仓库里的 `tools/truth_calibration/gap_fixtures.py` 和 `coverage_fixtures.py` 只负责把录制结果投影成夹具格式。
+
 ## 不要提交
 
 - 任何真值引擎代码、反编译源码片段、游戏 JAR、资源、字体和本地化文本；
