@@ -277,8 +277,8 @@ final class OutsidePacket {
             }
         }
         EventRules.readLive(c);
+        EventRules.Decision decision=c.event.equals(MatchGameRule.EVENT)?MatchGameRule.decide(c,array(visible,"choices")):EventRules.decide(c);
         prereadNote=c.preread;
-        EventRules.Decision decision=EventRules.decide(c);
         return decision==null?null:ruled(student,decision);
     }
 

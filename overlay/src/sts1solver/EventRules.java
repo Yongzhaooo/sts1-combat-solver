@@ -20,7 +20,7 @@ final class EventRules {
      * an event fight, map rooms ahead and results that reroll on load are not SL-visible and must never be added here.
      */
     static final java.util.Set<String> SL_PREREAD = java.util.Collections.unmodifiableSet(new java.util.HashSet<String>(
-        java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust")));
+        java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust", "Match and Keep!")));
 
     static final int UNKNOWN = -1, SAFE_SEARCH = 0, ELITE_SEARCH = 1;
     static final String MANUAL = "人工规则";

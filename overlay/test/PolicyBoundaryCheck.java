@@ -19,7 +19,7 @@ import java.util.Set;
  */
 public final class PolicyBoundaryCheck {
     /** Decision code. DecisionContext is left out: its only Foresight use is the bright_eye_mode flag in recording metadata. */
-    static final String[] POLICY = {"OutsidePacket", "Distill2", "RoutePlanner", "EventRules", "RelicScore", "PotionRewards"};
+    static final String[] POLICY = {"OutsidePacket", "Distill2", "RoutePlanner", "EventRules", "RelicScore", "PotionRewards", "MatchGameRule"};
     /** Display-only classes and members that carry beyond-SL information. */
     static final String[] FORBIDDEN = {"Foresight", "EventForesight", "TransformPreview", "Sandbox", "brightEyeMode", "nextRooms",
         "NeowEvent", "NeowReward", "neowRows"};
@@ -116,7 +116,7 @@ public final class PolicyBoundaryCheck {
         }
 
         // pre-reads: exactly the audited within-SL events; event-fight rewards are never pre-read
-        Set<String> audited = new HashSet<>(Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust"));
+        Set<String> audited = new HashSet<>(Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust", "Match and Keep!"));
         check(EventRules.SL_PREREAD.equals(audited), "SL pre-read allowlist changed: " + EventRules.SL_PREREAD);
         for (String beyond : new String[]{"Masked Bandits", "Mushrooms", "Mysterious Sphere"})
             check(!EventRules.SL_PREREAD.contains(beyond), beyond + " fight rewards are beyond SL");
