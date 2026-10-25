@@ -441,15 +441,19 @@ namespace {
                             }
                         }
                     } else {
-                        // LightningOrb.onEndOfTurn queues LightningOrbPassiveAction to
-                        // the bottom; that action rolls its target in update(), so the
-                        // roll happens after every damage already queued has resolved.
-                        // Rolling here instead would pick from a candidate list that
-                        // still holds monsters the earlier passives just killed.
+                        // LightningOrb.onEndOfTurn queues LightningOrbPassiveAction, whose
+                        // triggerPassiveEffect calls AbstractDungeon.getRandomMonster() as it
+                        // runs - after every passive this same pass already queued, and after
+                        // the block/settle actions in between, has resolved. Queue the roll
+                        // through addToBottom so it keeps that position in the queue: rolling
+                        // here would read a candidate list that still holds monsters an
+                        // earlier passive just killed (F30, floor 30: the roll silently ran
+                        // before the Frost passive's settle action, leaving the counter one
+                        // step behind and sending Coolheaded's evoke onto the wrong enemy).
                         bc.addToBot({[damage] (BattleContext &bc) {
                             const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
                             if (target >= 0) {
-                                bc.addToTop(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
+                                bc.addToBot(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
                             }
                         }});
                     }
@@ -619,20 +623,29 @@ namespace {
 
 Action Actions::ChannelOrb(Orb orb, std::int8_t evokeBonus, std::int16_t darkCounter) {
     return {[=] (BattleContext &bc) {
-        // AbstractPlayer.channelOrb: with no orb slots it only shows a thought
-        // bubble and returns, so nothing is evoked; otherwise the first empty
-        // slot takes the orb. With no empty slot it queues an evoke of slot 0
-        // and then the channel, so the oldest orb fires and the new one lands
-        // at the end.
+        // ChannelAction(orb) defaults autoEvoke to true. Its update() only calls
+        // AbstractPlayer.channelOrb when autoEvoke is set, or when the bar still
+        // holds an EmptyOrbSlot. A channel requested with a full bar therefore
+        // does nothing here: the game's channelOrb would instead queue an evoke
+        // of slot 0 and a nested ChannelAction, so the orb is not swallowed, it
+        // is simply pushed back behind the evoke.
         if (bc.player.orbSlots <= 0) {
             return;
         }
-        if (!bc.player.hasEmptyOrb() && !bc.player.orbs.empty()) {
+        if (bc.player.hasEmptyOrb()) {
+            bc.player.channelOrb(orb, evokeBonus, darkCounter);
+            return;
+        }
+        // AbstractPlayer.channelOrb with no empty slot: addToTop a ChannelAction
+        // whose own channelOrb now finds that empty slot, and before it an
+        // EvokeOrbAction(1). Both go to the top, evoke first, so the oldest orb
+        // fires before the new one lands at the end.
+        if (!bc.player.orbs.empty()) {
             const auto pushed = bc.player.orbs[0];
+            bc.addToTop(Actions::ChannelOrb(orb, evokeBonus, darkCounter));
             fireEvokeEffects(bc, pushed);
             bc.player.orbs.remove(0);
         }
-        bc.player.channelOrb(orb, evokeBonus, darkCounter);
     }};
 }
 
@@ -1349,11 +1362,14 @@ Action Actions::UpgradeAllCardsInHand() {
 
 Action Actions::EssenceOfDarkness(int darkOrbsPerSlot) {
     return {[=] (BattleContext &bc) {
-        // EssenceOfDarknessAction.update: for each orb slot (player.orbs.size() in
-        // the game, which always holds maxOrbs entries including empty slots)
-        // channel this.amount Dark orbs. ChannelOrb owns the full-bar evoke.
+        // EssenceOfDarknessAction.update: while the orb bar still holds an empty
+        // slot, channel this.amount Dark orbs. It stops as soon as the bar is
+        // full rather than pushing out the oldest orb.
         for (int i = 0; i < bc.player.orbSlots; ++i) {
             for (int j = 0; j < darkOrbsPerSlot; ++j) {
+                if (!bc.player.hasEmptyOrb()) {
+                    return;
+                }
                 bc.addToTop(Actions::ChannelOrb(Orb::DARK));
             }
         }

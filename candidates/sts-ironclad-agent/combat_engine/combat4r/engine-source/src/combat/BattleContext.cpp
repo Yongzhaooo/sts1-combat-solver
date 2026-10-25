@@ -2084,23 +2084,38 @@ void BattleContext::onAfterUseCard() {
         }
     }
 
-    if (item.purgeOnUse) {
-        return;
-    }
-
+    // Cards that rewrite themselves once played, which the game does inside
+    // use(): ReduceCostAction / ModifyBlockAction / IncreaseMiscAction all take
+    // the uuid and walk GetAllInBattleInstances, so every copy of the card is
+    // raised, including the purgeOnUse copies Echo Form, Duplication, Burst and
+    // Amplify queued. Those run use() again, so this branch has to run for them
+    // too; Steam Barrier's own bump lives in DefectCards.cpp for the same reason.
     bool rebound = false;
     c.freeToPlayOnce = false;
-
-    // Cards that rewrite themselves once played (the game does this in
-    // onMoveToDiscard/onUse): Streamline lowers its own cost, Steam Barrier
-    // lowers its own block, both for the rest of combat.
     if (c.getId() == CardId::STREAMLINE) {
         c.updateCost(-1);
     } else if (c.getId() == CardId::STEAM_BARRIER) {
-        ++c.specialData;
+        // Bumped in DefectCards.cpp, where use() reads it.
     } else if (c.getId() == CardId::GENETIC_ALGORITHM) {
         // GeneticAlgorithm.java: IncreaseMiscAction(uuid, misc, magicNumber).
-        c.specialData = static_cast<std::int16_t>(c.specialData + (c.isUpgraded() ? 3 : 2));
+        const std::int16_t growth = static_cast<std::int16_t>(c.isUpgraded() ? 3 : 2);
+        if (item.purgeOnUse) {
+            cards.findAndUpgradeSpecialData(c.uniqueId, growth);
+            for (int i = 0; i < cardQueue.size; ++i) {
+                auto &pending = cardQueue.arr[(cardQueue.frontIdx + i) % CardQueue::capacity];
+                if (!pending.isEndTurn && pending.card.uniqueId == c.uniqueId) {
+                    pending.card.specialData = static_cast<std::int16_t>(pending.card.specialData + growth);
+                }
+            }
+        }
+        c.specialData = static_cast<std::int16_t>(c.specialData + growth);
+    }
+
+    // UseCardAction drops a purgeOnUse card instead of moving it to a pile, so
+    // the powers it would otherwise notify never see it. Its self-rewrite above
+    // still applies, because the game runs it in the card's own use().
+    if (item.purgeOnUse) {
+        return;
     }
 
     if (c.getType() == CardType::POWER) {

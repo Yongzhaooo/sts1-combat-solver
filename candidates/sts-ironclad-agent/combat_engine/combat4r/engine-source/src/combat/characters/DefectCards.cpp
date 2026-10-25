@@ -511,11 +511,24 @@ namespace sts {
                 return true;
 
             case CardId::STEAM_BARRIER: {
-                // SteamBarrier.java: block drops by 1 for each earlier play this
-                // combat; specialData carries that count on the card instance and
-                // onAfterUseCard raises it after each play.
+                // SteamBarrier.java: gain block, then ModifyBlockAction(uuid, -1).
+                // ModifyBlockAction walks GetAllInBattleInstances, so the play
+                // count lives on the uuid, not on this one instance. Copies that
+                // Duplication, Echo Form, Burst or Amplify queued share the uuid,
+                // and they run after this call, so they have to be raised here —
+                // exactly like RAMPAGE above raises its own specialData.
                 const int block = std::max(0, (up ? 8 : 6) - static_cast<int>(c.specialData));
                 bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(block)));
+                if (bc.curCardQueueItem.purgeOnUse) {
+                    bc.cards.findAndUpgradeSpecialData(c.uniqueId, 1);
+                    for (int i = 0; i < bc.cardQueue.size; ++i) {
+                        auto &pending = bc.cardQueue.arr[(bc.cardQueue.frontIdx + i) % CardQueue::capacity];
+                        if (!pending.isEndTurn && pending.card.uniqueId == c.uniqueId) {
+                            ++pending.card.specialData;
+                        }
+                    }
+                }
+                bc.curCardQueueItem.card.specialData += 1;
                 return true;
             }
 

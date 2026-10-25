@@ -868,6 +868,30 @@ int main() {
         check(found, "Steam Barrier should be in the discard pile");
     }
     {
+        // F33: SteamBarrier.java grants this.block, then ModifyBlockAction(uuid, -1)
+        // walks GetAllInBattleInstances. Under Echo Form the autoplayed copy runs
+        // use() again, so one card played gives 6 + 5 and leaves the count at 2.
+        // The engine used to skip the bump on the purged copy, granting 6 + 6.
+        BattleContext bc = freshBattle();
+        bc.player.buff<PS::ECHO_FORM>(1);
+        playCard(bc, CardId::STEAM_BARRIER);
+        check(bc.player.block == 11, "Echo Form Steam Barrier should grant 6 + 5 block");
+        bool echoCounted = false;
+        for (const auto &dc : bc.cards.discardPile) {
+            if (dc.getId() == CardId::STEAM_BARRIER) {
+                check(dc.specialData == 2, "Echo Form Steam Barrier should count both plays");
+                echoCounted = true;
+            }
+        }
+        check(echoCounted, "Echo Form Steam Barrier should be in the discard pile");
+
+        // Echo Form only doubles the first card of the turn; the second play is a
+        // single copy that counts as its first play, so it grants 6.
+        bc.player.block = 0;
+        playCard(bc, CardId::STEAM_BARRIER);
+        check(bc.player.block == 6, "the second Echo Form Steam Barrier should grant 6 once");
+    }
+    {
         // Static Discharge: attack damage channels a Lightning orb, but a hit
         // that block absorbs completely does not (AbstractPlayer.damage runs
         // decrementBlock before the onAttacked loop; StaticDischargePower

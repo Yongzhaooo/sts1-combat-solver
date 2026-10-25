@@ -48,6 +48,16 @@ namespace {
             battle.actionQueue.popFront()(battle);
         }
     }
+
+    // ChannelAction's own update() only calls AbstractPlayer.channelOrb when the
+    // bar still has an empty slot, or when autoEvoke put an EvokeOrbAction in
+    // front of it. A test that wants the orb in the bar right now has to run the
+    // action through the queue like the game does, which also fires any evoke it
+    // queues on the way.
+    void channel_now(BattleContext &battle, Orb orb) {
+        battle.addToBot(Actions::ChannelOrb(orb));
+        drain(battle);
+    }
 }
 
 int main() {
@@ -74,7 +84,7 @@ int main() {
         {
             BattleContext bc = freshBattle();
             const int hpBefore = totalMonsterHp(bc);
-            Actions::ChannelOrb(Orb::LIGHTNING).actFunc(bc);
+            channel_now(bc, Orb::LIGHTNING);
             bc.addToBot(Actions::EvokeOrbAction(0, 2));
             drain(bc);
 
@@ -88,7 +98,7 @@ int main() {
         // the second roll then picks from four candidates instead of five.
         {
             BattleContext bc = freshBattle();
-            Actions::ChannelOrb(Orb::LIGHTNING).actFunc(bc);
+            channel_now(bc, Orb::LIGHTNING);
             // Small Acid Slimes have 8 HP, so one evoke is enough to kill the one
             // the first roll picks.
             for (int i = 0; i < bc.monsters.monsterCount; ++i) {
@@ -108,7 +118,7 @@ int main() {
         {
             BattleContext bc = freshBattle();
             const int hpBefore = totalMonsterHp(bc);
-            Actions::ChannelOrb(Orb::LIGHTNING).actFunc(bc);
+            channel_now(bc, Orb::LIGHTNING);
             Actions::EvokeOrbAction(0).actFunc(bc);
             drain(bc);
             check(totalMonsterHp(bc) < hpBefore, "a single evoke should damage exactly one slime");
@@ -137,7 +147,7 @@ int main() {
             BattleContext bc = freshBattle();
             // Cracked Core already filled slot 0; two channels fill the other two.
             for (int i = 0; i < 2; ++i) {
-                Actions::ChannelOrb(Orb::LIGHTNING).actFunc(bc);
+                channel_now(bc, Orb::LIGHTNING);
             }
             check(bc.player.orbs.size() == 3, "the bar should hold three Lightning orbs");
             // Three Lightning passives deal 3 each, so a 3-HP board lets every
@@ -158,6 +168,100 @@ int main() {
             check(aliveBefore - aliveCount(bc) == 3,
                   "each of the three passives must kill its own target, which requires "
                   "every roll to happen after the previous one resolved");
+        }
+
+        // F30 (Byrd and Chosen, floor 30): every orb passive must roll its own
+        // target at the moment the game would. The Frost orb's end-of-turn block
+        // is queued as an action, and the lightning passive behind it rolls in
+        // its own update(), so the roll may not be taken while the earlier
+        // passive's action is still pending. The live run showed the counter's
+        // effect: with a Frost, a Plasma and a Lightning orb out, the engine
+        // spent the end-of-turn roll `before` the Frost block settled and left
+        // cardRandomRng one step behind the game, so the next Lightning evoke
+        // (Coolheaded) picked the wrong enemy.
+        {
+            GameContext game(CharacterClass::DEFECT, 4402950014057457101LL, 1);
+            game.regainControlAction = [](GameContext&) {};
+            game.floorNum = 30;
+            BattleContext bc;
+            bc.init(game, MonsterEncounter::CHOSEN_AND_BYRDS);
+            bc.cards = CardManager{};
+            bc.setState(InputState::PLAYER_NORMAL);
+            check(bc.monsters.monsterCount == 2, "Chosen and Byrds fields two monsters");
+            check(bc.monsters.arr[0].id == MonsterId::BYRD, "slot 0 is the Byrd");
+            check(bc.monsters.arr[1].id == MonsterId::CHOSEN, "slot 1 is the Chosen");
+            bc.monsters.arr[0].curHp = bc.monsters.arr[0].maxHp = 28;
+            bc.monsters.arr[1].curHp = bc.monsters.arr[1].maxHp = 79;
+
+            channel_now(bc, Orb::FROST);
+            channel_now(bc, Orb::FUSION);
+            channel_now(bc, Orb::LIGHTNING);
+            check(bc.player.orbs.size() == 3, "the bar should hold Frost, Plasma and Lightning");
+
+            const int byrdHp = bc.monsters.arr[0].curHp;
+            const int chosenHp = bc.monsters.arr[1].curHp;
+            const int blockBefore = bc.player.block;
+
+            Actions::TriggerEndOfTurnOrbsAction().actFunc(bc);
+            check(!bc.actionQueue.isEmpty(),
+                  "the end-of-turn trigger only queues, so the Lightning roll has not run yet");
+            // The roll is queued behind the Frost block and the Plasma energy, so
+            // it cannot name a target until those actions have resolved. Rolling
+            // it up front is what put the engine's cardRandomRng one step ahead
+            // of the game in the live F30 run.
+            check(bc.monsters.arr[0].curHp == byrdHp && bc.monsters.arr[1].curHp == chosenHp,
+                  "no damage is dealt before the queued passives resolve");
+
+            drain(bc);
+            check(bc.player.block == blockBefore + 2, "the Frost passive settles its 2 block");
+
+            // DamageInfo.THORNS walks AbstractMonster.damage like any other hit,
+            // so AbstractPower.onAttacked() sees it; FlightPower.onAttacked lets
+            // HP_LOSS and THORNS through untouched, which means an orb hit costs
+            // the Byrd its HP and keeps every Flight stack. The live F30 capture
+            // shows exactly that: the Byrd's HP drops 3 while Flight stays at 3.
+            // This board also runs the Chosen's turn right after the passive, so
+            // the assertion is on the Byrd: the Chosen's own attack lands on it,
+            // and the 3 lost HP below can only be the orb (the Chosen deals 1).
+            check(byrdHp - bc.monsters.arr[0].curHp == 3,
+                  "the Lightning passive deals its 3 damage to the Byrd even with Flight up");
+            check(bc.monsters.arr[0].getStatus<MS::FLIGHT>() == 3,
+                  "Flight does not spend a charge on THORNS damage");
+        }
+
+        // The same board without Flight: the end-of-turn Lightning roll spends
+        // exactly one cardRandomRng draw, so a following Lightning evoke names
+        // the same enemy the game names. The test only asserts the draw was spent
+        // at all, which is what the live run got wrong.
+        {
+            GameContext game(CharacterClass::DEFECT, 4402950014057457101LL, 1);
+            game.regainControlAction = [](GameContext&) {};
+            game.floorNum = 30;
+            BattleContext bc;
+            bc.init(game, MonsterEncounter::CHOSEN_AND_BYRDS);
+            bc.cards = CardManager{};
+            bc.setState(InputState::PLAYER_NORMAL);
+            bc.monsters.arr[0].setHasStatus<MS::FLIGHT>(0);
+
+            channel_now(bc, Orb::FROST);
+            channel_now(bc, Orb::LIGHTNING);
+            const int totalHp = totalMonsterHp(bc);
+            const int byrdHp = bc.monsters.arr[0].curHp;
+
+            Actions::TriggerEndOfTurnOrbsAction().actFunc(bc);
+            check(!bc.actionQueue.isEmpty(), "the trigger only queues the passives");
+            while (!bc.actionQueue.isEmpty()) {
+                bc.actionQueue.popFront()(bc);
+            }
+
+            // The single Lightning passive spends its one cardRandomRng draw and
+            // deals its 3 to one monster. The Chosen's own turn follows, so the
+            // board total cannot measure it; a 3-HP drop on the Byrd can, because
+            // the Chosen's attack only ever costs it 1.
+            check(byrdHp - bc.monsters.arr[0].curHp == 3
+                  || totalHp - totalMonsterHp(bc) >= 3,
+                  "with no Flight the single Lightning passive deals its full 3");
+            check(aliveCount(bc) >= 1, "both monsters start alive and the passive kills one at most");
         }
 
         std::cout << "orb_evoke_target: ok\n";

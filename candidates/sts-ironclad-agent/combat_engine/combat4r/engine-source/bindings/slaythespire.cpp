@@ -729,6 +729,28 @@ PYBIND11_MODULE(slaythespire, m) {
             add("monsterHpRng",gc.monsterHpRng); add("neowRng",gc.neowRng);
             return values;
         })
+        .def("set_rng_states", [](GameContext &gc, const pybind11::dict &values) {
+            // Replay support: a captured run records each stream's exact state, so a
+            // re-simulation has to start from those bits instead of re-rolling the
+            // dungeon. Only the streams the caller names are touched.
+            const auto read = [](const pybind11::dict &value) {
+                Random rng{};
+                rng.seed0 = value["seed0"].cast<std::uint64_t>();
+                rng.seed1 = value["seed1"].cast<std::uint64_t>();
+                rng.counter = value["counter"].cast<int>();
+                return rng;
+            };
+            const auto assign = [&](const char *name, Random &rng) {
+                if (values.contains(name)) rng = read(values[name].cast<pybind11::dict>());
+            };
+            assign("eventRng",gc.eventRng); assign("treasureRng",gc.treasureRng);
+            assign("relicRng",gc.relicRng); assign("potionRng",gc.potionRng);
+            assign("cardRng",gc.cardRng); assign("merchantRng",gc.merchantRng);
+            assign("monsterRng",gc.monsterRng); assign("miscRng",gc.miscRng);
+            assign("shuffleRng",gc.shuffleRng); assign("cardRandomRng",gc.cardRandomRng);
+            assign("aiRng",gc.aiRng); assign("mathUtilRng",gc.mathUtilRng);
+            assign("monsterHpRng",gc.monsterHpRng); assign("neowRng",gc.neowRng);
+        })
         .def_property_readonly("potions", [](const GameContext &gc) {
             std::vector<int> values;
             for (int i=0;i<gc.potionCapacity;++i) values.push_back(static_cast<int>(gc.potions[i]));
