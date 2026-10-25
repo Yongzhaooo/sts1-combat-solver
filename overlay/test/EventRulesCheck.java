@@ -204,6 +204,7 @@ public final class EventRulesCheck {
         check(index(c("Designer", 2, 70, 80, 45)) == 0 && index(c("Designer", 1, 70, 80, 10)) == -99, "designer adjust or nothing");
 
         packetChecks(args[0]);
+        dangerChecks(args[0]);
         System.out.println("PASS: event rules and removal order");
     }
 
@@ -314,6 +315,139 @@ public final class EventRulesCheck {
         game.add("screen_state", screen);
         visible.addProperty("screen_type", "GRID");
         visible.remove("choices");
+        return OutsidePacket.build(model, state, visible);
+    }
+
+    /** Danger ahead, Shining Light and World of Goop (executor C). Pre-read fields are set by hand; readLive needs the game. */
+    static void dangerChecks(String fixturePath) throws Exception {
+        // Danger: expected HP to the next rest site against the HP left after the event.
+        DangerAhead calm = new DangerAhead(1, 1, 0, 0, false), elite = new DangerAhead(1, 1, 1, 0, false);
+        check(calm.expectedLoss == 6 && !calm.high(9) && calm.high(8), "danger: one act-1 monster needs 1.5 x 6 HP");
+        check(elite.expectedLoss == 24 && elite.high(35) && !elite.high(36), "danger: monster + elite needs 36 HP");
+        check(new DangerAhead(1, 0, 0, 0, false).high(0) && !new DangerAhead(1, 0, 0, 0, false).high(1), "danger: rest next is low unless dead");
+        check(new DangerAhead(3, 1, 1, 0, false).expectedLoss == 42, "danger: act 3 prices");
+
+        // Shining Light (80 max HP, below A15: 16 HP). live=false leaves worthyUpgrades unknown: the old 55% rule.
+        EventRules.Context light = c("Shining Light", 2, 50, 80, 0);
+        check(index(light) == 1, "light offline: 34 left is under 55%, leave");
+        light.hp = 61;
+        check(index(light) == 0, "light offline: 45 left enters");
+        light.danger = calm;
+        check(index(light) == 0, "light: danger alone (no pre-read) keeps the old rule");
+        light.hp = 50; light.worthyUpgrades = 1;
+        check(index(light) == 0, "light: one worthy card and low danger enters at moderate HP");
+        light.danger = elite;
+        check(index(light) == 1, "light: high danger and moderate HP leaves");
+        light.hp = 72;
+        check(index(light) == 0, "light: 56 left of 80 is too healthy to use up, enters despite danger");
+        light.worthyUpgrades = 0;
+        check(index(light) == 0, "light: very healthy enters even without a worthy card");
+        light.hp = 50; light.danger = calm;
+        check(index(light) == 1, "light: no worthy card and moderate HP leaves");
+        light.worthyUpgrades = 2; light.danger = new DangerAhead(1, 0, 0, 0, false);
+        light.hp = 17;
+        check(index(light) == 0, "light: rest next, 1 HP left is allowed (no extra floor)");
+        light.hp = 16;
+        check(index(light) == 1, "light: never lethal");
+        light.ascension = 15; light.hp = 25; light.danger = calm;
+        check(index(light) == 1, "light A15: 30% (24) of 80, 1 HP left after a monster is high danger");
+        light.danger = calm; light.hp = 34;
+        check(index(light) == 0, "light A15: 10 left covers one monster");
+
+        // World of Goop: gather 0 (+75 gold, -11 HP), leave 1 (-goldLoss). Offline: the old 35% rule.
+        EventRules.Context goop = c("World of Goop", 2, 30, 80, 100);
+        check(index(goop) == 0 && index(c("World of Goop", 2, 27, 80, 100)) == 1, "goop offline: 35% rule");
+        goop.danger = elite; goop.goopLoss = 40;
+        check(index(goop) == 1, "goop: high danger, keep the HP and pay 40 gold");
+        goop.danger = calm;
+        check(index(goop) == 0, "goop: low danger, gather (115 gold swing)");
+        goop.hp = 11;
+        check(index(goop) == 1, "goop: never lethal");
+        goop.hp = 12; goop.danger = new DangerAhead(1, 0, 0, 0, false);
+        check(index(goop) == 0, "goop: rest next, gather down to 1 HP");
+        goop.hp = 60; goop.ectoplasm = true; goop.goopLoss = 20;
+        check(index(goop) == 1, "goop: Ectoplasm gains nothing, 20 gold is not worth 11 HP");
+        goop.goopLoss = 40;
+        check(index(goop) == 0, "goop: Ectoplasm, avoiding a 40 gold loss is worth 11 HP");
+
+        JsonObject fixture;
+        try (InputStreamReader reader = new InputStreamReader(new FileInputStream(fixturePath), StandardCharsets.UTF_8)) {
+            fixture = new JsonParser().parse(reader).getAsJsonObject();
+        }
+        Distill2 model = Distill2.load();
+        // Planned route on a one-column map: M at row 3, E at 4, rest at 5 -> one monster, one elite before the fire.
+        JsonObject game = copy(fixture.getAsJsonObject("state")).getAsJsonObject("game_state");
+        JsonObject visible = copy(fixture.getAsJsonObject("visible"));
+        visible.addProperty("x", 0); visible.addProperty("y", 2);
+        game.add("map", column("MM?MERMMMMMMMMR"));
+        DangerAhead route = DangerAhead.of(game, visible);
+        check(route != null && route.monsters == 1 && route.elites == 1 && route.unknowns == 0 && !route.boss,
+            "danger: route stops at the first rest site");
+        JsonObject dripper = new JsonObject(); dripper.addProperty("id", "Coffee Dripper");
+        game.getAsJsonArray("relics").add(dripper);
+        DangerAhead tired = DangerAhead.of(game, visible);
+        check(tired != null && tired.boss && tired.elites == 1 && tired.monsters == 9,
+            "danger: Coffee Dripper walks on to the boss");
+        visible.addProperty("y", 14);
+        check(DangerAhead.of(game, visible) == null, "danger: no route known falls back (null)");
+
+        // Worth upgrading = the campfire upgrade grid's ranking (same packet and model), over distinct cards.
+        OutsidePacket light80 = event(model, fixture, "Shining Light", 50, 80, 2);
+        JsonArray deck = fixture.getAsJsonObject("state").getAsJsonObject("game_state").getAsJsonArray("deck");
+        int[] upgradable = new int[deck.size() - 1];
+        for (int i = 1; i < deck.size(); i++) upgradable[i - 1] = i; // index 0 is Ascender's Bane
+        OutsidePacket grid = upgradeGrid(model, fixture, upgradable);
+        Distill2.Result scored = grid.score();
+        int top = upgradable[Integer.parseInt(grid.choices.get(scored.best).command.substring(7))];
+        check(light80.worthyUpgrades(upgradable, new int[]{top}, 1) == 1, "the grid's own best card is top-1");
+        check(light80.worthyUpgrades(upgradable, new int[]{1, 6}, 0) == 0, "top-0 admits nothing");
+        check(light80.worthyUpgrades(upgradable, new int[]{1, 6}, 5) == 2, "five distinct faces: top-5 admits everything");
+        int strikes = light80.worthyUpgrades(upgradable, new int[]{1, 2}, 1);
+        check(strikes == 0 || strikes == 2, "duplicate copies rank together: " + strikes);
+        // live=false through the packet: the old rule and note.
+        check(light80.policyScore().best == 1 && light80.ruleNote.equals("闪耀之光：血量不足，离开"), "light packet offline unchanged");
+        OutsidePacket goopPacket = event(model, fixture, "World of Goop", 30, 80, 2);
+        check(goopPacket.policyScore().best == 0 && goopPacket.ruleNote.equals("泥坑：收集金币"), "goop packet offline unchanged");
+        // The result page carries no self-check while live is off.
+        OutsidePacket done = event(model, fixture, "World of Goop", 30, 80, 1);
+        done.policyScore();
+        check(done.prereadNote == null, "no self-check offline");
+    }
+
+    /** One map column at x=0, rows 0..14 with the given room symbols. */
+    static JsonArray column(String symbols) {
+        JsonArray map = new JsonArray();
+        for (int y = 0; y < 15; y++) {
+            JsonObject node = new JsonObject();
+            node.addProperty("x", 0); node.addProperty("y", y);
+            node.addProperty("symbol", String.valueOf(symbols.charAt(y)));
+            JsonArray children = new JsonArray();
+            JsonObject child = new JsonObject();
+            child.addProperty("x", 0); child.addProperty("y", y + 1);
+            children.add(child);
+            node.add("children", children);
+            node.add("parents", new JsonArray());
+            map.add(node);
+        }
+        return map;
+    }
+
+    /** A real campfire upgrade grid of the given deck cards, built like CommunicationMod does. */
+    static OutsidePacket upgradeGrid(Distill2 model, JsonObject fixture, int[] indices) {
+        JsonObject state = copy(fixture.getAsJsonObject("state")), visible = copy(fixture.getAsJsonObject("visible"));
+        JsonObject game = state.getAsJsonObject("game_state");
+        JsonArray deck = game.getAsJsonArray("deck"), cards = new JsonArray();
+        for (int i : indices) cards.add(deck.get(i));
+        game.addProperty("current_hp", 50); game.addProperty("max_hp", 80); game.addProperty("gold", 100);
+        game.addProperty("screen_type", "GRID"); game.addProperty("room_type", "RestRoom");
+        JsonObject screen = new JsonObject();
+        screen.addProperty("for_upgrade", true); screen.addProperty("for_purge", false); screen.addProperty("for_transform", false);
+        screen.addProperty("confirm_up", false); screen.addProperty("any_number", false); screen.addProperty("num_cards", 1);
+        screen.add("cards", cards); screen.add("selected_cards", new JsonArray());
+        game.add("screen_state", screen);
+        JsonArray commands = new JsonArray(); commands.add("choose"); commands.add("cancel");
+        state.add("available_commands", commands);
+        visible.addProperty("screen_type", "GRID"); visible.remove("choices"); visible.addProperty("grid_from_shop", false);
         return OutsidePacket.build(model, state, visible);
     }
 }

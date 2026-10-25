@@ -1,5 +1,6 @@
 package sts1solver;
 
+import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.events.AbstractEvent;
 import com.megacrit.cardcrawl.random.Random;
@@ -20,7 +21,8 @@ final class EventRules {
      * an event fight, map rooms ahead and results that reroll on load are not SL-visible and must never be added here.
      */
     static final java.util.Set<String> SL_PREREAD = java.util.Collections.unmodifiableSet(new java.util.HashSet<String>(
-        java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust")));
+        java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust",
+            "Shining Light", "World of Goop")));
 
     static final int UNKNOWN = -1, SAFE_SEARCH = 0, ELITE_SEARCH = 1;
     static final String MANUAL = "人工规则";
@@ -46,6 +48,15 @@ final class EventRules {
         int adventurerNext = UNKNOWN, adventurerEnemy = UNKNOWN;
         /** Hidden information: Face Trader's trade gives a good face (1) or not (0); the Joust owner wins (1) or loses (0). */
         int goodFace = UNKNOWN, ownerWins = UNKNOWN;
+        /** Danger ahead on the planned route (DangerAhead), or null when no route is known. */
+        DangerAhead danger;
+        /** Shining Light pre-read: deck indices of the upgradable cards and of the (up to) two the light upgrades. */
+        int[] lightUpgradable, lightTargets;
+        /** How many light targets the campfire upgrade grid ranks among its top UPGRADE_TOP_K distinct cards (OutsidePacket). */
+        int worthyUpgrades = UNKNOWN;
+        /** World of Goop pre-read: gold lost by leaving (the constructor's roll, already capped by current gold). */
+        int goopLoss = UNKNOWN;
+        boolean ectoplasm;
         /** What readLive pre-read on this decision (event and values), for the decision note; null when nothing was read. */
         String preread;
     }
@@ -94,6 +105,15 @@ final class EventRules {
 
     private static boolean healthy(Context c, double fraction) { return c.hp >= fraction * c.maxHp; }
 
+    /** Shining Light: a target is worth upgrading when the upgrade grid ranks it among this many distinct cards, about the
+     * smiths one act's route affords. Hand-set, uncalibrated. */
+    static final int UPGRADE_TOP_K = 3;
+    /** Shining Light: HP left after the light at or above this share of max HP is "too healthy to use up". Hand-set, uncalibrated. */
+    static final double LIGHT_SPARE = .7;
+    /** World of Goop: gather needs at least this much gold swing (75 gained + loss avoided) per HP paid. Hand-set, uncalibrated. */
+    static final int GOOP_GOLD_PER_HP = 3;
+    static final int GOOP_DAMAGE = 11, GOOP_GOLD = 75;
+
     /** Null means "no rule: ask the network". */
     /** Ruby Key: smith first, recall only at the second-to-last campfire (or the last one). {@code left} counts the
      * campfires still ahead on the shortest route. Decision index is -1 (network picks) with recall avoided until then. */
@@ -122,6 +142,14 @@ final class EventRules {
             case "Shining Light": {
                 if (n != 2) return null;
                 int damage = Math.round(c.maxHp * (c.ascension >= 15 ? .3f : .2f));
+                if (c.worthyUpgrades != UNKNOWN && c.danger != null) {
+                    int left = c.hp - damage;
+                    if (left <= 0) return pick(1, "闪耀之光：失 " + damage + " 血会致死，离开");
+                    if (left >= LIGHT_SPARE * c.maxHp) return pick(0, "闪耀之光：失 " + damage + " 血后仍很健康，进入");
+                    if (c.worthyUpgrades == 0) return pick(1, "闪耀之光：预读的升级牌都不在升级前 " + UPGRADE_TOP_K + "，离开");
+                    return c.danger.high(left) ? pick(1, "闪耀之光：" + c.danger.describe(left) + "，离开")
+                        : pick(0, "闪耀之光：" + c.worthyUpgrades + " 张预读牌值得升级，" + c.danger.describe(left) + "，进入");
+                }
                 return c.hp - damage >= .55 * c.maxHp ? pick(0, "闪耀之光：升级两张牌") : pick(1, "闪耀之光：血量不足，离开");
             }
             case "The Cleric": {
@@ -179,6 +207,15 @@ final class EventRules {
             case "Big Fish":
                 return n == 3 ? (healthy(c, .55) ? pick(1, "大鱼：甜甜圈 +5 最大血") : pick(0, "大鱼：香蕉回血")) : null;
             case "World of Goop":
+                if (n == 2 && c.goopLoss != UNKNOWN && c.danger != null) {
+                    // gather 0: +75 gold (none with Ectoplasm), lose 11 HP; leave 1: lose goopLoss gold
+                    int left = c.hp - GOOP_DAMAGE, swing = (c.ectoplasm ? 0 : GOOP_GOLD) + c.goopLoss;
+                    if (left <= 0) return pick(1, "泥坑：失 11 血会致死，离开（失 " + c.goopLoss + " 金币）");
+                    if (c.danger.high(left)) return pick(1, "泥坑：" + c.danger.describe(left) + "，离开（失 " + c.goopLoss + " 金币）");
+                    return swing >= GOOP_GOLD_PER_HP * GOOP_DAMAGE
+                        ? pick(0, "泥坑：" + c.danger.describe(left) + "，收集金币（金币差 " + swing + "）")
+                        : pick(1, "泥坑：金币差 " + swing + " 不值 11 血，离开");
+                }
                 return n == 2 ? (healthy(c, .35) ? pick(0, "泥坑：收集金币") : pick(1, "泥坑：血量不足，离开")) : null;
             case "Mushrooms":
                 return n == 2 ? pick(0, "蘑菇：战斗（不吃寄生诅咒）") : null;
@@ -293,6 +330,13 @@ final class EventRules {
                 case "Dead Adventurer": adventurer(event, c);
                     c.preread = "next=" + (c.adventurerNext == SAFE_SEARCH ? "safe" : "elite") + " enemy=" + c.adventurerEnemy; break;
                 case "FaceTrader": c.goodFace = goodFace(); c.preread = "goodFace=" + c.goodFace; break;
+                case "Shining Light": light(c); break;
+                case "World of Goop":
+                    c.goopLoss = intField(event, "goldLoss");
+                    c.ectoplasm = AbstractDungeon.player.hasRelic("Ectoplasm");
+                    c.preread = "goldLoss=" + c.goopLoss;
+                    expect(c.event, AbstractDungeon.player.gold, c.goopLoss, null);
+                    break;
                 case "The Joust": c.ownerWins = AbstractDungeon.miscRng.copy().randomBoolean(0.3f) ? 1 : 0;
                     c.preread = "ownerWins=" + c.ownerWins; break;
                 default: break;
@@ -300,6 +344,70 @@ final class EventRules {
             if (c.preread != null) c.preread = c.event + ": " + c.preread;
         } catch (Throwable ignored) {
             // Stay UNKNOWN: the caller falls back to the network.
+        }
+    }
+
+    /** Replays ShiningLight.upgradeCards on a copy of miscRng (same order as EventForesight.shiningLight): the upgradable
+     * cards in deck order, shuffled with java.util.Random(miscRng.randomLong()), first two. */
+    private static void light(Context c) {
+        java.util.ArrayList<AbstractCard> deck = AbstractDungeon.player.masterDeck.group;
+        java.util.List<Integer> upgradable = new java.util.ArrayList<Integer>();
+        for (int i = 0; i < deck.size(); i++) if (deck.get(i).canUpgrade()) upgradable.add(i);
+        if (upgradable.isEmpty()) return;
+        java.util.List<Integer> order = new java.util.ArrayList<Integer>(upgradable);
+        java.util.Collections.shuffle(order, new java.util.Random(AbstractDungeon.miscRng.copy().randomLong()));
+        order = order.subList(0, Math.min(2, order.size()));
+        c.lightUpgradable = new int[upgradable.size()];
+        for (int i = 0; i < c.lightUpgradable.length; i++) c.lightUpgradable[i] = upgradable.get(i);
+        c.lightTargets = new int[order.size()];
+        java.util.Set<java.util.UUID> predicted = new java.util.HashSet<java.util.UUID>();
+        StringBuilder names = new StringBuilder();
+        for (int i = 0; i < c.lightTargets.length; i++) {
+            AbstractCard card = deck.get(c.lightTargets[i] = order.get(i));
+            predicted.add(card.uuid);
+            names.append(i == 0 ? "" : ",").append(card.cardID);
+        }
+        c.preread = "targets=" + names;
+        expect(c.event, 0, 0, predicted);
+    }
+
+    // ---- runtime self-check: the pre-read against what the game did (logged with the result page's click) ----
+
+    private static String checkEvent;
+    private static int checkFloor, checkGold, checkLoss;
+    private static java.util.Set<java.util.UUID> checkCards;
+    private static java.util.Map<java.util.UUID, Integer> checkUpgrades;
+
+    private static void expect(String event, int gold, int loss, java.util.Set<java.util.UUID> cards) {
+        checkEvent = event; checkFloor = AbstractDungeon.floorNum; checkGold = gold; checkLoss = loss; checkCards = cards;
+        checkUpgrades = new java.util.HashMap<java.util.UUID, Integer>();
+        for (AbstractCard card : AbstractDungeon.player.masterDeck.group) checkUpgrades.put(card.uuid, card.timesUpgraded);
+    }
+
+    /** On the event's result page: "preread ok" / "preread MISMATCH ..." for the option actually taken, or null when there
+     * is nothing to compare (another event, the other option, live off). Idempotent, so a re-scored page logs it again. */
+    static String selfCheck(String event) {
+        if (!live || checkEvent == null) return null;
+        try {
+            if (!checkEvent.equals(event) || checkFloor != AbstractDungeon.floorNum) return null;
+            if (checkCards != null) {
+                java.util.Set<java.util.UUID> upgraded = new java.util.HashSet<java.util.UUID>();
+                StringBuilder names = new StringBuilder();
+                for (AbstractCard card : AbstractDungeon.player.masterDeck.group) {
+                    Integer before = checkUpgrades.get(card.uuid);
+                    if (before != null && card.timesUpgraded > before) {
+                        upgraded.add(card.uuid);
+                        names.append(names.length() == 0 ? "" : ",").append(card.cardID);
+                    }
+                }
+                if (upgraded.isEmpty()) return null; // left the light
+                return event + ": preread " + (upgraded.equals(checkCards) ? "ok" : "MISMATCH") + " upgraded=" + names;
+            }
+            int lost = checkGold - AbstractDungeon.player.gold;
+            if (lost <= 0) return null; // gathered
+            return event + ": preread " + (lost == checkLoss ? "ok" : "MISMATCH predicted=" + checkLoss) + " goldLost=" + lost;
+        } catch (Throwable ignored) {
+            return null;
         }
     }
 

@@ -249,7 +249,10 @@ final class OutsidePacket {
     }
 
     private Distill2.Result eventRule(Distill2.Result student) {
-        if(forcedEventPage())return null;
+        if(forcedEventPage()) { // result page: compare the pre-read with what the game did
+            prereadNote=EventRules.selfCheck(string(object(game,"screen_state"),"event_id"));
+            return null;
+        }
         EventRules.Context c=new EventRules.Context();
         c.event=string(object(game,"screen_state"),"event_id");
         c.shown=array(visible,"choices").size(); // Potion actions are not event buttons.
@@ -276,11 +279,58 @@ final class OutsidePacket {
                 c.neowDrawback[i]=string(neow.get(i).getAsJsonObject(),"drawback");
             }
         }
+        if(c.event.equals("Shining Light") || c.event.equals("World of Goop"))c.danger=DangerAhead.of(game,visible);
         EventRules.readLive(c);
+        if(c.lightTargets!=null) {
+            try { c.worthyUpgrades=worthyUpgrades(c.lightUpgradable,c.lightTargets,EventRules.UPGRADE_TOP_K); }
+            catch(RuntimeException failure) { c.worthyUpgrades=EventRules.UNKNOWN; } // keep the non-preread rule
+            if(c.preread!=null)c.preread+=" worthy="+c.worthyUpgrades;
+        }
         prereadNote=c.preread;
         EventRules.Decision decision=EventRules.decide(c);
         return decision==null?null:ruled(student,decision);
     }
+
+    /** How many targets the campfire upgrade grid (same packet path and model as a real one) ranks among its top k
+     * distinct cards (id and upgrade count, so duplicate copies do not crowd the top). Indices are into the deck. */
+    int worthyUpgrades(int[] upgradable, int[] targets, int k) {
+        JsonArray deck=array(game,"deck"), cards=new JsonArray();
+        for(int i:upgradable)cards.add(deck.get(i));
+        JsonObject g=new com.google.gson.JsonParser().parse(game.toString()).getAsJsonObject();
+        JsonObject v=new com.google.gson.JsonParser().parse(visible.toString()).getAsJsonObject();
+        JsonObject screen=new JsonObject(), state=new JsonObject();
+        screen.addProperty("for_upgrade",true); screen.addProperty("for_purge",false); screen.addProperty("for_transform",false);
+        screen.addProperty("confirm_up",false); screen.addProperty("any_number",false); screen.addProperty("num_cards",1);
+        screen.add("cards",cards); screen.add("selected_cards",new JsonArray());
+        g.add("screen_state",screen); g.addProperty("screen_type","GRID"); g.addProperty("room_type","RestRoom");
+        v.addProperty("screen_type","GRID"); v.remove("choices"); v.addProperty("grid_from_shop",false);
+        JsonArray commands=new JsonArray(); commands.add("choose"); commands.add("cancel");
+        state.addProperty("in_game",true); state.addProperty("ready_for_command",true);
+        state.add("available_commands",commands); state.add("game_state",g);
+        OutsidePacket grid=build(model,state,v);
+        float[] scores=grid.score().scores, byCard=new float[upgradable.length];
+        Arrays.fill(byCard,Float.NaN);
+        Map<String,Float> faces=new HashMap<>();
+        for(int i=0;i<grid.choices.size();i++) {
+            String command=grid.choices.get(i).command;
+            if(!command.startsWith("choose "))continue;
+            int at=Integer.parseInt(command.substring(7));
+            byCard[at]=scores[i];
+            faces.merge(face(cards.get(at).getAsJsonObject()),scores[i],Math::max);
+        }
+        int worthy=0;
+        for(int target:targets) {
+            int at=-1;
+            for(int i=0;i<upgradable.length;i++)if(upgradable[i]==target)at=i;
+            if(at<0 || Float.isNaN(byCard[at]))throw new IllegalArgumentException("Light target is not on the upgrade grid");
+            float own=faces.get(face(cards.get(at).getAsJsonObject()));
+            int above=0;
+            for(float other:faces.values())if(other>own)above++;
+            if(above<k)worthy++;
+        }
+        return worthy;
+    }
+    private static String face(JsonObject card) {return string(card,"id")+"+"+optionalInt(card,"upgrades",0);}
 
     private Distill2.Result restRule(Distill2.Result student) {
         if(!game.has("solver_rest_left") || !game.has("solver_final_act"))return null;
