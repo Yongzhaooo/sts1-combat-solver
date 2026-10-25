@@ -1,9 +1,16 @@
 package sts1solver;
 
+import com.megacrit.cardcrawl.cards.AbstractCard;
+import com.megacrit.cardcrawl.cards.CardGroup;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.events.AbstractEvent;
+import com.megacrit.cardcrawl.helpers.CardLibrary;
 import com.megacrit.cardcrawl.random.Random;
+import com.megacrit.cardcrawl.relics.AbstractRelic;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Hand-written event policy that overrides the student network (docs/event-rules.md).
@@ -16,13 +23,16 @@ final class EventRules {
 
     /**
      * The only events whose live reads may run (docs/outside-rules.md, SL-visible pre-reads): each read replays the current
-     * room's own draws on an RNG copy, from the latest save point and without crossing the next one. Rewards handed out after
-     * an event fight, map rooms ahead and results that reroll on load are not SL-visible and must never be added here.
+     * room's own draws on an RNG copy (inside a Sandbox when the replay draws cards from the pools), from the latest save
+     * point and without crossing the next one. Rewards handed out after an event fight, map rooms ahead and results that reroll on load are not SL-visible and must never be added here.
      */
     static final java.util.Set<String> SL_PREREAD = java.util.Collections.unmodifiableSet(new java.util.HashSet<String>(
-        java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust")));
+        java.util.Arrays.asList("Knowing Skull", "Scrap Ooze", "Dead Adventurer", "FaceTrader", "The Joust",
+            "SensoryStone", "The Library", "Transmorgrifier", "Drug Dealer")));
 
     static final int UNKNOWN = -1, SAFE_SEARCH = 0, ELITE_SEARCH = 1;
+    /** SensoryStone HP loss by tier (number of colorless groups taken). */
+    static final int[] SENSORY_COST = {0, 0, 5, 10};
     static final String MANUAL = "人工规则";
 
     static final class Context {
@@ -46,6 +56,10 @@ final class EventRules {
         int adventurerNext = UNKNOWN, adventurerEnemy = UNKNOWN;
         /** Hidden information: Face Trader's trade gives a good face (1) or not (0); the Joust owner wins (1) or loses (0). */
         int goodFace = UNKNOWN, ownerWins = UNKNOWN;
+        /** Card pre-reads scored by CardWant. SensoryStone: bit k-1 set when the model takes a card from colorless group k (the
+         * groups are scored in order, each pick added to the deck). The Library, Transmorgrifier, Drug Dealer: 1 when the model
+         * wants a read card / the transform results, 0 when not. */
+        int sensoryWants = UNKNOWN, cardsWanted = UNKNOWN;
         /** What readLive pre-read on this decision (event and values), for the decision note; null when nothing was read. */
         String preread;
     }
@@ -157,7 +171,10 @@ final class EventRules {
                     : pick(1, "死去的冒险者：下一次遇精英，血量不够，离开");
             case "Drug Dealer":
                 // J.A.X. 0, transform 1 (only listed with two transformable cards), Mutagenic Strength 2.
-                if (n == 3) return c.artifactRelic ? pick(2, "药贩：自带人工制品，突变力量") : pick(1, "药贩：变形两张牌");
+                if (n == 3 && c.artifactRelic) return pick(2, "药贩：自带人工制品，突变力量");
+                if (n == 3 && c.cardsWanted != UNKNOWN) return c.cardsWanted == 1
+                    ? pick(1, "药贩：预读两张变形结果都想要，变形两张牌") : pick(2, "药贩：预读变形结果不全想要，突变力量");
+                if (n == 3) return pick(1, "药贩：变形两张牌");
                 return n == 2 ? pick(1, "药贩：不选 J.A.X.") : null;
             case "Living Wall":
                 if (n != 2 && n != 3) return null;
@@ -165,6 +182,8 @@ final class EventRules {
             case "Purifier":
                 return n == 2 ? (c.removable > 0 ? pick(0, "净化祭坛：删牌") : pick(1, "净化祭坛：无牌可删")) : null;
             case "Transmorgrifier":
+                if (n == 2 && c.cardsWanted != UNKNOWN)
+                    return c.cardsWanted == 1 ? pick(0, "变形祭坛：预读变形结果想要，变形") : pick(1, "变形祭坛：预读变形结果不想要，离开");
                 return n == 2 ? (c.removable > 0 ? pick(0, "变形祭坛：变形") : pick(1, "变形祭坛：无牌可变")) : null;
             case "Upgrade Shrine":
             case "Duplicator":
@@ -219,9 +238,17 @@ final class EventRules {
             case "Tomb of Lord Red Mask":
                 // with the Red Mask: wear it for 222 gold (0), leave; without: pay all gold for it, leave
                 return n == 2 ? (c.redMask ? pick(0, "红面具陵墓：戴上红面具拿 222 金币") : pick(1, "红面具陵墓：不花光金币买面具，离开")) : null;
-            case "SensoryStone":
+            case "SensoryStone": {
                 // recall 1 colorless card, 5 HP for 2, 10 HP for 3
-                return n == 3 ? (healthy(c, .6) ? pick(2, "感知石：血量够，拿三张无色牌") : pick(0, "感知石：血量不足，只拿一张")) : null;
+                if (n != 3) return null;
+                if (c.sensoryWants == UNKNOWN)
+                    return healthy(c, .6) ? pick(2, "感知石：血量够，拿三张无色牌") : pick(0, "感知石：血量不足，只拿一张");
+                // The last wanted group among the tiers whose HP loss is not lethal; no other HP floor.
+                int tier = 1;
+                for (int k = 2; k <= 3; k++) if ((c.sensoryWants >> (k - 1) & 1) != 0 && c.hp > SENSORY_COST[k]) tier = k;
+                return tier == 1 ? pick(0, "感知石：预读后两组没有想要的牌（或付血致死），只拿第一组")
+                    : pick(tier - 1, "感知石：预读想要第 " + tier + " 组的牌，付 " + SENSORY_COST[tier] + " 血拿 " + tier + " 组");
+            }
             case "FaceTrader":
                 // touch (lose 10% HP, gold), trade (a random face, read ahead), leave
                 if (n != 3) return null;
@@ -230,6 +257,8 @@ final class EventRules {
                     : pick(2, "换脸商：血量不足，离开");
             case "The Library":
                 // read 0 (pick one of twenty cards), sleep 1 (heal)
+                if (n == 2 && c.cardsWanted != UNKNOWN)
+                    return c.cardsWanted == 1 ? pick(0, "图书馆：预读 20 张里有想要的牌，读书") : pick(1, "图书馆：预读 20 张都不想要，睡觉回血");
                 return n == 2 ? (healthy(c, .4) ? pick(0, "图书馆：读书选牌") : pick(1, "图书馆：血量低于 40%，睡觉回血")) : null;
             case "The Joust":
                 // bet on the murderer 0 (100 gold if he wins), on the owner 1 (250 gold); the fight is decided by a read-ahead draw
@@ -295,6 +324,10 @@ final class EventRules {
                 case "FaceTrader": c.goodFace = goodFace(); c.preread = "goodFace=" + c.goodFace; break;
                 case "The Joust": c.ownerWins = AbstractDungeon.miscRng.copy().randomBoolean(0.3f) ? 1 : 0;
                     c.preread = "ownerWins=" + c.ownerWins; break;
+                case "SensoryStone": if (c.shown == 3) sensoryStone(c); break;
+                case "The Library": if (c.shown == 2) library(c); break;
+                case "Transmorgrifier": if (c.shown == 2) transmogrify(c); break;
+                case "Drug Dealer": if (c.shown == 3 && !c.artifactRelic) drugDealer(c); break;
                 default: break;
             }
             if (c.preread != null) c.preread = c.event + ": " + c.preread;
@@ -331,6 +364,133 @@ final class EventRules {
         c.adventurerEnemy = intField(event, "enemy");
         Random rng = AbstractDungeon.miscRng.copy();
         c.adventurerNext = rng.random(0, 99) < chance ? ELITE_SEARCH : SAFE_SEARCH;
+    }
+
+    // ---- card pre-reads: the replays run in a Sandbox; CardWant scores the cards as the real reward screen would ----------
+
+    /** SensoryStone.reward(n): n x RewardItem(COLORLESS), each getColorlessRewardCards() on cardRng and onPreviewObtainCard
+     * from every relic; memory k gets the first k groups of one sequence (getRandomMemory draws only miscRng). */
+    private static void sensoryStone(Context c) {
+        List<List<AbstractCard>> groups = new ArrayList<>();
+        try (Sandbox ignored = new Sandbox()) {
+            for (int k = 0; k < 3; k++) {
+                List<AbstractCard> cards = AbstractDungeon.getColorlessRewardCards();
+                for (AbstractCard card : cards) previewObtain(card);
+                groups.add(cards);
+            }
+        }
+        int wants = 0;
+        List<AbstractCard> added = new ArrayList<>();
+        List<List<String>> faces = new ArrayList<>();
+        StringBuilder note = new StringBuilder();
+        for (int k = 0; k < 3; k++) {
+            List<AbstractCard> group = groups.get(k);
+            int pick = CardWant.choose(group, added);
+            if (pick >= 0) { wants |= 1 << k; added.add(group.get(pick)); }
+            faces.add(faces(group));
+            note.append(k == 0 ? "" : " | ").append(names(group)).append(" -> ").append(pick >= 0 ? group.get(pick).name : "skip");
+        }
+        c.sensoryWants = wants;
+        c.preread = note.toString();
+        PrereadCheck.expect(c.event, AbstractDungeon.floorNum, PrereadCheck.rewardGroups(c.event, faces));
+    }
+
+    /** TheLibrary read: 20 x getCard(rollRarity()).makeCopy() on cardRng, re-rolling ids already listed, then onPreviewObtainCard.
+     * The grid has no cancel button (gridSelectScreen.open(group, 1, tip, false)), so reading commits to one card: read when the
+     * model wants any of the 20 as a single-card reward, its skip standing for sleep. */
+    private static void library(Context c) {
+        List<AbstractCard> cards = new ArrayList<>();
+        try (Sandbox ignored = new Sandbox()) {
+            for (int i = 0; i < 20; i++) {
+                AbstractCard card = AbstractDungeon.getCard(AbstractDungeon.rollRarity()).makeCopy();
+                for (boolean dupe = true; dupe; ) {
+                    dupe = false;
+                    for (AbstractCard have : cards) if (have.cardID.equals(card.cardID)) { dupe = true; break; }
+                    if (dupe) card = AbstractDungeon.getCard(AbstractDungeon.rollRarity()).makeCopy();
+                }
+                previewObtain(card);
+                cards.add(card);
+            }
+        }
+        List<AbstractCard> wanted = new ArrayList<>();
+        for (AbstractCard card : cards)
+            if (CardWant.choose(Collections.singletonList(card), Collections.<AbstractCard>emptyList()) == 0) wanted.add(card);
+        c.cardsWanted = wanted.isEmpty() ? 0 : 1;
+        c.preread = names(cards) + " -> " + (wanted.isEmpty() ? "none wanted" : "wants " + names(wanted));
+        if (!wanted.isEmpty()) PrereadCheck.expect(c.event, AbstractDungeon.floorNum, PrereadCheck.grid(c.event, faces(cards)));
+    }
+
+    /** Transmogrifier: the for_transform grid of purgeable cards without bottled ones; one transformCard(target, false, miscRng). */
+    private static void transmogrify(Context c) {
+        transforms(c, CardGroup.getGroupWithoutBottledCards(AbstractDungeon.player.masterDeck.getPurgeableCards()).group, 1, true);
+    }
+
+    /** DrugDealer: a grid of all purgeable cards (bottled included, for_transform off, so no removal order); two selections,
+     * transformed in selection order on miscRng. */
+    private static void drugDealer(Context c) {
+        transforms(c, AbstractDungeon.player.masterDeck.getPurgeableCards().group, 2, false);
+    }
+
+    /** The targets are the cards the real GRID decision selects (CardWant.gridChoose: same packet and hand rules); a result
+     * depends on its target through the color and the excluded id. Wanted: every target is a non-curse card the removal order
+     * reaches and the model wants every result (after onPreviewObtainCard: the eggs upgrade it on obtain), in order. */
+    private static void transforms(Context c, List<AbstractCard> grid, int count, boolean forTransform) {
+        List<AbstractCard> targets = new ArrayList<>();
+        for (int i = 0; i < count; i++) targets.add(grid.get(CardWant.gridChoose(grid, targets, count, forTransform)));
+        List<AbstractCard> results = new ArrayList<>();
+        try (Sandbox ignored = new Sandbox()) {
+            for (AbstractCard target : targets) {
+                AbstractCard result = transformed(target, AbstractDungeon.miscRng);
+                previewObtain(result);
+                results.add(result);
+            }
+        }
+        boolean wanted = true;
+        List<AbstractCard> added = new ArrayList<>();
+        StringBuilder note = new StringBuilder();
+        for (int i = 0; i < count; i++) {
+            AbstractCard target = targets.get(i), result = results.get(i);
+            boolean reachable = target.type != AbstractCard.CardType.CURSE
+                && removalTier(target.cardID, target.type.name()) <= LAST_REMOVAL_TIER;
+            boolean want = reachable && CardWant.choose(Collections.singletonList(result), added) == 0;
+            wanted &= want;
+            added.add(result);
+            note.append(i == 0 ? "" : ", ").append(target.name).append(" -> ").append(result.name)
+                .append(want ? " (wanted)" : reachable ? " (not wanted)" : " (target outside the removal order)");
+        }
+        c.cardsWanted = wanted ? 1 : 0;
+        c.preread = note.toString();
+        if (wanted) {
+            java.util.Set<String> uuids = new java.util.HashSet<>();
+            for (AbstractCard target : targets) uuids.add(target.uuid.toString());
+            PrereadCheck.expect(c.event, AbstractDungeon.floorNum,
+                PrereadCheck.transform(c.event, uuids, faces(results), faces(AbstractDungeon.player.masterDeck.group)));
+        }
+    }
+
+    /** AbstractDungeon.transformCard(card, false, rng) without its seen-card bookkeeping (UnlockTracker writes the profile). */
+    private static AbstractCard transformed(AbstractCard card, Random rng) {
+        switch (card.color) {
+            case COLORLESS: return AbstractDungeon.returnTrulyRandomColorlessCardFromAvailable(card, rng).makeCopy();
+            case CURSE: return CardLibrary.getCurse(card, rng).makeCopy();
+            default: return AbstractDungeon.returnTrulyRandomCardFromAvailable(card, rng).makeCopy();
+        }
+    }
+
+    private static void previewObtain(AbstractCard card) {
+        for (AbstractRelic relic : AbstractDungeon.player.relics) relic.onPreviewObtainCard(card);
+    }
+
+    private static List<String> faces(List<AbstractCard> cards) {
+        List<String> out = new ArrayList<>();
+        for (AbstractCard card : cards) out.add(card.cardID + "+" + card.timesUpgraded);
+        return out;
+    }
+
+    private static String names(List<AbstractCard> cards) {
+        List<String> out = new ArrayList<>();
+        for (AbstractCard card : cards) out.add(card.name);
+        return String.join("/", out);
     }
 
     private static int intField(Object target, String name) throws ReflectiveOperationException {

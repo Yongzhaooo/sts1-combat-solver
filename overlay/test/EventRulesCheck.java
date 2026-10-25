@@ -195,6 +195,7 @@ public final class EventRulesCheck {
         joust.ownerWins = 0;
         check(index(joust) == 0, "joust: murderer wins");
         check(index(c("The Library", 2, 33, 80, 0)) == 0 && index(c("The Library", 2, 30, 80, 0)) == 1, "library reads from 40%");
+        cardPrereads();
         check(index(c("The Moai Head", 3, 70, 80, 0)) == 1 && index(c("The Moai Head", 2, 70, 80, 0)) == 1
             && index(c("The Moai Head", 2, 20, 80, 0)) == 0, "moai head");
         check(index(c("Mysterious Sphere", 2, 70, 80, 0)) == 0 && index(c("Mysterious Sphere", 2, 30, 80, 0)) == 1, "sphere");
@@ -205,6 +206,57 @@ public final class EventRulesCheck {
 
         packetChecks(args[0]);
         System.out.println("PASS: event rules and removal order");
+    }
+
+    /** Card pre-reads (CardWant verdicts in sensoryWants / cardsWanted); UNKNOWN is the live-off or failed read: old rules. */
+    static void cardPrereads() {
+        // SensoryStone: the last wanted group picks the tier; a tier whose HP loss (5 / 10) is lethal is never taken.
+        int[][] stone = {  // wants bits (group k = bit k-1), hp, expected button
+            {0b100, 70, 2}, {0b111, 70, 2}, {0b011, 70, 1}, {0b010, 70, 1}, {0b001, 70, 0}, {0, 70, 0},
+            {0b100, 10, 0},   // the violating case: only group 3 wanted at 10 HP must not pay 10
+            {0b110, 10, 1}, {0b110, 11, 2}, {0b010, 5, 0}, {0b010, 6, 1}, {0b100, 11, 2}, {0b111, 3, 0}};
+        for (int[] row : stone) {
+            EventRules.Context s = c("SensoryStone", 3, row[1], 80, 0);
+            s.sensoryWants = row[0];
+            check(index(s) == row[2], "sensory stone wants " + Integer.toBinaryString(row[0]) + " at hp " + row[1] + ": " + index(s));
+        }
+        EventRules.Context lowStone = c("SensoryStone", 3, 20, 80, 0);
+        lowStone.sensoryWants = 0b100;
+        check(index(lowStone) == 2, "sensory stone: no HP floor besides the lethal guard (20/80 HP takes tier 3)");
+        check(index(c("SensoryStone", 3, 20, 80, 0)) == 0, "sensory stone unread: old 60% rule");
+        EventRules.Context stoneIntro = c("SensoryStone", 1, 70, 80, 0);
+        stoneIntro.sensoryWants = 0b100;
+        check(index(stoneIntro) == -99, "sensory stone intro page is not ruled");
+
+        // The Library: read when a card is wanted, else sleep, whatever the HP.
+        for (int hp : new int[]{20, 70}) {
+            EventRules.Context lib = c("The Library", 2, hp, 80, 0);
+            lib.cardsWanted = 1;
+            check(index(lib) == 0, "library reads a wanted card at hp " + hp);
+            lib.cardsWanted = 0;
+            check(index(lib) == 1, "library sleeps when nothing is wanted at hp " + hp);
+        }
+        // Transmorgrifier: transform only for a wanted result; unread keeps the removable rule.
+        EventRules.Context trans = c("Transmorgrifier", 2, 70, 80, 0);
+        trans.cardsWanted = 1;
+        check(index(trans) == 0, "transmogrifier transforms into a wanted card");
+        trans.cardsWanted = 0;
+        check(index(trans) == 1, "transmogrifier leaves an unwanted result");
+        trans.cardsWanted = EventRules.UNKNOWN;
+        check(index(trans) == 0, "transmogrifier unread: transform while something is removable");
+        trans.removable = 0;
+        check(index(trans) == 1, "transmogrifier unread: nothing removable, leave");
+        // Drug Dealer: an artifact relic still takes Mutagenic Strength; both results wanted transforms, else Mutagenic Strength.
+        EventRules.Context dealer = c("Drug Dealer", 3, 70, 80, 0);
+        dealer.cardsWanted = 1;
+        check(index(dealer) == 1, "drug dealer transforms two wanted results");
+        dealer.cardsWanted = 0;
+        check(index(dealer) == 2, "drug dealer takes Mutagenic Strength when a result is unwanted");
+        dealer.artifactRelic = true; dealer.cardsWanted = 1;
+        check(index(dealer) == 2, "drug dealer artifact relic rule comes first");
+        dealer.artifactRelic = false; dealer.cardsWanted = EventRules.UNKNOWN;
+        check(index(dealer) == 1, "drug dealer unread: transform");
+        check(index(c("Drug Dealer", 2, 70, 80, 0)) == 1, "drug dealer without the transform button: not J.A.X.");
     }
 
     static JsonObject copy(JsonObject value) {
