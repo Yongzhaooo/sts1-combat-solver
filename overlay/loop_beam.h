@@ -81,6 +81,9 @@ inline void materialize(Node &n) {
     n.deferred = false;
 }
 
+// BattleContext objects owned by this thread's pass pool (live plus recycled): the dominant beam memory, read by the search memory budget.
+inline thread_local std::size_t poolStates = 0;
+
 // Recycles the BattleContext copies of one pass: a dropped state returns to a free list and the next copy assigns into it
 // (vector capacities survive) instead of paying a malloc/free pair per edge. Single-threaded: a pass owns its pool, and every
 // state cloned from it dies before the pass returns (a stored win is copied out), so the deleters may hold a raw pointer.
@@ -89,9 +92,9 @@ public:
     explicit StatePool(std::size_t limit) : limit_(limit) {}
     StatePool(const StatePool &) = delete;
     StatePool &operator=(const StatePool &) = delete;
-    ~StatePool() { for (auto *p : free_) delete p; }
+    ~StatePool() { poolStates -= free_.size(); for (auto *p : free_) delete p; }
     std::shared_ptr<BattleContext> clone(const BattleContext &src) {
-        if (free_.empty()) return std::shared_ptr<BattleContext>(new BattleContext(src), Release{this});
+        if (free_.empty()) { ++poolStates; return std::shared_ptr<BattleContext>(new BattleContext(src), Release{this}); }
         BattleContext *p = free_.back();
         free_.pop_back();
         std::shared_ptr<BattleContext> out(p, Release{this});  // back to the pool should the assignment throw
@@ -103,7 +106,7 @@ private:
         StatePool *pool;
         void operator()(BattleContext *p) const {
             if (pool->free_.size() < pool->limit_) pool->free_.push_back(p);
-            else delete p;
+            else { --poolStates; delete p; }
         }
     };
     std::vector<BattleContext *> free_;

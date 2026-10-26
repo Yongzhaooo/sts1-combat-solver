@@ -45,7 +45,8 @@ def search_plan(native, root, budget, slots, credit, index, kill_thieves, genera
     if boss_fast_plan(game, best, slots):
         best['boss_fast_finish'] = True
         return finalize_plan(root, best)
-    if initial_budget != budget and not interrupt.is_set():
+    # A search that reached the memory budget is over, like an interrupted one: no further stage starts.
+    if initial_budget != budget and not interrupt.is_set() and not best.get('memory_capped'):
         candidate = dict(native.plan(root, budget, slots, credit, index, kill_thieves, generated, fast_boss))
         if candidate['value'] > best['value']:
             best = candidate
@@ -53,7 +54,7 @@ def search_plan(native, root, budget, slots, credit, index, kill_thieves, genera
             best['boss_fast_finish'] = True
             return finalize_plan(root, best)
     # Standard search gets one bounded refinement when its route still loses HP.
-    if budget == 8000 and not interrupt.is_set() and (
+    if budget == 8000 and not interrupt.is_set() and not best.get('memory_capped') and (
             best['outcome'] != 1
             or health(best, game, True)['loss'] > 0
             or best.get('used_tail') or best.get('used_fairy')) and not (
