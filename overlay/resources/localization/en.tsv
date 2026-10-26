@@ -400,3 +400,6 @@ F6 导出日志 · F8 收起 · F9 停止|F6 export log · F8 fold · F9 stop
 语言|Language
 辉眼模式|Bright Eye mode
 选择用药路线|Pick a potion plan
+本轮无可选路线|No selectable route this search
+本轮未提供原因，请重新计算或导出日志|No reason provided; recalculate or export the log
+ · 滚轮查看完整路线与原因| · Scroll for all routes and reasons

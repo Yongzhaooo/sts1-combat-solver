@@ -27,6 +27,26 @@ for bits in result['actions']:advisor.native_search.execute(end,bits&0xffffffff)
 assert end.outcome==S.Outcome.PLAYER_VICTORY and end.player.cur_hp==72 and end.player.max_hp==80
 print('PASS: actual Advisor removes redundant Defend, keeps victory/HP and preserves root')
 
+# Shortening may wait another turn, but it must preserve every carried resource.
+def resource_win(*, hp=72, max_hp=80, potion='SPEED_POTION', dagger=15, turn=1):
+    state = S.BattleContext.from_snapshot(dict(seed=1, floor=1, turn=turn, ascension=20,
+        player=dict(current_hp=hp, max_hp=max_hp, block=0, energy=3),
+        hand=[dict(id=S.card_id_from_name('STRIKE_RED'), upgrades=0)],
+        draw_pile=[dict(id=S.card_id_from_name('RITUAL_DAGGER'), upgrades=0, misc=dagger)],
+        discard_pile=[], exhaust_pile=[], relics=[], potions=[S.potion_id_from_name(potion)],
+        monsters=[dict(id=S.monster_id_from_name('CULTIST'), current_hp=1, max_hp=48,
+                       block=0, move=S.monster_move_id_from_name('CULTIST_INCANTATION'))]), 1)
+    advisor.native_search.execute(state, int(S.SearchAction(S.SearchActionType.CARD, 0, 0).bits))
+    assert state.outcome == S.Outcome.PLAYER_VICTORY
+    return state
+
+resource_end = resource_win()
+assert advisor.native_search._same_victory(resource_end, resource_win(turn=2))
+for worse in (resource_win(hp=71), resource_win(max_hp=79),
+              resource_win(potion='EMPTY_POTION_SLOT'), resource_win(dagger=14)):
+    assert not advisor.native_search._same_victory(resource_end, worse)
+print('PASS: shortening guard permits another turn and rejects lost HP, max HP, bottle or Dagger growth')
+
 # A bottle that changes nothing (Speed Potion, then the killing Strike) leaves a no-potion line; a killing Fire Potion does not.
 from concurrent.futures import Future
 import time

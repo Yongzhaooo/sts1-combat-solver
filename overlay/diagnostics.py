@@ -138,11 +138,23 @@ def battle_snapshot(state):
     snap = {'turn': combat.get('turn'), 'hp': game.get('current_hp'), 'energy': player.get('energy'),
             'block': player.get('block'),
             'monsters': [[m.get('id'), m.get('current_hp'), m.get('is_gone')] for m in combat.get('monsters', [])],
-            'hand': [c.get('id') for c in combat.get('hand', [])]}
+            'hand': [c.get('id') for c in combat.get('hand', [])],
+            'potions': [{k: p[k] for k in ('id', 'can_use') if k in p}
+                        for p in game.get('potions', [])]}
     counters = relic_counters(game)
     if counters:
         snap['counters'] = counters
     return snap
+
+
+def reply_summary(value):
+    summary = {k: value[k] for k in ('id', 'status', 'command', 'hp', 'outcome', 'branch',
+                                    'backend_seconds', 'interrupted', 'boss_fast_finish',
+                                    'remaining') if k in value}
+    if value.get('status') == 'ready' and 'branches' in value:
+        summary['branches'] = [{k: branch[k] for k in ('id', 'name', 'available', 'message') if k in branch}
+                               for branch in value['branches']]
+    return summary
 
 
 def combat_open_summary(state):
