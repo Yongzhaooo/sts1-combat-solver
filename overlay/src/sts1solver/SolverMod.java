@@ -582,6 +582,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     private void send(String op, JsonObject state) throws IOException {
+        if (op.equals("solve")) TestRecorder.captureSolveRoot(state);
         backend.start();
         JsonObject request = new JsonObject();
         request.addProperty("id", ++serial);
@@ -1470,17 +1471,25 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             this::toggleAuto, () -> { heldThisFight=true; auto=false; executeStep(); }, this::solveAgain});
     }
 
+    static String unavailableRouteReason(JsonObject branch) {
+        if (branch.has("message") && !branch.get("message").isJsonNull()
+                && !branch.get("message").getAsString().trim().isEmpty())
+            return I18n.backend(branch.get("message").getAsString());
+        return I18n.t("本轮未提供原因，请重新计算或导出日志");
+    }
+
     private float renderPicker(SpriteBatch sb, float top) {
         boolean thief=result.has("manual_choice") && result.get("manual_choice").getAsBoolean();
         top=headline(sb,I18n.t(thief?"抢劫怪路线 · 可手动或自动执行":"选择用药路线"),top,Color.WHITE);
         top=lines(sb,status+(branchInput.isEmpty()?"":"  ["+branchInput+"]"),top-4,.78f,MUTED);
         JsonArray branches=result.getAsJsonArray("branches");
         List<String> rows=new ArrayList<>(); List<Color> colors=new ArrayList<>();
+        List<Integer> rowBranches=new ArrayList<>();
         for(int i=0;i<branches.size();i++) {
             JsonObject branch=branches.get(i).getAsJsonObject();
             boolean available=branch.get("available").getAsBoolean();
             // Result first so a long bottle list can only truncate the route name.
-            String summary=available?(branch.get("won").getAsBoolean()?I18n.t("损 ")+branch.get("loss").getAsInt():I18n.t("未胜")):I18n.t("不可用");
+            String summary=available?(branch.get("won").getAsBoolean()?I18n.t("损 ")+branch.get("loss").getAsInt():I18n.t("未胜")):I18n.t("本轮无可选路线");
             String revival=revivalWarning(branch);
             if(!revival.isEmpty()) summary=revival+" · "+summary;
             if(available && branch.has("lost_gold") && branch.get("lost_gold").getAsInt()>0)
@@ -1489,15 +1498,24 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 summary+=I18n.t(" / 补 ")+branch.get("potion_gain").getAsInt()+I18n.t(" 药");
             rows.add(i+"  "+summary+" · "+I18n.backend(branch.get("name").getAsString()));
             colors.add(!revival.isEmpty()?DANGER:available?ACCENT:MUTED);
+            rowBranches.add(i);
+            if(!available) {
+                String prefix=i+"  ";
+                for(String line:canvas.wrap(unavailableRouteReason(branch),WIDTH-2*PAD-20-canvas.textWidth(prefix,.8f),.8f)) {
+                    rows.add(prefix+line);
+                    colors.add(MUTED);
+                    rowBranches.add(i);
+                }
+            }
         }
         top=listRows(sb,top,rows,colors,index -> {
-            JsonObject branch=branches.get(index).getAsJsonObject();
+            JsonObject branch=branches.get(rowBranches.get(index)).getAsJsonObject();
             if(branch.get("available").getAsBoolean()) chooseBranch(branch.get("id").getAsString());
         });
         String hint=thief ? I18n.t("空回车：选推荐路线；选后可开自动")
             : branches.size()>0 && branches.get(0).getAsJsonObject().get("id").getAsString().equals("no-potion")
             ? I18n.t("0 / 空回车：不交药；无输入则等待") : I18n.t("0 / 空回车：选 0 号路线；无输入则等待");
-        return lines(sb,hint,top,.72f,MUTED);
+        return lines(sb,hint+I18n.t(" · 滚轮查看完整路线与原因"),top,.72f,MUTED);
     }
 
     /** Outside combat: the run status, and the event foresight or the transform preview when there is one. */

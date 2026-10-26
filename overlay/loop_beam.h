@@ -116,6 +116,20 @@ private:
 // Root gate (layer 1): a known loop family is present (loop_gate.h). Off means no quick loop pass and no macros.
 inline bool cyclePotential(const BattleContext &b) { return loop_gate::matches(b) != 0; }
 
+inline bool hasTarget(const BattleContext &b) {
+    for (int i = 0; i < b.monsters.monsterCount; ++i)
+        if (b.monsters.arr[i].isTargetable()) return true;
+    return false;
+}
+
+inline bool retainTurnExits(const BattleContext &b) {
+    for (int i = 0; i < b.monsters.monsterCount; ++i) {
+        const auto &m = b.monsters.arr[i];
+        if (m.hasStatus<MS::INVINCIBLE>() || m.id == MonsterId::NEMESIS || m.id == MonsterId::AWAKENED_ONE) return true;
+    }
+    return false;
+}
+
 inline std::vector<const Path *> cycle(const Node &node) {
     std::vector<const Path *> motif;
     const auto *last = node.path.get();
@@ -151,6 +165,7 @@ Node repeatCycle(const Node &start, const std::vector<const Path *> &motif, long
                     || b.loopCount >= BattleContext::ACTION_EXECUTION_LIMIT
                     || b.outcome != Outcome::UNDECIDED || b.inputState != InputState::PLAYER_NORMAL
                     || b.turn != start.state->turn || (payHp ? b.player.curHp <= floor : b.player.curHp < hp)
+                    || !hasTarget(b)
                     || b.player.hasStatus<PS::NO_DRAW>()) return out;
             int source = -1;
             for (int i = 0; i < b.cards.cardsInHand; ++i)
@@ -280,11 +295,14 @@ struct Best {
     std::vector<int> actions;
 };
 
-// Equal results, fewest actions: a win replaces the best one with a higher value, or the same value in fewer actions.
+// Equal results, fewest actions. A shortening guard can recognize identical carried resources despite a turn penalty.
 // With a floor (shorten() for the Heart, where the run ends on victory) any win keeping that much HP counts as equal.
-inline bool better(const Best &best, double v, const std::shared_ptr<const Path> &path, int hp, int floor) {
+using SameVictory = bool (*)(const BattleContext &, const BattleContext &);
+inline bool better(const Best &best, double v, const std::shared_ptr<const Path> &path,
+                   const BattleContext &end, int floor, SameVictory sameVictory = nullptr) {
     const bool shorter = path && (!best.found || path->length < int(best.actions.size()));
-    if (floor >= 0) return hp >= floor && shorter;
+    if (floor >= 0) return end.player.curHp >= floor && shorter;
+    if (best.found && sameVictory && sameVictory(end, *best.state)) return shorter;
     return !best.found || v > best.value || (v == best.value && shorter);
 }
 
@@ -305,7 +323,7 @@ inline KeyRef keyRef(Node &n) { bucketKey(n); return {&n.key, n.keyHash}; }
 // One beam pass of the given width; stops at `cap` total transitions (stats.transitions) or when cancelled().
 template <class Value, class Cancel>
 void pass(const BattleContext &root, int width, long long cap, Value value, Cancel cancelled, Best &best, bool macros = false,
-          double playWeight = 0, int winFloor = -1) {
+          double playWeight = 0, int winFloor = -1, SameVictory sameVictory = nullptr) {
     if (root.loopCount >= BattleContext::ACTION_EXECUTION_LIMIT) return;
     StatePool pool(16 * std::size_t(width) + 1024);  // declared first: it outlives every state cloned from it
     search::BattleScumSearcher2 enumerator(root);
@@ -316,9 +334,10 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
         return legalActions.edges;
     };
     auto stop = [&]() { return stats.transitions >= cap || cancelled(); };
-    // playWeight charges each play this turn on every lane (shorten() only); 0 leaves the ranking unchanged.
+    // A terminal-run HP floor retains the per-turn heuristic; other shortening charges the whole path.
     auto rank = [&](Node &n) {
-        const double charge = playWeight * n.state->player.cardsPlayedThisTurn;
+        const int length = n.deferred ? (n.base ? n.base->length : 0) + 1 : (n.path ? n.path->length : 0);
+        const double charge = playWeight * (winFloor >= 0 ? n.state->player.cardsPlayedThisTurn : length);
         const auto f = features(*n.state);
         n.scores = {score(n, 0, f) - charge, score(n, 1, f) - charge, score(n, 2, f) - charge};
     };
@@ -330,11 +349,9 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
     struct Ranked { double score; std::uint32_t pos, index; };
     std::vector<Ranked> keyed;
     KeySet seen;
-    // Only a per-turn damage cap (Invincible: the Heart) makes a loop worthless before the turn ends; elsewhere the
-    // per-turn quota below stays off and the search is unchanged.
+    // Damage caps, Intangible and revival phases need an exit from the current turn even while loop lanes score well.
     const bool payHp = loop_gate::pseudo(loop_gate::matches(root));
-    bool damageCap = false;
-    for (int i = 0; i < root.monsters.monsterCount; ++i) damageCap |= root.monsters.arr[i].hasStatus<MS::INVINCIBLE>();
+    const bool turnExits = retainTurnExits(root);
     // The transition cap bounds a pass; 256 actions did not reach the end of long loop fights (Awakened One, 320+300 HP).
     for (int depth = 0; depth < 4096 && !frontier.empty() && !stop(); ++depth) {
         candidates.clear();
@@ -372,7 +389,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
             }
             // Each turn's leaders for the per-turn quota below. Later candidates only add turns, so the final quota is no
             // larger; keeping more would let stalling lines over many turns refill the layer past compactAt.
-            auto groups = damageCap ? byTurn() : decltype(byTurn()){};
+            auto groups = turnExits ? byTurn() : decltype(byTurn()){};
             const std::size_t quota = std::max<std::size_t>(1, width / std::max<std::size_t>(1, groups.size() - 1));
             for (auto &group : groups) {
                 seen.clear();
@@ -403,7 +420,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                     auto &b = *child.state;
                     if (b.outcome == Outcome::PLAYER_VICTORY && b.player.curHp > 0) {
                         double v = value(b);
-                        if (better(best, v, child.path, b.player.curHp, winFloor)) { best = {true, v, child.state, actions(child.path)}; }
+                        if (better(best, v, child.path, b, winFloor, sameVictory)) { best = {true, v, child.state, actions(child.path)}; }
                         if (best.state->player.curHp >= root.player.curHp) return;
                     } else if (child.path != parent.path && b.outcome == Outcome::UNDECIDED
                             && b.player.curHp > 0 && b.turn < 100 && b.inputState == InputState::PLAYER_NORMAL
@@ -429,7 +446,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                     if (b.outcome == Outcome::PLAYER_VICTORY && b.player.curHp > 0) {
                         materialize(child);
                         double v = value(b);
-                        if (better(best, v, child.path, b.player.curHp, winFloor)) { best.found = true; best.value = v; best.state = std::make_shared<BattleContext>(*child.state); best.actions = actions(child.path); }
+                        if (better(best, v, child.path, b, winFloor, sameVictory)) { best.found = true; best.value = v; best.state = std::make_shared<BattleContext>(*child.state); best.actions = actions(child.path); }
                     } else if (b.outcome == Outcome::UNDECIDED && b.player.curHp > 0 && b.turn < 100
                             && b.loopCount < BattleContext::ACTION_EXECUTION_LIMIT) {
                         // turn < 100: stalling lines (end turn behind block forever) otherwise reach the engine's 500-turn limit, which throws
@@ -457,7 +474,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                 if (seen.insert(keyRef(n)).second) { advance(n); ++kept; }
             }
         }
-        if (damageCap && !candidates.empty()) {
+        if (turnExits && !candidates.empty()) {
             auto groups = byTurn();
             groups.erase(groups.begin());  // the earliest turn is the one the lanes above already favour
             const int quota = groups.empty() ? 0 : std::max(1, width / int(groups.size()));
@@ -516,12 +533,13 @@ Best portfolio(const BattleContext &root, long long cap, Value value, Cancel can
     return best;
 }
 // A long win often keeps replaying a loop that no longer changes the result (past the Heart's damage cap, extra circuits
-// only reshuffle). One extra pass charges every play this turn, without loop macros, seeded with that win; better() keeps
-// the seed unless a line wins with a higher value or the same value in fewer actions, so the result never gets worse;
+// only reshuffle). One extra pass penalizes plays, without loop macros, seeded with that win; better() keeps
+// the seed unless a line wins with a higher value or fewer actions at equal value or identical carried resources;
 // with winFloor >= 0 any shorter win keeping at least winFloor HP replaces it.
 template <class Value, class Cancel>
-Best shorten(const BattleContext &root, Best best, long long budget, Value value, Cancel cancelled, int winFloor = -1) {
-    pass(root, 128, stats.transitions + budget, value, cancelled, best, false, 1.0, winFloor);
+Best shorten(const BattleContext &root, Best best, long long budget, Value value, Cancel cancelled, int winFloor = -1,
+             SameVictory sameVictory = nullptr) {
+    pass(root, 128, stats.transitions + budget, value, cancelled, best, false, 1.0, winFloor, sameVictory);
     return best;
 }
 }  // namespace loop_beam

@@ -43,6 +43,43 @@ public class BattleHistoryCheck {
         if (history.snapshot("2").getAsJsonArray("completed").size() != 0) throw new AssertionError("Cross-seed leak");
         history.record("2", event("battle_start", 1), null);
         if (history.snapshot("2").getAsJsonArray("completed").size() != 0) throw new AssertionError("New seed must reset history");
-        System.out.println("PASS: five battles, manual actions, roots, ownership, current battle, truncation, seed reset");
+        BattleHistory pending = new BattleHistory();
+        pending.record("3", event("battle_start", 31), null);
+        JsonObject root = new JsonObject();
+        root.addProperty("ready_for_command", false);
+        pending.captureSolveRoot("3", root, 10);
+        if (pending.snapshot("3").getAsJsonObject("current").has("root"))
+            throw new AssertionError("Unready battle start must not become a replay root");
+        root.addProperty("ready_for_command", true);
+        root.addProperty("marker", "first-stable-root");
+        pending.captureSolveRoot("3", root, 20);
+        root.addProperty("marker", "later-solve");
+        pending.captureSolveRoot("3", root, 30);
+        JsonObject exported = pending.snapshot("3").getAsJsonObject("current");
+        if (!exported.getAsJsonObject("root").get("marker").getAsString().equals("first-stable-root")
+                || exported.getAsJsonArray("events").size() != 1
+                || exported.get("root_after_events").getAsInt() != 1
+                || exported.get("root_time").getAsLong() != 20
+                || !exported.get("root_source").getAsString().equals("solve"))
+            throw new AssertionError("Export before any action must retain the first stable solve root without fake actions");
+        BattleHistory failed = new BattleHistory();
+        JsonObject error = event("selection", 31);
+        error.addProperty("root_error", "original capture failure");
+        failed.record("3", event("battle_start", 31), null);
+        failed.record("3", error, null);
+        failed.captureSolveRoot("3", root, 40);
+        JsonObject failure = failed.snapshot("3").getAsJsonObject("current");
+        if (failure.has("root") || !failure.get("root_error").getAsString().equals("original capture failure"))
+            throw new AssertionError("Later solve must not conceal an earlier root capture failure");
+        BattleHistory malformed = new BattleHistory();
+        malformed.record("3", event("battle_start", 31), null);
+        JsonObject invalidRoot = new JsonObject();
+        invalidRoot.add("ready_for_command", new JsonObject());
+        malformed.captureSolveRoot("3", invalidRoot, 50);
+        malformed.captureSolveRoot("3", root, 60);
+        JsonObject rejected = malformed.snapshot("3").getAsJsonObject("current");
+        if (rejected.has("root") || !rejected.has("root_error") || rejected.get("root_time").getAsLong() != 50)
+            throw new AssertionError("Capture errors must survive export and must not stop the solve");
+        System.out.println("PASS: five battles, manual actions, roots, ownership, current battle, truncation, seed reset, pending solve export, capture failure");
     }
 }

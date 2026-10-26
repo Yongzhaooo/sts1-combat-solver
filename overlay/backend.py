@@ -26,7 +26,7 @@ for s in (sys.stdin, sys.stdout, sys.stderr):
             pass
 
 from recovery import health, future_recovery, incense_targets, carry_weight
-from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature
+from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature, reply_summary
 from auto_policy import recommend, smoke_opening, smoke_probe_keeps, smoke_threshold
 from solver_search import DEEP_BUDGET, boss_fast_plan, finalize_plan, search_plan
 from runtime_files import OVERLAY_FILES
@@ -1051,9 +1051,7 @@ def serve(runs_dir=None):
                                   'exitcode': value.get('exitcode'), 'traceback': value.get('traceback'),
                                   'sig': fault_signature(value.get('message'), tail), 'frame': state}, state)
         elif value.get('status') not in ('progress',):
-            note('reply', {k: value[k] for k in ('id', 'status', 'command', 'hp', 'outcome', 'branch',
-                                                         'backend_seconds', 'interrupted', 'boss_fast_finish',
-                                                         'remaining') if k in value}, state)
+            note('reply', reply_summary(value), state)
         print(json.dumps(value, ensure_ascii=False), flush=True)
 
     def start():

@@ -36,6 +36,61 @@ int main() {
     loop_beam::pass(battle, 8, 128, [](const BattleContext &) { return 0.0; }, [] { return false; }, best, true);
     assert(!best.found && loop_beam::stats.transitions == 0);
 
+    // Equal results retain the shortest sampled route, including cached MCTS terminals.
+    const search::Action play(search::ActionType::CARD, 0, 0);
+    searcher.updateFromEvaluation({}, {play, play, play}, 100, hp);
+    searcher.updateFromEvaluation({}, {play}, 100, hp);
+    assert(searcher.bestActionSequence.size() == 1);
+    searcher.updateFromEvaluation({}, {play, play}, 100, hp);
+    searcher.updateFromEvaluation({}, {}, 99, hp);
+    assert(searcher.bestActionSequence.size() == 1 && searcher.bestActionValue == 100);
+
+    auto candidate = fresh();
+    candidate.outcome = Outcome::PLAYER_VICTORY;
+    auto end = std::make_shared<BattleContext>(candidate);
+    loop_beam::Best seed{true, 100, end, {1, 2, 3}};
+    auto path = std::make_shared<loop_beam::Path>();
+    const auto sameResources = [](const BattleContext &x, const BattleContext &y) {
+        return x.player.curHp == y.player.curHp && x.player.maxHp == y.player.maxHp && x.potions == y.potions;
+    };
+    assert(loop_beam::better(seed, 100, path, candidate, -1));
+    assert(!loop_beam::better(seed, 99, path, candidate, -1));
+    ++candidate.turn;
+    assert(loop_beam::better(seed, 99, path, candidate, -1, sameResources));
+    path->length = 4;
+    assert(!loop_beam::better(seed, 101, path, candidate, -1, sameResources));
+    path->length = 0;
+    --candidate.player.curHp;
+    assert(!loop_beam::better(seed, 99, path, candidate, -1, sameResources));
+    candidate = *end;
+    --candidate.player.maxHp;
+    assert(!loop_beam::better(seed, 99, path, candidate, -1, sameResources));
+    candidate = *end;
+    candidate.potions[0] = Potion::FIRE_POTION;
+    assert(!loop_beam::better(seed, 99, path, candidate, -1, sameResources));
+
+    auto phase = fresh();
+    assert(!loop_beam::retainTurnExits(phase));
+    phase.monsters.arr[0].id = MonsterId::NEMESIS;
+    assert(loop_beam::retainTurnExits(phase)); // Before its first Intangible turn too.
+    phase.monsters.arr[0].id = MonsterId::AWAKENED_ONE;
+    assert(loop_beam::retainTurnExits(phase));
+    phase.monsters.arr[0].curHp = 0;
+    phase.monsters.arr[0].halfDead = true;
+    phase.loopCount = 0;
+    phase.inputState = InputState::PLAYER_NORMAL;
+    phase.cards.cardsInHand = 1;
+    phase.cards.hand[0] = CardInstance(CardId::IMMOLATE);
+    phase.cards.hand[0].uniqueId = 7;
+    phase.player.energy = 3;
+    const auto blast = search::Action(search::ActionType::CARD, 0, 0);
+    assert(blast.isValidAction(phase)); // Normal search still permits resource preparation during revival.
+    loop_beam::Node node{std::make_shared<BattleContext>(phase), nullptr, 0};
+    auto motif = loop_beam::append(node, blast);
+    loop_beam::stats = {};
+    auto repeated = loop_beam::repeatCycle(node, {motif.get()}, 100, [] { return false; }, [](const loop_beam::Node &) {});
+    assert(loop_beam::stats.macroActions == 0 && repeated.state->player.energy == 3);
+
     auto invalid = fresh();
     invalid.monsters.monstersAlive = -1;
     bool refused = false;

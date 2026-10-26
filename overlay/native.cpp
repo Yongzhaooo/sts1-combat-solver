@@ -519,7 +519,8 @@ PYBIND11_MODULE(overlay_search, m) {
                     [](){return overlayBeamTick();},std::move(quick),loop_beam::stats,
                     simulations == 128000 ? &predicted : nullptr, growth < 0 ? -1 : root.player.maxHp+growth);
                 const int mctsHp=predicted.player.curHp;
-                if(best.found && (!mctsWin || best.value>mctsValue)) {
+                if(best.found && (!mctsWin || best.value>mctsValue
+                        || (best.value==mctsValue && best.actions.size()<result.actions.size()))) {
                     predicted=*best.state; result.actions=best.actions; result.bestHp=predicted.player.curHp; beamUsed=true;
                 }
                 if(const char *log=std::getenv("LOOP_BEAM_LOG")) {      // diagnostic only
@@ -537,14 +538,14 @@ PYBIND11_MODULE(overlay_search, m) {
                 predicted=*macroLine.state; result.actions=macroLine.actions; result.bestHp=predicted.player.curHp;
                 macroUsed=beamUsed=true;
             }
-            // Equal results, fewest actions: a long win gets one shortening pass; it never lowers the end value. A Heart
+            // Equal resources, fewest actions: shortening may trade a turn penalty for fewer plays. A Heart
             // victory ends the run and no run fights a second Heart, so there any shorter win is equal (user, 2026-10-24).
             if(predicted.outcome==Outcome::PLAYER_VICTORY && result.actions.size()>64 && !overlayInterrupted()) {
                 loop_beam::Best seed{true,value(predicted),std::make_shared<BattleContext>(predicted),
                                      result.actions};
                 const int floor=heartFight ? 1 : -1;
                 auto shorter=loop_beam::shorten(root,std::move(seed),std::min(LOOP_BEAM_PER_SIM*simulations,2000000LL),
-                                                value,cancelled,floor);
+                                                value,cancelled,floor,overlaySameVictory);
                 if(shorter.actions.size()<result.actions.size()) {
                     shortenedFrom=static_cast<int>(result.actions.size());
                     predicted=*shorter.state; result.actions=shorter.actions; result.bestHp=predicted.player.curHp; beamUsed=true;
