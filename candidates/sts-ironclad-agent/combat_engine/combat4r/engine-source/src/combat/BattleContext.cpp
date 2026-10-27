@@ -1112,9 +1112,7 @@ void BattleContext::useAttackCard() {
             break;
 
         case CardId::HEAVY_BLADE: {
-            const int dmg1 = 14 + ((up ? 4 : 2) * player.getStatus<PS::STRENGTH>());
-            const int dmg2 = calculateCardDamage(c, t, dmg1);
-            addToBot( Actions::AttackEnemy(t, dmg2) );
+            addToBot( Actions::AttackEnemy(t, calculateCardDamage(c, t, 14)) );
             break;
         }
 
@@ -2821,9 +2819,10 @@ int BattleContext::calculateCardDamage(const CardInstance &card, int targetIdx, 
 
     // Java calculateCardDamage runs atDamageGive in player.powers order; RedSkull.addPower appends Strength
     // without Collections.sort, so it can follow Pen Nib / Double Damage (priority 6).
+    const int strengthMultiplier = card.id == CardId::HEAVY_BLADE ? (card.isUpgraded() ? 5 : 3) : 1;
     for (const auto &power : player.powerOrder) {
         switch (power.status) {
-            case PS::STRENGTH: damage += static_cast<float>(player.getStatus<PS::STRENGTH>()); break;
+            case PS::STRENGTH: damage += static_cast<float>(player.getStatus<PS::STRENGTH>()) * strengthMultiplier; break;
             case PS::VIGOR: damage += static_cast<float>(player.getStatus<PS::VIGOR>()); break;
             case PS::DOUBLE_DAMAGE:
             case PS::PEN_NIB: damage *= 2; break;
