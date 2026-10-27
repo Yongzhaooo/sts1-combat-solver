@@ -53,6 +53,9 @@ set_target_properties(slaythespire fightsim live_combat_search PROPERTIES
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(monster_block_test tests/monster_block_test.cpp)
+  target_link_libraries(monster_block_test PRIVATE sts_core)
+  add_test(NAME monster_block COMMAND monster_block_test)
   add_executable(action_budget_test tests/action_budget_test.cpp)
   target_link_libraries(action_budget_test PRIVATE sts_core)
   add_test(NAME action_budget COMMAND action_budget_test)
