@@ -48,7 +48,8 @@ public final class RoutePlannerCheck {
         goldChecks();
         wingChecks();
         actStartCheck(first);
-        System.out.printf("PASS: %d golden openings, final-act keys, expected gold, burning-elite lean, Wing Boots ties, all legal starts, low-HP suffix replans, act-3 start, unchanged input (%.0f ms)%n",checks,(System.nanoTime()-start)/1e6);
+        restChecks();
+        System.out.printf("PASS: %d golden openings, final-act keys, expected gold, burning-elite lean, Wing Boots ties, all legal starts, low-HP suffix replans, act-3 start, no rest credit under Coffee Dripper or Mark of the Bloom, unchanged input (%.0f ms)%n",checks,(System.nanoTime()-start)/1e6);
     }
 
     static JsonObject copy(JsonObject o) {return new JsonParser().parse(o.toString()).getAsJsonObject();}
@@ -138,10 +139,21 @@ public final class RoutePlannerCheck {
         return p==null?-1:p.path.get(0).x;
     }
 
-    static double line(String[] rooms,int gold) {
+    /** A wounded player gains fire credit only when resting heals: Coffee Dripper forbids resting, Mark of the Bloom healing. */
+    static void restChecks() {
+        String[] fire={"M","R","M","M","M","M","M","M","M","M","M","M","M","M","M"};
+        double dripper=line(fire,0,30,"Coffee Dripper");
+        if(!(line(fire,0,30,null)>dripper))throw new AssertionError("A wounded player credits the fire");
+        if(line(fire,0,30,"Mark of the Bloom")!=dripper)throw new AssertionError("Mark of the Bloom gives the fire no heal credit");
+    }
+
+    static double line(String[] rooms,int gold) {return line(rooms,gold,70,null);}
+    static double line(String[] rooms,int gold,int hp,String relic) {
         JsonObject g=new JsonObject(), v=new JsonObject();
-        g.addProperty("act",1); g.addProperty("screen_type","NONE"); g.addProperty("current_hp",70); g.addProperty("max_hp",70);
-        g.addProperty("gold",gold); g.add("keys",new JsonObject()); g.add("deck",new JsonArray()); g.add("relics",new JsonArray());
+        g.addProperty("act",1); g.addProperty("screen_type","NONE"); g.addProperty("current_hp",hp); g.addProperty("max_hp",70);
+        JsonArray relics=new JsonArray();
+        if(relic!=null){JsonObject r=new JsonObject(); r.addProperty("id",relic); relics.add(r);}
+        g.addProperty("gold",gold); g.add("keys",new JsonObject()); g.add("deck",new JsonArray()); g.add("relics",relics);
         g.add("screen_state",new JsonObject());
         JsonArray map=new JsonArray();
         for(int y=0;y<15;y++) {
