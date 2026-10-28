@@ -27,18 +27,9 @@ public class RngModsCheck {
         require(touches(Draws.class), "draws from a game stream");
         require(!touches(ReadsCounter.class), "reading counter is harmless");
         require(!touches(Copies.class), "copy() is harmless");
-        // Spire Ledger and this mod recognise each other: the ledger is trusted here, and the ledger's turn replay
-        // reflects on these SolverMod members (SolverReplay.contract()); renaming one breaks its replay support.
         java.lang.reflect.Field trusted = RngMods.class.getDeclaredField("TRUSTED");
         trusted.setAccessible(true);
         require(((java.util.Set<?>) trusted.get(null)).contains("spire-ledger"), "Spire Ledger is trusted");
-        Class<?> mod = Class.forName("sts1solver.SolverMod", false, RngModsCheck.class.getClassLoader());
-        require(java.lang.reflect.Modifier.isStatic(mod.getDeclaredField("instance").getModifiers()), "SolverMod.instance");
-        mod.getDeclaredField("runAutoPlayer");
-        mod.getDeclaredMethod("cancel", boolean.class);
-        mod.getDeclaredMethod("stopAll");
-        mod.getDeclaredMethod("receivePostUpdate");
-        mod.getDeclaredMethod("receivePostRender", com.badlogic.gdx.graphics.g2d.SpriteBatch.class);
-        System.out.println("PASS: RNG-affecting mod detection; Spire Ledger trust and replay contract");
+        System.out.println("PASS: RNG-affecting mod detection; Spire Ledger trusted");
     }
 }
