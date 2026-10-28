@@ -872,6 +872,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 send("advance", state);
                 return;
             }
+            if (CombatReadiness.holdSolveForPicker(AbstractDungeon.screen, auto, openingSelection(state))) return; // decisionDirty stays set: re-solve after it closes
             if ((busy || result != null) && !current.equals(rootKey)) {
                 stateChanged(state);
                 if(paused)return;

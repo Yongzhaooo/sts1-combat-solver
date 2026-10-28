@@ -57,6 +57,10 @@ public class StateKeyCheck {
                 throw new AssertionError("Action timeout must pause on overlay screen " + screen);
             boolean paused = screen == com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.GRID
                 || screen == com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.CARD_REWARD;
+            if (CombatReadiness.holdSolveForPicker(screen, false, false) != (interactive && screen != com.megacrit.cardcrawl.dungeons.AbstractDungeon.CurrentScreen.NONE)
+                    || CombatReadiness.holdSolveForPicker(screen, true, false)
+                    || CombatReadiness.holdSolveForPicker(screen, false, true))
+                throw new AssertionError("manual re-solve must wait only on mid-turn picker " + screen);
             if (CombatReadiness.waitForMonsterExit(screen,true,false,false,false,false) == paused)
                 throw new AssertionError("death gate on " + screen);
             if (CombatReadiness.waitForMonsterExit(screen,false,false,false,true,false) == paused)
