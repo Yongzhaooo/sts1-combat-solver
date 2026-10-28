@@ -50,6 +50,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private long serial, activeId, sentAt;
     private long searchTimeoutMillis = SearchStatus.timeoutMillis(8000);
     private JsonObject rootKey, lastKey, result;
+    // The step being executed, kept for the panel only: the backend's answer to "advance" replaces `result`, and a
+    // body that fell back to the search view between steps made the panel blink.
+    private JsonObject shownPlan;
     private boolean decisionDirty=true;
     private boolean busy, awaitingAction, auto, gamblingAuto, paused, collapsed;
     private boolean runAuto;
@@ -106,6 +109,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     // Shops and events fold the panel (results sit beside the options); it reopens on leaving
     // unless the player toggled it meanwhile.
     private boolean autoFolded, inFoldRoom;
+    // The player unfolded the panel by hand this fight (header + or F8): autoFold then leaves it
+    // alone until the fight ends.
+    private boolean heldPanelOpen;
     // Classes the combat engine imports exactly; keep in sync with backend.SUPPORTED_CLASSES.
     // Out-of-combat foresight works for every class.
     static final EnumSet<AbstractPlayer.PlayerClass> SUPPORTED = EnumSet.of(AbstractPlayer.PlayerClass.IRONCLAD);
@@ -193,12 +199,36 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         AbstractRoom room = CommandExecutor.isInDungeon() ? AbstractDungeon.getCurrRoom() : null;
         AbstractDungeon.CurrentScreen screen = room == null ? null : AbstractDungeon.screen;
         boolean event = room != null && room.phase == AbstractRoom.RoomPhase.EVENT && room.event != null;
-        boolean fold = !expandOnScreen(screen, room != null && combat(), event)
-            || (pilot.mode == 2 && !combat()); // the pilot's status fits the folded header.
-        if (fold && (!inFoldRoom || screen != lastFoldScreen) && !collapsed) { collapsed = true; autoFolded = true; }
-        if (!fold && inFoldRoom && autoFolded && !standby()) { collapsed = false; autoFolded = false; }
+        boolean fight = room != null && combat();
+        boolean fold = foldsAway(screen, fight, event, pilot.mode == 2);
+        if (autoFolds(fold, inFoldRoom, screen != lastFoldScreen, collapsed, heldPanelOpen, fight, screen)) {
+            collapsed = true; autoFolded = true;
+        }
+        if (autoUnfolds(fold, inFoldRoom, autoFolded, standby(), fight)) { collapsed = false; autoFolded = false; }
         inFoldRoom = fold;
         lastFoldScreen = screen;
+    }
+
+    /** Whether the panel gives the screen room by folding to its header. */
+    static boolean foldsAway(AbstractDungeon.CurrentScreen screen, boolean combat, boolean event, boolean pilotOutside) {
+        return !expandOnScreen(screen, combat, event) || (pilotOutside && !combat);
+    }
+
+    /** Whether autoFold folds now: a screen to give room to, the panel is unfolded, and the player has not held it open.
+     *  Only a pile view can be held open: pickers (hand select, grid, card choices) need their clicks, so they always fold it. */
+    static boolean autoFolds(boolean fold, boolean inFoldRoom, boolean screenChanged, boolean collapsed,
+                             boolean heldOpen, boolean combat, AbstractDungeon.CurrentScreen screen) {
+        return fold && (!inFoldRoom || screenChanged) && !collapsed && !(heldOpen && combat && pileView(screen));
+    }
+
+    static boolean pileView(AbstractDungeon.CurrentScreen screen) {
+        return screen == AbstractDungeon.CurrentScreen.DISCARD_VIEW || screen == AbstractDungeon.CurrentScreen.EXHAUST_VIEW
+            || screen == AbstractDungeon.CurrentScreen.GAME_DECK_VIEW || screen == AbstractDungeon.CurrentScreen.MASTER_DECK_VIEW;
+    }
+
+    /** Whether autoFold unfolds what it folded: back in a room that has room, in standby only during a fight. */
+    static boolean autoUnfolds(boolean fold, boolean inFoldRoom, boolean autoFolded, boolean standby, boolean combat) {
+        return !fold && inFoldRoom && autoFolded && (!standby || combat);
     }
 
     static boolean expandOnScreen(AbstractDungeon.CurrentScreen screen, boolean combat, boolean event) {
@@ -614,6 +644,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             sentAt = System.currentTimeMillis();
             busy = true;
             result = null;
+            if (!op.equals("advance")) shownPlan = null;
             status = op.equals("advance") ? I18n.t("核对执行结果…") : I18n.t("正在搜索整场战斗…");
         }
     }
@@ -651,6 +682,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (!pendingSearch) clickedBranch = null;
         busy = pendingSearch;
         awaitingAction = auto = gamblingAuto = runAfterBranch = false;
+        shownPlan = null;
         if (!keepResult) { branchPicker = branchConfirmed = false; branchInput = ""; result = null; }
         decisionDirty = true;
         paused = pause;
@@ -737,7 +769,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             }
             if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) bindingKey=false;
         } else if (Gdx.input.isKeyJustPressed(autoKey)) toggleAuto();
-        if (Gdx.input.isKeyJustPressed(Input.Keys.F8)) { collapsed = !collapsed; autoFolded = false; }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.F8)) {
+            collapsed = !collapsed; autoFolded = false; heldPanelOpen = !collapsed;
+        }
         autoFold();
         if(!CommandExecutor.isInDungeon() || AbstractDungeon.player==null) {
             runAuto=false;runAutoPlayer=null;
@@ -751,7 +785,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         boolean inCombat = combat();
         if(!wasCombat && inCombat) {
             heldThisFight=false;
-            if(standby()) { collapsed=true; autoFolded=false; status=I18n.t("待命 · 点【计算】开始搜索"); }
+            // Every fight opens the panel unfolded; - or F8 folds it again and autoFold then leaves it folded.
+            collapsed=false; autoFolded=false; heldPanelOpen=false;
+            if(standby()) status=I18n.t("待命 · 点【计算】开始搜索");
         }
         if(!wasCombat && inCombat && runAuto) {
             auto=true;paused=false;branchConfirmed=false;decisionDirty=true;lastKey=null;
@@ -763,6 +799,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             lastKey = null;
             thiefPreference=null;
             armed=false;
+            heldPanelOpen=false;
             if(standby()) { collapsed=true; autoFolded=false; }
             error = "";
         }
@@ -800,6 +837,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 continue;
             }
             busy = false;
+            shownPlan = null;
             if (kind.equals("ready")) {
                 result = reply;
                 status = reply.has("manual_choice") && reply.get("manual_choice").getAsBoolean()
@@ -919,6 +957,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             // Direct game-thread call: no queued command can survive Stop or a screen change.
             if (!CommandExecutor.executeCommand(command)) throw new IllegalStateException(I18n.t("动作未提交"));
             GameStateListener.registerCommandExecution();
+            shownPlan = result;
             result = null;
             awaitingAction = true;
             sentAt = System.currentTimeMillis();
@@ -1201,9 +1240,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             if(node.getRoomSymbol(true).equals("R"))return true;
         return false;
     }
-    private String commandLabel() {
-        if (result == null) return "";
-        String command=result.get("command").getAsString();
+    /** The step the plan runs next; while it is being executed, the route row the backend labelled for it. */
+    private String commandLabel(JsonObject plan, boolean executing) {
+        if (plan == null) return "";
+        if (executing) {
+            String step = routeLabel(plan);
+            if (!step.isEmpty()) return step;
+        }
+        String command=plan.get("command").getAsString();
         String[] p=command.split(" ");
         try {
             if (p[0].equals("play")) {
@@ -1223,6 +1267,15 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             if (p[0].equals("skip")) return I18n.t("跳过战斗选牌");
         } catch (RuntimeException ignored) { return I18n.t("局面已变化，等待重新计算"); }
         return command;
+    }
+
+    /** The first route row's label: what the plan's next step is, without reading the live hand. */
+    static String routeLabel(JsonObject plan) {
+        if (plan == null || !plan.has("route") || !plan.get("route").isJsonArray()
+                || plan.getAsJsonArray("route").size() == 0) return "";
+        JsonObject first = plan.getAsJsonArray("route").get(0).getAsJsonObject();
+        if (!first.has("label") && !first.has("text")) return "";
+        return I18n.backend(first.has("label") ? first.get("label").getAsString() : first.get("text").getAsString());
     }
 
     @Override public void receivePostRender(SpriteBatch sb) {
@@ -1249,12 +1302,30 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         canvas.cursorOnTop(sb);
     }
 
+    /** Which body the unfolded panel draws: exactly one, most specific first. */
+    enum Body { OUTSIDE, UNSUPPORTED, ERROR, PICKER, PLAN, SEARCH, IDLE }
+
+    /**
+     * The body for the current flags. A plan being executed keeps the plan body ({@code hasShownPlan}), so the step
+     * the panel just ran stays in place while the backend confirms it, instead of blinking to the search body.
+     */
+    static Body bodyView(boolean combat, boolean supported, boolean hasError, boolean picker,
+                         boolean busy, boolean hasResult, boolean hasShownPlan) {
+        if (!combat) return Body.OUTSIDE;
+        if (!supported) return Body.UNSUPPORTED;
+        if (hasError) return Body.ERROR;
+        if (picker && hasResult) return Body.PICKER;
+        if (hasResult || hasShownPlan) return Body.PLAN;
+        if (busy) return Body.SEARCH;
+        return Body.IDLE;
+    }
+
     private void renderFolded(SpriteBatch sb) {
         canvas.box(sb,0,0,WIDTH,FOLDED,BORDER);
         canvas.box(sb,1,1,WIDTH-2,FOLDED-2,BACKGROUND);
         canvas.label(sb,I18n.t("战斗求解器"),PAD,9,150,.9f,Color.WHITE);
         float left=PAD+canvas.textWidth("战斗求解器",.9f)+10, right=WIDTH-PAD-24;
-        canvas.button(sb,right,7,24,26,null,"＋",1,MUTED,() -> { collapsed=false; autoFolded=false; });
+        canvas.button(sb,right,7,24,26,null,"＋",1,MUTED,() -> { collapsed=false; autoFolded=false; heldPanelOpen=true; });
         String action=foldedAction();
         if(!action.isEmpty()) {
             float w=canvas.textWidth(action,.74f)+26;
@@ -1276,6 +1347,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }
         if(!error.isEmpty()) { tone[0]=DANGER_SOFT; tone[1]=DANGER; return status; }
         if(auto) { tone[0]=ACCENT_SOFT; tone[1]=ACCENT; return I18n.t("自动执行中"); }
+        if(shownPlan != null) return status;
         if(busy) return I18n.t("搜索中")+" "+(System.currentTimeMillis()-sentAt)/1000+I18n.t("秒");
         if(branchPicker) { tone[0]=ACCENT_SOFT; tone[1]=ACCENT; return I18n.t("选择用药路线"); }
         if(result!=null) {
@@ -1294,7 +1366,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private float renderBody(SpriteBatch sb) {
         float right=WIDTH-PAD-24;
         canvas.label(sb,I18n.t(settingsOpen?"设置":"战斗求解器"),PAD,11,200,.95f,Color.WHITE);
-        canvas.button(sb,right,8,24,26,null,"－",1,MUTED,() -> { collapsed=true; autoFolded=false; });
+        canvas.button(sb,right,8,24,26,null,"－",1,MUTED,() -> { collapsed=true; autoFolded=false; heldPanelOpen=false; });
         right=ghost(sb,right,settingsOpen?"返回":"设置",() -> settingsOpen=!settingsOpen);
         if(!settingsOpen) ghost(sb,right,"导出日志",() -> exports.exportRun(backend));
         float top=44;
@@ -1303,13 +1375,15 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             if(inSupportedRun()) top=modeSwitch(sb,top);
             if((highSpeed || streakMode) && System.currentTimeMillis()-highSpeedWarnedAt < 8000)
                 top=lines(sb,I18n.t(highSpeed?"高速模式：搜索量 1/20，胜率和省血下降":"连胜模式：前三幕不降预算，搜索更慢"),top,.76f,DANGER);
-            if(!combat()) top=renderOutside(sb,top);
-            else if(!supported()) top=lines(sb,status,top,.85f,MUTED);
-            else if(!error.isEmpty()) top=renderError(sb,top);
-            else if(branchPicker && result!=null) top=renderPicker(sb,top);
-            else if(busy) top=renderSearch(sb,top);
-            else if(result!=null) top=renderPlan(sb,top);
-            else top=renderIdle(sb,top);
+            switch(bodyView(combat(),supported(),!error.isEmpty(),branchPicker,busy,result!=null,shownPlan!=null)) {
+                case OUTSIDE: top=renderOutside(sb,top); break;
+                case UNSUPPORTED: top=lines(sb,status,top,.85f,MUTED); break;
+                case ERROR: top=renderError(sb,top); break;
+                case PICKER: top=renderPicker(sb,top); break;
+                case PLAN: top=renderPlan(sb,top,result!=null?result:shownPlan,result==null); break;
+                case SEARCH: top=renderSearch(sb,top); break;
+                default: top=renderIdle(sb,top); break;
+            }
         }
         String note=exports.note();
         if(!note.isEmpty()) top=lines(sb,note,top,.74f,exports.messageError?DANGER:ACCENT);
@@ -1440,30 +1514,30 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         return actions(sb,top+4,new String[]{"停止搜索"},new int[]{3},new Runnable[]{this::stopSearch});
     }
 
-    private float renderPlan(SpriteBatch sb, float top) {
-        boolean won=result.get("won").getAsBoolean();
+    private float renderPlan(SpriteBatch sb, float top, JsonObject plan, boolean executing) {
+        boolean won=plan.get("won").getAsBoolean();
         String head=I18n.t(won?"预测胜利":"当前路线未找到胜利");
-        String metrics=I18n.t("战后 HP")+" "+result.get("hp").getAsString()+" · "+I18n.t("等效战损")+" "+result.get("loss").getAsString();
+        String metrics=I18n.t("战后 HP")+" "+plan.get("hp").getAsString()+" · "+I18n.t("等效战损")+" "+plan.get("loss").getAsString();
         canvas.label(sb,head,PAD,top,WIDTH-2*PAD,1.05f,won?ACCENT:DANGER);
         float x=PAD+canvas.textWidth(head,1.05f)+12;
         if(x+canvas.textWidth(metrics,.8f)<=WIDTH-PAD) canvas.label(sb,metrics,x,top+4,WIDTH-PAD-x,.8f,MUTED);
         else { top+=26; canvas.label(sb,metrics,PAD,top,WIDTH-2*PAD,.8f,MUTED); }
         top+=30;
-        String revival=revivalWarning(result);
+        String revival=revivalWarning(plan);
         if(!revival.isEmpty()) top=lines(sb,revival,top-4,.78f,DANGER);
-        if((fightAuto() || auto) && result.has("branch") && !result.get("branch").getAsString().equals("no-potion")) {
-            String why=result.has("auto_recommendation") && !autoReason.isEmpty() ? I18n.backend(autoReason) : I18n.t("自动战斗已采纳用药路线");
-            if(result.has("auto_recommendation"))
-                why+=" · "+I18n.backend(result.getAsJsonObject("auto_recommendation").getAsJsonObject("assessment").get("summary").getAsString());
+        if((fightAuto() || auto) && plan.has("branch") && !plan.get("branch").getAsString().equals("no-potion")) {
+            String why=plan.has("auto_recommendation") && !autoReason.isEmpty() ? I18n.backend(autoReason) : I18n.t("自动战斗已采纳用药路线");
+            if(plan.has("auto_recommendation"))
+                why+=" · "+I18n.backend(plan.getAsJsonObject("auto_recommendation").getAsJsonObject("assessment").get("summary").getAsString());
             top=lines(sb,why,top-4,.74f,MUTED);
         }
-        String lead=I18n.t(auto?"自动执行中":"下一步");
+        String lead=I18n.t(executing?"执行中":auto?"自动执行中":"下一步");
         canvas.label(sb,lead,PAD,top,140,.82f,MUTED);
         float lx=PAD+canvas.textWidth(lead,.82f)+8;
-        canvas.label(sb,commandLabel(),lx,top,WIDTH-PAD-lx,.82f,Color.WHITE);
+        canvas.label(sb,commandLabel(plan,executing),lx,top,WIDTH-PAD-lx,.82f,Color.WHITE);
         top+=30;
-        JsonArray route=result.getAsJsonArray("route");
-        String healing=I18n.t("战后恢复：")+result.get("recovery").getAsInt();
+        JsonArray route=plan.getAsJsonArray("route");
+        String healing=I18n.t("战后恢复：")+plan.get("recovery").getAsInt();
         top=disclosure(sb,top,I18n.t("出牌顺序")+" · "+route.size()+" "+I18n.t("步"),playOrderOpen,() -> { playOrderOpen=!playOrderOpen; scroll=0; },healing);
         if(playOrderOpen) {
             List<String> rows=new ArrayList<>(); List<Color> colors=new ArrayList<>();
@@ -1474,10 +1548,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 colors.add(i==0?Color.WHITE:MUTED);
             }
             top=listRows(sb,top,rows,colors,null); // reading only; Play and Step are the ways in
-            if(result.getAsJsonArray("recovery_notes").size()>0)
-                top=lines(sb,I18n.backend(result.getAsJsonArray("recovery_notes").get(0).getAsString()),top,.72f,MUTED);
+            if(plan.getAsJsonArray("recovery_notes").size()>0)
+                top=lines(sb,I18n.backend(plan.getAsJsonArray("recovery_notes").get(0).getAsString()),top,.72f,MUTED);
         }
         if(auto) return actions(sb,top+4,new String[]{"暂停自动"},new int[]{1},new Runnable[]{this::toggleAuto});
+        // One button too, so the row keeps its height while the step is confirmed.
+        if(executing) return actions(sb,top+4,new String[]{"重新计算"},new int[]{2},new Runnable[]{this::solveAgain});
         return actions(sb,top+4,new String[]{"执行整场","执行一步","重新计算"},new int[]{0,1,2},new Runnable[]{
             this::toggleAuto, () -> { heldThisFight=true; auto=false; executeStep(); }, this::solveAgain});
     }
