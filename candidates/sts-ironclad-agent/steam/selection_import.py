@@ -109,8 +109,7 @@ def mid_turn_selection(comparator, view):
     screen = game['screen_state']
     card = game['combat_state'].get('card_in_play')
     if not isinstance(card, dict) or card.get('id') not in MID_TURN_TASKS:
-        raise ValueError('unsupported mid-turn picker after ' + str(
-            card.get('id') if isinstance(card, dict) else None))
+        raise ValueError('only battle-start queues are supported')  # the message every other picker already got
     task = MID_TURN_TASKS[card['id']]
     if not screen.get('cards'):
         raise ValueError('mid-turn picker has no candidates')
