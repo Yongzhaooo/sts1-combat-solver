@@ -333,6 +333,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     static boolean approved(JsonObject result, boolean branchConfirmed, boolean standby) {
         return routeConfirmed(result, branchConfirmed) && (branchConfirmed || !routeChoice(result, standby));
     }
+    /** Only the automatic modes start an opening selection by themselves; Standby waits for the player's approval. */
+    static boolean startsOpeningAuto(boolean opening, boolean fightAuto) {
+        return opening && fightAuto;
+    }
     static boolean autoAfterBranch(boolean manual) {
         return !manual;
     }
@@ -859,10 +863,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         try {
             JsonObject state = capture(), current = key(state);
             if (!paused && !gamblingAuto && !auto && !awaitingAction && !standbyWaiting()
-                    && openingSelection(state)) {
-                gamblingAuto = auto = branchConfirmed = true;
+                    && startsOpeningAuto(openingSelection(state), fightAuto())) {
+                gamblingAuto = auto = true; // the branch is still chosen below, like any fight
                 branchPicker=false;captureBranchKeys=false;branchInput="";
-                status = I18n.t("开场选牌：规划并自动选择（不用药路线）");
+                status = I18n.t("开场选牌：规划并自动选择");
             }
             if (awaitingAction) {
                 if (executedCommand.equals("end") && AbstractDungeon.screen == AbstractDungeon.CurrentScreen.NONE

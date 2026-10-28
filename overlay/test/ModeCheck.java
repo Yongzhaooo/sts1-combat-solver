@@ -31,6 +31,8 @@ public final class ModeCheck {
         require(!SolverMod.routeChoice(revivalSwap, false), "Combat auto keeps choosing by itself");
         com.google.gson.JsonObject single = json.parse("{\"needs_confirmation\":false,\"branches\":["
             + "{\"id\":\"no-potion\",\"available\":true},{\"id\":\"potion-0\",\"available\":false}]}").getAsJsonObject();
+        require(!SolverMod.startsOpeningAuto(true, false), "Standby never starts an opening selection by itself");
+        require(SolverMod.startsOpeningAuto(true, true) && !SolverMod.startsOpeningAuto(false, true), "automatic modes start only opening selections");
         require(!SolverMod.routeChoice(single, true), "one usable route needs no choice");
         require(SolverMod.approved(single, false, true), "with one usable plan, Play is the approval");
         com.google.gson.JsonObject thief = json.parse("{\"needs_confirmation\":true,\"manual_choice\":true,\"branches\":[]}").getAsJsonObject();
