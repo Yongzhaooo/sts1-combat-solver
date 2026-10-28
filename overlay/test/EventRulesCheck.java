@@ -174,12 +174,14 @@ public final class EventRulesCheck {
         check(EventRules.rest(fire, true, 1).index == 2 && EventRules.rest(fire, true, 0).index == 2, "ruby: recall at the second-to-last and last fire");
         check(EventRules.rest(fire, false, 0) == null && EventRules.rest(new String[]{"rest", "smith"}, true, 0) == null, "ruby: nothing to decide");
 
-        // Relic scores: Sapphire Key beats a weak relic, loses to a strong one; boss picks the best, skips junk.
+        // Relic scores: Sapphire Key beats a weak relic, loses to a strong one. Boss picks themselves go through the
+        // shipped OutsidePacket.bossRule and are checked in OutsidePacketCheck; these are the scores it reads.
         check(RelicScore.takeSapphireKey("Anchor") == false && RelicScore.takeSapphireKey("Strawberry") == false, "key vs strong relic");
         check(RelicScore.takeSapphireKey("Omamori") && RelicScore.takeSapphireKey("Unknown Relic") == true, "key vs weak or neutral relic");
-        check(RelicScore.bestBoss(new String[]{"Fusion Hammer", "Black Star", "Sozu"}, new float[3]) == 1, "boss: best score");
-        check(RelicScore.bestBoss(new String[]{"Ectoplasm"}, new float[1]) == -1, "boss: skip when all are junk");
-        check(RelicScore.bestBoss(new String[]{"Ectoplasm", "Runic Dome", "Sozu"}, new float[3]) == 1, "boss: the dome only hides icons, the solver still sees intents");
+        JsonArray noDeck = new JsonArray();
+        check(RelicScore.bossScore("Black Star", noDeck) > Math.max(RelicScore.bossScore("Fusion Hammer", noDeck), RelicScore.bossScore("Sozu", noDeck)), "boss: Black Star scores highest");
+        check(RelicScore.bossScore("Ectoplasm", noDeck) < RelicScore.SKIP_BELOW, "boss: Ectoplasm is worth skipping");
+        check(RelicScore.bossScore("Runic Dome", noDeck) > Math.max(RelicScore.bossScore("Ectoplasm", noDeck), RelicScore.bossScore("Sozu", noDeck)), "boss: the dome only hides icons, the solver still sees intents");
 
         // Rules from the community guides.
         check(index(c("Nest", 2, 70, 80, 0)) == 0 && index(c("Nest", 1, 70, 80, 0)) == -99, "nest: take the gold");
