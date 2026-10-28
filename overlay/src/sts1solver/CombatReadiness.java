@@ -59,6 +59,12 @@ final class CombatReadiness {
             && screen != AbstractDungeon.CurrentScreen.CARD_REWARD;
     }
 
+    /** A mid-turn picker (Burning Pact, Headbutt...) is no importable root: wait for it to close before a manual-play re-solve. */
+    static boolean holdSolveForPicker(AbstractDungeon.CurrentScreen screen, boolean auto, boolean opening) {
+        return !auto && !opening && (screen == AbstractDungeon.CurrentScreen.HAND_SELECT
+            || screen == AbstractDungeon.CurrentScreen.GRID || screen == AbstractDungeon.CurrentScreen.CARD_REWARD);
+    }
+
     static boolean waitForMonsterExit(AbstractDungeon.CurrentScreen screen, boolean dying,
                                       boolean dead, boolean halfDead, boolean escaping, boolean escaped) {
         // AbstractDungeon skips room.update on these screens unless peeking.
