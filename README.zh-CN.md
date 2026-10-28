@@ -55,7 +55,7 @@ agent 负责局外决策，求解器负责战斗。需要 v0.9.0 或更新版本
 
 ## 参与开发
 
-静默猎手、故障机器人和观者的求解器欢迎协作开发：现状见[四职业范围](docs/multi-character.md)，代码与 CI 要求见[参与开发](CONTRIBUTING.md)，组件结构见[架构](docs/architecture.md)。联系邮箱：yongzhao.derek@gmail.com。
+静默猎手、故障机器人和观者的求解器欢迎协作开发：现状见[四职业范围](docs/multi-character.md)，代码与 CI 要求见[参与开发](CONTRIBUTING.md)，组件结构见[架构](docs/architecture.md)。调路线权重前先看[路线调参数据包](docs/route-tuning.md)（110 局 A20 战士实测路线，能回答什么、不能回答什么）。联系邮箱：yongzhao.derek@gmail.com。
 
 ## 致谢
 
