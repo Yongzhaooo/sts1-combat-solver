@@ -36,6 +36,7 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 已 |Elapsed 
 已停止 · 尚无可执行路线|Stopped · no complete route yet
 已停止 · 点击路线或输入编号后回车|Stopped · click route / number + Enter
+已到时限 · 当前最佳路线（搜索未完成）|Time limit reached · best route so far (search unfinished)
 已停止 · 点击重新计算恢复|Stopped · recalculate to resume
 已停止 · 需要重新计算|Stopped · recalculate required
 已模拟 |Simulated 

@@ -796,6 +796,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 result = reply;
                 status = reply.has("manual_choice") && reply.get("manual_choice").getAsBoolean()
                     ? I18n.t("抢劫怪：选定路线后可开启自动战斗")
+                    : reply.has("deadline") && reply.get("deadline").getAsBoolean()
+                    ? I18n.t("已到时限 · 当前最佳路线（搜索未完成）")
                     : reply.has("interrupted") && reply.get("interrupted").getAsBoolean()
                     ? I18n.t("已停止 · 点【执行整场】继续") : I18n.t("路线已就绪 · 等待你的操作");
                 if(reply.has("boss_fast_finish") && reply.get("boss_fast_finish").getAsBoolean())
@@ -827,7 +829,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                         && reply.getAsJsonArray("branches").size()>1) {
                     branchPicker=true;
                     branchInput="";
-                    status=I18n.t("已停止 · 点击路线或输入编号后回车");
+                    if (!reply.has("deadline")) status=I18n.t("已停止 · 点击路线或输入编号后回车");
                 } else if (routeChoice(reply, !fightAuto()) && !branchConfirmed) requestBranches();
                 decisionDirty=true;
             } else if (kind.equals("error")) fail(reply.get("message").getAsString());
