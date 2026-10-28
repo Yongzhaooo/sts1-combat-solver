@@ -50,6 +50,27 @@ BOSS_HEAL_POTION_LOSS = 50
 # Safety net: if cardRandomRng still drifts after card generation, keep executing the planned
 # route (later random cards are re-checked) instead of letting LiveSearch silently drop it.
 FRAME_RNG = ('/rng/card_random',)
+# A Smoke Bomb escape the original battle has not finished playing yet is not a divergence:
+# the engine leaves the fight the moment the potion lands while the game still runs the haze
+# and reports UNDECIDED. The comparator labels that case with this gap. A predicted kill or
+# victory the game does not show is a real divergence and is never excused here.
+TERMINAL_PENDING = 'original_combat_continues_after_predicted_terminal'
+
+
+def unexplained_differences(comparison, tolerated=FRAME_RNG):
+    """Differences that mean the simulation is no longer tracking the original battle.
+
+    Only a simulated PLAYER_ESCAPE (Smoke Bomb) still playing out in the game, labelled by the
+    TERMINAL_PENDING gap, is dropped here; every other difference stays.
+    """
+    differences = [d for d in comparison.get('differences', [])
+                   if not d.get('path', '').startswith(tolerated)]
+    if differences and all(d.get('path') == '/outcome' and d.get('simulator') == 'PLAYER_ESCAPE'
+                           for d in differences):
+        gaps = comparison.get('gaps') or ()
+        if any(g.get('kind') == TERMINAL_PENDING for g in gaps):
+            return []
+    return differences
 
 
 def heart_fight(game):
@@ -696,9 +717,14 @@ class Advisor:
                 action = s.pending_multi['action']
             else:
                 comparison = s._compare(view, FRAME_RNG)
-                diffs = [d for d in comparison.get('differences', []) if not d.get('path', '').startswith(FRAME_RNG)]
+                diffs = unexplained_differences(comparison)
                 if diffs:
                     raise ValueError('确认选牌后状态偏离预测：' + repr(diffs[:4]))
+                if s.battle.outcome != s.sts.Outcome.UNDECIDED:
+                    # The fight is already decided for the simulation; the game is
+                    # only playing it out, so there is nothing left to execute.
+                    s.actions.clear()
+                    s.pending_multi = None
                 return
         if (int(action.bits) & 0xffffffff) != (s.actions[0] & 0xffffffff):
             raise ValueError('执行动作与路线不一致')
@@ -706,9 +732,15 @@ class Advisor:
         s.actions.popleft()
         s.pending_multi = None
         comparison = s._compare(view, FRAME_RNG)
-        diffs = [d for d in comparison.get('differences', []) if not d.get('path', '').startswith(FRAME_RNG)]
+        diffs = unexplained_differences(comparison)
         if diffs:
             raise ValueError('实际状态偏离预测；已停止执行。' + repr(diffs[:2]))
+        if s.battle.outcome != s.sts.Outcome.UNDECIDED:
+            # Only a Smoke Bomb escape reaches here (any other predicted terminal raised
+            # above). Drop the rest of the plan; the game reports combat_end on its own.
+            s.actions.clear()
+            s.pending_multi = None
+            return
         if s.battle.input_state == s.sts.InputState.CARD_SELECT:
             # Toolbox can generate a card and immediately open Gambling Chip,
             # with no normal-play frame in which LiveSearch refreshes identities.
