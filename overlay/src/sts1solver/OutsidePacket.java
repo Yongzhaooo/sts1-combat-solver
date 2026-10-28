@@ -162,8 +162,9 @@ final class OutsidePacket {
         return result;
     }
 
-    Distill2.Result ruleScore() {
-        Distill2.Result student=score();
+    Distill2.Result ruleScore() { return ruleScore(score()); }
+
+    Distill2.Result ruleScore(Distill2.Result student) {
         String screenType=string(visible,"screen_type");
         Distill2.Result rule=screenType.equals("EVENT") ? eventRule(student)
             : screenType.equals("GRID") ? removalRule(student)
@@ -173,7 +174,7 @@ final class OutsidePacket {
             : screenType.equals("COMBAT_REWARD") ? keyRule(student)
             : screenType.equals("CHEST") ? chestRule(student) : null;
         if(rule!=null)return rule;
-        if(!string(visible,"screen_type").equals("MAP") || mapTargetX(student.best)<0)return student;
+        if(!string(visible,"screen_type").equals("MAP"))return student; // a potion-first student argmax must not skip the route
         RoutePlanner planner=new RoutePlanner(game,visible);
         RoutePlanner.Plan best=planner.best(-1);
         if(best==null)return student; // Boss/no next nodes; normal maps always have a route.
