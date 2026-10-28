@@ -11,6 +11,48 @@ import argparse
 import time
 
 
+# Entry point whose solve sleeps first; the spawned worker re-imports this file, so the patch reaches it.
+STALLED = '''import sys, time
+sys.path.insert(0, "{overlay}")
+import backend
+_solve = backend.Advisor.solve
+def solve(self, *args):
+    time.sleep(60)
+    return _solve(self, *args)
+backend.Advisor.solve = solve
+if __name__ == "__main__":
+    backend.serve()
+'''
+
+
+def check_deadline(backend, timeout, requests):
+    """Run one backend with shortened search deadlines; `requests` gets a send(value, wait) callable."""
+    with tempfile.TemporaryDirectory(prefix='solver deadline check ') as folder:
+        env = dict(os.environ, STS_SOLVER_DATA=folder, PYTHONUTF8='1', PYTHONIOENCODING='utf-8',
+                   STS_SEARCH_TIMEOUT_SECONDS=str(timeout))
+        env.pop('PYTHONHOME', None)
+        env.pop('PYTHONPATH', None)
+        with (Path(folder) / 'backend.log').open('w', encoding='utf-8') as log:
+            process = subprocess.Popen([sys.executable, '-X', 'utf8', '-B', '-u', str(backend)],
+                cwd=folder, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=log, text=True, encoding='utf-8')
+            replies = queue.Queue()
+            threading.Thread(target=lambda: [replies.put(json.loads(line)) for line in process.stdout], daemon=True).start()
+
+            def send(value, wait=30):
+                process.stdin.write(json.dumps(value) + '\n')
+                process.stdin.flush()
+                return replies.get(timeout=wait)
+
+            try:
+                requests(send)
+            finally:
+                process.kill()
+                process.wait()
+                process.stdout.close()
+                process.stdin.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
@@ -96,7 +138,32 @@ def main():
                 process.stdout.close()
                 if not process.stdin.closed:
                     process.stdin.close()
-        print('PASS: native worker, real solve, divergent-state refusal, unimplemented-item refusal, idle/active cancel, debug export, EOF')
+        # The fixture comes from the checkout: a packaged runtime under test ships no test files.
+        state = json.loads((Path(__file__).resolve().parents[1] / 'overlay/test/live-root.json').read_text(encoding='utf-8'))
+        for i, potion in enumerate(('Block Potion', 'Strength Potion', 'Fire Potion')):
+            state['game_state']['potions'][i] = {'requires_target': potion == 'Fire Potion', 'can_use': True,
+                                                 'can_discard': True, 'name': potion, 'id': potion}
+        state['game_state']['combat_state']['monsters'][0]['current_hp'] = 300   # unwinnable: the deep search runs long
+        state['game_state']['combat_state']['monsters'][0]['max_hp'] = 300
+
+        def soft(send):
+            assert send({'id': 1, 'op': 'solve', 'state': state, 'budget': 2000}, 120).get('status') == 'ready'  # warm worker
+            started = time.monotonic()
+            reply = send({'id': 2, 'op': 'solve', 'state': state, 'budget': 128000})
+            assert reply['status'] == 'ready' and reply['interrupted'] and reply['deadline'] and reply['command'], reply
+            assert time.monotonic() - started < 4, 'soft deadline reply came after the hard deadline'
+
+        def hard(send):
+            # The worker ignores the interrupt (stalled before it searches), so no plan exists at the hard deadline.
+            reply = send({'id': 1, 'op': 'solve', 'state': state, 'budget': 128000}, 30)
+            assert reply['status'] == 'error' and '搜索超时' in reply['message'], str(reply)[:300]
+
+        check_deadline(backend, 4, soft)
+        with tempfile.TemporaryDirectory(prefix='solver stall ') as folder:
+            stalled = Path(folder) / 'stalled_backend.py'
+            stalled.write_text(STALLED.format(overlay=backend.parent.as_posix()), encoding='utf-8')
+            check_deadline(stalled, 1, hard)
+        print('PASS: native worker, real solve, divergent-state refusal, unimplemented-item refusal, idle/active cancel, soft-deadline plan, hard-deadline timeout, debug export, EOF')
 
 
 if __name__ == '__main__':
