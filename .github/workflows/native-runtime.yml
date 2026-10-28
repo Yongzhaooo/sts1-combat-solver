@@ -27,9 +27,17 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - if: matrix.os != 'sts1-mac'
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      # setup-python's macOS builds install through `sudo installer`; the self-hosted Mac gets a user-space Python from uv.
+      - if: matrix.os == 'sts1-mac'
+        uses: astral-sh/setup-uv@v6
+      - if: matrix.os == 'sts1-mac'
+        run: |
+          uv venv --seed --python ${{ matrix.python }} "$RUNNER_TEMP/venv"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
       - name: Check public source boundary
         run: |
           python tools/check_public_source_boundary_test.py
@@ -85,9 +93,11 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
+      # User-space Python from uv: setup-python's macOS builds need `sudo installer` on a self-hosted Mac.
+      - uses: astral-sh/setup-uv@v6
+      - run: |
+          uv venv --seed --python 3.14 "$RUNNER_TEMP/venv"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
