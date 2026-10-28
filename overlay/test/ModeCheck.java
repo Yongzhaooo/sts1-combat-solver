@@ -1,5 +1,6 @@
 package sts1solver;
 
+import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import java.util.EnumSet;
 
 /** The three automation modes (Standby, Combat auto, AI autopilot), plan approval and the Boss fast-finish switch. */
@@ -77,6 +78,24 @@ public final class ModeCheck {
         require(SolverMod.unavailableRouteReason(unavailable).equals(longError), "unknown errors retain every detail");
         unavailable.remove("message");
         require(SolverMod.unavailableRouteReason(unavailable).equals("本轮未提供原因，请重新计算或导出日志"), "missing cause is explicit");
+
+        // Panel folding: a fight opens the panel, other screens fold it, and autoFold never folds a panel the
+        // player held open by hand until the fight ends.
+        require(!SolverMod.foldsAway(AbstractDungeon.CurrentScreen.NONE, true, false, false), "a combat screen keeps the panel open");
+        require(SolverMod.foldsAway(AbstractDungeon.CurrentScreen.GRID, true, false, false), "a card-select screen folds it");
+        require(!SolverMod.foldsAway(AbstractDungeon.CurrentScreen.NONE, false, true, false), "an event screen keeps it open");
+        require(SolverMod.foldsAway(AbstractDungeon.CurrentScreen.NONE, false, false, false), "outside a fight it folds");
+        require(SolverMod.foldsAway(AbstractDungeon.CurrentScreen.NONE, false, false, true), "the pilot folds it outside");
+        require(SolverMod.autoFolds(true, false, true, false, false, true), "a new screen folds it");
+        require(!SolverMod.autoFolds(true, true, false, false, false, true), "the same screen twice does not fold again");
+        require(!SolverMod.autoFolds(true, false, true, true, false, true), "an already folded panel stays folded");
+        require(!SolverMod.autoFolds(true, false, true, false, true, true), "held open in a fight: no auto fold");
+        require(SolverMod.autoFolds(true, false, true, false, true, false), "held open last fight: folds outside a fight");
+        require(!SolverMod.autoUnfolds(true, true, true, false, true), "no unfold while folding");
+        require(SolverMod.autoUnfolds(false, true, true, false, true), "Combat auto reopens it");
+        require(SolverMod.autoUnfolds(false, true, true, true, true), "Standby reopens it during the fight");
+        require(!SolverMod.autoUnfolds(false, true, true, true, false), "Standby keeps it folded outside a fight");
+        require(!SolverMod.autoUnfolds(false, true, false, false, true), "never unfold what the player folded");
 
         // New and renamed panel text is translated.
         I18n.setLanguage("en");

@@ -109,6 +109,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     // Shops and events fold the panel (results sit beside the options); it reopens on leaving
     // unless the player toggled it meanwhile.
     private boolean autoFolded, inFoldRoom;
+    // The player unfolded the panel by hand this fight (header + or F8): autoFold then leaves it
+    // alone until the fight ends.
+    private boolean heldPanelOpen;
     // Classes the combat engine imports exactly; keep in sync with backend.SUPPORTED_CLASSES.
     // Out-of-combat foresight works for every class.
     static final EnumSet<AbstractPlayer.PlayerClass> SUPPORTED = EnumSet.of(AbstractPlayer.PlayerClass.IRONCLAD);
@@ -196,12 +199,30 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         AbstractRoom room = CommandExecutor.isInDungeon() ? AbstractDungeon.getCurrRoom() : null;
         AbstractDungeon.CurrentScreen screen = room == null ? null : AbstractDungeon.screen;
         boolean event = room != null && room.phase == AbstractRoom.RoomPhase.EVENT && room.event != null;
-        boolean fold = !expandOnScreen(screen, room != null && combat(), event)
-            || (pilot.mode == 2 && !combat()); // the pilot's status fits the folded header.
-        if (fold && (!inFoldRoom || screen != lastFoldScreen) && !collapsed) { collapsed = true; autoFolded = true; }
-        if (!fold && inFoldRoom && autoFolded && !standby()) { collapsed = false; autoFolded = false; }
+        boolean fight = room != null && combat();
+        boolean fold = foldsAway(screen, fight, event, pilot.mode == 2);
+        if (autoFolds(fold, inFoldRoom, screen != lastFoldScreen, collapsed, heldPanelOpen, fight)) {
+            collapsed = true; autoFolded = true;
+        }
+        if (autoUnfolds(fold, inFoldRoom, autoFolded, standby(), fight)) { collapsed = false; autoFolded = false; }
         inFoldRoom = fold;
         lastFoldScreen = screen;
+    }
+
+    /** Whether the panel gives the screen room by folding to its header. */
+    static boolean foldsAway(AbstractDungeon.CurrentScreen screen, boolean combat, boolean event, boolean pilotOutside) {
+        return !expandOnScreen(screen, combat, event) || (pilotOutside && !combat);
+    }
+
+    /** Whether autoFold folds now: a screen to give room to, the panel is unfolded, and the player has not held it open. */
+    static boolean autoFolds(boolean fold, boolean inFoldRoom, boolean screenChanged, boolean collapsed,
+                             boolean heldOpen, boolean combat) {
+        return fold && (!inFoldRoom || screenChanged) && !collapsed && !(heldOpen && combat);
+    }
+
+    /** Whether autoFold unfolds what it folded: back in a room that has room, in standby only during a fight. */
+    static boolean autoUnfolds(boolean fold, boolean inFoldRoom, boolean autoFolded, boolean standby, boolean combat) {
+        return !fold && inFoldRoom && autoFolded && (!standby || combat);
     }
 
     static boolean expandOnScreen(AbstractDungeon.CurrentScreen screen, boolean combat, boolean event) {
@@ -742,7 +763,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             }
             if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) bindingKey=false;
         } else if (Gdx.input.isKeyJustPressed(autoKey)) toggleAuto();
-        if (Gdx.input.isKeyJustPressed(Input.Keys.F8)) { collapsed = !collapsed; autoFolded = false; }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.F8)) {
+            collapsed = !collapsed; autoFolded = false; heldPanelOpen = !collapsed;
+        }
         autoFold();
         if(!CommandExecutor.isInDungeon() || AbstractDungeon.player==null) {
             runAuto=false;runAutoPlayer=null;
@@ -756,7 +779,9 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         boolean inCombat = combat();
         if(!wasCombat && inCombat) {
             heldThisFight=false;
-            if(standby()) { collapsed=true; autoFolded=false; status=I18n.t("待命 · 点【计算】开始搜索"); }
+            // Every fight opens the panel unfolded; - or F8 folds it again and autoFold then leaves it folded.
+            collapsed=false; autoFolded=false; heldPanelOpen=false;
+            if(standby()) status=I18n.t("待命 · 点【计算】开始搜索");
         }
         if(!wasCombat && inCombat && runAuto) {
             auto=true;paused=false;branchConfirmed=false;decisionDirty=true;lastKey=null;
@@ -768,6 +793,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             lastKey = null;
             thiefPreference=null;
             armed=false;
+            heldPanelOpen=false;
             if(standby()) { collapsed=true; autoFolded=false; }
             error = "";
         }
@@ -1293,7 +1319,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         canvas.box(sb,1,1,WIDTH-2,FOLDED-2,BACKGROUND);
         canvas.label(sb,I18n.t("战斗求解器"),PAD,9,150,.9f,Color.WHITE);
         float left=PAD+canvas.textWidth("战斗求解器",.9f)+10, right=WIDTH-PAD-24;
-        canvas.button(sb,right,7,24,26,null,"＋",1,MUTED,() -> { collapsed=false; autoFolded=false; });
+        canvas.button(sb,right,7,24,26,null,"＋",1,MUTED,() -> { collapsed=false; autoFolded=false; heldPanelOpen=true; });
         String action=foldedAction();
         if(!action.isEmpty()) {
             float w=canvas.textWidth(action,.74f)+26;
@@ -1334,7 +1360,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private float renderBody(SpriteBatch sb) {
         float right=WIDTH-PAD-24;
         canvas.label(sb,I18n.t(settingsOpen?"设置":"战斗求解器"),PAD,11,200,.95f,Color.WHITE);
-        canvas.button(sb,right,8,24,26,null,"－",1,MUTED,() -> { collapsed=true; autoFolded=false; });
+        canvas.button(sb,right,8,24,26,null,"－",1,MUTED,() -> { collapsed=true; autoFolded=false; heldPanelOpen=false; });
         right=ghost(sb,right,settingsOpen?"返回":"设置",() -> settingsOpen=!settingsOpen);
         if(!settingsOpen) ghost(sb,right,"导出日志",() -> exports.exportRun(backend));
         float top=44;
