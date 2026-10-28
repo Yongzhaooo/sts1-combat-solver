@@ -7,6 +7,7 @@
 #include "sim/search/BattleScumSearcher2.h"
 
 using namespace sts;
+#include "../../../../overlay/growth_gate.h"
 #include "../../../../overlay/loop_beam.h"
 
 static void check(bool value, const char *why) {
