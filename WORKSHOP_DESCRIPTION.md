@@ -19,7 +19,7 @@ Subscribe with ModTheSpire and BaseMod. Windows x64 and Apple Silicon Macs; Inte
 
 [源码与下载 / Source & downloads](https://github.com/Yongzhaooo/sts1-combat-solver)
 
-v0.9.6: Reduces unproductive loops during Intangible and fixes repeated plays while the Awakened One waits to revive. Equal results prefer shorter lines. Search stops expanding at its memory limit and keeps the best line found. Potion plans now show why they cannot be selected, and F6 logs include the first solve state and potion-branch details. Some unresponsive-solver and Weak Potion reports still need new logs for diagnosis. Thanks to 七月流火（猫火）, 暖暖二号机 and the community for testing and feedback.
+v0.9.7: Fixes a solver backend crash in streak mode on long fights that left the panel on "searching". Near its time limit the search returns the best route found so far. While a route runs the panel keeps the plan instead of flashing back to "searching"; it opens at fight start and always folds for card-selection screens. In Standby, opening selections such as Gambling Chip and Toolbox wait for you to approve the recommended plan. Opening a mid-turn picker during manual play (such as Burning Pact) no longer breaks re-solving. Smoke Bomb escapes are no longer reported as divergences. Monster Block cap and Heavy Blade match the game. Map route rules are no longer skipped by a potion preference. The RNG-mod warning follows a language switch and no longer flags Spire Ledger. Thanks to 七月流火（猫火）, 暖暖二号机 and the community for testing and feedback.
 
 Special thanks to 七月流火（猫火） for long-term testing and feedback.
 

@@ -27,6 +27,9 @@ public class RngModsCheck {
         require(touches(Draws.class), "draws from a game stream");
         require(!touches(ReadsCounter.class), "reading counter is harmless");
         require(!touches(Copies.class), "copy() is harmless");
-        System.out.println("PASS: RNG-affecting mod detection");
+        java.lang.reflect.Field trusted = RngMods.class.getDeclaredField("TRUSTED");
+        trusted.setAccessible(true);
+        require(((java.util.Set<?>) trusted.get(null)).contains("spire-ledger"), "Spire Ledger is trusted");
+        System.out.println("PASS: RNG-affecting mod detection; Spire Ledger trusted");
     }
 }

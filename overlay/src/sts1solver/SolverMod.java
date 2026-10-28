@@ -671,6 +671,22 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         }
     }
 
+    /** A new run's player re-arms run automation once. Spire Ledger's turn replay sets runAutoPlayer to the restored
+     *  player so a rewind does not re-arm it (ReplayContractCheck). */
+    private void followPlayer(boolean inDungeon) {
+        if(!inDungeon || AbstractDungeon.player==null) {
+            runAuto=false;runAutoPlayer=null;
+        } else if(rearms(inDungeon, AbstractDungeon.player, runAutoPlayer, supported())) {
+            runAutoPlayer=AbstractDungeon.player;
+            runAuto=runAutoEnabled || pilot.mode==2; // the pilot keeps combat automation across acts.
+            autoPotionRewards=config==null || config.getBool("autoPotionRewards");
+        }
+    }
+
+    static boolean rearms(boolean inDungeon, Object player, Object remembered, boolean supportedClass) {
+        return inDungeon && player != null && supportedClass && player != remembered;
+    }
+
     private void cancel(boolean pause) {
         if(pause)runAuto=false;
         rewardPotionPending=null;
@@ -773,13 +789,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             collapsed = !collapsed; autoFolded = false; heldPanelOpen = !collapsed;
         }
         autoFold();
-        if(!CommandExecutor.isInDungeon() || AbstractDungeon.player==null) {
-            runAuto=false;runAutoPlayer=null;
-        } else if(supported() && AbstractDungeon.player!=runAutoPlayer) {
-            runAutoPlayer=AbstractDungeon.player;
-            runAuto=runAutoEnabled || pilot.mode==2; // the pilot keeps combat automation across acts.
-            autoPotionRewards=config==null || config.getBool("autoPotionRewards");
-        }
+        followPlayer(CommandExecutor.isInDungeon());
         if(AbstractDungeon.player!=null && AbstractDungeon.player.isDead)runAuto=false;
         if (Gdx.input.isKeyJustPressed(Input.Keys.F9)) stopAll();
         boolean inCombat = combat();
