@@ -18,8 +18,9 @@ import javassist.bytecode.annotation.*;
 final class RngMods {
     private static final String RANDOM = "com.megacrit.cardcrawl.random.Random";
     // Libraries only draw on behalf of the game or of other mods; this mod draws in its own sandbox;
-    // State Notes (paired in CI) bundles savestate copies that repeat vanilla's draws one for one.
-    private static final Set<String> TRUSTED = new HashSet<>(Arrays.asList("basemod", "stslib", "sts1solver", "sts1-state-notes"));
+    // State Notes (paired in CI) bundles savestate copies that repeat vanilla's draws one for one;
+    // Spire Ledger embeds the same savestate classes byte for byte and its own code calls no Random method.
+    private static final Set<String> TRUSTED = new HashSet<>(Arrays.asList("basemod", "stslib", "sts1solver", "sts1-state-notes", "spire-ledger"));
     // copy() and the counter field are read-only; every other Random method advances or resets a stream.
     private static final Set<String> READ_ONLY = new HashSet<>(Arrays.asList("<init>", "copy"));
 
