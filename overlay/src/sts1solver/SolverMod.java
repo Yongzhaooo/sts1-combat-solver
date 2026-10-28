@@ -201,7 +201,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         boolean event = room != null && room.phase == AbstractRoom.RoomPhase.EVENT && room.event != null;
         boolean fight = room != null && combat();
         boolean fold = foldsAway(screen, fight, event, pilot.mode == 2);
-        if (autoFolds(fold, inFoldRoom, screen != lastFoldScreen, collapsed, heldPanelOpen, fight)) {
+        if (autoFolds(fold, inFoldRoom, screen != lastFoldScreen, collapsed, heldPanelOpen, fight, screen)) {
             collapsed = true; autoFolded = true;
         }
         if (autoUnfolds(fold, inFoldRoom, autoFolded, standby(), fight)) { collapsed = false; autoFolded = false; }
@@ -214,10 +214,16 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         return !expandOnScreen(screen, combat, event) || (pilotOutside && !combat);
     }
 
-    /** Whether autoFold folds now: a screen to give room to, the panel is unfolded, and the player has not held it open. */
+    /** Whether autoFold folds now: a screen to give room to, the panel is unfolded, and the player has not held it open.
+     *  Only a pile view can be held open: pickers (hand select, grid, card choices) need their clicks, so they always fold it. */
     static boolean autoFolds(boolean fold, boolean inFoldRoom, boolean screenChanged, boolean collapsed,
-                             boolean heldOpen, boolean combat) {
-        return fold && (!inFoldRoom || screenChanged) && !collapsed && !(heldOpen && combat);
+                             boolean heldOpen, boolean combat, AbstractDungeon.CurrentScreen screen) {
+        return fold && (!inFoldRoom || screenChanged) && !collapsed && !(heldOpen && combat && pileView(screen));
+    }
+
+    static boolean pileView(AbstractDungeon.CurrentScreen screen) {
+        return screen == AbstractDungeon.CurrentScreen.DISCARD_VIEW || screen == AbstractDungeon.CurrentScreen.EXHAUST_VIEW
+            || screen == AbstractDungeon.CurrentScreen.GAME_DECK_VIEW || screen == AbstractDungeon.CurrentScreen.MASTER_DECK_VIEW;
     }
 
     /** Whether autoFold unfolds what it folded: back in a room that has room, in standby only during a fight. */

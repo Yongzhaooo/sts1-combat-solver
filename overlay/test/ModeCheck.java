@@ -86,11 +86,13 @@ public final class ModeCheck {
         require(!SolverMod.foldsAway(AbstractDungeon.CurrentScreen.NONE, false, true, false), "an event screen keeps it open");
         require(SolverMod.foldsAway(AbstractDungeon.CurrentScreen.NONE, false, false, false), "outside a fight it folds");
         require(SolverMod.foldsAway(AbstractDungeon.CurrentScreen.NONE, false, false, true), "the pilot folds it outside");
-        require(SolverMod.autoFolds(true, false, true, false, false, true), "a new screen folds it");
-        require(!SolverMod.autoFolds(true, true, false, false, false, true), "the same screen twice does not fold again");
-        require(!SolverMod.autoFolds(true, false, true, true, false, true), "an already folded panel stays folded");
-        require(!SolverMod.autoFolds(true, false, true, false, true, true), "held open in a fight: no auto fold");
-        require(SolverMod.autoFolds(true, false, true, false, true, false), "held open last fight: folds outside a fight");
+        require(SolverMod.autoFolds(true, false, true, false, false, true, AbstractDungeon.CurrentScreen.GRID), "a new screen folds it");
+        require(!SolverMod.autoFolds(true, true, false, false, false, true, AbstractDungeon.CurrentScreen.GRID), "the same screen twice does not fold again");
+        require(!SolverMod.autoFolds(true, false, true, true, false, true, AbstractDungeon.CurrentScreen.GRID), "an already folded panel stays folded");
+        require(!SolverMod.autoFolds(true, false, true, false, true, true, AbstractDungeon.CurrentScreen.DISCARD_VIEW), "held open in a fight: a pile view stays open");
+        require(SolverMod.autoFolds(true, false, true, false, true, true, AbstractDungeon.CurrentScreen.GRID), "held open: a card-select grid still folds");
+        require(SolverMod.autoFolds(true, false, true, false, true, true, AbstractDungeon.CurrentScreen.HAND_SELECT), "held open: hand select still folds");
+        require(SolverMod.autoFolds(true, false, true, false, true, false, AbstractDungeon.CurrentScreen.GRID), "held open last fight: folds outside a fight");
         require(!SolverMod.autoUnfolds(true, true, true, false, true), "no unfold while folding");
         require(SolverMod.autoUnfolds(false, true, true, false, true), "Combat auto reopens it");
         require(SolverMod.autoUnfolds(false, true, true, true, true), "Standby reopens it during the fight");
