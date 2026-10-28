@@ -95,17 +95,6 @@ final class RelicScore {
         return junk>=2?8:junk==1?6:2;
     }
 
-    /** Index of the best boss relic, ties broken by {@code tiebreak}; -1 when every offer is worth skipping. */
-    static int bestBoss(String[] ids, float[] tiebreak) {
-        int best = -1;
-        for (int i = 0; i < ids.length; i++) {
-            if (score(ids[i]) < SKIP_BELOW) continue;
-            if (best < 0 || score(ids[i]) > score(ids[best])
-                    || (score(ids[i]) == score(ids[best]) && tiebreak[i] > tiebreak[best])) best = i;
-        }
-        return best;
-    }
-
     /** True when the Sapphire Key is worth more than the relic it replaces. */
     static boolean takeSapphireKey(String linkedRelic) {
         return SAPPHIRE_KEY > score(linkedRelic);
