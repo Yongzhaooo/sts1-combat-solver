@@ -47,7 +47,7 @@ final class RoutePlanner {
             JsonObject n=e.getAsJsonObject(); nodes.put(key(number(n,"x",-1),number(n,"y",-1)),n);
         }
         for(JsonElement e:array(game,"relics")) relics.add(text(e.getAsJsonObject(),"id"));
-        canSmith=!relics.contains("Fusion Hammer"); canRest=!relics.contains("Coffee Dripper");
+        canSmith=!relics.contains("Fusion Hammer"); canRest=!relics.contains("Coffee Dripper") && !relics.contains("Mark of the Bloom");
         int count=0;
         for(JsonElement e:array(game,"deck")) {
             JsonObject c=e.getAsJsonObject(); String type=text(c,"type");

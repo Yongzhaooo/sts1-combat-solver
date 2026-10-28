@@ -84,6 +84,20 @@ strength = {**deck_game, 'potions': [{'id': 'Strength Potion'}]}
 assert recommend(strength, [dict(baseline, loss=12), bottle])['branch'] == 'potion-0'  # ordinary strong price 10
 print('PASS: hand-access and long-fight bottles (Gambler Brew by its game id) cost 15 HP, other strong bottles 10')
 
+flex = {**deck_game, 'potions': [{'id': 'SteroidPotion'}],
+        'map': [{'x': 0, 'y': 10, 'children': [{'x': 0, 'y': 11}]},
+                {'x': 0, 'y': 11, 'symbol': 'E', 'children': []}],
+        'solver_auto_context': {**deck_game['solver_auto_context'], 'x': 0, 'y': 10}}
+comparison = [dict(baseline, loss=12), bottle]
+assert recommend(flex, comparison)['assessment']['reserve']
+assert recommend(flex, comparison)['branch'] == 'no-potion'  # keep the real Flex id for a nearby damage check
+assert recommend(flex, [bottle])['branch'] == 'potion-0'  # preserving it cannot override the only winning line
+assert recommend({**flex, 'map': [], 'solver_auto_context': {
+    **flex['solver_auto_context'], 'y': 0}}, comparison)['branch'] == 'potion-0'
+assert recommend({**flex, 'solver_auto_context': {**flex['solver_auto_context'],
+    'deck': [{'id': 'Immolate', 'cost': 2, 'base_damage': 21}]}}, comparison)['branch'] == 'potion-0'
+print('PASS: Flex uses its actual game id, retains the burst reserve, and preserves safe-use and survival choices')
+
 if not args.native_root:
     raise SystemExit(0)
 from backend import Advisor
