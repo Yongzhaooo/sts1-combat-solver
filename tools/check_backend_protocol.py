@@ -138,7 +138,8 @@ def main():
                 process.stdout.close()
                 if not process.stdin.closed:
                     process.stdin.close()
-        state = json.loads((backend.parent / 'test/live-root.json').read_text(encoding='utf-8'))
+        # The fixture comes from the checkout: a packaged runtime under test ships no test files.
+        state = json.loads((Path(__file__).resolve().parents[1] / 'overlay/test/live-root.json').read_text(encoding='utf-8'))
         for i, potion in enumerate(('Block Potion', 'Strength Potion', 'Fire Potion')):
             state['game_state']['potions'][i] = {'requires_target': potion == 'Fire Potion', 'can_use': True,
                                                  'can_discard': True, 'name': potion, 'id': potion}
