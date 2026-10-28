@@ -35,6 +35,20 @@ final class BattleHistory {
         return !seed.equals(this.seed) || current == null || (!current.has("root") && !current.has("root_error"));
     }
 
+    void captureSolveRoot(String seed, JsonObject root, long time) {
+        selectSeed(seed);
+        if (current == null || !needsRoot(seed) || root == null) return;
+        try {
+            if (!root.has("ready_for_command") || !root.get("ready_for_command").getAsBoolean()) return;
+            current.add("root", copy(root));
+        } catch (RuntimeException failure) {
+            current.addProperty("root_error", failure.toString());
+        }
+        current.addProperty("root_source", "solve");
+        current.addProperty("root_time", time);
+        current.addProperty("root_after_events", current.getAsJsonArray("events").size());
+    }
+
     void record(String seed, JsonObject event, JsonObject root) {
         selectSeed(seed);
         String kind = event.get("kind").getAsString();

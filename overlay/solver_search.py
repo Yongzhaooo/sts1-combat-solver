@@ -10,6 +10,11 @@ from recovery import health
 DEEP_BUDGET = 128000
 
 
+def better_plan(candidate, best):
+    return (candidate['value'] > best['value']
+            or (candidate['value'] == best['value'] and len(candidate['actions']) < len(best['actions'])))
+
+
 def boss_fast_plan(game, plan, slots):
     return (game.get('solver_auto_context', {}).get('boss_fast_finish') is True
             and not slots and plan['outcome'] == 1 and plan['hp'] > 0
@@ -45,15 +50,16 @@ def search_plan(native, root, budget, slots, credit, index, kill_thieves, genera
     if boss_fast_plan(game, best, slots):
         best['boss_fast_finish'] = True
         return finalize_plan(root, best)
-    if initial_budget != budget and not interrupt.is_set():
+    # A search that reached the memory budget is over, like an interrupted one: no further stage starts.
+    if initial_budget != budget and not interrupt.is_set() and not best.get('memory_capped'):
         candidate = dict(native.plan(root, budget, slots, credit, index, kill_thieves, generated, fast_boss))
-        if candidate['value'] > best['value']:
+        if better_plan(candidate, best):
             best = candidate
         if boss_fast_plan(game, best, slots):
             best['boss_fast_finish'] = True
             return finalize_plan(root, best)
     # Standard search gets one bounded refinement when its route still loses HP.
-    if budget == 8000 and not interrupt.is_set() and (
+    if budget == 8000 and not interrupt.is_set() and not best.get('memory_capped') and (
             best['outcome'] != 1
             or health(best, game, True)['loss'] > 0
             or best.get('used_tail') or best.get('used_fairy')) and not (
@@ -64,7 +70,7 @@ def search_plan(native, root, budget, slots, credit, index, kill_thieves, genera
             if not interrupt.is_set():
                 raise
             return finalize_plan(root, best)
-        if refined['value'] > best['value']:
+        if better_plan(refined, best):
             best = refined
     if boss_fast_plan(game, best, slots):
         best['boss_fast_finish'] = True

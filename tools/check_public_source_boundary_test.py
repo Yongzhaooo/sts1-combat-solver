@@ -109,5 +109,46 @@ class CheckPublicSourceBoundaryTest(unittest.TestCase):
             self.assertEqual(code, 2, f"Expected 2, got {code}. stdout: {out}")
             self.assertIn("not the repository root", err)
 
+    def test_pre_push_checks_pushed_commits_not_worktree(self):
+        with tempfile.TemporaryDirectory(prefix="boundary-test-prepush-") as td:
+            repo = Path(td)
+
+            def git(*args):
+                return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=str(repo),
+                                      check=True, capture_output=True, text=True).stdout.strip()
+
+            def push(remote, url, sha):
+                line = f"refs/heads/b {sha} refs/heads/b {'0' * 40}\n"
+                proc = subprocess.run([sys.executable, str(SCRIPT), "--pre-push", remote, url], cwd=str(repo),
+                                      input=line, capture_output=True, text=True, encoding="utf-8")
+                return proc.returncode, proc.stderr
+
+            git("init", "-b", "main")
+            (repo / "README.md").write_text("# Public", encoding="utf-8")
+            git("add", ".")
+            git("commit", "-m", "clean")
+            clean = git("rev-parse", "HEAD")
+            (repo / "reports").mkdir()
+            (repo / "reports" / "x.md").write_text("private", encoding="utf-8")
+            git("add", ".")
+            git("commit", "-m", "leak")
+            leak = git("rev-parse", "HEAD")
+            git("rm", "-q", "reports/x.md")
+            git("commit", "-m", "hide")
+            hidden = git("rev-parse", "HEAD")
+            git("checkout", "-q", clean)  # the checked-out tree is clean; the pushed commit is not
+
+            url = "https://github.com/Yongzhaooo/sts1-combat-solver.git"
+            code, err = push("public", url, leak)
+            self.assertEqual(code, 1, err)
+            self.assertIn("reports/x.md", err)
+            code, err = push("origin", "/tmp/fake.git", hidden)
+            self.assertEqual(code, 1, "a path added then deleted is still in the pushed history")
+            self.assertEqual(push("origin", url, clean)[0], 0)
+            self.assertEqual(push("private", "git@example.com:me/private.git", leak)[0], 0)
+            deletion = subprocess.run([sys.executable, str(SCRIPT), "--pre-push", "origin", url], cwd=str(repo),
+                                      input=f"(delete) {'0' * 40} refs/heads/b {leak}\n", capture_output=True, text=True)
+            self.assertEqual(deletion.returncode, 0)
+
 if __name__ == "__main__":
     unittest.main()

@@ -31,6 +31,8 @@ public final class ModeCheck {
         require(!SolverMod.routeChoice(revivalSwap, false), "Combat auto keeps choosing by itself");
         com.google.gson.JsonObject single = json.parse("{\"needs_confirmation\":false,\"branches\":["
             + "{\"id\":\"no-potion\",\"available\":true},{\"id\":\"potion-0\",\"available\":false}]}").getAsJsonObject();
+        require(!SolverMod.startsOpeningAuto(true, false), "Standby never starts an opening selection by itself");
+        require(SolverMod.startsOpeningAuto(true, true) && !SolverMod.startsOpeningAuto(false, true), "automatic modes start only opening selections");
         require(!SolverMod.routeChoice(single, true), "one usable route needs no choice");
         require(SolverMod.approved(single, false, true), "with one usable plan, Play is the approval");
         com.google.gson.JsonObject thief = json.parse("{\"needs_confirmation\":true,\"manual_choice\":true,\"branches\":[]}").getAsJsonObject();
@@ -63,9 +65,22 @@ public final class ModeCheck {
         require(!SolverMod.bossFastFinish(true, true, 3, 20, 2, false), "A20 act 3 first Boss never");
         require(!SolverMod.bossFastFinish(true, true, 4, 0, 0, false), "the Heart never");
 
+        com.google.gson.JsonObject unavailable = new com.google.gson.JsonObject();
+        String noUse = "本轮搜索未找到使用路线";
+        String merged = "药水不改变结果，已并入不用药路线";
+        unavailable.addProperty("message", noUse);
+        require(SolverMod.unavailableRouteReason(unavailable).equals(noUse), "show the actual route search reason");
+        unavailable.addProperty("message", merged);
+        require(SolverMod.unavailableRouteReason(unavailable).equals(merged), "explain a route merged into no-potion");
+        String longError = "Failed to validate potion route at turn 12: " + String.join(" ", java.util.Collections.nCopies(30, "original-error-detail"));
+        unavailable.addProperty("message", longError);
+        require(SolverMod.unavailableRouteReason(unavailable).equals(longError), "unknown errors retain every detail");
+        unavailable.remove("message");
+        require(SolverMod.unavailableRouteReason(unavailable).equals("本轮未提供原因，请重新计算或导出日志"), "missing cause is explicit");
+
         // New and renamed panel text is translated.
         I18n.setLanguage("en");
-        for (String key : new String[]{"Boss 快速收尾：", "未安装", "战斗全自动", "执行整场", "暂停自动", "计算", "执行", "暂停", "待命", "待命 · 点【计算】开始搜索", "待命：点【重新计算】才开始搜索", "确认（回车）",
+        for (String key : new String[]{" · 滚轮查看完整路线与原因", "本轮无可选路线", "本轮未提供原因，请重新计算或导出日志", "Boss 快速收尾：", "未安装", "战斗全自动", "执行整场", "暂停自动", "计算", "执行", "暂停", "待命", "待命 · 点【计算】开始搜索", "待命：点【重新计算】才开始搜索", "确认（回车）",
                 "战斗全自动已开 · 等待下场；其他选择由你决定", "按 F1-F12 绑定；F6/F7/F8/F9 保留；Esc 取消",
                 "Boss 快速收尾：找到无药胜线就停止搜索，省时间但可能多掉血；关闭时与普通战斗相同",
                 "已停止 · 待命：局外由你决定，战斗点【计算】才搜索", "Agent 确认每一步局外选择",

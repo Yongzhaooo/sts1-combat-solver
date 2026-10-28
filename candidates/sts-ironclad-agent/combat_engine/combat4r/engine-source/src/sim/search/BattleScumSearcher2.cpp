@@ -233,7 +233,8 @@ void search::BattleScumSearcher2::updateFromPlayout(const std::vector<Node *> &s
 
 void search::BattleScumSearcher2::updateFromEvaluation(const std::vector<Node *> &stack,
         const std::vector<Action> &actionStack, double evaluation, int terminalHp) {
-    if (evaluation > bestActionValue) {
+    if (evaluation > bestActionValue
+            || (evaluation == bestActionValue && actionStack.size() < bestActionSequence.size())) {
         bestActionSequence = actionStack;
         bestActionValue = evaluation;
         outcomePlayerHp = terminalHp;

@@ -36,11 +36,12 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 已 |Elapsed 
 已停止 · 尚无可执行路线|Stopped · no complete route yet
 已停止 · 点击路线或输入编号后回车|Stopped · click route / number + Enter
+已到时限 · 当前最佳路线（搜索未完成）|Time limit reached · best route so far (search unfinished)
 已停止 · 点击重新计算恢复|Stopped · recalculate to resume
 已停止 · 需要重新计算|Stopped · recalculate required
 已模拟 |Simulated 
 建议 · |Advice · 
-开场选牌：规划并自动选择（不用药路线）|Opening selection: planning potion-free route
+开场选牌：规划并自动选择|Opening selection: planning and choosing the route automatically
 当前路线未找到胜利|No win on this route
 录音启动失败：|Recording failed to start: 
 快捷键保存失败：|Hotkey save failed: 
@@ -402,3 +403,6 @@ F6 导出日志 · F8 收起 · F9 停止|F6 export log · F8 fold · F9 stop
 语言|Language
 辉眼模式|Bright Eye mode
 选择用药路线|Pick a potion plan
+本轮无可选路线|No selectable route this search
+本轮未提供原因，请重新计算或导出日志|No reason provided; recalculate or export the log
+ · 滚轮查看完整路线与原因| · Scroll for all routes and reasons

@@ -30,6 +30,10 @@ public class TestRecorder implements OnStartBattleSubscriber, PostBattleSubscrib
 
     static JsonObject recentBattles() { return history.snapshot(String.valueOf(Settings.seed)); }
 
+    static synchronized void captureSolveRoot(JsonObject state) {
+        history.captureSolveRoot(Long.toString(Settings.seed), state, System.currentTimeMillis());
+    }
+
     static void subscribe() { BaseMod.subscribe(new TestRecorder()); }
 
     @Override public void receiveOnBattleStart(AbstractRoom room) {

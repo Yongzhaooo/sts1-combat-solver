@@ -19,7 +19,7 @@ Subscribe with ModTheSpire and BaseMod. Windows x64 and Apple Silicon Macs; Inte
 
 [源码与下载 / Source & downloads](https://github.com/Yongzhaooo/sts1-combat-solver)
 
-v0.9.5: In events whose outcome a save-and-reload would show, AI autopilot reads the outcome first and then decides: Sensory Stone pays HP only for a card group it wants, The Library sleeps when no card is wanted, Transmogrifier and Augmenter look at what the cards become, Match and Keep flips only wanted pairs, Shining Light and World of Goop weigh the danger ahead, and The Mausoleum and Cursed Tome check for a curse first. Neow and the map's ? rooms are never read ahead. Transforms no longer pick curses, which only become other curses. Fixed: the search failed when many cards were queued at once; Time Eater's end-of-turn order after a 12th-card kill; skill costs under Corruption after a shuffle or a Burn discard. The loop rescue search is faster.
+v0.9.6: Reduces unproductive loops during Intangible and fixes repeated plays while the Awakened One waits to revive. Equal results prefer shorter lines. Search stops expanding at its memory limit and keeps the best line found. Potion plans now show why they cannot be selected, and F6 logs include the first solve state and potion-branch details. Some unresponsive-solver and Weak Potion reports still need new logs for diagnosis. Thanks to 七月流火（猫火）, 暖暖二号机 and the community for testing and feedback.
 
 Special thanks to 七月流火（猫火） for long-term testing and feedback.
 

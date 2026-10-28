@@ -43,7 +43,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private final AgentBridge agent = new AgentBridge();
     private final DeckWatch deckWatch = new DeckWatch();
     private final RunExports exports = new RunExports();
-    private volatile String rngWarning = "";
+    private volatile String rngMods = "";  // names only: the warning is translated when shown, after language switches
     // SuperFastMode multiplies Gdx delta; the solver no longer depends on frame time.
     // x10 is the speed long runs were played at (the author's own setting).
     static final float SUPER_FAST_TESTED = 10f;
@@ -184,10 +184,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         TestRecorder.subscribe();
         ShopRecorder.subscribe();
         Thread warmup = new Thread(() -> {
-            List<String> rngMods = RngMods.loaded();
-            if (!rngMods.isEmpty()) {
-                rngWarning = I18n.t("这些 Mod 会影响随机数（RNG），求解器计算可能不准确，建议关闭：") + String.join(" / ", rngMods);
-                System.err.println("[STS1Solver] RNG-affecting mods: " + rngMods);
+            List<String> mods = RngMods.loaded();
+            if (!mods.isEmpty()) {
+                rngMods = String.join(" / ", mods);
+                System.err.println("[STS1Solver] RNG-affecting mods: " + mods);
             }
             try { backend.start(); } catch (IOException failure) { System.err.println("[STS1Solver] " + failure); }
         }, "sts1-solver-warmup");
@@ -250,12 +250,16 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if (keep) heldThisFight = true;
     }
 
+    private String rngWarning() {
+        return rngMods.isEmpty() ? "" : I18n.t("这些 Mod 会影响随机数（RNG），求解器计算可能不准确，建议关闭：") + rngMods;
+    }
+
     /** Red warnings about other mods, shown whole in their own box under the panel. */
     private List<String> modWarnings() {
         List<String> warnings = new ArrayList<>();
         if (Loader.isModLoaded("SaveStateMod") || Loader.isModLoaded("undothespire") || Loader.isModLoaded("undobutton"))
             warnings.add(I18n.t("检测到不兼容 Mod（SaveStateMod / Undo）：会破坏战斗选牌与状态同步，建议禁用"));
-        if (!rngWarning.isEmpty()) warnings.add(rngWarning);
+        if (!rngMods.isEmpty()) warnings.add(rngWarning());
         if (superFastSpeed() > SUPER_FAST_TESTED) warnings.add(superFastNote());
         return warnings;
     }
@@ -334,6 +338,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     /** A plan may run: the backend's route question is answered, and in Standby a plan is picked whenever several are usable. */
     static boolean approved(JsonObject result, boolean branchConfirmed, boolean standby) {
         return routeConfirmed(result, branchConfirmed) && (branchConfirmed || !routeChoice(result, standby));
+    }
+    /** Only the automatic modes start an opening selection by themselves; Standby waits for the player's approval. */
+    static boolean startsOpeningAuto(boolean opening, boolean fightAuto) {
+        return opening && fightAuto;
     }
     static boolean autoAfterBranch(boolean manual) {
         return !manual;
@@ -505,7 +513,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
 
     private void syncAgent() {
         try {
-            if(agent.sync(pilot,runAuto,rngWarning,this::startAgentMode) && error.startsWith(I18n.t("Agent 通道读写失败：")))error="";
+            if(agent.sync(pilot,runAuto,rngWarning(),this::startAgentMode) && error.startsWith(I18n.t("Agent 通道读写失败：")))error="";
         } catch(IOException failure) {
             // Retried next frame: on Windows the replace fails while the agent holds the file open.
             error=I18n.t("Agent 通道读写失败：")+failure.getMessage();
@@ -588,6 +596,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     private void send(String op, JsonObject state) throws IOException {
+        if (op.equals("solve")) TestRecorder.captureSolveRoot(state);
         backend.start();
         JsonObject request = new JsonObject();
         request.addProperty("id", ++serial);
@@ -801,6 +810,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 result = reply;
                 status = reply.has("manual_choice") && reply.get("manual_choice").getAsBoolean()
                     ? I18n.t("抢劫怪：选定路线后可开启自动战斗")
+                    : reply.has("deadline") && reply.get("deadline").getAsBoolean()
+                    ? I18n.t("已到时限 · 当前最佳路线（搜索未完成）")
                     : reply.has("interrupted") && reply.get("interrupted").getAsBoolean()
                     ? I18n.t("已停止 · 点【执行整场】继续") : I18n.t("路线已就绪 · 等待你的操作");
                 if(reply.has("boss_fast_finish") && reply.get("boss_fast_finish").getAsBoolean())
@@ -832,7 +843,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                         && reply.getAsJsonArray("branches").size()>1) {
                     branchPicker=true;
                     branchInput="";
-                    status=I18n.t("已停止 · 点击路线或输入编号后回车");
+                    if (!reply.has("deadline")) status=I18n.t("已停止 · 点击路线或输入编号后回车");
                 } else if (routeChoice(reply, !fightAuto()) && !branchConfirmed) requestBranches();
                 decisionDirty=true;
             } else if (kind.equals("error")) fail(reply.get("message").getAsString());
@@ -860,10 +871,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         try {
             JsonObject state = capture(), current = key(state);
             if (!paused && !gamblingAuto && !auto && !awaitingAction && !standbyWaiting()
-                    && openingSelection(state)) {
-                gamblingAuto = auto = branchConfirmed = true;
+                    && startsOpeningAuto(openingSelection(state), fightAuto())) {
+                gamblingAuto = auto = true; // the branch is still chosen below, like any fight
                 branchPicker=false;captureBranchKeys=false;branchInput="";
-                status = I18n.t("开场选牌：规划并自动选择（不用药路线）");
+                status = I18n.t("开场选牌：规划并自动选择");
             }
             if (awaitingAction) {
                 if (executedCommand.equals("end") && AbstractDungeon.screen == AbstractDungeon.CurrentScreen.NONE
@@ -877,6 +888,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 send("advance", state);
                 return;
             }
+            if (CombatReadiness.holdSolveForPicker(AbstractDungeon.screen, auto, openingSelection(state))) return; // decisionDirty stays set: re-solve after it closes
             if ((busy || result != null) && !current.equals(rootKey)) {
                 stateChanged(state);
                 if(paused)return;
@@ -1476,17 +1488,25 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             this::toggleAuto, () -> { heldThisFight=true; auto=false; executeStep(); }, this::solveAgain});
     }
 
+    static String unavailableRouteReason(JsonObject branch) {
+        if (branch.has("message") && !branch.get("message").isJsonNull()
+                && !branch.get("message").getAsString().trim().isEmpty())
+            return I18n.backend(branch.get("message").getAsString());
+        return I18n.t("本轮未提供原因，请重新计算或导出日志");
+    }
+
     private float renderPicker(SpriteBatch sb, float top) {
         boolean thief=result.has("manual_choice") && result.get("manual_choice").getAsBoolean();
         top=headline(sb,I18n.t(thief?"抢劫怪路线 · 可手动或自动执行":"选择用药路线"),top,Color.WHITE);
         top=lines(sb,status+(branchInput.isEmpty()?"":"  ["+branchInput+"]"),top-4,.78f,MUTED);
         JsonArray branches=result.getAsJsonArray("branches");
         List<String> rows=new ArrayList<>(); List<Color> colors=new ArrayList<>();
+        List<Integer> rowBranches=new ArrayList<>();
         for(int i=0;i<branches.size();i++) {
             JsonObject branch=branches.get(i).getAsJsonObject();
             boolean available=branch.get("available").getAsBoolean();
             // Result first so a long bottle list can only truncate the route name.
-            String summary=available?(branch.get("won").getAsBoolean()?I18n.t("损 ")+branch.get("loss").getAsInt():I18n.t("未胜")):I18n.t("不可用");
+            String summary=available?(branch.get("won").getAsBoolean()?I18n.t("损 ")+branch.get("loss").getAsInt():I18n.t("未胜")):I18n.t("本轮无可选路线");
             String revival=revivalWarning(branch);
             if(!revival.isEmpty()) summary=revival+" · "+summary;
             if(available && branch.has("lost_gold") && branch.get("lost_gold").getAsInt()>0)
@@ -1495,15 +1515,24 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
                 summary+=I18n.t(" / 补 ")+branch.get("potion_gain").getAsInt()+I18n.t(" 药");
             rows.add(i+"  "+summary+" · "+I18n.backend(branch.get("name").getAsString()));
             colors.add(!revival.isEmpty()?DANGER:available?ACCENT:MUTED);
+            rowBranches.add(i);
+            if(!available) {
+                String prefix=i+"  ";
+                for(String line:canvas.wrap(unavailableRouteReason(branch),WIDTH-2*PAD-20-canvas.textWidth(prefix,.8f),.8f)) {
+                    rows.add(prefix+line);
+                    colors.add(MUTED);
+                    rowBranches.add(i);
+                }
+            }
         }
         top=listRows(sb,top,rows,colors,index -> {
-            JsonObject branch=branches.get(index).getAsJsonObject();
+            JsonObject branch=branches.get(rowBranches.get(index)).getAsJsonObject();
             if(branch.get("available").getAsBoolean()) chooseBranch(branch.get("id").getAsString());
         });
         String hint=thief ? I18n.t("空回车：选推荐路线；选后可开自动")
             : branches.size()>0 && branches.get(0).getAsJsonObject().get("id").getAsString().equals("no-potion")
             ? I18n.t("0 / 空回车：不交药；无输入则等待") : I18n.t("0 / 空回车：选 0 号路线；无输入则等待");
-        return lines(sb,hint,top,.72f,MUTED);
+        return lines(sb,hint+I18n.t(" · 滚轮查看完整路线与原因"),top,.72f,MUTED);
     }
 
     /** Outside combat: the run status, and the event foresight or the transform preview when there is one. */

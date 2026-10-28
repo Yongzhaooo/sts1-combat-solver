@@ -63,6 +63,7 @@ jobs:
         run: python tools/check_combat_exam.py --search
       - run: python tools/check_potion_policy.py --native-root .
       - run: python tools/check_search_progress.py
+      - run: python tools/check_search_memory.py
       - run: python tools/check_snapshot_import.py
       - name: Compare the native Defect fixtures against the simulator
         run: python tools/check_coverage_gaps.py

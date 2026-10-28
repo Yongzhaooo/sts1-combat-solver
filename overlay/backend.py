@@ -26,11 +26,11 @@ for s in (sys.stdin, sys.stdout, sys.stderr):
             pass
 
 from recovery import health, future_recovery, incense_targets, carry_weight
-from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature
+from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature, reply_summary
 from auto_policy import recommend, smoke_opening, smoke_probe_keeps, smoke_threshold
 from solver_search import DEEP_BUDGET, boss_fast_plan, finalize_plan, search_plan
 from runtime_files import OVERLAY_FILES
-from search_status import search_timeout
+from search_status import search_timeout, soft_deadline
 from worker_policy import worker_limit, background_priority
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1094,6 +1094,7 @@ def serve(runs_dir=None):
     threading.Thread(target=read, daemon=True).start()
     process = connection = active = interrupt = None
     last_solve_ready = None
+    deadline_cut = False
     loaded_version = None
     ctx = mp.get_context('spawn')
 
@@ -1118,9 +1119,7 @@ def serve(runs_dir=None):
                                   'exitcode': value.get('exitcode'), 'traceback': value.get('traceback'),
                                   'sig': fault_signature(value.get('message'), tail), 'frame': state}, state)
         elif value.get('status') not in ('progress',):
-            note('reply', {k: value[k] for k in ('id', 'status', 'command', 'hp', 'outcome', 'branch',
-                                                         'backend_seconds', 'interrupted', 'boss_fast_finish',
-                                                         'remaining') if k in value}, state)
+            note('reply', reply_summary(value), state)
         print(json.dumps(value, ensure_ascii=False), flush=True)
 
     def start():
@@ -1208,6 +1207,7 @@ def serve(runs_dir=None):
                     start()
                     connection.send(request)
                 timeout_limit = search_timeout(request.get('budget', 0))
+                deadline_cut = False
                 active = (request['id'], received_at, request.get('state'), log_offset, request.get('op'), None, timeout_limit)
             while active and connection.poll():
                 completed_active = active
@@ -1225,12 +1225,19 @@ def serve(runs_dir=None):
                         result['id'] = completed_active[5]
                         if result.get('status') == 'ready':
                             result['interrupted'] = True
+                    if deadline_cut and result.get('status') == 'ready':
+                        result['interrupted'] = result['deadline'] = True
                     if completed_active[4] == 'solve' and result.get('status') == 'ready':
                         last_solve_ready = result
                     active = None
                 if result.get('status') == 'error':
                     result['stderr'] = stderr_since(log_offset)
                 emit(result, active_state)
+            if (active and active[4] == 'solve' and not deadline_cut
+                    and time.monotonic() - active[1] > soft_deadline(active[6])):
+                # Same path as a player cancel: the worker returns its best plan so far; the hard kill below stays as the fallback.
+                deadline_cut = True
+                interrupt.set()
             if active and (not process.is_alive() or time.monotonic() - active[1] > active[6]):
                 request_id = active[0]
                 active_state = active[2]
