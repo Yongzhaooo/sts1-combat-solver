@@ -4,8 +4,9 @@
     python tools/route_history/report.py --data tools/route_history/data/ironclad-a20.jsonl --act 1
     python tools/route_history/report.py --weights overlay/resources/route-preferences.json
 
-Nothing here fits weights. The save records the rooms a run walked through, not the map it was
-offered, so the sibling rooms that would make a comparison possible are gone. What the numbers do
+Nothing here fits weights. The bundle records the rooms a run walked through, not the map it was
+offered (the map is rebuildable from the seed, but this script does not do that), so the sibling
+rooms that would make a comparison possible are missing. What the numbers do
 give is the house style of the reference runs: how many elites, campfires and shops an act actually
 held, and with what HP and gold the next act started. Read `docs/route-tuning.md` before changing a
 weight: it says which terms this bundle can and cannot speak to.
@@ -42,7 +43,26 @@ def load_bundle(path):
             records.append(record)
     if not records:
         raise SystemExit(f'error: {path} holds no runs')
-    return records
+    return dedupe(records)
+
+
+def dedupe(records):
+    """Drop a run recorded twice (same seed and same rooms in every act, e.g. a reloaded save)."""
+    seen, kept = set(), []
+    for record in records:
+        key = (record['seed'], tuple(act['rooms'] for act in record['acts']))
+        if key not in seen:
+            seen.add(key)
+            kept.append(record)
+    if len(kept) < len(records):
+        print(f'note: dropped {len(records) - len(kept)} duplicate run(s) (same seed and rooms)', file=sys.stderr)
+    return kept
+
+
+def act_entries(records, act):
+    """One act of every run, skipping acts the export flagged short_act (e.g. a secret portal)."""
+    return [entry for record in records for entry in record['acts'] if entry['act'] == act
+            and not any(i['type'] == 'short_act' and i.get('act') == act for i in record.get('issues', []))]
 
 
 def act_floor_ranges(record):
@@ -119,10 +139,10 @@ def print_coverage(records, path):
 
 def print_room_mix(records, acts_wanted):
     print()
-    print('## rooms per act (mean per run; share of the act excluding its boss rows)')
+    print('## rooms per act (mean per run; share of the act excluding its boss rows; short_act acts left out)')
     rows = []
     for act in acts_wanted:
-        entries = [entry for record in records for entry in record['acts'] if entry['act'] == act]
+        entries = act_entries(records, act)
         if not entries:
             continue
         rooms = [entry['rooms'] for entry in entries]
@@ -147,7 +167,7 @@ def print_spread(records, acts_wanted):
     print()
     print('## how a single run distributes its rooms')
     for act in acts_wanted:
-        entries = [entry for record in records for entry in record['acts'] if entry['act'] == act]
+        entries = act_entries(records, act)
         if not entries:
             continue
         cells = []
@@ -200,14 +220,14 @@ def print_weights(path, records, acts_wanted):
     weights = json.loads(path.read_text(encoding='utf-8'))
     print()
     print(f'## weights in {path.name} ({weights.get("version", "?")}) next to what these runs walked')
-    print('   the observed column is what the reference strategy did, not an optimum; the save keeps')
+    print('   the observed column is what the reference strategy did, not an optimum; the bundle keeps')
     print('   no map, so the rooms it was offered are unknown and nothing here can be fitted.')
     observed = {'elite': 'E', 'fire': 'R', 'event': '?', 'monster': 'M', 'shop': '$'}
     for act in acts_wanted:
         row = weights.get('weights', {}).get(f'{act}:balanced')
         if row is None:
             continue
-        entries = [entry for record in records for entry in record['acts'] if entry['act'] == act]
+        entries = act_entries(records, act)
         if not entries:
             continue
         print(f'\nact {act} ("{act}:balanced")')
