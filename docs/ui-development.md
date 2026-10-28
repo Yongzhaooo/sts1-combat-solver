@@ -80,7 +80,9 @@
 
 ### 面板的绘制和点击
 
-战斗面板宽 420，高度随内容变化。`renderPanel` 每帧先用 `canvas.dry=true` 量一遍 `renderBody` 的高度（只算尺寸，不画也不登记点击），再画背景和正文。`renderBody` 依次画标题栏（导出、设置、折叠）、三段模式切换，然后按状态只画一种正文：局外（`renderOutside`）、出错（`renderError`）、选路线（`renderPicker`）、搜索中（`renderSearch`）、有路线（`renderPlan`）或空闲（`renderIdle`）。
+战斗面板宽 420，高度随内容变化。`renderPanel` 每帧先用 `canvas.dry=true` 量一遍 `renderBody` 的高度（只算尺寸，不画也不登记点击），再画背景和正文。`renderBody` 依次画标题栏（导出、设置、折叠）、三段模式切换，然后按 `bodyView` 只画一种正文：局外（`renderOutside`）、引擎不支持、出错（`renderError`）、选路线（`renderPicker`）、有路线（`renderPlan`，正在执行的那一步也画它）、搜索中（`renderSearch`）或空闲（`renderIdle`）。
+
+执行一步时 `executeStep` 把当前路线存进 `shownPlan` 再清空 `result`，`send("advance")` 期间 `bodyView` 仍然返回 `PLAN`，所以面板停在原来那一步（标题换成「执行中」、按钮只剩「重新计算」），不会闪回搜索正文；后台回终态（`ready`/`error`/`cancelled`）或取消时清空 `shownPlan`。
 
 能点的控件用 `canvas.button(..., action)` 画，绘制时同时登记点击区域；`input()` 用 `canvas.click(lx, ly)` 执行上一帧登记在该点的动作。点到标题栏空白处才开始拖动。新增控件只需要在绘制处传入动作，不要再在 `input()` 里按坐标判断。
 
