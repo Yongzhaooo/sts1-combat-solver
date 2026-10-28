@@ -3,9 +3,10 @@ package sts1solver;
 /**
  * The panel's three automation modes and the transitions its switch and keys make between them.
  *
- * STANDBY: every fight waits for the player. The panel stays folded, the fight is searched after Solve (or F10), a
- * plan runs only after the player approves it, and outside decisions are the player's. COMBAT_AUTO: every fight runs
- * automatically, outside decisions stay with the player (or the agent). PILOT: full autopilot (climb and fight).
+ * STANDBY: every fight waits for the player. The panel opens when a fight starts, the fight is searched after Solve
+ * (or F10), a plan runs only after the player approves it, and outside decisions are the player's. COMBAT_AUTO: every
+ * fight runs automatically, outside decisions stay with the player (or the agent). PILOT: full autopilot (climb and
+ * fight).
  */
 enum RunMode {
     STANDBY, COMBAT_AUTO, PILOT;

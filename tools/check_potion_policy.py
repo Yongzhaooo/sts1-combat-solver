@@ -84,14 +84,42 @@ strength = {**deck_game, 'potions': [{'id': 'Strength Potion'}]}
 assert recommend(strength, [dict(baseline, loss=12), bottle])['branch'] == 'potion-0'  # ordinary strong price 10
 print('PASS: hand-access and long-fight bottles (Gambler Brew by its game id) cost 15 HP, other strong bottles 10')
 
+flex = {**deck_game, 'potions': [{'id': 'SteroidPotion'}],
+        'map': [{'x': 0, 'y': 10, 'children': [{'x': 0, 'y': 11}]},
+                {'x': 0, 'y': 11, 'symbol': 'E', 'children': []}],
+        'solver_auto_context': {**deck_game['solver_auto_context'], 'x': 0, 'y': 10}}
+comparison = [dict(baseline, loss=12), bottle]
+assert recommend(flex, comparison)['assessment']['reserve']
+assert recommend(flex, comparison)['branch'] == 'no-potion'  # keep the real Flex id for a nearby damage check
+assert recommend(flex, [bottle])['branch'] == 'potion-0'  # preserving it cannot override the only winning line
+assert recommend({**flex, 'map': [], 'solver_auto_context': {
+    **flex['solver_auto_context'], 'y': 0}}, comparison)['branch'] == 'potion-0'
+assert recommend({**flex, 'solver_auto_context': {**flex['solver_auto_context'],
+    'deck': [{'id': 'Immolate', 'cost': 2, 'base_damage': 21}]}}, comparison)['branch'] == 'potion-0'
+print('PASS: Flex uses its actual game id, retains the burst reserve, and preserves safe-use and survival choices')
+
 if not args.native_root:
     raise SystemExit(0)
-from backend import Advisor
+from backend import Advisor, TERMINAL_PENDING, unexplained_differences
 advisor = Advisor()
 engine = advisor.search.sts
 native = advisor.native_search
 potion = engine.potion_id_from_name
 card = engine.card_id_from_name
+
+# The recorded F48 smoke-bomb fault: the engine escapes the instant the potion lands and
+# the game still reports UNDECIDED while the haze plays. That is a gap, not a divergence,
+# so the rest of the plan is dropped instead of raising 实际状态偏离预测.
+escape = {'differences': [{'path': '/outcome', 'kind': 'value',
+                           'original': 'UNDECIDED', 'simulator': 'PLAYER_ESCAPE'}],
+          'gaps': [{'kind': TERMINAL_PENDING}], 'observed_match': False}
+assert unexplained_differences(escape) == []
+assert len(unexplained_differences({**escape, 'gaps': []})) == 1  # the same loss without the gap still stops
+# The tolerance is the escape only: the same gap on a predicted victory is a real divergence.
+assert len(unexplained_differences({**escape, 'differences': [dict(escape['differences'][0], simulator='PLAYER_VICTORY')]})) == 1
+assert unexplained_differences({'differences': [{'path': '/rng/card_random/0'}], 'gaps': []}) == []
+assert unexplained_differences({'differences': [], 'gaps': [{'kind': TERMINAL_PENDING}]}) == []
+print('PASS: a predicted terminal outcome the original battle is still playing is a gap, not a divergence')
 
 def snapshot(hand=(), *, turn=1, played=0, damaged=0, hp=20, enemy_hp=50,
              potions=('SMOKE_BOMB', 'FAIRY_POTION', 'EMPTY_POTION_SLOT'), powers=(), enemy_powers=(),

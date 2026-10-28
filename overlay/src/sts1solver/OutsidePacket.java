@@ -95,6 +95,9 @@ final class OutsidePacket {
         else if (screen.equals("GRID") && (bool(object(game, "screen_state"), "confirm_up") || packet.gridFull()))
             packet.directChoice("confirm", "Confirm");
         else if (screen.equals("GRID")) packet.selectChoices();
+        // A battle the solver ends itself (a smoke bomb escape) leaves the game on no screen for a
+        // frame or two before the rewards open. That is a moment to wait for, not an unknown screen.
+        else if (screen.equals("NONE")) throw new NotReady("Outside screen is still settling");
         else throw new IllegalArgumentException("Student screen not mapped yet: " + screen);
         packet.potionChoices();
         if (packet.choices.isEmpty()) throw new IllegalArgumentException("No legal student choices");
@@ -159,8 +162,9 @@ final class OutsidePacket {
         return result;
     }
 
-    Distill2.Result ruleScore() {
-        Distill2.Result student=score();
+    Distill2.Result ruleScore() { return ruleScore(score()); }
+
+    Distill2.Result ruleScore(Distill2.Result student) {
         String screenType=string(visible,"screen_type");
         Distill2.Result rule=screenType.equals("EVENT") ? eventRule(student)
             : screenType.equals("GRID") ? removalRule(student)
@@ -170,7 +174,7 @@ final class OutsidePacket {
             : screenType.equals("COMBAT_REWARD") ? keyRule(student)
             : screenType.equals("CHEST") ? chestRule(student) : null;
         if(rule!=null)return rule;
-        if(!string(visible,"screen_type").equals("MAP") || mapTargetX(student.best)<0)return student;
+        if(!string(visible,"screen_type").equals("MAP"))return student; // a potion-first student argmax must not skip the route
         RoutePlanner planner=new RoutePlanner(game,visible);
         RoutePlanner.Plan best=planner.best(-1);
         if(best==null)return student; // Boss/no next nodes; normal maps always have a route.

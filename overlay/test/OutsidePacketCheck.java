@@ -64,6 +64,33 @@ public final class OutsidePacketCheck {
             throw new AssertionError("Executed map choice differs from drawn plan");
         if (result.best < 0 || result.best >= packet.choices.size())
             throw new AssertionError("Invalid student selection");
+        // A student whose argmax is a potion must still get the RoutePlanner's node; Fruit Juice stays forced.
+        JsonArray savedBag = game.has("potions") ? game.getAsJsonArray("potions") : new JsonArray();
+        for (String id : new String[]{"BloodPotion", "Fruit Juice"}) {
+            JsonObject bottle = new JsonObject();
+            bottle.addProperty("id", id); bottle.addProperty("name", id);
+            bottle.addProperty("can_use", true); bottle.addProperty("requires_target", false);
+            bottle.addProperty("can_discard", true);
+            JsonArray bag = new JsonArray(); bag.add(bottle);
+            game.add("potions", bag);
+            OutsidePacket withPotion = OutsidePacket.build(Distill2.load(), state, visible);
+            int potion = -1;
+            for (int i = 0; i < withPotion.choices.size(); i++)
+                if (withPotion.choices.get(i).command.startsWith("potion use")) potion = i;
+            if (potion < 0) throw new AssertionError("Potion choice missing on the map");
+            float[] favour = new float[withPotion.choices.size()];
+            favour[potion] = 1e9f;
+            Distill2.Result routed = withPotion.ruleScore(new Distill2.Result(favour, potion));
+            if (id.equals("BloodPotion")) {
+                if (withPotion.mapTargetX(routed.best) != recommended.get(0).x)
+                    throw new AssertionError("Potion-first student bypassed the RoutePlanner");
+            } else {
+                Distill2.Result forced = withPotion.potionRule(routed);
+                if (!withPotion.choices.get(forced.best).command.equals("potion use 0"))
+                    throw new AssertionError("Fruit Juice on the map must still be used");
+            }
+        }
+        game.add("potions", savedBag);
         for (int i = 0; i < packet.choices.size(); i++)
             if (!packet.choices.get(i).command.equals("choose " + i))
                 throw new AssertionError("Map command order drifted");
@@ -437,6 +464,17 @@ public final class OutsidePacketCheck {
         if (purge.choices.size() != 2 || !purge.choices.get(0).command.equals("choose 2")
                 || !purge.choices.get(1).command.equals("choose 3"))
             throw new AssertionError("Event removal must offer only starter cards and curses");
+        // A battle the solver ended itself leaves the game on no screen for a frame or two before
+        // the rewards open; the pilot must wait for that, not stop the whole run.
+        visible.addProperty("screen_type", "NONE");
+        try {
+            OutsidePacket.build(Distill2.load(), state, visible);
+            throw new AssertionError("A screen-less moment must read as not ready");
+        } catch (OutsidePacket.NotReady settling) {
+        } catch (RuntimeException unknown) {
+            throw new AssertionError("A screen-less moment must not read as an unknown screen: "
+                + unknown.getMessage());
+        }
         System.out.printf("PASS: map packet, reviewed rule route to boss (%.0f ms) and Neow stages%n", planMs);
     }
 }

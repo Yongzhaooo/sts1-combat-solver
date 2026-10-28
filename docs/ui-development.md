@@ -63,6 +63,8 @@
 | `runAfterBranch` | 玩家按了 F10，选完路线后直接打完整场 |
 | `highSpeed`、`streakMode` | 搜索档位：高速、连胜；都为 false 时是标准 |
 | `armed` | 待命（`standby()` 即 `!runAuto`）时，玩家点“计算”、F10 或“重新计算”后才搜索这一场；战斗结束清掉 `armed` 并折叠 |
+| `collapsed` | 面板是否折叠成一行；每场战斗开始时展开，`－` 或 F8 折叠 |
+| `autoFolded`、`heldPanelOpen` | `autoFold()` 只在牌堆、选牌等界面自动折叠，回到无遮挡的房间再展开；玩家手动展开（`＋` 或 F8）会把 `heldPanelOpen` 置 true，本场看牌堆时不再自动折叠；选牌界面（手牌选择、网格）仍然折叠，免得面板挡住点击 |
 | `playOrderOpen`、`progressOpen` | “出牌顺序”和“搜索过程”是否展开；整局保持玩家上次的选择 |
 
 模式由 `RunMode.of(pilot.mode, runAuto)` 推出来：`pilot.mode` 为 2 是 AI全自动，否则 `runAuto` 为 true 是战斗全自动，其余是待命。Agent 模式（局外 1、战斗自动）算战斗全自动。面板上的三段切换调用 `setMode(目标)`；`stopAll()`（F9）停下并回到待命。
@@ -80,7 +82,9 @@
 
 ### 面板的绘制和点击
 
-战斗面板宽 420，高度随内容变化。`renderPanel` 每帧先用 `canvas.dry=true` 量一遍 `renderBody` 的高度（只算尺寸，不画也不登记点击），再画背景和正文。`renderBody` 依次画标题栏（导出、设置、折叠）、三段模式切换，然后按状态只画一种正文：局外（`renderOutside`）、出错（`renderError`）、选路线（`renderPicker`）、搜索中（`renderSearch`）、有路线（`renderPlan`）或空闲（`renderIdle`）。
+战斗面板宽 420，高度随内容变化。`renderPanel` 每帧先用 `canvas.dry=true` 量一遍 `renderBody` 的高度（只算尺寸，不画也不登记点击），再画背景和正文。`renderBody` 依次画标题栏（导出、设置、折叠）、三段模式切换，然后按 `bodyView` 只画一种正文：局外（`renderOutside`）、引擎不支持、出错（`renderError`）、选路线（`renderPicker`）、有路线（`renderPlan`，正在执行的那一步也画它）、搜索中（`renderSearch`）或空闲（`renderIdle`）。
+
+执行一步时 `executeStep` 把当前路线存进 `shownPlan` 再清空 `result`，`send("advance")` 期间 `bodyView` 仍然返回 `PLAN`，所以面板停在原来那一步（标题换成「执行中」、按钮只剩「重新计算」），不会闪回搜索正文；后台回终态（`ready`/`error`/`cancelled`）或取消时清空 `shownPlan`。
 
 能点的控件用 `canvas.button(..., action)` 画，绘制时同时登记点击区域；`input()` 用 `canvas.click(lx, ly)` 执行上一帧登记在该点的动作。点到标题栏空白处才开始拖动。新增控件只需要在绘制处传入动作，不要再在 `input()` 里按坐标判断。
 
@@ -148,7 +152,7 @@ python -m venv .venv
 2. 用 ModTheSpire 启动，勾选 BaseMod 和本 Mod。
 3. 按改动逐项试，并在 PR 里写清楚试了什么：
    - 每种模式各打一场战斗；
-   - 待命走完一遍：开战时折叠、点“计算”才搜索、多条路线时展开、选一条后折叠、点“执行”打完、战斗结束折叠；回车没有反应，点出牌顺序的行不会出牌；
+   - 待命走完一遍：开战时展开、点“计算”才搜索、多条路线时展开、选一条后折叠、点“执行”打完、战斗结束折叠；手动展开后看牌堆不再自动折叠，打开选牌界面（头槌、武装）仍然折叠；回车没有反应，点出牌顺序的行不会出牌；
    - 切换模式、按 F9 停止，确认不会多走一步，也不会卡住，F9 后回到待命；
    - 中英文各看一次面板，文字没有溢出；
    - 出问题时按 F6 或点标题栏的“导出日志”导出诊断，附在 issue 里。

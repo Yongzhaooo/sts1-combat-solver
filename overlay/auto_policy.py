@@ -126,7 +126,7 @@ def recommend(game, branches):
         for use in branch.get('potion_uses', []):
             potion = potions[use['slot']]['id']
             valuable = potion in strong or (potion == 'Ancient Potion' and game.get('act') == 2)
-            covers_gap = ((potion in {'Fire Potion', 'FlexPotion', 'Energy Potion'} and '爆发不足' in profile['weaknesses'])
+            covers_gap = ((potion in {'Fire Potion', 'SteroidPotion', 'Energy Potion'} and '爆发不足' in profile['weaknesses'])
                           or (potion == 'Explosive Potion' and '群攻不足' in profile['weaknesses'])
                           or (potion in {'Block Potion', 'SpeedPotion'} and '防御不足' in profile['weaknesses']))
             reserve = profile['reserve'] and (valuable or covers_gap)
