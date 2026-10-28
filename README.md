@@ -55,7 +55,7 @@ The agent makes the decisions outside combat and the solver fights. Requires v0.
 
 ## Contributing
 
-Silent, Defect and Watcher solvers are open for collaboration: see the [multi-character scope](docs/multi-character.md) (Chinese), [Contributing](CONTRIBUTING.md) for code and CI requirements, and [Architecture](docs/architecture.md). Contact: yongzhao.derek@gmail.com.
+Silent, Defect and Watcher solvers are open for collaboration: see the [multi-character scope](docs/multi-character.md) (Chinese), [Contributing](CONTRIBUTING.md) for code and CI requirements, and [Architecture](docs/architecture.md). Before changing a route weight, read the [route-tuning bundle](docs/route-tuning.md) (110 measured A20 Ironclad routes; what it can and cannot answer). Contact: yongzhao.derek@gmail.com.
 
 ## Thanks
 
