@@ -27,6 +27,16 @@ struct Path {
     int card = -1, turn = -1;
     CardId id = CardId::INVALID;
     int length = 1;  // actions from the root, this one included
+    Path(std::shared_ptr<const Path> parent, unsigned bits) : parent(std::move(parent)), bits(bits) {}
+    Path(const Path &) = delete;
+    Path &operator=(const Path &) = delete;
+    // Release a sole-owned parent chain in a loop: recursive destruction of a long rescue path overflowed
+    // the ~3 MB stack of a Windows search thread (streak-mode Darkling root, 2026-10-28 export).
+    ~Path() {
+        auto next = std::move(parent);
+        while (next && next.use_count() == 1)
+            next = std::move(const_cast<Path &>(*next).parent);  // every Path is created non-const by makePath
+    }
 };
 // The Path fields of an action, kept until a node survives (Node::deferred) so that dropped candidates never allocate one.
 struct Step {
@@ -66,8 +76,8 @@ inline Step stepOf(const Node &node, search::Action action) {
     return step;
 }
 inline std::shared_ptr<const Path> makePath(std::shared_ptr<const Path> parent, const Step &step) {
-    auto path = std::make_shared<Path>(Path{parent, step.bits});
-    if (parent) path->length = parent->length + 1;
+    auto path = std::make_shared<Path>(std::move(parent), step.bits);
+    if (path->parent) path->length = path->parent->length + 1;
     path->card = step.card;
     path->id = step.id;
     path->turn = step.turn;
