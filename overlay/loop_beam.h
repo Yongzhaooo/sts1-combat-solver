@@ -27,7 +27,7 @@ struct Path {
     int card = -1, turn = -1;
     CardId id = CardId::INVALID;
     int length = 1;  // actions from the root, this one included
-    Path(std::shared_ptr<const Path> parent, unsigned bits) : parent(std::move(parent)), bits(bits) {}
+    explicit Path(std::shared_ptr<const Path> parent = nullptr, unsigned bits = 0) : parent(std::move(parent)), bits(bits) {}
     Path(const Path &) = delete;
     Path &operator=(const Path &) = delete;
     // Release a sole-owned parent chain in a loop: recursive destruction of a long rescue path overflowed
