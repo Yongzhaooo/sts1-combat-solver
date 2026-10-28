@@ -281,7 +281,7 @@ void Monster::heal(int amount) {
 }
 
 void Monster::addBlock(int amount) {
-    block += amount;
+    block = std::min(999, block + amount);
 }
 
 void Monster::die(BattleContext &bc) {

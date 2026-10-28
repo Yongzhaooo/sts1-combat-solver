@@ -98,7 +98,7 @@ Action Actions::HealPlayer(int amount) {
 
 Action Actions::MonsterGainBlock(int idx, int amount) {
     return {[=] (BattleContext &bc) {
-        bc.monsters.arr[idx].block += amount;
+        bc.monsters.arr[idx].addBlock(amount);
     }};
 }
 
