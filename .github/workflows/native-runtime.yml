@@ -17,9 +17,10 @@ jobs:
       fail-fast: false
       matrix:
         # CMake 3.31 supports VS 2022, not the VS 2026 image behind windows-latest.
-        os: [ubuntu-24.04, macos-14, windows-2022]
+        # macOS runs on the maintainer's own Apple Silicon Mac (self-hosted runner `sts1-mac`), never for fork PRs.
+        os: ${{ fromJSON((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '["ubuntu-24.04","sts1-mac","windows-2022"]' || '["ubuntu-24.04","windows-2022"]') }}
         python: ['3.11', '3.14']
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os == 'sts1-mac' && fromJSON('["self-hosted","macOS","ARM64","sts1-mac"]') || matrix.os }}
     env:
       # setup-python can otherwise select NMake without a developer shell.
       CMAKE_GENERATOR: ${{ matrix.os == 'windows-2022' && 'Visual Studio 17 2022' || 'Unix Makefiles' }}
@@ -71,13 +72,14 @@ jobs:
       - run: python tools/check_loop_gate.py
       - run: python tools/check_executor_tiers.py
   macos-package:
+    # Self-hosted on the maintainer's Mac; fork PRs never reach it.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
-            arch: arm64
-    runs-on: ${{ matrix.os }}
+          - arch: arm64
+    runs-on: [self-hosted, macOS, ARM64, sts1-mac]
     timeout-minutes: 20
     env:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
