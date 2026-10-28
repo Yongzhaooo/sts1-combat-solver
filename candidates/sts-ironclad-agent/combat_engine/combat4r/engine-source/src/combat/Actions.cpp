@@ -126,20 +126,13 @@ Action Actions::DamageEnemy(int idx, int damage) {
     }};
 }
 
-Action Actions::DamageAllEnemy(int damage, DamageType type) {
+Action Actions::DamageAllEnemy(int damage) { // todo this is probably broken
     return {[=] (BattleContext &bc) {
         for (int idx = 0; idx < bc.monsters.monsterCount; idx++) {
             if (!bc.monsters.arr[idx].isDeadOrEscaped()) {
-                // ExplosivePotion builds its DamageInfo with the two-argument
-                // constructor, which is NORMAL, so it walks the same onAttacked
-                // chain as a card and spends Curl Up and friends. The Bomb and
-                // Mercury Hourglass are THORNS, which those reactions ignore, so
-                // they keep the plain damage path.
-                if (type == DamageType::NORMAL) {
-                    bc.monsters.arr[idx].attacked(bc, damage, type);
-                } else {
-                    bc.monsters.arr[idx].damage(bc, damage);
-                }
+                // ExplosivePotion (null owner, javap), The Bomb and Mercury Hourglass all
+                // skip the onAttacked chain: Curl Up, Thorns, Angry and friends need an owner.
+                bc.monsters.arr[idx].damage(bc, damage); // possible should addToBot here todo
             }
         }
         bc.checkCombat();
