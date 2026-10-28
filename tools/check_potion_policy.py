@@ -101,8 +101,8 @@ escape = {'differences': [{'path': '/outcome', 'kind': 'value',
           'gaps': [{'kind': TERMINAL_PENDING}], 'observed_match': False}
 assert unexplained_differences(escape) == []
 assert len(unexplained_differences({**escape, 'gaps': []})) == 1  # the same loss without the gap still stops
-assert len(unexplained_differences({**escape, 'differences':
-    escape['differences'] + [{'path': '/player/hp', 'kind': 'value', 'original': 75, 'simulator': 70}]})) == 2
+# The tolerance is the escape only: the same gap on a predicted victory is a real divergence.
+assert len(unexplained_differences({**escape, 'differences': [dict(escape['differences'][0], simulator='PLAYER_VICTORY')]})) == 1
 assert unexplained_differences({'differences': [{'path': '/rng/card_random/0'}], 'gaps': []}) == []
 assert unexplained_differences({'differences': [], 'gaps': [{'kind': TERMINAL_PENDING}]}) == []
 print('PASS: a predicted terminal outcome the original battle is still playing is a gap, not a divergence')

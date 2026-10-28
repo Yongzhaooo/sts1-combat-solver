@@ -32,11 +32,11 @@ advisor = Advisor()
 session = advisor.search
 
 
-def escaped_advisor():
-    """A fresh imported battle plus the queued potion action, as a real request would have."""
+def queue(view, command):
+    """A fresh imported battle plus the queued action, as a real request would have."""
     battle = session.comparator.import_battle(view, require_search_state=True)
     mapper = ActionMapper(session.comparator, battle, view)
-    action = mapper.action('potion use 0', view, battle)
+    action = mapper.action(command, view, battle)
     assert action.is_valid(battle)
     session.battle, session.mapper = battle, mapper
     session.actions = deque([int(action.bits)])
@@ -44,7 +44,7 @@ def escaped_advisor():
     return battle
 
 
-battle = escaped_advisor()
+battle = queue(view, 'potion use 0')
 advisor.advance(view, 256)
 assert int(battle.outcome) == int(session.sts.Outcome.PLAYER_ESCAPE), int(battle.outcome)
 assert not session.actions, 'the rest of a plan that cannot happen must be dropped'
@@ -56,10 +56,25 @@ assert any(g.get('kind') == TERMINAL_PENDING for g in comparison['gaps']), compa
 assert unexplained_differences(comparison) == []
 # Without the gap this very frame is a divergence, so the test cannot pass by accident.
 assert len(unexplained_differences({**comparison, 'gaps': []})) == 1
-# And the tolerance stays narrow: one real difference alongside it still stops the pilot.
-extra = {'path': '/player/hp', 'kind': 'value', 'original': 72, 'simulator': 67}
-assert len(unexplained_differences({**comparison,
-                                    'differences': comparison['differences'] + [extra]})) == 2
 
-print('PASS: a smoke bomb the engine resolves before the game does ends the plan '
-      'without a divergence, while real drift still stops the pilot')
+# The exemption is only for the escape: the simulator kills the Jaw Worm with Strike, the
+# game frame still shows it alive. That is a real divergence and must stop the pilot.
+kill = json.loads(json.dumps(recorded))
+kill_game = kill['game_state']
+kill_game['combat_state']['player']['energy'] = 1
+kill_game['combat_state']['monsters'][0]['current_hp'] = 1
+kill_view = view_from_state(kill)
+battle = queue(kill_view, 'play 2 0')
+try:
+    advisor.advance(kill_view, 256)
+except ValueError as error:
+    assert '实际状态偏离预测' in str(error), error
+else:
+    raise AssertionError('a predicted victory the game does not show must raise a divergence')
+assert int(battle.outcome) == int(session.sts.Outcome.PLAYER_VICTORY), int(battle.outcome)
+kill_comparison = session.comparator.compare_battle(kill_view, battle)
+assert any(g.get('kind') == TERMINAL_PENDING for g in kill_comparison['gaps']), kill_comparison['gaps']
+assert len(unexplained_differences(kill_comparison)) == 1
+
+print('PASS: a smoke bomb the engine resolves before the game does ends the plan without a '
+      'divergence, while a predicted victory the game does not show still stops the pilot')

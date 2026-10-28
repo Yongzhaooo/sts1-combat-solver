@@ -50,22 +50,23 @@ BOSS_HEAL_POTION_LOSS = 50
 # Safety net: if cardRandomRng still drifts after card generation, keep executing the planned
 # route (later random cards are re-checked) instead of letting LiveSearch silently drop it.
 FRAME_RNG = ('/rng/card_random',)
-# A predicted terminal outcome the original battle has not finished playing yet is not a
-# divergence: the engine ends the fight the moment the action lands (Smoke Bomb escapes,
-# a killing blow wins) while the game still runs the animation and reports UNDECIDED
-# until it leaves the combat screen. The comparator labels that case with this gap.
+# A Smoke Bomb escape the original battle has not finished playing yet is not a divergence:
+# the engine leaves the fight the moment the potion lands while the game still runs the haze
+# and reports UNDECIDED. The comparator labels that case with this gap. A predicted kill or
+# victory the game does not show is a real divergence and is never excused here.
 TERMINAL_PENDING = 'original_combat_continues_after_predicted_terminal'
 
 
 def unexplained_differences(comparison, tolerated=FRAME_RNG):
     """Differences that mean the simulation is no longer tracking the original battle.
 
-    A predicted terminal outcome still playing out in the game is explained by the
-    TERMINAL_PENDING gap and is dropped here; every other difference stays.
+    Only a simulated PLAYER_ESCAPE (Smoke Bomb) still playing out in the game, labelled by the
+    TERMINAL_PENDING gap, is dropped here; every other difference stays.
     """
     differences = [d for d in comparison.get('differences', [])
                    if not d.get('path', '').startswith(tolerated)]
-    if differences and all(d.get('path') == '/outcome' for d in differences):
+    if differences and all(d.get('path') == '/outcome' and d.get('simulator') == 'PLAYER_ESCAPE'
+                           for d in differences):
         gaps = comparison.get('gaps') or ()
         if any(g.get('kind') == TERMINAL_PENDING for g in gaps):
             return []
@@ -735,9 +736,8 @@ class Advisor:
         if diffs:
             raise ValueError('实际状态偏离预测；已停止执行。' + repr(diffs[:2]))
         if s.battle.outcome != s.sts.Outcome.UNDECIDED:
-            # Smoke Bomb and killing blows end the fight inside the engine before the
-            # game leaves the combat screen. Drop the rest of the plan instead of
-            # reporting a divergence; the game reports combat_end on its own.
+            # Only a Smoke Bomb escape reaches here (any other predicted terminal raised
+            # above). Drop the rest of the plan; the game reports combat_end on its own.
             s.actions.clear()
             s.pending_multi = None
             return
