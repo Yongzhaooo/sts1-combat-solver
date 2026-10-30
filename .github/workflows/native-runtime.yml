@@ -78,6 +78,7 @@ jobs:
       - name: Compare the native Defect fixtures against the simulator
         run: python tools/check_coverage_gaps.py
       - run: python tools/check_headbutt.py
+      - run: python tools/check_mid_turn_picker.py
       - run: python tools/check_discovery_frames.py
       - run: python tools/check_armaments_identity.py
       - run: python tools/check_corruption_snecko.py

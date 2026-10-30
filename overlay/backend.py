@@ -288,44 +288,15 @@ class Advisor:
         import_view = {**view, 'game': {**view['game'],
                        'seed': int(view['game']['seed']) % (1 << 64)}}
         s.battle = s.comparator.import_battle(import_view, require_search_state=True)
-        mid_turn_pick = None
         if view['game']['screen_type'] != 'NONE':
             if 'live_run' not in view:
                 raise ValueError('缺少战斗选牌动作导出，请重启游戏加载新版模组。')
-            spec = start_selection(s.comparator, view)
-            s.native.import_start_selection(s.battle, spec)
-            if spec.get('task') == 'MID_TURN':
-                mid_turn_pick = spec
+            # Battle-start and mid-turn pickers alike are searched from the picker state.
+            s.native.import_start_selection(s.battle, start_selection(s.comparator, view))
         self.phase('核对游戏与模拟状态')
         comparison = s.comparator.compare_battle(view, s.battle)
         if comparison['differences']:
             raise ValueError('模拟器无法精确导入当前状态：' + repr(comparison['differences'][:2]))
-        if mid_turn_pick is not None:
-            # The game is waiting on a picker a card opened after its own use
-            # resolved. There is no earlier position to plan from, so answer the
-            # picker first: the plan is that one selection and the normal search
-            # resumes on the next decision point.
-            choices = s.sts.get_legal_actions(s.battle)
-            if not choices:
-                raise ValueError('战斗中选牌没有可选的牌')
-            self.native_search.resume()
-            s.actions.clear()
-            s.actions.append(int(choices[0].bits))
-            s.mapper = ActionMapper(s.comparator, s.battle, view)
-            self.root = s.battle.clone()
-            self.root_game = copy.deepcopy(view['game'])
-            # The picker itself decides nothing about the fight, so the plan's
-            # numbers are the state the picker was opened in: no HP moves and
-            # nothing is spent by answering it.
-            hp = int(s.battle.player.cur_hp)
-            self.plan = dict(actions=list(s.actions), outcome=0, value=0, hp=hp,
-                             post_hp=hp, max_hp=int(s.battle.player.max_hp),
-                             simulations=0, seconds=0.0, mid_turn_pick=True)
-            self.branches = {'mid-turn': self.plan}
-            self.branch_info = []
-            self.selected_branch = 'mid-turn'
-            self.manual_choice = False
-            return
         before = s.comparator.clone_fingerprint(s.battle)
         self.phase('搜索战斗路线')
         started = time.monotonic()
