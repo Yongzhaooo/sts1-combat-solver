@@ -10,6 +10,8 @@ using namespace sts;
 
 CardInstance::CardInstance(CardId id, bool upgraded) : id(id), upgraded(upgraded) {
     if (id == CardId::RITUAL_DAGGER) specialData = 15;
+    // GeneticAlgorithm.java starts with misc = 1 and baseBlock = misc.
+    else if (id == CardId::GENETIC_ALGORITHM) specialData = 1;
     cost = getEnergyCost(id, upgraded);
     costForTurn = cost;
 }
@@ -83,6 +85,19 @@ bool CardInstance::isXCost() const {
     return sts::isXCost(id);
 }
 
+int CardInstance::recycleEnergyGain(const int currentEnergy) const {
+    // RecycleAction compares costForTurn against -1 and then against "> 0".
+    // A card whose cost was randomised to 0 by Confusion therefore grants no
+    // energy, which is why the game cannot afford a play it could before.
+    if (costForTurn == -1) {
+        return currentEnergy;
+    }
+    if (costForTurn > 0) {
+        return costForTurn;
+    }
+    return 0;
+}
+
 bool CardInstance::isBloodCard() const {
     return getId() == CardId::BLOOD_FOR_BLOOD || getId() == CardId::MASTERFUL_STAB;
 }
@@ -127,6 +142,8 @@ void CardInstance::setCostForTurn(int newCost) {
 //#ifdef sts_asserts
 //    assert(newCost >= 0);
 //#endif
+    // AbstractCard.setCostForTurn leaves an X cost (-1) alone: those cards never
+    // take a this-turn override, they spend whatever energy is available.
     if (costForTurn >= 0) {
         costForTurn = static_cast<int8_t>(std::max(0,newCost));
     }

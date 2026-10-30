@@ -72,6 +72,37 @@ def unexplained_differences(comparison, tolerated=FRAME_RNG):
             return []
     return differences
 
+# Opt-in audit of every game/simulator state check. The checks themselves are
+# silent when they pass, so a run only proves anything if it is written down:
+# drop a file named parity-transcript.enable next to backend.log to get one
+# JSON line per solve/advance, with the first difference verbatim on failure.
+RUNTIME_DIR = Path(os.environ.get('LOCALAPPDATA', str(ROOT))) / 'STS1CombatSolver'
+PARITY_FLAG = RUNTIME_DIR / 'parity-transcript.enable'
+PARITY_LOG = RUNTIME_DIR / 'parity-transcript.jsonl'
+
+
+def record_parity(op: str, view: dict, ok: bool, detail: str = '') -> None:
+    if not PARITY_FLAG.exists():
+        return
+    game = view.get('game') or {}
+    combat = game.get('combat_state') or {}
+    player = combat.get('player') or {}
+    line = {'time': round(time.time(), 3), 'op': op, 'ok': ok, 'floor': game.get('floor'),
+            'turn': combat.get('turn'), 'hp': player.get('current_hp'),
+            'block': player.get('block'), 'energy': player.get('energy'),
+            'orbs': [orb.get('id') for orb in player.get('orbs') or []],
+            'monsters': [(m.get('id'), m.get('current_hp')) for m in combat.get('monsters') or []]}
+    if detail:
+        line['detail'] = detail[:600]
+    try:
+        # A new run starts on the first floor: keep one file per run, not per machine.
+        mode = 'w' if op == 'solve' and (game.get('floor') or 1) <= 1 else 'a'
+        RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+        with PARITY_LOG.open(mode, encoding='utf-8') as handle:
+            handle.write(json.dumps(line, ensure_ascii=False) + '\n')
+    except OSError:
+        pass
+
 
 def heart_fight(game):
     return any(m['id'] == 'CorruptHeart' for m in game['combat_state']['monsters'])
@@ -257,14 +288,44 @@ class Advisor:
         import_view = {**view, 'game': {**view['game'],
                        'seed': int(view['game']['seed']) % (1 << 64)}}
         s.battle = s.comparator.import_battle(import_view, require_search_state=True)
+        mid_turn_pick = None
         if view['game']['screen_type'] != 'NONE':
             if 'live_run' not in view:
                 raise ValueError('缺少战斗选牌动作导出，请重启游戏加载新版模组。')
-            s.native.import_start_selection(s.battle, start_selection(s.comparator, view))
+            spec = start_selection(s.comparator, view)
+            s.native.import_start_selection(s.battle, spec)
+            if spec.get('task') == 'MID_TURN':
+                mid_turn_pick = spec
         self.phase('核对游戏与模拟状态')
         comparison = s.comparator.compare_battle(view, s.battle)
         if comparison['differences']:
             raise ValueError('模拟器无法精确导入当前状态：' + repr(comparison['differences'][:2]))
+        if mid_turn_pick is not None:
+            # The game is waiting on a picker a card opened after its own use
+            # resolved. There is no earlier position to plan from, so answer the
+            # picker first: the plan is that one selection and the normal search
+            # resumes on the next decision point.
+            choices = s.sts.get_legal_actions(s.battle)
+            if not choices:
+                raise ValueError('战斗中选牌没有可选的牌')
+            self.native_search.resume()
+            s.actions.clear()
+            s.actions.append(int(choices[0].bits))
+            s.mapper = ActionMapper(s.comparator, s.battle, view)
+            self.root = s.battle.clone()
+            self.root_game = copy.deepcopy(view['game'])
+            # The picker itself decides nothing about the fight, so the plan's
+            # numbers are the state the picker was opened in: no HP moves and
+            # nothing is spent by answering it.
+            hp = int(s.battle.player.cur_hp)
+            self.plan = dict(actions=list(s.actions), outcome=0, value=0, hp=hp,
+                             post_hp=hp, max_hp=int(s.battle.player.max_hp),
+                             simulations=0, seconds=0.0, mid_turn_pick=True)
+            self.branches = {'mid-turn': self.plan}
+            self.branch_info = []
+            self.selected_branch = 'mid-turn'
+            self.manual_choice = False
+            return
         before = s.comparator.clone_fingerprint(s.battle)
         self.phase('搜索战斗路线')
         started = time.monotonic()
@@ -848,14 +909,20 @@ class Advisor:
         budget = request.get('budget', 8000)
         if type(budget) is not int or budget not in (2000, 8000, DEEP_BUDGET):
             raise ValueError('无效搜索预算')
-        if request['op'] == 'solve':
-            self.solve(view, budget)
-        elif request['op'] == 'advance':
-            self.advance(view, budget)
-        elif request['op'] == 'choose':
-            self.choose(view, request.get('branch'))
-        else:
-            raise ValueError('未知操作')
+        op = request['op']
+        try:
+            if op == 'solve':
+                self.solve(view, budget)
+            elif op == 'advance':
+                self.advance(view, budget)
+            elif op == 'choose':
+                self.choose(view, request.get('branch'))
+            else:
+                raise ValueError('未知操作')
+        except Exception as error:
+            record_parity(op, view, False, '%s | %s' % (fault_signature(error), error))
+            raise
+        record_parity(op, view, True)
         return self.result(view)
 
 

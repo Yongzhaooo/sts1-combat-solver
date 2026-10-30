@@ -77,6 +77,9 @@ void BattleContext::init(const GameContext &gc, MonsterEncounter encounterToInit
     }
 
     player.cardDrawPerTurn = 5;
+    if (player.cc == CharacterClass::DEFECT) {
+        player.orbSlots = 3; // Defect.maxOrbs; imported snapshots carry their own value.
+    }
     if (gc.hasRelic(R::SNECKO_EYE)) {
         player.cardDrawPerTurn += 2;
     }
@@ -191,14 +194,19 @@ void BattleContext::initRelics(const GameContext &gc, int extraOpeningDraw) {
                 p.inkBottleCounter = r.data;
                 break;
 
-            case R::INSERTER:
+            case R::INSERTER: {
+                // Inserter.atTurnStart adds one counter per turn, but treats a counter of -1 as
+                // "one short of firing" and then adds two, so the counter only reaches 2 on the
+                // turn after an odd number of starts. Carrying the counter between fights keeps
+                // that parity; a counter of 0 here means 1 on the next start.
                 if (r.data) {
-                    p.inserterCounter = 0;
+                    p.inserterCounter = 2;
                     p.increaseOrbSlots(1);
                 } else {
-                    p.inserterCounter = 1;
+                    p.inserterCounter = 0;
                 }
                 break;
+            }
 
             case R::LIZARD_TAIL:
                 p.setHasRelic<R::LIZARD_TAIL>(r.data == -1);
@@ -350,6 +358,10 @@ void BattleContext::initRelics(const GameContext &gc, int extraOpeningDraw) {
                 break;
 
             case R::RUNIC_CAPACITOR:
+                // RunicCapacitor.atTurnStart raises the slots on the first player turn only, but
+                // nothing later in the fight reads that turn boundary, so applying them up front
+                // gives the same fight. It must not stack per fight, so tools must not add this
+                // relic to a battle that starts with it already counted.
                 p.increaseOrbSlots(3);
                 break;
 
@@ -567,6 +579,11 @@ void BattleContext::updateRelicsOnExit(GameContext &g) const {
         VictoryHpRelics(g.relics).apply(g.curHp, g.maxHp, [&](int amount) {
             g.playerHeal(amount);
         });
+
+        // SelfRepairPower: heal its stack amount once the combat is won.
+        if (player.hasStatus<PS::SELF_REPAIR>()) {
+            g.playerHeal(player.getStatus<PS::SELF_REPAIR>());
+        }
     }
     for (auto &r : g.relics.relics) {
         switch (r.id) {
@@ -633,10 +650,10 @@ void cardOnExit(const CardInstance &c, Deck &deck) {
         deckCard.misc = c.specialData;
     }
 
-    // todo
-//    if (c.getId() == CardId::GENETIC_ALGORITHM) {
-//        deckCard.misc = c.specialData;
-//    }
+    if (c.getId() == CardId::GENETIC_ALGORITHM) {
+        // GeneticAlgorithm.java persists its block growth in the master deck's misc.
+        deckCard.misc = c.specialData;
+    }
 }
 
 void BattleContext::updateCardsOnExit(Deck &deck) const {
@@ -935,6 +952,14 @@ void BattleContext::useCard() {
     item.exhaustOnUse |= c.doesExhaust();
     ++player.cardsPlayedThisTurn;
 
+    // AbstractCard keeps the printed X cost at -1 for the whole time the card is
+    // in play: use() reads it, and the printed cost is what RecycleAction tests.
+    // A this-turn override (Madness, Mummified Hand) must survive: the game
+    // spends energy when costForTurn > 0, exactly like any other card.
+    if (c.isXCost()) {
+        c.cost = -1;
+    }
+
     switch (c.getType()) {
         case CardType::ATTACK:
             useAttackCard();
@@ -969,8 +994,23 @@ void BattleContext::useCard() {
 
     if (!item.purgeOnUse) { // todo change to checking the card queue item
         cards.removeFromHandById(c.uniqueId);
+        // A printed X cost (-1) never reaches the payment branch below, and a
+        // positive this-turn override (Whirlwind after Madness) is paid exactly
+        // like any other card.
         if (c.costForTurn > 0 && !c.isFreeToPlay(*this) && !item.autoplay && !(player.hasStatus<PS::CORRUPTION>() && c.getType() == CardType::SKILL)) {
             player.useEnergy(c.costForTurn);
+        }
+        // The unresolved X sentinel (-1) applies only while the card is in hand
+        // or being played. AbstractCard clears it on use, so it must not leak
+        // onto the played card, the hand copy held by the card queue item, or
+        // the copy Echo Form keeps for the next play.
+        if (c.costForTurn == -1) {
+            for (int i = 0; i < cards.cardsInHand; ++i) {
+                if (cards.hand[i].getUniqueId() == c.getUniqueId()) {
+                    cards.hand[i].costForTurn = 0;
+                }
+            }
+            curCardQueueItem.card.costForTurn = 0;
         }
     }
 }
@@ -1250,7 +1290,7 @@ void BattleContext::useAttackCard() {
                 item.energyOnUse = player.energy;
             }
             addToBot(Actions::WhirlwindAction(calculateCardDamageMatrix(c, up ? 8 : 5),
-                    item.energyOnUse, !(item.freeToPlay || c.freeToPlayOnce)));
+                    item.energyOnUse, item.freeToPlay || c.freeToPlayOnce));
             break;
         }
 
@@ -1540,7 +1580,7 @@ void BattleContext::useSkillCard() {
                 item.energyOnUse = player.energy;
             }
 
-            addToBot( Actions::TransmutationAction(up, item.energyOnUse, !(item.freeToPlay || c.freeToPlayOnce)) );
+            addToBot( Actions::TransmutationAction(up, item.energyOnUse, item.freeToPlay || c.freeToPlayOnce) );
             break;
 
         case CardId::TRIP: // maybe fixed --- todo this doesn't work properly because it only requires a target when not upgraded, also the trip card doesn't uses its own implementation of debuff all enemy
@@ -1713,6 +1753,9 @@ void BattleContext::onUseAttackCard() {
 
     const auto echoForm = p.getStatus<PS::ECHO_FORM>();
     if (!item.purgeOnUse && echoForm) {
+        // EchoFormPower: the first amount cards played each turn are played twice.
+        // cardsPlayedThisTurn counts the queued duplicate as well, so subtracting
+        // the duplicates recovers the game's cardsPlayedThisTurn.size() value.
         const bool echoFormActive = player.cardsPlayedThisTurn - player.echoFormCardsDoubled <= echoForm;
         if (echoFormActive) {
             ++player.echoFormCardsDoubled;
@@ -1786,6 +1829,9 @@ void BattleContext::onUseSkillCard() {
 
     const auto echoForm = p.getStatus<PS::ECHO_FORM>();
     if (!item.purgeOnUse && echoForm) {
+        // EchoFormPower: the first amount cards played each turn are played twice.
+        // cardsPlayedThisTurn counts the queued duplicate as well, so subtracting
+        // the duplicates recovers the game's cardsPlayedThisTurn.size() value.
         const bool echoFormActive = player.cardsPlayedThisTurn - player.echoFormCardsDoubled <= echoForm;
         if (echoFormActive) {
             ++player.echoFormCardsDoubled;
@@ -1842,8 +1888,17 @@ void BattleContext::onUsePowerCard() {
         p.decrementStatus<PS::DUPLICATION>();
     }
 
+    // AmplifyPower.onUseCard: the next Power card played this turn is played twice.
+    if (!item.purgeOnUse && p.hasStatus<PS::AMPLIFY>()) {
+        queuePurgeCard(c, item.target);
+        p.decrementStatus<PS::AMPLIFY>();
+    }
+
     const auto echoForm = p.getStatus<PS::ECHO_FORM>();
     if (!item.purgeOnUse && echoForm) {
+        // EchoFormPower: the first amount cards played each turn are played twice.
+        // cardsPlayedThisTurn counts the queued duplicate as well, so subtracting
+        // the duplicates recovers the game's cardsPlayedThisTurn.size() value.
         const bool echoFormActive = player.cardsPlayedThisTurn - player.echoFormCardsDoubled <= echoForm;
         if (echoFormActive) {
             ++player.echoFormCardsDoubled;
@@ -1969,6 +2024,9 @@ void BattleContext::onUseStatusOrCurseCard() {
 
     const auto echoForm = p.getStatus<PS::ECHO_FORM>();
     if (!item.purgeOnUse && echoForm) {
+        // EchoFormPower: the first amount cards played each turn are played twice.
+        // cardsPlayedThisTurn counts the queued duplicate as well, so subtracting
+        // the duplicates recovers the game's cardsPlayedThisTurn.size() value.
         const bool echoFormActive = player.cardsPlayedThisTurn - player.echoFormCardsDoubled <= echoForm;
         if (echoFormActive) {
             ++player.echoFormCardsDoubled;
@@ -2029,14 +2087,51 @@ void BattleContext::onAfterUseCard() {
         }
     }
 
+    // Cards that rewrite themselves once played, which the game does inside
+    // use(): ReduceCostAction / ModifyBlockAction / IncreaseMiscAction all take
+    // the uuid and walk GetAllInBattleInstances, so every copy of the card is
+    // raised, including the purgeOnUse copies Echo Form, Duplication, Burst and
+    // Amplify queued. Those run use() again, so this branch has to run for them
+    // too; Steam Barrier's own bump lives in DefectCards.cpp for the same reason.
+    bool rebound = false;
+    c.freeToPlayOnce = false;
+    if (c.getId() == CardId::STREAMLINE) {
+        c.updateCost(-1);
+    } else if (c.getId() == CardId::STEAM_BARRIER) {
+        // Bumped in DefectCards.cpp, where use() reads it.
+    } else if (c.getId() == CardId::GENETIC_ALGORITHM) {
+        // GeneticAlgorithm.java: IncreaseMiscAction(uuid, misc, magicNumber).
+        const std::int16_t growth = static_cast<std::int16_t>(c.isUpgraded() ? 3 : 2);
+        if (item.purgeOnUse) {
+            cards.findAndUpgradeSpecialData(c.uniqueId, growth);
+            for (int i = 0; i < cardQueue.size; ++i) {
+                auto &pending = cardQueue.arr[(cardQueue.frontIdx + i) % CardQueue::capacity];
+                if (!pending.isEndTurn && pending.card.uniqueId == c.uniqueId) {
+                    pending.card.specialData = static_cast<std::int16_t>(pending.card.specialData + growth);
+                }
+            }
+        }
+        c.specialData = static_cast<std::int16_t>(c.specialData + growth);
+    }
+
+    // UseCardAction drops a purgeOnUse card instead of moving it to a pile, so
+    // the powers it would otherwise notify never see it. Its self-rewrite above
+    // still applies, because the game runs it in the card's own use().
     if (item.purgeOnUse) {
         return;
     }
 
-    bool rebound = false;
-    c.freeToPlayOnce = false;
-
     if (c.getType() == CardType::POWER) {
+        // ForceField.java: every Power played this combat lowers its cost by 1 in
+        // whatever pile it is sitting in.
+        auto lowerForceField = [](CardInstance &fc) {
+            if (fc.getId() == CardId::FORCE_FIELD) {
+                fc.updateCost(-1);
+            }
+        };
+        for (int i = 0; i < cards.cardsInHand; ++i) lowerForceField(cards.hand[i]);
+        for (auto &fc : cards.drawPile) lowerForceField(fc);
+        for (auto &fc : cards.discardPile) lowerForceField(fc);
         c.id = CardId::INVALID;
         return;
     }
@@ -2238,6 +2333,9 @@ void BattleContext::afterMonsterTurns() {
     // player.applyStartOfTurnOrbs()
     //for each orb : OnStartOfTurn
     //if have relic cables: apply orb[0].OnStartOfTurn again
+    if (player.cc == CharacterClass::DEFECT) { // Ironclad queues nothing here, as before.
+        addToBot(Actions::TriggerStartOfTurnOrbsAction());
+    }
 
     if (player.hasStatus<PS::BARRICADE>()) {
 
@@ -2787,6 +2885,18 @@ void BattleContext::triggerOnOtherCardPlayed(const CardInstance &usedCard) {
     if (thousandCuts) {
         addToBot(Actions::DamageAllEnemy(thousandCuts));
     }
+
+    // Storm/Heatsinks watch the card type (both use onUseCard in the game).
+    if (usedCard.getType() == CardType::POWER) {
+        if (const int storm = player.getStatus<PS::STORM>(); storm > 0) {
+            for (int i = 0; i < storm; ++i) {
+                addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
+            }
+        }
+        if (const int heatsinks = player.getStatus<PS::HEATSINKS>(); heatsinks > 0) {
+            addToBot(Actions::DrawCards(heatsinks));
+        }
+    }
 }
 
 DamageMatrix BattleContext::calculateCardDamageMatrix(const CardInstance &card, int baseDamage) const {
@@ -2808,6 +2918,10 @@ int BattleContext::calculateCardDamage(const CardInstance &card, int targetIdx, 
 
     if (player.hasRelic<R::STRIKE_DUMMY>() && card.isStrikeCard()) {
         damage += 3;
+    }
+
+    if (card.getId() == CardId::CLAW) {
+        damage += player.clawBonus;
     }
 
     if (player.hasRelic<R::WRIST_BLADE>() && card.costForTurn == 0) {
@@ -3202,7 +3316,19 @@ void BattleContext::chooseHeadbuttCard(int discardIdx) {
 }
 
 void BattleContext::chooseRecycleCard(int handIdx) {
-    // todo
+#ifdef sts_asserts
+    assert(handIdx >= 0 && handIdx < cards.cardsInHand);
+#endif
+    // RecycleAction: exhaust the chosen card and gain energy from its current
+    // cost. Java inspects the number, so Confusion setting the cost to 0 grants
+    // nothing, and the -1 X-cost sentinel grants everything currently available.
+    const CardInstance chosen = cards.hand[handIdx];
+    const int energyGain = chosen.recycleEnergyGain(player.energy);
+    cards.moveToExhaustPile(chosen);
+    cards.removeFromHandAtIdx(handIdx);
+    if (energyGain > 0) {
+        player.gainEnergy(energyGain);
+    }
 }
 
 void BattleContext::chooseWarcryCard(int handIdx) {

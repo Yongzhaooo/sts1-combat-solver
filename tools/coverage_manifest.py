@@ -6,9 +6,12 @@ Reads the engine sources only (no build, no game):
     of the per-character dispatch functions in src/combat/characters/, and of cases that
     overlay/build_native.py injects into the shared switch
   - hooked class relics = relic ids named in combat sources (src/combat, include/combat)
+  - tested class relics = hooked relics whose id also appears in a test registered by the
+    engine CMakeLists, so a name alone no longer counts as done
 Writes overlay/coverage_manifest.json. With --check it fails if the committed file is stale or if
-a character that overlay/backend.py supports has any gap. The backend loads the file to refuse a
-combat that contains a missing item before search starts.
+a character that overlay/backend.py supports has any gap. Untested relics are reported as a note
+instead of a failure, because they say nothing about whether another character's PR is sound. The
+backend loads the file to refuse a combat that contains a missing item before search starts.
 """
 import argparse
 import ast
@@ -19,6 +22,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 ENGINE = 'candidates/sts-ironclad-agent/combat_engine/combat4r/engine-source'
+TESTS_CMAKE = 'candidates/sts-ironclad-agent/combat_engine/CMakeLists.txt'
 MANIFEST = 'overlay/coverage_manifest.json'
 CHARACTERS = ['IRONCLAD', 'THE_SILENT', 'DEFECT', 'WATCHER']  # CharacterClass / CardColor order
 # Generated cards are not in any pool, so which character makes them is declared here. Each
@@ -190,6 +194,19 @@ def derive():
     hooks = set()
     for path in sorted((ROOT / ENGINE).glob('src/combat/**/*.cpp')) + sorted((ROOT / ENGINE).glob('include/combat/**/*.h')):
         hooks |= set(re.findall(r'\b(?:R|RelicId)::(\w+)', strip_comments(path.read_text(encoding='utf-8'))))
+    # A hook only proves the name is mentioned, not that the effect is right, so the manifest also
+    # records which class relics a registered test exercises. CONTRIBUTING asks for coverage of
+    # every new implementation; reading the CMake lists keeps this derived from source, not asserted.
+    # CMake comments are `#` lines and its strings are not C++ strings, so strip_comments() would
+    # misread them: read the file plainly and drop the `#` lines instead.
+    cmake = '\n'.join(line for line in (ROOT / TESTS_CMAKE).read_text(encoding='utf-8').splitlines()
+                      if not line.lstrip().startswith('#'))
+    registered = set(re.findall(r'add_test\(\s*NAME\s+\w+\s+COMMAND\s+(\w+)\s*\)', cmake))
+    tested = set()
+    for target, source in re.findall(r'add_executable\(\s*(\w+)\s+([^\s)]+\.cpp)\s*\)', cmake):
+        path = (ROOT / TESTS_CMAKE).parent / source
+        if target in registered and path.is_file():
+            tested |= set(re.findall(r'\b(?:R|RelicId)::(\w+)', strip_comments(path.read_text(encoding='utf-8'))))
     class_relics = {c: sorted(pool[c] - set().union(*(pool[o] for o in CHARACTERS if o != c))
                               | set(starter_relic[c])) for c in CHARACTERS}
 
@@ -206,6 +223,7 @@ def derive():
             'starter': section(starter[character]),
             'generated': section(GENERATED[character]),
             'class_relics': section(relic_names, lambda r: r in hooks),
+            'class_relic_tests': section(relic_names, lambda r: r in hooks and r in tested),
         }
     result['colorless'] = {'reward_pool': section(colorless)}
     cards_missing = sorted({n for c in result['characters'].values() for s in (c['reward_pool'], c['starter'], c['generated'])
@@ -242,13 +260,20 @@ def main():
     if committed != render(manifest):
         sys.exit(f'FAIL: {MANIFEST} is stale; run python tools/coverage_manifest.py and commit the result')
     gaps = []
+    advisory = []
     for character in supported_characters():
         for name, section in manifest['characters'][character].items():
-            gaps += [f'{character} {name}: {item}' for item in section['missing']]
+            # class_relic_tests is reported but not enforced: it records test coverage rather
+            # than whether the item works, and holding a character's PR on another character's
+            # untested relics would block work that does not touch them.
+            bucket = advisory if name == 'class_relic_tests' else gaps
+            bucket += [f'{character} {name}: {item}' for item in section['missing']]
     gaps += [f'colorless: {item}' for item in manifest['colorless']['reward_pool']['missing']]
     if gaps:
         sys.exit('FAIL: a supported character has gaps:\n  ' + '\n  '.join(gaps))
     print('PASS: manifest is current;', ', '.join(supported_characters()), 'has no gaps')
+    if advisory:
+        print('NOTE: implemented but untested:\n  ' + '\n  '.join(advisory))
 
 
 if __name__ == '__main__':

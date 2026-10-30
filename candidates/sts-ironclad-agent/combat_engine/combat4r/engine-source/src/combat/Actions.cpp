@@ -14,13 +14,91 @@ Action Actions::SetState(InputState state) {
     }};
 }
 
-Action Actions::AttackEnemy(int idx, int damage) {
+Action Actions::AttackEnemy(int idx, int damage, DamageType type) {
     return {[=] (BattleContext &bc) {
         if (bc.monsters.arr[idx].isDeadOrEscaped()) {
             return;
         }
 
+        bc.monsters.arr[idx].attacked(bc, damage, type);
+        bc.checkCombat();
+    }};
+}
+
+Action Actions::RipAndTearAction(int damage, int times) {
+    return {[=] (BattleContext &bc) {
+        // NewRipAndTearAction: each hit rolls its own random target when it resolves.
+        for (int i = 0; i < times; ++i) {
+            bc.addToBot({[=] (BattleContext &bc) {
+                const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                if (target >= 0) {
+                    bc.addToBot(Actions::AttackEnemy(target, damage));
+                }
+            }});
+        }
+    }};
+}
+
+Action Actions::AllForOneAction() {
+    return {[] (BattleContext &bc) {
+        // AllForOneAction: every 0-cost card in the discard pile returns to hand as
+        // the same instance (no new unique id). Walking backwards keeps indices valid.
+        for (int i = static_cast<int>(bc.cards.discardPile.size()) - 1; i >= 0; --i) {
+            const auto &dc = bc.cards.discardPile[i];
+            if (dc.costForTurn != 0 && dc.cost != 0) {
+                continue;
+            }
+            if (bc.cards.cardsInHand >= CardManager::MAX_HAND_SIZE) {
+                break;
+            }
+            bc.cards.hand[bc.cards.cardsInHand++] = dc;
+            bc.cards.discardPile.erase(bc.cards.discardPile.begin() + i);
+        }
+    }};
+}
+
+Action Actions::CreateRandomCardInHandAction(CardType type, bool commonOnly, bool zeroCost) {
+    return {[=] (BattleContext &bc) {
+        // Hello World and Creative AI add the card at its printed cost: neither
+        // HelloPower.atStartOfTurn nor CreativeAIPower.atStartOfTurn touches the cost,
+        // and MakeTempCardInHandAction never zeroes one. Only WhiteNoise.java calls
+        // setCostForTurn(0) on what it adds, hence zeroCost. commonOnly restricts the
+        // pool to Common cards, which is what separates Hello World from the others.
+        const auto cid = commonOnly
+                ? getRandomClassCardOfTypeAndRarity(
+                        bc.cardRandomRng, bc.player.cc, type, CardRarity::COMMON)
+                : getTrulyRandomCardInCombat(bc.cardRandomRng, bc.player.cc, type);
+        CardInstance generated = bc.createGeneratedCard(cid);
+        if (zeroCost) generated.setCostForTurn(0);
+        bc.addToTop(Actions::MakeTempCardInHand(generated));
+    }};
+}
+
+Action Actions::CreateRandomRarityCardInHandAction(CardRarity rarity, bool zeroCost) {
+    return {[=] (BattleContext &bc) {
+        // HelloPower.atStartOfTurn: AbstractDungeon.getCard(COMMON, cardRandomRng), which
+        // rolls over the whole rarity pool - attacks included - so it is not the
+        // type-filtered pool CreateRandomCardInHandAction draws from.
+        const auto cid = getRandomClassCardOfRarity(bc.cardRandomRng, bc.player.cc, rarity);
+        CardInstance generated = bc.createGeneratedCard(cid);
+        if (zeroCost) generated.setCostForTurn(0);
+        bc.addToTop(Actions::MakeTempCardInHand(generated));
+    }};
+}
+
+Action Actions::SunderAction(int idx, int damage) {
+    return {[=] (BattleContext &bc) {
+        if (bc.monsters.arr[idx].isDeadOrEscaped()) {
+            return;
+        }
+        const bool aliveBefore = bc.monsters.arr[idx].curHp > 0;
         bc.monsters.arr[idx].attacked(bc, damage);
+        // The kill check must run inside the damage action. The game checks
+        // target.isDying in AttackAction; a follow-up queued action may never
+        // resolve once checkCombat changes the input state.
+        if (aliveBefore && bc.monsters.arr[idx].curHp <= 0) {
+            bc.player.gainEnergy(3);
+        }
         bc.checkCombat();
     }};
 }
@@ -52,6 +130,8 @@ Action Actions::DamageAllEnemy(int damage) { // todo this is probably broken
     return {[=] (BattleContext &bc) {
         for (int idx = 0; idx < bc.monsters.monsterCount; idx++) {
             if (!bc.monsters.arr[idx].isDeadOrEscaped()) {
+                // ExplosivePotion (null owner, javap), The Bomb and Mercury Hourglass all
+                // skip the onAttacked chain: Curl Up, Thorns, Angry and friends need an owner.
                 bc.monsters.arr[idx].damage(bc, damage); // possible should addToBot here todo
             }
         }
@@ -250,7 +330,7 @@ Action Actions::MakeTempCardInDiscard(const CardInstance &c, int amount) {
     // This action animates the inserted object; its Soul clears temporary
     // costs. Hand-overflow and Dual Wield insert a distinct source object
     // while animating a copy, so their CardManager paths must not reset it.
-    c_copy.costForTurn = c_copy.cost;
+    c_copy.costForTurn = (c_copy.cost == -1) ? static_cast<int8_t>(-1) : c_copy.cost;
     return {[=](BattleContext &bc) { // todo maybe store by reference instead of copy if CardInstance is too big to fit directly in the lambda. Make a seperate space where the card will be stored
         for (int i = 0; i < amount; ++i) {
             bc.cards.createTempCardInDiscard(c_copy);
@@ -327,9 +407,381 @@ Action Actions::MonsterStartTurnAction() {
     }};
 }
 
+namespace {
+    // LockOnPower: orb damage against a locked target is increased by 50%. The
+    // game applies this per target, so multi-target orb hits resolve one enemy at
+    // a time instead of through a single DamageAllEnemy action.
+    int lockOnDamage(const BattleContext &bc, int targetIdx, int damage) {
+        if (targetIdx >= 0 && targetIdx < bc.monsters.monsterCount
+                && bc.monsters.arr[targetIdx].hasStatus<MS::LOCK_ON>()) {
+            return static_cast<int>(static_cast<float>(damage) * 1.5f);
+        }
+        return damage;
+    }
+
+    // DarkOrb.onEndOfTurn: the accumulated counter grows by max(0, 6 + focus).
+    // Negative focus never reduces the counter (Dark.applyFocus clamps only the
+    // growth rate, and never touches the accumulated value itself).
+    void growDarkOrb(BattleContext &bc, Player::OrbState &orb) {
+        const int growth = 6 + bc.player.focus;
+        if (growth > 0) {
+            orb.darkCounter = static_cast<std::int16_t>(orb.darkCounter + growth);
+        }
+    }
+
+    // One orb's end-of-turn passive: Lightning and Frost settle, Dark grows and
+    // Plasma has none (Plasma overrides onStartOfTurn only). Shared by the
+    // end-of-turn trigger, Loop's extra trigger and Emotion Chip's ImpulseAction.
+    void triggerOrbEndOfTurnPassive(BattleContext &bc, Player::OrbState &orb) {
+        switch (orb.type) {
+            case Orb::LIGHTNING: {
+                // LightningOrb.onEndOfTurn: deal 3 (+focus) to a random enemy.
+                // With Electrodynamics (ElectroPower) it hits all enemies and
+                // consumes no target roll (Lightning checks hasPower("Electro")).
+                const int damage = 3 + bc.player.focus;
+                if (bc.player.hasStatus<PS::ELECTRO>()) {
+                    for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                        if (!bc.monsters.arr[i].isDeadOrEscaped()) {
+                            bc.addToBot(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage), DamageType::THORNS));
+                        }
+                    }
+                } else {
+                    // LightningOrb.onEndOfTurn queues LightningOrbPassiveAction, whose
+                    // triggerPassiveEffect calls AbstractDungeon.getRandomMonster() as it
+                    // runs - after every passive this same pass already queued, and after
+                    // the block/settle actions in between, has resolved. Queue the roll
+                    // through addToBottom so it keeps that position in the queue: rolling
+                    // here would read a candidate list that still holds monsters an
+                    // earlier passive just killed (F30, floor 30: the roll silently ran
+                    // before the Frost passive's settle action, leaving the counter one
+                    // step behind and sending Coolheaded's evoke onto the wrong enemy).
+                    // The roll is unconditional: the action picks its target before it
+                    // looks at the damage, so Focus <= -3 still advances cardRandomRng.
+                    bc.addToBot({[damage] (BattleContext &bc) {
+                        const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                        if (target >= 0 && damage > 0) {
+                            bc.addToBot(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
+                        }
+                    }});
+                }
+                break;
+            }
+            case Orb::FROST: {
+                // FrostOrb.onEndOfTurn: gain 2 (+focus) block.
+                const int block = 2 + bc.player.focus;
+                if (block > 0) {
+                    bc.addToBot(Actions::GainBlock(block));
+                }
+                break;
+            }
+            case Orb::DARK:
+                // DarkOrb.onEndOfTurn: the counter grows; no damage, the orb stays.
+                growDarkOrb(bc, orb);
+                break;
+            default:
+                // Plasma has no end-of-turn passive.
+                break;
+        }
+    }
+}
+
+Action Actions::TriggerOrbPassiveAction(int orbIdx) {
+    return {[=] (BattleContext &bc) {
+        // LoopPower: for each stack, trigger the oldest orb's passive by calling
+        // both onStartOfTurn and onEndOfTurn (only Plasma overrides the former).
+        if (orbIdx < 0 || orbIdx >= bc.player.orbs.size()) {
+            return;
+        }
+        auto &orb = bc.player.orbs[orbIdx];
+        if (orb.type == Orb::FUSION) {
+            bc.addToBot(Actions::GainEnergy(1));
+        }
+        triggerOrbEndOfTurnPassive(bc, orb);
+    }};
+}
+
+Action Actions::TriggerStartOfTurnOrbsAction() {
+    return {[] (BattleContext &bc) {
+        // Plasma is the only orb with a start-of-turn passive: Plasma.onStartOfTurn
+        // gains passiveAmount (1) energy per orb, queued at the bottom. Focus never
+        // changes plasma values (AbstractOrb.applyFocus skips Plasma).
+        for (int i = 0; i < bc.player.orbs.size(); ++i) {
+            if (bc.player.orbs[i].type == Orb::FUSION) {
+                bc.addToBot(Actions::GainEnergy(1));
+            }
+        }
+        // AbstractPlayer.applyStartOfTurnOrbs: with Cables, orbs.get(0).onStartOfTurn() runs again.
+        if (bc.player.hasRelic<R::GOLD_PLATED_CABLES>() && bc.player.orbs.size() > 0
+                && bc.player.orbs[0].type == Orb::FUSION) {
+            bc.addToBot(Actions::GainEnergy(1));
+        }
+    }};
+}
+
 Action Actions::TriggerEndOfTurnOrbsAction() {
     return {[] (BattleContext &bc) {
-        // todo
+        // End-of-turn passives trigger left to right and never consume the orb.
+        for (int i = 0; i < bc.player.orbs.size(); ++i) {
+            triggerOrbEndOfTurnPassive(bc, bc.player.orbs[i]);
+        }
+        // GoldPlatedCables lives inside TriggerEndOfTurnOrbsAction in the game:
+        // after the full pass it triggers orbs.get(0) - the orb evokeOrb removes
+        // first, index 0 here - one more time. The game queues that second
+        // TriggerEndOfTurnOrbsAction to the bottom, so the first pass's damage
+        // resolves and can kill a monster before the second pass picks its
+        // target. Rolling the target here instead would see a corpse as alive
+        // and draw from the wrong range.
+        if (bc.player.hasRelic<R::GOLD_PLATED_CABLES>() && bc.player.orbs.size() > 0) {
+            bc.addToBot({[] (BattleContext &bc) {
+                if (bc.player.orbs.size() > 0) {
+                    triggerOrbEndOfTurnPassive(bc, bc.player.orbs[0]);
+                }
+            }});
+        }
+    }};
+}
+
+Action Actions::ImpulseAction() {
+    return {[] (BattleContext &bc) {
+        // EmotionChip.atTurnStart queues ImpulseAction: every orb runs its
+        // onStartOfTurn and then its onEndOfTurn passive once. GoldPlatedCables
+        // adds one more full trigger to orbs.get(0).
+        for (int i = 0; i < bc.player.orbs.size(); ++i) {
+            auto &orb = bc.player.orbs[i];
+            if (orb.type == Orb::FUSION) {
+                bc.addToBot(Actions::GainEnergy(1));
+            }
+            triggerOrbEndOfTurnPassive(bc, orb);
+        }
+        if (bc.player.hasRelic<R::GOLD_PLATED_CABLES>() && bc.player.orbs.size() > 0) {
+            auto &orb = bc.player.orbs[0];
+            if (orb.type == Orb::FUSION) {
+                bc.addToBot(Actions::GainEnergy(1));
+            }
+            triggerOrbEndOfTurnPassive(bc, orb);
+        }
+    }};
+}
+
+namespace {
+    // Fires one orb's evoke effects without consuming it. Shared by EvokeOrbAction
+    // and the full-bar push-out in ChannelOrb. The target roll for lightning
+    // happens here, when the effects are queued. The game queues evoke effects
+    // with addToTop (Lightning/Frost/Dark onEvoke), so effects must resolve
+    // before anything else pending in the queue.
+    void fireEvokeEffects(BattleContext &bc, const Player::OrbState &orb) {
+        switch (orb.type) {
+            case Orb::LIGHTNING: {
+                // LightningOrb.onEvoke: deal 8 (+focus +bonus) to a random enemy, or
+                // to all enemies under Electrodynamics (no target roll in that case).
+                // LightningOrbEvokeAction.update() calls getRandomMonster() before it
+                // looks at the damage, so the roll happens even at zero damage - Focus
+                // <= -8 must not shift cardRandomRng by one for the rest of the fight.
+                const int damage = 8 + bc.player.focus;
+                if (bc.player.hasStatus<PS::ELECTRO>()) {
+                    for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                        if (!bc.monsters.arr[i].isDeadOrEscaped()) {
+                            bc.addToTop(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage), DamageType::THORNS));
+                        }
+                    }
+                } else {
+                    const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+                    if (target >= 0 && damage > 0) {
+                        bc.addToTop(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
+                    }
+                }
+                break;
+            }
+            case Orb::FROST: {
+                // FrostOrb.onEvoke: gain 5 (+focus) block.
+                const int block = 5 + bc.player.focus;
+                if (block > 0) {
+                    bc.addToTop(Actions::GainBlock(block));
+                }
+                break;
+            }
+            case Orb::FUSION:
+                // Plasma.onEvoke: gain evokeAmount (2, never scaled by focus) energy.
+                bc.addToTop(Actions::GainEnergy(2));
+                break;
+            case Orb::DARK: {
+                // DarkOrb.onEvoke via DarkOrbEvokeAction: deal the accumulated
+                // counter to the lowest-HP enemy, chosen when the effect queues.
+                if (orb.darkCounter > 0) {
+                    int target = -1;
+                    int lowestHp = 0;
+                    for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                        const auto &m = bc.monsters.arr[i];
+                        if (m.isDeadOrEscaped() || m.curHp <= 0) {
+                            continue;
+                        }
+                        if (target < 0 || m.curHp < lowestHp) {
+                            target = i;
+                            lowestHp = m.curHp;
+                        }
+                    }
+                    if (target >= 0) {
+                        // DarkOrbEvokeAction runs AbstractOrb.applyLockOn on its target.
+                        bc.addToTop(Actions::AttackEnemy(target, lockOnDamage(bc, target, orb.darkCounter), DamageType::THORNS));
+                    }
+                }
+                break;
+            }
+            default:
+                // TODO(defect M3): plasma evoke settlement stays unimplemented.
+                break;
+        }
+    }
+}
+
+Action Actions::ChannelOrb(Orb orb, std::int16_t darkCounter) {
+    return {[=] (BattleContext &bc) {
+        // ChannelAction(orb) defaults autoEvoke to true. Its update() only calls
+        // AbstractPlayer.channelOrb when autoEvoke is set, or when the bar still
+        // holds an EmptyOrbSlot. A channel requested with a full bar therefore
+        // does nothing here: the game's channelOrb would instead queue an evoke
+        // of slot 0 and a nested ChannelAction, so the orb is not swallowed, it
+        // is simply pushed back behind the evoke.
+        if (bc.player.orbSlots <= 0) {
+            return;
+        }
+        if (bc.player.hasEmptyOrb()) {
+            bc.player.channelOrb(orb, darkCounter);
+            return;
+        }
+        // AbstractPlayer.channelOrb with no empty slot: addToTop a ChannelAction
+        // whose own channelOrb now finds that empty slot, and before it an
+        // EvokeOrbAction(1). Both go to the top, evoke first, so the oldest orb
+        // fires before the new one lands at the end.
+        if (!bc.player.orbs.empty()) {
+            const auto pushed = bc.player.orbs[0];
+            bc.addToTop(Actions::ChannelOrb(orb, darkCounter));
+            fireEvokeEffects(bc, pushed);
+            bc.player.orbs.remove(0);
+        }
+    }};
+}
+
+Action Actions::DarkImpulseAction() {
+    return {[] (BattleContext &bc) {
+        // DarkImpulseAction (upgraded Darkness): every Dark orb's counter grows
+        // once right now. GoldPlatedCables then repeats the trigger for orbs.get(0)
+        // when that orb is Dark, like the other orb-trigger actions.
+        for (auto &orb : bc.player.orbs) {
+            if (orb.type == Orb::DARK) {
+                growDarkOrb(bc, orb);
+            }
+        }
+        if (bc.player.hasRelic<R::GOLD_PLATED_CABLES>() && bc.player.orbs.size() > 0
+                && bc.player.orbs[0].type == Orb::DARK) {
+            growDarkOrb(bc, bc.player.orbs[0]);
+        }
+    }};
+}
+
+Action Actions::DoubleEnergy() {
+    return {[] (BattleContext &bc) {
+        // DoubleEnergyAction: gainEnergy(player.energy) doubles the current energy.
+        bc.player.gainEnergy(bc.player.energy);
+    }};
+}
+
+Action Actions::EmptyEnergy(bool freeToPlay) {
+    return {[=] (BattleContext &bc) {
+        // TempestAction/MulticastAction/ReinforcedBodyAction.update(): the energy
+        // pool is emptied at the very end of the action, and only when the card
+        // was not played for free (bytecode guard `freeToPlayOnce != 0 -> skip`).
+        // AbstractCard.useCard() pays nothing for an X card, so this is the whole
+        // energy cost of the card.
+        if (freeToPlay) {
+            return;
+        }
+        bc.player.useEnergy(bc.player.energy);
+    }};
+}
+
+Action Actions::MultiCastAction(int times) {
+    return {[=] (BattleContext &bc) {
+        // MulticastAction: evoke the oldest orb N times. Every trigger except
+        // the last one leaves the orb in the bar (EvokeWithoutRemovingOrbAction);
+        // the final EvokeOrbAction(1) consumes it. Each trigger is its own action,
+        // so a trigger's target roll sees the monsters the previous trigger killed
+        // (AbstractDungeon.getRandomMonster filters halfDead/isDying/isEscaping);
+        // rolling all N targets here would pick from a stale candidate list.
+        for (int i = 0; i < times; ++i) {
+            const bool last = i == times - 1;
+            bc.addToBot({[=] (BattleContext &bc) {
+                if (bc.player.orbs.empty()) {
+                    return;
+                }
+                fireEvokeEffects(bc, bc.player.orbs[0]);
+                if (last) {
+                    bc.player.orbs.remove(0);
+                }
+            }});
+        }
+    }};
+}
+
+Action Actions::FissionAction(bool upgraded) {
+    return {[=] (BattleContext &bc) {
+        // FissionAction: the orb count is read when the action resolves, then all
+        // orbs are removed (evoked when upgraded), and that many energy/cards are
+        // granted. Queued bottom-up so removal resolves before the rewards.
+        const int count = static_cast<int>(bc.player.orbs.size());
+        if (upgraded) {
+            // EvokeAllOrbsAction addToTop's one EvokeOrbAction per orb, so each
+            // evoke's target roll sees the monsters the previous evoke killed.
+            // One evoke per orb, queued in order, reproduces that.
+            for (int i = 0; i < count; ++i) {
+                bc.addToBot({[] (BattleContext &bc) {
+                    if (bc.player.orbs.empty()) {
+                        return;
+                    }
+                    fireEvokeEffects(bc, bc.player.orbs[0]);
+                    bc.player.orbs.remove(0);
+                }});
+            }
+        } else {
+            bc.addToBot({[] (BattleContext &bc) {
+                bc.player.orbs.clear();
+            }});
+        }
+        bc.addToBot(Actions::GainEnergy(count));
+        bc.addToBot(Actions::DrawCards(count));
+    }};
+}
+
+Action Actions::EvokeOrbAction(int orbIdx, int times) {
+    return {[=] (BattleContext &bc) {
+        if (orbIdx < 0 || orbIdx >= bc.player.orbs.size()) {
+            return;
+        }
+        if (times <= 1) {
+            fireEvokeEffects(bc, bc.player.orbs[orbIdx]);
+            // Evoking consumes the orb, after all triggered instances resolve.
+            bc.player.orbs.remove(orbIdx);
+            return;
+        }
+        // EvokeOrbAction.update() evokes `times` orbs in one update, and every
+        // LightningOrbEvokeAction it queues is addToTop'd, so that action resolves
+        // before the loop continues. Each evoke therefore observes the monsters
+        // the previous one killed: AbstractDungeon.getRandomMonster() filters
+        // halfDead/isDying/isEscaping, so the candidate list can shrink between
+        // the rolls. Queue one evoke per slot to reproduce that ordering; rolling
+        // all `times` targets up front would pick from a stale candidate list.
+        for (int i = 0; i < times; ++i) {
+            const bool last = i == times - 1;
+            bc.addToBot({[=] (BattleContext &bc) {
+                if (orbIdx < 0 || orbIdx >= bc.player.orbs.size()) {
+                    return;
+                }
+                fireEvokeEffects(bc, bc.player.orbs[orbIdx]);
+                if (last) {
+                    bc.player.orbs.remove(orbIdx);
+                }
+            }});
+        }
     }};
 }
 
@@ -613,7 +1065,7 @@ Action Actions::JackOfAllTradesAction(bool upgraded) {
     }};
 }
 
-Action Actions::TransmutationAction(bool upgraded, int energy, bool useEnergy) {
+Action Actions::TransmutationAction(bool upgraded, int energy, bool freeToPlay) {
     return {[=] (BattleContext &bc) {
         const auto effectAmount = energy + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
 
@@ -630,9 +1082,12 @@ Action Actions::TransmutationAction(bool upgraded, int energy, bool useEnergy) {
        }
        bc.addToBot( Actions::MakeTempCardsInHand(cards) );
 
-       if (useEnergy) {
+       // TransmutationAction.update() empties the pool after queueing the cards,
+       // and only when the card was not played for free.
+       if (!freeToPlay) {
            bc.player.useEnergy(bc.player.energy);
        }
+
     }};
 }
 
@@ -932,11 +1387,30 @@ Action Actions::UpgradeAllCardsInHand() {
 }
 
 Action Actions::EssenceOfDarkness(int darkOrbsPerSlot) {
-    return sts::Action();
+    return {[=] (BattleContext &bc) {
+        // EssenceOfDarknessAction.update: while the orb bar still holds an empty
+        // slot, channel this.amount Dark orbs. It stops as soon as the bar is
+        // full rather than pushing out the oldest orb.
+        for (int i = 0; i < bc.player.orbSlots; ++i) {
+            for (int j = 0; j < darkOrbsPerSlot; ++j) {
+                if (!bc.player.hasEmptyOrb()) {
+                    return;
+                }
+                bc.addToTop(Actions::ChannelOrb(Orb::DARK));
+            }
+        }
+    }};
 }
 
 Action Actions::IncreaseOrbSlots(int count) {
-    return sts::Action();
+    return {[=] (BattleContext &bc) {
+        bc.player.increaseOrbSlots(count);
+        // Losing a slot drops the newest orb without evoking it. In the vanilla
+        // game only the full-bar channel push-out evokes; slot loss does not.
+        while (static_cast<int>(bc.player.orbs.size()) > bc.player.orbSlots) {
+            bc.player.orbs.remove(bc.player.orbs.size() - 1);
+        }
+    }};
 }
 
 Action Actions::SuicideAction(int monsterIdx, bool triggerRelics) {
@@ -1283,9 +1757,12 @@ Action Actions::SpotWeaknessAction(int target, int strength) {
     }};
 }
 
-Action Actions::WhirlwindAction(DamageMatrix damageMatrix, int energy, bool useEnergy) {
+Action Actions::WhirlwindAction(DamageMatrix damageMatrix, int energy, bool freeToPlay) {
     return {[=] (BattleContext &bc) {
-        if (useEnergy) {
+        // WhirlwindAction.update(): the hits are queued first, then the pool is
+        // emptied unless freeToPlayOnce was set (the bytecode guard at the end of
+        // update() skips EnergyManager.use entirely when the card was free).
+        if (!freeToPlay) {
             bc.player.useEnergy(bc.player.energy);
         }
 

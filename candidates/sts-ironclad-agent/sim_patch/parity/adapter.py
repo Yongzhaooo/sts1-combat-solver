@@ -20,6 +20,11 @@ from .core import Observation, differences, digest, field_family, leaves, sha256
 RNG_NAMES = {"ai": "aiRng", "card_random": "cardRandomRng", "misc": "miscRng",
              "monster_hp": "monsterHpRng", "potion": "potionRng", "shuffle": "shuffleRng"}
 PILES = ("hand", "draw_pile", "discard_pile", "exhaust_pile")
+# The game's orb id -> engine name, and the amounts each orb shows at Focus 0.
+# Plasma ignores Focus in the game, so it must ignore it in the projection too.
+ORB_IDS = {"Lightning": "LIGHTNING", "Frost": "FROST", "Dark": "DARK", "Plasma": "FUSION"}
+ORB_PASSIVE_EVOKE = {"LIGHTNING": (3, 8), "FROST": (2, 5), "DARK": (6, 8), "FUSION": (1, 2)}
+ORB_IGNORES_FOCUS = {"FUSION"}
 PRESENTATION = {"name", "raw_description", "description", "description_visible",
                 "spire_lab_observer_version", "screen_name"}
 
@@ -67,8 +72,10 @@ class Comparator:
                          "projection_sha256": sha256(__file__)}
 
     def original_card(self, raw: dict) -> dict:
-        name = {"Strike_R": "STRIKE_RED", "Defend_R": "DEFEND_RED", "Ghostly": "APPARITION", "J.A.X.": "JAX"}.get(
-            raw["id"], enum_key(raw["id"]))
+        # One alias table for the whole pipeline: build_snapshot already uses
+        # bridge.CARD_ALIASES, so a second copy here silently dropped every
+        # character added after the Ironclad (Strike_B -> STRIKE_B, for one).
+        name = self.bridge.CARD_ALIASES.get(raw["id"], enum_key(raw["id"]))
         misc = raw.get("misc", 0)
         if name == "SEARING_BLOW":
             misc = raw["upgrades"]
@@ -76,6 +83,11 @@ class Comparator:
             misc = raw["base_damage"] - 8
         elif name == "RITUAL_DAGGER":
             misc = raw["base_damage"]
+        elif name == "STEAM_BARRIER":
+            # SteamBarrier.java drops its own baseBlock by 1 on every play and leaves
+            # misc at 0; the engine keeps that count in specialData. build_snapshot
+            # derives the same value, so this only mirrors it for the comparison.
+            misc = (8 if raw["upgrades"] else 6) - raw["base_block"]
         return {"id": name, "upgrades": raw["upgrades"], "cost": raw["cost"],
                 "base_cost": raw["base_cost"], "free_to_play_once": raw["free_to_play_once"],
                 "special_data": misc}
@@ -84,6 +96,30 @@ class Comparator:
         return {"id": self.sts.CardId(card.id).name, "upgrades": int(card.upgrade_count),
                 "cost": int(card.cost_for_turn), "base_cost": int(card.base_cost),
                 "free_to_play_once": bool(card.free_to_play_once), "special_data": int(card.special_data)}
+
+    def original_orb(self, raw: dict) -> dict:
+        """One filled slot as the game reports it (CommunicationMod's shape)."""
+        return {"id": ORB_IDS.get(raw["id"], raw["id"]),
+                "passive": raw["passive_amount"], "evoke": raw["evoke_amount"]}
+
+    def simulator_orb(self, orb: dict, focus: int) -> dict:
+        """What the imported orb bar shows, rebuilt from stored state and Focus.
+
+        The engine keeps no passive/evoke numbers: Lightning and Frost hold the
+        card-granted bonus, Dark holds its accumulated damage, and Focus is a
+        player field. Rebuilding the displayed amounts here is what makes a wrong
+        Focus or a wrong derived bonus visible instead of silently accepted.
+
+        Both amounts are floored at zero, like the game does in
+        AbstractOrb.applyFocus (``max(0, base + Focus)``): a Focus of -3 or lower
+        drives Lightning's passive to 0 rather than to a negative number.
+        """
+        name = orb["id"]
+        passive, evoke = ORB_PASSIVE_EVOKE[name]
+        if name in ORB_IGNORES_FOCUS:
+            focus = 0
+        evoke = orb["dark_counter"] if name == "DARK" else evoke + focus
+        return {"id": name, "passive": max(0, passive + focus), "evoke": max(0, evoke)}
 
     def import_battle(self, view: dict, *, require_search_state=False):
         game = copy.deepcopy(view["game"])
@@ -242,6 +278,19 @@ class Comparator:
                 value += sum(power["amount"] for power in combat["player"]["powers"] if power["id"] == "Berserk")
             expected["player"][field] = value
         expected["turn"] = observation.consume("/game/combat_state/turn")
+        if "orbs" in combat["player"]:
+            # The game exports one entry per orb slot, null for an empty one; the
+            # simulator keeps only filled orbs plus a slot count. Compare the
+            # filled sequence, the slot count, and every displayed amount, so a
+            # wrong Focus or a wrong derived evoke bonus cannot pass unnoticed.
+            slots = combat["player"]["orbs"]
+            expected["player"]["orbs"] = [
+                self.original_orb(observation.consume(f"/game/combat_state/player/orbs/{index}"))
+                for index, raw in enumerate(slots) if raw.get("id")]
+            expected["player"]["orb_slots"] = len(slots)
+            actual["player"]["orbs"] = [self.simulator_orb(orb, battle.player.focus)
+                                        for orb in battle.player.orbs]
+            actual["player"]["orb_slots"] = int(battle.player.orb_slots)
         expected["piles"] = {}
         for pile in PILES:
             cards = combat[pile]

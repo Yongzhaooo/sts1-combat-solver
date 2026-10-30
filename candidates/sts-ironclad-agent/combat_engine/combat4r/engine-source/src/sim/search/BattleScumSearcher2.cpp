@@ -361,6 +361,11 @@ void search::BattleScumSearcher2::playoutRandom(BattleContext &state, std::vecto
         ++simulationIdx;
         enumerateActionsImpl(tempNode, state, preservePotions);
         if (tempNode.edges.empty()) {
+            // A Defect state with no legal action cannot be continued. Ending the
+            // rollout here keeps the search alive; aborting the process would
+            // take the whole backend down with a state we can still score.
+            // Ironclad keeps the original diagnostics and assert.
+            if (state.player.cc == CharacterClass::DEFECT) break;
             std::cerr << state.seed << " " << simulationIdx << std::endl;
             std::cerr << state.monsters.arr[0].getName() << " " << state.floorNum << " " << monsterEncounterStrings[static_cast<int>(state.encounter)] << std::endl;
             assert(false);
@@ -626,6 +631,24 @@ void enumerateCardSelectActionsImpl(NodeLike &node,
             }
             break;
 
+        case CardSelectTask::HOLOGRAM:
+            setupCardOptionsHelper(node, bc.cards.discardPile.begin(), bc.cards.discardPile.end());
+            break;
+
+        case CardSelectTask::RECYCLE:
+            setupCardOptionsHelper(node, bc.cards.hand.begin(), bc.cards.hand.begin() + bc.cards.cardsInHand);
+            break;
+
+        case CardSelectTask::SEEK:
+            // The grid keeps showing every card until the last pick, so a card
+            // already picked is still on screen but no longer selectable.
+            for (int i = 0; i < static_cast<int>(bc.cards.drawPile.size()); ++i) {
+                const auto &chosen = bc.cardSelectInfo.selectedIndices;
+                if (std::find(chosen.begin(), chosen.end(), i) != chosen.end()) continue;
+                node.edges.push_back({Action(search::ActionType::SINGLE_CARD_SELECT, i)});
+            }
+            break;
+
         default:
 #ifdef sts_asserts
             assert(false);
@@ -742,7 +765,7 @@ static double escapedThiefPenaltyHp(const BattleContext &bc, int victoryHp) {
 
 double search::BattleScumSearcher2::evaluateEndState4r(const BattleContext &bc, int initialMaxHp) {
     if (bc.outcome != Outcome::PLAYER_VICTORY) return evaluateEndState4q(bc);
-    const auto hp = bc.victoryHpRelics.project(bc.player.curHp, bc.player.maxHp);
+    const auto hp = bc.victoryHp();
     // Keep the existing Feed, potion and turn values, then account for escaped gold.
     // The projection cannot create rewards, enter another room or consume RNG.
     return evaluateEndState4q(bc) + 100.0 * (hp.curHp - bc.player.curHp)

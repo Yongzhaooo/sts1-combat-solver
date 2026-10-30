@@ -103,6 +103,13 @@ namespace sts {
         int turn = 0;
         Player player;
         VictoryHpRelics victoryHpRelics;
+        // Post-combat HP as the search must value it: the relic hooks and then
+        // SelfRepairPower, in the order updateRelicsOnExit heals them. Projecting with
+        // victoryHpRelics alone underrates every card that heals when the combat ends.
+        [[nodiscard]] VictoryHp victoryHp() const {
+            return victoryHpRelics.project(player.curHp, player.maxHp,
+                    player.hasStatus<PS::SELF_REPAIR>() ? player.getStatus<PS::SELF_REPAIR>() : 0);
+        }
         MonsterGroup monsters;
         CardManager cards;
 

@@ -55,7 +55,7 @@ PYBIND11_MODULE(live_combat_search, m) {
     });
     m.def("search_state", [](const BattleContext &b) {
         py::dict d;d["cards_drawn"]=b.cardsDrawn;d["energy_wasted"]=b.energyWasted;
-        auto hp=b.victoryHpRelics.project(b.player.curHp,b.player.maxHp);
+        auto hp=b.victoryHp();
         d["victory_hp"]=hp.curHp;d["victory_max_hp"]=hp.maxHp;
         if(b.killCurHp>=0)d["victory_hp_at_kill"]=b.victoryHpRelics.project(b.killCurHp,b.player.maxHp).curHp;
         d["centennial_puzzle_used"]=!b.player.hasRelic<RelicId::CENTENNIAL_PUZZLE>();
@@ -76,7 +76,57 @@ PYBIND11_MODULE(live_combat_search, m) {
         } else if(task=="HEADBUTT") {
             b.cardSelectInfo.cardSelectTask=CardSelectTask::HEADBUTT;
             b.cardSelectInfo.pickCount=1;
+        } else if(task=="MID_TURN") {
+            // A picker a Defect card opened mid-turn (Hologram, Recycle, Seek).
+            // The queue that opened it resolved before the click, so only the
+            // task and picks are restored; the choose* helper then reads the same
+            // pile the game is showing. Check the candidate list first so a
+            // mismatch between game and simulator cannot silently pick a
+            // different card.
+            const auto selectTask=d["select_task"].cast<std::string>();
+            if(selectTask=="HOLOGRAM")b.cardSelectInfo.cardSelectTask=CardSelectTask::HOLOGRAM;
+            else if(selectTask=="RECYCLE")b.cardSelectInfo.cardSelectTask=CardSelectTask::RECYCLE;
+            else if(selectTask=="SEEK")b.cardSelectInfo.cardSelectTask=CardSelectTask::SEEK;
+            else throw std::invalid_argument("unsupported mid-turn select task");
+            b.cardSelectInfo.pickCount=d["pick_count"].cast<int>();
+            if(d.contains("selected_indices"))
+                b.cardSelectInfo.selectedIndices=d["selected_indices"].cast<std::vector<int>>();
+            {
+                const auto pickTask=b.cardSelectInfo.cardSelectTask;
+                auto offered=d["cards"].cast<std::vector<CardId>>();
+                if(pickTask==CardSelectTask::SEEK) {
+                    // Seek's grid shows the draw pile sorted by name and rarity, so
+                    // its order differs from the pile's. Only the multiset has to
+                    // agree; the plan's index stays a draw pile index and the
+                    // caller translates it to a grid position by identity.
+                    if(offered.size()!=b.cards.drawPile.size())
+                        throw std::invalid_argument("mid-turn picker offers a different number of cards");
+                    auto sorted=[&] (std::vector<CardId> cards) {
+                        std::sort(cards.begin(),cards.end(),
+                            [] (CardId a,CardId b) { return static_cast<int>(a)<static_cast<int>(b); });
+                        return cards;
+                    };
+                    std::vector<CardId> pile;
+                    pile.reserve(b.cards.drawPile.size());
+                    for(const auto &card:b.cards.drawPile) pile.push_back(card.id);
+                    if(sorted(offered)!=sorted(pile))
+                        throw std::invalid_argument("mid-turn picker offers different cards");
+                } else {
+                    const int count=pickTask==CardSelectTask::RECYCLE?b.cards.cardsInHand:
+                        pickTask==CardSelectTask::HOLOGRAM?(int)b.cards.discardPile.size():(int)b.cards.drawPile.size();
+                    if((int)offered.size()!=count)
+                        throw std::invalid_argument("mid-turn picker offers a different number of cards");
+                    for(int i=0;i<count;i++) {
+                        const auto &card=pickTask==CardSelectTask::RECYCLE?b.cards.hand[i]:
+                            pickTask==CardSelectTask::HOLOGRAM?b.cards.discardPile[i]:b.cards.drawPile[i];
+                        if(card.id!=offered[i])
+                            throw std::invalid_argument("mid-turn picker offers different cards");
+                    }
+                }
+            }
         } else throw std::invalid_argument("unsupported start selection");
+        // A mid-turn picker carries no queue: the card resolved before the click.
+        if(!d.contains("queue"))return;
         for(auto value:d["queue"].cast<py::list>()) {
             auto a=value.cast<py::dict>();auto kind=a["kind"].cast<std::string>();
             if(kind=="draw")b.addToBot(Actions::DrawCards(a["amount"].cast<int>()));

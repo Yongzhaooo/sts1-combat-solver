@@ -10,6 +10,16 @@ repo=here.parent/'candidates/sts-ironclad-agent'
 engine=repo/'combat_engine/combat4r/engine-source'
 out=here/'build/native'
 out.mkdir(parents=True,exist_ok=True)
+
+# tools/build_solver_runtime.py configures with CMAKE_BUILD_TYPE=Release. A
+# multi-config generator then keeps the archive in Release/, a single-config one
+# at the build root, so accept both layouts rather than one.
+def core_archive(name='sts_core'):
+    build=repo/'build/engine'
+    for path in (build/'Release'/(name+'.lib'),build/(name+'.lib'),build/('lib'+name+'.a')):
+        if path.is_file():
+            return path
+    raise FileNotFoundError('no '+name+' archive under '+str(build)+'; run tools/build_solver_runtime.py first')
 source=(engine/'src/sim/search/BattleScumSearcher2.cpp').read_text(encoding='utf-8')
 marker='''void enumeratePotionActionsImpl(NodeLike &node, const BattleContext &bc, bool preservePotions) {
     for (int i = 0; i < bc.potionCapacity; ++i) {'''
@@ -33,7 +43,7 @@ source=source.replace(terminal,'''    if (overlayAcceptTerminal(endState, action
         outcomePlayerHp = terminalHp;
     }
 '''+terminal,1)
-victory='    const auto hp = bc.victoryHpRelics.project(bc.player.curHp, bc.player.maxHp);'
+victory='    const auto hp = bc.victoryHp();'
 assert source.count(victory)==1
 source=source.replace(victory,'''    // Terminal fight: survival dominates; among wins prefer fewer turns only.
     if (overlayHeartFight()) return 100000000.0 - 1000.0 * bc.turn;
@@ -146,7 +156,9 @@ patched_battle.write_text(battle,encoding='utf-8')
 # FlightPower queues ReducePowerAction at the bottom; all already queued hits
 # still see Flight. Removing it immediately overestimates Sword Boomerang damage.
 monster=(engine/'src/combat/Monster.cpp').read_text(encoding='utf-8')
-flight='''    } else if (hasStatus<MS::FLIGHT>() && damage > 0) {
+flight='''    } else if (hasStatus<MS::FLIGHT>() && damage > 0 && type == DamageType::NORMAL) {
+        // FlightPower.onAttacked skips HP_LOSS and THORNS, so orb damage does not
+        // spend a flight charge either.
         auto flight = getStatus<MS::FLIGHT>();
         if (flight == 1) {
             removeStatus<MS::FLIGHT>();
@@ -156,7 +168,7 @@ flight='''    } else if (hasStatus<MS::FLIGHT>() && damage > 0) {
         }
 '''
 assert monster.count(flight)==1,'upstream flight damage handling changed'
-monster=monster.replace(flight,'''    } else if (hasStatus<MS::FLIGHT>() && damage > 0) {
+monster=monster.replace(flight,'''    } else if (hasStatus<MS::FLIGHT>() && damage > 0 && type == DamageType::NORMAL) {
         if (damage * .5f < curHp) {
             const int target = idx;
             bc.addToBot(Action{[target](BattleContext &state) {
@@ -234,7 +246,7 @@ pybind11_add_module(overlay_search '''+' '.join(map(cmake_path,sources))+''')
 target_compile_options(overlay_search PRIVATE /O2 /UNDEBUG /utf-8 /EHsc /bigobj)
 target_compile_definitions(overlay_search PRIVATE COMBAT3_TARGET_POLICY=1 NOMINMAX)
 target_include_directories(overlay_search PRIVATE '''+' '.join(map(cmake_path,includes))+''')
-target_link_libraries(overlay_search PRIVATE '''+cmake_path(repo/'build/engine/Release/sts_core.lib')+''')
+target_link_libraries(overlay_search PRIVATE '''+cmake_path(core_archive())+''')
 set_target_properties(overlay_search PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE '''+cmake_path(out)+''')
 ''',encoding='utf-8')
     subprocess.run(['cmake','-S',str(out),'-B',str(out/'cmake'),'-A','x64',
@@ -250,7 +262,7 @@ else:
     '-I'+str(out),'-I'+str(engine/'include'),'-I'+str(repo/'combat_engine/combat4r/agent'),
     '-I'+str(repo/'combat_engine/third_party'),'-I'+pybind11.get_include(),
     '-I'+sysconfig.get_paths()['include'],str(here/'native.cpp'),str(patched),str(patched_game),str(patched_battle),str(patched_monster),str(patched_actions),
-        str(repo/'build/engine/libsts_core.a'),'-o',str(pending)],check=True)
+        str(core_archive()),'-o',str(pending)],check=True)
     pending.replace(binary)  # Existing workers retain their loaded library until stopped.
 assert binary.stat().st_size>1000
 print(binary)

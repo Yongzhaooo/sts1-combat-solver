@@ -54,6 +54,13 @@ namespace sts {
         [[nodiscard]] bool hasSelfRetain() const;
         [[nodiscard]] bool requiresTarget() const;
         [[nodiscard]] bool isXCost() const;
+        // AbstractCard stores an X cost as -1 and prints it as "X"; the game
+        // recognises those cards by that sentinel (getCost, RecycleAction), not
+        // by card id. useCard() rewrites the pair to -1 for every X-cost card.
+        [[nodiscard]] bool isXCostSentinel() const { return cost == -1 || costForTurn == -1; }
+        // RecycleAction: costForTurn -1 gains all current energy, > 0 gains that
+        // much, and 0 (or any other value) gains nothing.
+        [[nodiscard]] int recycleEnergyGain(int currentEnergy) const;
         [[nodiscard]] bool isBloodCard() const;
         [[nodiscard]] bool usesSpecialData() const;
 
