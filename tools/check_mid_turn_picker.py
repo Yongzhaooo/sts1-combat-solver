@@ -2,8 +2,9 @@
 
 The root is the recorded Machine Learning state turned into the moment after Seek
 was played: Seek is the card in play, its UseCardAction waits behind the grid, and
-the draw pile is Defend or Sweeping Beam. Both lice have 5 HP and 1 energy is left,
-so only Sweeping Beam wins this turn; the first legal choice is Defend.
+the draw pile is Defend or Sweeping Beam. Both lice have 5 HP and bite for 20, and
+1 energy is left, so only Sweeping Beam wins without losing HP; the first legal
+choice is Defend.
 """
 import copy
 import json
@@ -30,7 +31,10 @@ beam = dict(strike, id='Sweeping Beam', name='Sweeping Beam', rarity='COMMON', h
 combat['draw_pile'] = [defend, beam]
 combat['card_in_play'] = seek
 for monster in combat['monsters']:
-    monster['current_hp'] = 5
+    monster.update(current_hp=5, move_id=3, intent='ATTACK', move_hits=1, move_base_damage=20,
+                   move_adjusted_damage=20)
+    monster['internal']['biteDamage'] = 20
+combat['player']['block'] = 0
 game['screen_type'] = 'GRID'
 # Seek's grid sorts the draw pile, so its order need not be the pile's.
 game['screen_state'] = dict(cards=[beam, defend], selected_cards=[], num_cards=1, any_number=False,
@@ -68,10 +72,18 @@ pick.execute(battle)
 assert [c.id.name for c in battle.discard_pile].count('SEEK') == 1, 'Seek vanished instead of reaching the discard pile'
 assert 'SWEEPING_BEAM' in [c.id.name for c in battle.hand]
 
+# The position is decisive: after the first legal choice (Defend) even the best plan loses HP.
+battle = s.comparator.import_battle(imported, require_search_state=True)
+s.native.import_start_selection(battle, spec)
+choices = s.sts.get_legal_actions(battle)
+assert ActionMapper(s.comparator, battle, picker).action('choose 1', picker, battle).bits == choices[0].bits
+choices[0].execute(battle)
+assert advisor.native_search.plan(battle, 2000, [], 0, 0)['hp'] < combat['player']['current_hp']
+
 # The picker is searched: the reply picks Sweeping Beam (grid position 0), not the first legal choice.
 advisor.solve(picker, 2000)
 assert not advisor.plan.get('mid_turn_pick') and advisor.plan['simulations'] > 0, advisor.plan
-assert advisor.plan['outcome'] == 1 and advisor.plan['turns'] == 0, advisor.plan
+assert advisor.plan['outcome'] == 1 and advisor.plan['hp'] == combat['player']['current_hp'], advisor.plan
 reply = advisor.result(picker)
 assert reply['status'] == 'ready' and reply['command'] == 'choose 0', reply
 
