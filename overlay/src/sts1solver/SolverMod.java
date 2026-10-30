@@ -115,7 +115,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     // Classes the combat engine imports exactly; keep in sync with backend.SUPPORTED_CLASSES.
     // Out-of-combat foresight works for every class.
     static final EnumSet<AbstractPlayer.PlayerClass> SUPPORTED = EnumSet.of(AbstractPlayer.PlayerClass.IRONCLAD);
-    static final String SUPPORTED_NAMES = I18n.t("战士");
+    static String SUPPORTED_NAMES = I18n.t("战士");
 
     static boolean supported() {
         return AbstractDungeon.player != null && SUPPORTED.contains(AbstractDungeon.player.chosenClass);
@@ -128,6 +128,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     public SolverMod() {
         BaseMod.subscribe(this);
         EventRules.live = true; // hidden-information event rules read the running game
+        if (RunExports.defectTestBuild) {
+            // Build-time opt-in, written only by overlay/build.py --defect-test. The backend at
+            // solver.properties' backend= must be overlay/backend_defect_test.py at the same time.
+            SUPPORTED.add(AbstractPlayer.PlayerClass.DEFECT);
+            SUPPORTED_NAMES = I18n.t("战士") + I18n.t("、") + I18n.t("机器人");
+        }
         try {
             Properties defaults = new Properties();
             defaults.setProperty("language", "zh");

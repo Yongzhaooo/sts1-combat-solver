@@ -48,6 +48,29 @@ namespace sts {
 
         Stance stance = Stance::NEUTRAL;
         int8_t orbSlots = 0;
+        // Defect orb bar. Only orb identity and, for Dark, its accumulated counter are
+        // stored; passive/evoke values are computed from the orb type and focus at
+        // settlement time (same pattern as stance effects).
+        // Inline storage is copied with each independent MCTS battle state.
+        //
+        // Vanilla caps orb slots at 10 (AbstractPlayer.MAX_ORBS); increaseOrbSlots
+        // clamps to MAX_ORB_SLOTS. Mods can raise the cap (some go far beyond 10),
+        // so the storage capacity is a separate constant: raising support for a
+        // larger cap is a two-constant change. Past roughly 64 slots the per-state
+        // copy cost of inline storage in MCTS demands a storage redesign instead
+        // of a bigger constant; snapshot import rejects out-of-range slot counts
+        // until that exists.
+        static constexpr int MAX_ORB_SLOTS = 10;
+        static constexpr int ORB_STORAGE_CAPACITY = 16;
+        struct OrbState {
+            Orb type = Orb::EMPTY;
+            // Dark orbs accumulate their damage counter here (starts at 6 and
+            // grows by max(0, 6 + focus) per end of turn). Other orbs keep it 0.
+            // There is no per-orb evoke bonus: no card raises an orb's evoke amount,
+            // so it is always max(0, base + focus).
+            std::int16_t darkCounter = 0;
+        };
+        fixed_list<OrbState, ORB_STORAGE_CAPACITY> orbs;
 
         // for spire spear/shield
         std::int8_t lastTargetedMonster = 1;
@@ -94,6 +117,8 @@ namespace sts {
         int8_t  penNibCounter = 0;
         int8_t  sundialCounter = 0;
         bool haveUsedNecronomiconThisTurn = false;
+        // EmotionChip.wasHPLost arms the relic; atTurnStart consumes it once.
+        bool emotionChipPulse = false;
 
         int8_t  combustHpLoss = 0;
         int16_t  devaFormEnergyPerTurn = 0;
@@ -105,6 +130,14 @@ namespace sts {
         int16_t skillsPlayedThisTurn = 0;
         std::bitset<3> orangePelletsCardTypesPlayed;
         int16_t cardsDiscardedThisTurn = 0;
+        // GameActionManager.orbsChanneledThisCombat, split by orb type. Blizzard and
+        // Thunder Strike scale with these counters; Recursion's rechannel counts too
+        // because the game re-channels the evoked orb object.
+        // Claw.java raises the damage of every Claw card for the rest of combat by
+        // walking the hand/draw/discard piles; one shared bonus is equivalent.
+        int16_t  clawBonus = 0;
+        int16_t  lightningChanneledThisCombat = 0;
+        int16_t  frostChanneledThisCombat = 0;
 
         // currently unused
         int16_t lastAttackUnblockedDamage = 0;
@@ -163,7 +196,7 @@ namespace sts {
         void useEnergy(int amount);
         void gainEnergy(int amount);
         void increaseOrbSlots(int amount);
-        void channelOrb(Orb orb);
+        void channelOrb(Orb orb, std::int16_t darkCounter = -1);
         [[nodiscard]] bool hasEmptyOrb() const;
 
         void applyEndOfTurnPowers(BattleContext &bc);
@@ -220,6 +253,8 @@ namespace sts {
                 break;
 
             case PS::FOCUS:
+                // Vanilla FocusPower sets canGoNegative=true (desktop-1.0.jar):
+                // focus can drop below zero and orbs weaken accordingly.
                 focus -= amount;
                 updatePowerOrder(s, focus != 0);
                 break;
@@ -448,6 +483,8 @@ namespace sts {
             return;
         }
         if (s == PlayerStatus::FOCUS) {
+            // Vanilla FocusPower sets canGoNegative=true (desktop-1.0.jar): the
+            // merged amount may go negative and orbs weaken accordingly.
             focus += amount;
             updatePowerOrder(s, focus != 0);
             return;

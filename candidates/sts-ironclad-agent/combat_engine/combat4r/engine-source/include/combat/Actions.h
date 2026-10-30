@@ -16,6 +16,7 @@
 #include "constants/Potions.h"
 
 #include "combat/InputState.h"
+#include "combat/Monster.h"
 #include "combat/CardSelectInfo.h"
 
 #include "combat/ActionQueue.h"
@@ -44,7 +45,22 @@ namespace sts {
 
 
         // todo, action and damage actions should clear certain actions from the queue if the player kills all enemies
-        static Action AttackEnemy(int idx, int damage);
+        // DamageType matters because the game's orb damage is typed THORNS, which
+        // monster onAttacked powers (Curl Up, Malleable, Reactive, Flight) ignore.
+        static Action AttackEnemy(int idx, int damage,
+                                   DamageType type = DamageType::NORMAL);
+        static Action SunderAction(int idx, int damage); // attack; +3 energy when the hit kills
+        static Action FissionAction(bool upgraded); // remove (evoke when upgraded) all orbs: +1 energy/card each
+        static Action RipAndTearAction(int damage, int times); // one random-target hit per time
+        // Random card of the player's class at its printed cost. commonOnly restricts the
+        // pool to Common cards (Hello World); zeroCost is only for White Noise, whose
+        // Java sets the generated card's turn cost to 0.
+        static Action CreateRandomCardInHandAction(CardType type, bool commonOnly = false,
+                                                   bool zeroCost = false);
+        // AbstractDungeon.getCard(rarity, rng): a random card of the player's class with
+        // that rarity and no type filter, which is what HelloPower.atStartOfTurn uses.
+        static Action CreateRandomRarityCardInHandAction(CardRarity rarity, bool zeroCost = false);
+        static Action AllForOneAction(); // return every 0-cost discard pile card to hand
 
         // Per-target damage is captured when the card is used.
         static Action AttackAllEnemy(DamageMatrix damageMatrix);
@@ -101,7 +117,14 @@ namespace sts {
 
         static Action UnnamedEndOfTurnAction();
         static Action MonsterStartTurnAction();
+        static Action DoubleEnergy(); // DoubleEnergyAction: double the current energy
+        static Action EmptyEnergy(bool freeToPlay); // X cards: the action drains the pool unless freeToPlayOnce
+        static Action MultiCastAction(int times); // MulticastAction: evoke the oldest orb N times, consume once
+        static Action TriggerStartOfTurnOrbsAction();
+        static Action TriggerOrbPassiveAction(int orbIdx); // Loop: one orb's full passive
         static Action TriggerEndOfTurnOrbsAction();
+        static Action ImpulseAction(); // Emotion Chip: every orb runs start then end passive
+        static Action DarkImpulseAction(); // upgraded Darkness: every Dark orb grows once now
 
         static Action ExhaustTopCardInHand();
         static Action ExhaustSpecificCardInHand(int idx, std::int16_t uniqueId);
@@ -131,7 +154,7 @@ namespace sts {
         static Action DiscoveryAction(CardType type, int amount); // attack potion, skill potion
         static Action InfernalBladeAction();
         static Action JackOfAllTradesAction(bool upgraded);
-        static Action TransmutationAction(bool upgraded, int energy, bool useEnergy);
+        static Action TransmutationAction(bool upgraded, int energy, bool freeToPlay);
         static Action ViolenceAction(int count);
 
         static Action BetterDiscardPileToHandAction(int amount, CardSelectTask task); // used by hologram and liquid memories
@@ -151,6 +174,8 @@ namespace sts {
         static Action OnAfterCardUsed(); // called UseCardAction in game
         static Action EssenceOfDarkness(int darkOrbsPerSlot); // handle sacred bark
         static Action IncreaseOrbSlots(int count);
+        static Action ChannelOrb(Orb orb, std::int16_t darkCounter = -1);
+        static Action EvokeOrbAction(int orbIdx, int times = 1);
 
         static Action SuicideAction(int monsterIdx, bool triggerRelics);
 
@@ -171,7 +196,7 @@ namespace sts {
         static Action SecondWindAction(int blockPerCard);
         static Action SeverSoulExhaustAction();
         static Action SpotWeaknessAction(int target, int strength); // Spot Weakness
-        static Action WhirlwindAction(DamageMatrix damageMatrix, int energy, bool useEnergy);
+        static Action WhirlwindAction(DamageMatrix damageMatrix, int energy, bool freeToPlay);
 
     };
 

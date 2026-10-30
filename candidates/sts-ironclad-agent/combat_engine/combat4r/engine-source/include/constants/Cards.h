@@ -840,6 +840,87 @@ namespace sts {
                 return -2;
 
 
+            // Defect costs that differ from the historical default of 1. Each one
+            // is the card class's own baseCost, or the argument of the
+            // upgradeBaseCost call in its upgrade() method.
+            case CardId::BEAM_CELL:
+            case CardId::CHILL:
+            case CardId::TURBO:
+                return 0;
+
+            case CardId::GLACIER:
+                return 2;
+
+            case CardId::RECURSION:
+                return upgraded ? 0 : 1;
+
+            case CardId::DUALCAST:
+            case CardId::WHITE_NOISE:
+            case CardId::ZAP:
+                return upgraded ? 0 : 1;
+
+            case CardId::CONSUME:
+            case CardId::DOOM_AND_GLOOM:
+            case CardId::ELECTRODYNAMICS:
+            case CardId::HYPERBEAM:
+            case CardId::RAINBOW:
+                return 2;
+
+            case CardId::FUSION:
+                return upgraded ? 1 : 2;
+
+            case CardId::TEMPEST:
+                return -1; // X cost
+
+            case CardId::BOOT_SEQUENCE:
+            case CardId::GO_FOR_THE_EYES:
+                return 0;
+
+            case CardId::DOUBLE_ENERGY:
+                return upgraded ? 0 : 1;
+
+            case CardId::METEOR_STRIKE:
+                return 5;
+
+            case CardId::SUNDER:
+            case CardId::THUNDER_STRIKE:
+                return 3;
+
+            case CardId::OVERCLOCK:
+            case CardId::FISSION:
+            case CardId::FTL:
+                return 0;
+
+            case CardId::BUFFER:
+                return 2;
+
+            case CardId::ECHO_FORM:
+                return 3;
+
+            case CardId::CREATIVE_AI:
+                return upgraded ? 2 : 3;
+
+            case CardId::CLAW:
+            case CardId::STEAM_BARRIER:
+                return 0;
+
+            case CardId::EQUILIBRIUM:
+            case CardId::STREAMLINE:
+            case CardId::ALL_FOR_ONE:
+                return 2;
+
+            case CardId::FORCE_FIELD:
+                return 4;
+
+            case CardId::REBOOT:
+                return 0;
+
+            case CardId::RECYCLE:
+                return upgraded ? 0 : 1;
+
+            case CardId::SEEK:
+                return 0;
+
             default:
                 return 1;
         }

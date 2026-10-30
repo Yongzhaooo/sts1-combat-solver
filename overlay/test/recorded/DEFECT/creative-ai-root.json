@@ -1,0 +1,2184 @@
+{
+  "available_commands": [
+    "play",
+    "end",
+    "key",
+    "click",
+    "wait",
+    "state"
+  ],
+  "ready_for_command": true,
+  "in_game": true,
+  "game_state": {
+    "solver_elite_ahead": true,
+    "screen_type": "NONE",
+    "seed": 6756128769377989192,
+    "keys": {
+      "emerald": false,
+      "ruby": true,
+      "sapphire": false
+    },
+    "deck": [
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 1,
+        "base_block": -1,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": -1,
+        "type": "ATTACK",
+        "ethereal": false,
+        "uuid": "5254fb41-1618-4720-88c4-97e2e75581b6",
+        "upgrades": 0,
+        "cost_modified_for_turn": false,
+        "base_damage": 6,
+        "has_target": true,
+        "target": "ENEMY",
+        "is_playable": true,
+        "name": "打击",
+        "block": -1,
+        "id": "Strike_B",
+        "magic_number": -1,
+        "rarity": "BASIC",
+        "misc": 0
+      },
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 1,
+        "base_block": -1,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": -1,
+        "type": "ATTACK",
+        "ethereal": false,
+        "uuid": "e34992ba-50d7-4013-8521-acfc944f2dcd",
+        "upgrades": 0,
+        "cost_modified_for_turn": false,
+        "base_damage": 6,
+        "has_target": true,
+        "target": "ENEMY",
+        "is_playable": true,
+        "name": "打击",
+        "block": -1,
+        "id": "Strike_B",
+        "magic_number": -1,
+        "rarity": "BASIC",
+        "misc": 0
+      },
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 1,
+        "base_block": -1,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": -1,
+        "type": "ATTACK",
+        "ethereal": false,
+        "uuid": "4ec9d37b-9951-4908-aa89-c4525bc4c9d9",
+        "upgrades": 0,
+        "cost_modified_for_turn": false,
+        "base_damage": 6,
+        "has_target": true,
+        "target": "ENEMY",
+        "is_playable": true,
+        "name": "打击",
+        "block": -1,
+        "id": "Strike_B",
+        "magic_number": -1,
+        "rarity": "BASIC",
+        "misc": 0
+      },
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 1,
+        "base_block": -1,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": -1,
+        "type": "ATTACK",
+        "ethereal": false,
+        "uuid": "6dce9f39-db94-4d17-b537-fe094a5448c4",
+        "upgrades": 0,
+        "cost_modified_for_turn": false,
+        "base_damage": 6,
+        "has_target": true,
+        "target": "ENEMY",
+        "is_playable": true,
+        "name": "打击",
+        "block": -1,
+        "id": "Strike_B",
+        "magic_number": -1,
+        "rarity": "BASIC",
+        "misc": 0
+      },
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 1,
+        "base_block": 5,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": -1,
+        "type": "SKILL",
+        "ethereal": false,
+        "uuid": "992e0801-14a2-4e55-8c94-32f28959b7b0",
+        "upgrades": 0,
+        "cost_modified_for_turn": false,
+        "base_damage": -1,
+        "has_target": false,
+        "target": "SELF",
+        "is_playable": true,
+        "name": "防御",
+        "block": -1,
+        "id": "Defend_B",
+        "magic_number": -1,
+        "rarity": "BASIC",
+        "misc": 0
+      },
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 1,
+        "base_block": 5,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": -1,
+        "type": "SKILL",
+        "ethereal": false,
+        "uuid": "4c92b11e-72db-484d-86f8-84adc14a808d",
+        "upgrades": 0,
+        "cost_modified_for_turn": false,
+        "base_damage": -1,
+        "has_target": false,
+        "target": "SELF",
+        "is_playable": true,
+        "name": "防御",
+        "block": -1,
+        "id": "Defend_B",
+        "magic_number": -1,
+        "rarity": "BASIC",
+        "misc": 0
+      },
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 1,
+        "base_block": 5,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": -1,
+        "type": "SKILL",
+        "ethereal": false,
+        "uuid": "d6263dd8-1639-45dd-9301-90810b60013a",
+        "upgrades": 0,
+        "cost_modified_for_turn": false,
+        "base_damage": -1,
+        "has_target": false,
+        "target": "SELF",
+        "is_playable": true,
+        "name": "防御",
+        "block": -1,
+        "id": "Defend_B",
+        "magic_number": -1,
+        "rarity": "BASIC",
+        "misc": 0
+      },
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 1,
+        "base_block": 5,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": -1,
+        "type": "SKILL",
+        "ethereal": false,
+        "uuid": "f9a0521f-d4e7-4758-b260-b8a65cfc5945",
+        "upgrades": 0,
+        "cost_modified_for_turn": false,
+        "base_damage": -1,
+        "has_target": false,
+        "target": "SELF",
+        "is_playable": true,
+        "name": "防御",
+        "block": -1,
+        "id": "Defend_B",
+        "magic_number": -1,
+        "rarity": "BASIC",
+        "misc": 0
+      },
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 1,
+        "base_block": -1,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": 1,
+        "type": "SKILL",
+        "ethereal": false,
+        "uuid": "46d63358-1b1d-40ab-9a65-5e0c6f9ab6b2",
+        "upgrades": 0,
+        "cost_modified_for_turn": false,
+        "base_damage": -1,
+        "has_target": false,
+        "target": "SELF",
+        "is_playable": true,
+        "name": "电击",
+        "block": -1,
+        "id": "Zap",
+        "magic_number": 1,
+        "rarity": "BASIC",
+        "misc": 0
+      },
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 1,
+        "base_block": -1,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": -1,
+        "type": "SKILL",
+        "ethereal": false,
+        "uuid": "5264ee5c-c270-4cc7-804a-638941a4bc19",
+        "upgrades": 0,
+        "cost_modified_for_turn": false,
+        "base_damage": -1,
+        "has_target": false,
+        "target": "NONE",
+        "is_playable": true,
+        "name": "双重释放",
+        "block": -1,
+        "id": "Dualcast",
+        "magic_number": -1,
+        "rarity": "BASIC",
+        "misc": 0
+      },
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 0,
+        "base_block": -1,
+        "base_cost": 0,
+        "free_to_play_once": false,
+        "base_magic_number": 2,
+        "type": "SKILL",
+        "ethereal": false,
+        "uuid": "12091e12-985d-4fd2-9c6b-71ef5bce039a",
+        "upgrades": 0,
+        "cost_modified_for_turn": false,
+        "base_damage": -1,
+        "has_target": false,
+        "target": "SELF",
+        "is_playable": true,
+        "name": "内核加速",
+        "block": -1,
+        "id": "Turbo",
+        "magic_number": 2,
+        "rarity": "COMMON",
+        "misc": 0
+      },
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 1,
+        "base_block": -1,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": 1,
+        "type": "ATTACK",
+        "ethereal": false,
+        "uuid": "17e3182b-eda4-466d-acad-9c19c52c794a",
+        "upgrades": 1,
+        "cost_modified_for_turn": false,
+        "base_damage": 9,
+        "has_target": true,
+        "target": "ENEMY",
+        "is_playable": true,
+        "name": "寒流+",
+        "block": -1,
+        "id": "Cold Snap",
+        "magic_number": 1,
+        "rarity": "COMMON",
+        "misc": 0
+      },
+      {
+        "exhausts": true,
+        "damage": -1,
+        "cost": 1,
+        "base_block": 3,
+        "base_cost": 1,
+        "free_to_play_once": false,
+        "base_magic_number": -1,
+        "type": "SKILL",
+        "ethereal": false,
+        "uuid": "650fb0aa-c5a9-4b3b-994c-0947eb0e2935",
+        "upgrades": 0,
+        "cost_modified_for_turn": false,
+        "base_damage": -1,
+        "has_target": false,
+        "target": "SELF",
+        "is_playable": true,
+        "name": "全息影像",
+        "block": -1,
+        "id": "Hologram",
+        "magic_number": -1,
+        "rarity": "COMMON",
+        "misc": 0
+      },
+      {
+        "exhausts": false,
+        "damage": -1,
+        "cost": 0,
+        "base_block": -1,
+        "base_cost": 0,
+        "free_to_play_once": false,
+        "base_magic_number": 2,
+        "type": "ATTACK",
+        "ethereal": false,
+        "uuid": "e12de2e8-8a94-4b61-a801-49d54a0eb181",
+        "upgrades": 1,
+        "cost_modified_for_turn": false,
+        "base_damage": 4,
+        "has_target": true,
+        "target": "ENEMY",
+        "is_playable": true,
+        "name": "眼部攻击+",
+        "block": -1,
+        "id": "Go for the Eyes",
+        "magic_number": 2,
+        "rarity": "COMMON",
+        "misc": 0
+      }
+    ],
+    "max_hp": 68,
+    "act_boss": "The Guardian",
+    "gold": 137,
+    "solver_last_elite": "Lagavulin",
+    "action_phase": "WAITING_ON_USER",
+    "solver_next_rooms": [
+      "R"
+    ],
+    "solver_act_prep": {
+      "elite": true,
+      "seen": 3
+    },
+    "act": 1,
+    "screen_name": "NONE",
+    "room_phase": "COMBAT",
+    "current_hp": 60,
+    "floor": 7,
+    "class": "DEFECT",
+    "map": [
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 0,
+            "y": 1
+          },
+          {
+            "x": 1,
+            "y": 1
+          }
+        ],
+        "x": 0,
+        "y": 0,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 3,
+            "y": 1
+          }
+        ],
+        "x": 4,
+        "y": 0,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 5,
+            "y": 1
+          },
+          {
+            "x": 6,
+            "y": 1
+          }
+        ],
+        "x": 5,
+        "y": 0,
+        "parents": []
+      },
+      {
+        "symbol": "$",
+        "children": [
+          {
+            "x": 1,
+            "y": 2
+          }
+        ],
+        "x": 0,
+        "y": 1,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 1,
+            "y": 2
+          },
+          {
+            "x": 2,
+            "y": 2
+          }
+        ],
+        "x": 1,
+        "y": 1,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 2,
+            "y": 2
+          }
+        ],
+        "x": 3,
+        "y": 1,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 5,
+            "y": 2
+          }
+        ],
+        "x": 5,
+        "y": 1,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 6,
+            "y": 2
+          }
+        ],
+        "x": 6,
+        "y": 1,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 0,
+            "y": 3
+          },
+          {
+            "x": 1,
+            "y": 3
+          }
+        ],
+        "x": 1,
+        "y": 2,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 2,
+            "y": 3
+          }
+        ],
+        "x": 2,
+        "y": 2,
+        "parents": []
+      },
+      {
+        "symbol": "$",
+        "children": [
+          {
+            "x": 5,
+            "y": 3
+          }
+        ],
+        "x": 5,
+        "y": 2,
+        "parents": []
+      },
+      {
+        "symbol": "$",
+        "children": [
+          {
+            "x": 5,
+            "y": 3
+          }
+        ],
+        "x": 6,
+        "y": 2,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 0,
+            "y": 4
+          }
+        ],
+        "x": 0,
+        "y": 3,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 1,
+            "y": 4
+          }
+        ],
+        "x": 1,
+        "y": 3,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 2,
+            "y": 4
+          },
+          {
+            "x": 3,
+            "y": 4
+          }
+        ],
+        "x": 2,
+        "y": 3,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 4,
+            "y": 4
+          },
+          {
+            "x": 5,
+            "y": 4
+          }
+        ],
+        "x": 5,
+        "y": 3,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 1,
+            "y": 5
+          }
+        ],
+        "x": 0,
+        "y": 4,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 1,
+            "y": 5
+          }
+        ],
+        "x": 1,
+        "y": 4,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 1,
+            "y": 5
+          }
+        ],
+        "x": 2,
+        "y": 4,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 2,
+            "y": 5
+          }
+        ],
+        "x": 3,
+        "y": 4,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 5,
+            "y": 5
+          }
+        ],
+        "x": 4,
+        "y": 4,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 5,
+            "y": 5
+          }
+        ],
+        "x": 5,
+        "y": 4,
+        "parents": []
+      },
+      {
+        "symbol": "R",
+        "children": [
+          {
+            "x": 0,
+            "y": 6
+          },
+          {
+            "x": 2,
+            "y": 6
+          }
+        ],
+        "x": 1,
+        "y": 5,
+        "parents": []
+      },
+      {
+        "symbol": "E",
+        "children": [
+          {
+            "x": 2,
+            "y": 6
+          }
+        ],
+        "x": 2,
+        "y": 5,
+        "parents": []
+      },
+      {
+        "symbol": "E",
+        "children": [
+          {
+            "x": 5,
+            "y": 6
+          },
+          {
+            "x": 6,
+            "y": 6
+          }
+        ],
+        "x": 5,
+        "y": 5,
+        "parents": []
+      },
+      {
+        "symbol": "E",
+        "children": [
+          {
+            "x": 0,
+            "y": 7
+          }
+        ],
+        "x": 0,
+        "y": 6,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 1,
+            "y": 7
+          },
+          {
+            "x": 3,
+            "y": 7
+          }
+        ],
+        "x": 2,
+        "y": 6,
+        "parents": []
+      },
+      {
+        "symbol": "R",
+        "children": [
+          {
+            "x": 5,
+            "y": 7
+          }
+        ],
+        "x": 5,
+        "y": 6,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 5,
+            "y": 7
+          }
+        ],
+        "x": 6,
+        "y": 6,
+        "parents": []
+      },
+      {
+        "symbol": "R",
+        "children": [
+          {
+            "x": 0,
+            "y": 8
+          }
+        ],
+        "x": 0,
+        "y": 7,
+        "parents": []
+      },
+      {
+        "symbol": "R",
+        "children": [
+          {
+            "x": 0,
+            "y": 8
+          }
+        ],
+        "x": 1,
+        "y": 7,
+        "parents": []
+      },
+      {
+        "symbol": "E",
+        "children": [
+          {
+            "x": 3,
+            "y": 8
+          }
+        ],
+        "x": 3,
+        "y": 7,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 4,
+            "y": 8
+          }
+        ],
+        "x": 5,
+        "y": 7,
+        "parents": []
+      },
+      {
+        "symbol": "T",
+        "children": [
+          {
+            "x": 0,
+            "y": 9
+          },
+          {
+            "x": 1,
+            "y": 9
+          }
+        ],
+        "x": 0,
+        "y": 8,
+        "parents": []
+      },
+      {
+        "symbol": "T",
+        "children": [
+          {
+            "x": 3,
+            "y": 9
+          }
+        ],
+        "x": 3,
+        "y": 8,
+        "parents": []
+      },
+      {
+        "symbol": "T",
+        "children": [
+          {
+            "x": 4,
+            "y": 9
+          }
+        ],
+        "x": 4,
+        "y": 8,
+        "parents": []
+      },
+      {
+        "symbol": "R",
+        "children": [
+          {
+            "x": 0,
+            "y": 10
+          }
+        ],
+        "x": 0,
+        "y": 9,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 0,
+            "y": 10
+          },
+          {
+            "x": 2,
+            "y": 10
+          }
+        ],
+        "x": 1,
+        "y": 9,
+        "parents": []
+      },
+      {
+        "symbol": "R",
+        "children": [
+          {
+            "x": 3,
+            "y": 10
+          }
+        ],
+        "x": 3,
+        "y": 9,
+        "parents": []
+      },
+      {
+        "symbol": "R",
+        "children": [
+          {
+            "x": 3,
+            "y": 10
+          },
+          {
+            "x": 5,
+            "y": 10
+          }
+        ],
+        "x": 4,
+        "y": 9,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 1,
+            "y": 11
+          }
+        ],
+        "x": 0,
+        "y": 10,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 3,
+            "y": 11
+          }
+        ],
+        "x": 2,
+        "y": 10,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 4,
+            "y": 11
+          }
+        ],
+        "x": 3,
+        "y": 10,
+        "parents": []
+      },
+      {
+        "symbol": "E",
+        "children": [
+          {
+            "x": 5,
+            "y": 11
+          }
+        ],
+        "x": 5,
+        "y": 10,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 2,
+            "y": 12
+          }
+        ],
+        "x": 1,
+        "y": 11,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 3,
+            "y": 12
+          }
+        ],
+        "x": 3,
+        "y": 11,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 4,
+            "y": 12
+          },
+          {
+            "x": 5,
+            "y": 12
+          }
+        ],
+        "x": 4,
+        "y": 11,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 6,
+            "y": 12
+          }
+        ],
+        "x": 5,
+        "y": 11,
+        "parents": []
+      },
+      {
+        "symbol": "E",
+        "children": [
+          {
+            "x": 3,
+            "y": 13
+          }
+        ],
+        "x": 2,
+        "y": 12,
+        "parents": []
+      },
+      {
+        "symbol": "E",
+        "children": [
+          {
+            "x": 3,
+            "y": 13
+          }
+        ],
+        "x": 3,
+        "y": 12,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 5,
+            "y": 13
+          }
+        ],
+        "x": 4,
+        "y": 12,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 5,
+            "y": 13
+          }
+        ],
+        "x": 5,
+        "y": 12,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 5,
+            "y": 13
+          }
+        ],
+        "x": 6,
+        "y": 12,
+        "parents": []
+      },
+      {
+        "symbol": "?",
+        "children": [
+          {
+            "x": 3,
+            "y": 14
+          }
+        ],
+        "x": 3,
+        "y": 13,
+        "parents": []
+      },
+      {
+        "symbol": "M",
+        "children": [
+          {
+            "x": 4,
+            "y": 14
+          },
+          {
+            "x": 5,
+            "y": 14
+          },
+          {
+            "x": 6,
+            "y": 14
+          }
+        ],
+        "x": 5,
+        "y": 13,
+        "parents": []
+      },
+      {
+        "symbol": "R",
+        "children": [
+          {
+            "x": 3,
+            "y": 16
+          }
+        ],
+        "x": 3,
+        "y": 14,
+        "parents": []
+      },
+      {
+        "symbol": "R",
+        "children": [
+          {
+            "x": 3,
+            "y": 16
+          }
+        ],
+        "x": 4,
+        "y": 14,
+        "parents": []
+      },
+      {
+        "symbol": "R",
+        "children": [
+          {
+            "x": 3,
+            "y": 16
+          }
+        ],
+        "x": 5,
+        "y": 14,
+        "parents": []
+      },
+      {
+        "symbol": "R",
+        "children": [
+          {
+            "x": 3,
+            "y": 16
+          }
+        ],
+        "x": 6,
+        "y": 14,
+        "parents": []
+      }
+    ],
+    "solver_final_act": true,
+    "solver_card_pools": {
+      "ALL": [
+        "Steam",
+        "Cold Snap",
+        "Leap",
+        "Beam Cell",
+        "Hologram",
+        "Conserve Battery",
+        "Sweeping Beam",
+        "Turbo",
+        "Coolheaded",
+        "Gash",
+        "Rebound",
+        "Stack",
+        "Barrage",
+        "Compile Driver",
+        "Redo",
+        "Streamline",
+        "Ball Lightning",
+        "Go for the Eyes",
+        "Doom and Gloom",
+        "Defragment",
+        "Capacitor",
+        "White Noise",
+        "Skim",
+        "Recycle",
+        "Scrape",
+        "Lockon",
+        "Reprogram",
+        "Auto Shields",
+        "Reinforced Body",
+        "Double Energy",
+        "Darkness",
+        "Rip and Tear",
+        "FTL",
+        "Force Field",
+        "Undo",
+        "Tempest",
+        "Heatsinks",
+        "Static Discharge",
+        "BootSequence",
+        "Chill",
+        "Loop",
+        "Melter",
+        "Chaos",
+        "Blizzard",
+        "Aggregate",
+        "Fusion",
+        "Consume",
+        "Glacier",
+        "Sunder",
+        "Hello World",
+        "Steam Power",
+        "Genetic Algorithm",
+        "Storm",
+        "Multi-Cast",
+        "Hyperbeam",
+        "Thunder Strike",
+        "Biased Cognition",
+        "Machine Learning",
+        "Electrodynamics",
+        "Buffer",
+        "Rainbow",
+        "Seek",
+        "Meteor Strike",
+        "Echo Form",
+        "All For One",
+        "Reboot",
+        "Amplify",
+        "Creative AI",
+        "Fission",
+        "Core Surge"
+      ],
+      "SKILL": [
+        "Steam",
+        "Leap",
+        "Hologram",
+        "Conserve Battery",
+        "Turbo",
+        "Coolheaded",
+        "Stack",
+        "Redo",
+        "White Noise",
+        "Skim",
+        "Recycle",
+        "Reprogram",
+        "Auto Shields",
+        "Reinforced Body",
+        "Double Energy",
+        "Darkness",
+        "Force Field",
+        "Undo",
+        "Tempest",
+        "BootSequence",
+        "Chill",
+        "Chaos",
+        "Aggregate",
+        "Fusion",
+        "Consume",
+        "Glacier",
+        "Steam Power",
+        "Genetic Algorithm",
+        "Multi-Cast",
+        "Rainbow",
+        "Seek",
+        "Reboot",
+        "Amplify",
+        "Fission"
+      ],
+      "ATTACK": [
+        "Cold Snap",
+        "Beam Cell",
+        "Sweeping Beam",
+        "Gash",
+        "Rebound",
+        "Barrage",
+        "Compile Driver",
+        "Streamline",
+        "Ball Lightning",
+        "Go for the Eyes",
+        "Doom and Gloom",
+        "Scrape",
+        "Lockon",
+        "Rip and Tear",
+        "FTL",
+        "Melter",
+        "Blizzard",
+        "Sunder",
+        "Hyperbeam",
+        "Thunder Strike",
+        "Meteor Strike",
+        "All For One",
+        "Core Surge"
+      ],
+      "POWER": [
+        "Defragment",
+        "Capacitor",
+        "Heatsinks",
+        "Static Discharge",
+        "Loop",
+        "Hello World",
+        "Storm",
+        "Biased Cognition",
+        "Machine Learning",
+        "Electrodynamics",
+        "Buffer",
+        "Echo Form",
+        "Creative AI"
+      ],
+      "COLORLESS": [
+        "Madness",
+        "Thinking Ahead",
+        "Mind Blast",
+        "Metamorphosis",
+        "Jack Of All Trades",
+        "Swift Strike",
+        "Good Instincts",
+        "Master of Strategy",
+        "Magnetism",
+        "Finesse",
+        "Discovery",
+        "Chrysalis",
+        "Transmutation",
+        "Panacea",
+        "Purity",
+        "Enlightenment",
+        "Forethought",
+        "Flash of Steel",
+        "HandOfGreed",
+        "Mayhem",
+        "Apotheosis",
+        "Secret Weapon",
+        "Panache",
+        "Violence",
+        "Deep Breath",
+        "Secret Technique",
+        "Blind",
+        "The Bomb",
+        "Impatience",
+        "Dramatic Entrance",
+        "Trip",
+        "PanicButton",
+        "Sadistic Nature",
+        "Dark Shackles"
+      ]
+    },
+    "screen_state": {},
+    "combat_state": {
+      "discard_pile": [
+        {
+          "exhausts": false,
+          "damage": -1,
+          "cost": 1,
+          "base_block": 5,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "f9a0521f-d4e7-4758-b260-b8a65cfc5945",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "name": "防御",
+          "block": 5,
+          "id": "Defend_B",
+          "magic_number": -1,
+          "rarity": "BASIC",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": -1,
+          "cost": 1,
+          "base_block": 5,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "d6263dd8-1639-45dd-9301-90810b60013a",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "name": "防御",
+          "block": 5,
+          "id": "Defend_B",
+          "magic_number": -1,
+          "rarity": "BASIC",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": 4,
+          "cost": 0,
+          "base_block": -1,
+          "base_cost": 0,
+          "free_to_play_once": false,
+          "base_magic_number": 2,
+          "type": "ATTACK",
+          "ethereal": false,
+          "uuid": "e12de2e8-8a94-4b61-a801-49d54a0eb181",
+          "upgrades": 1,
+          "cost_modified_for_turn": false,
+          "base_damage": 4,
+          "has_target": true,
+          "target": "ENEMY",
+          "is_playable": true,
+          "name": "眼部攻击+",
+          "block": -1,
+          "id": "Go for the Eyes",
+          "magic_number": 2,
+          "rarity": "COMMON",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": -1,
+          "cost": 1,
+          "base_block": 5,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "992e0801-14a2-4e55-8c94-32f28959b7b0",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "name": "防御",
+          "block": 5,
+          "id": "Defend_B",
+          "magic_number": -1,
+          "rarity": "BASIC",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": 9,
+          "cost": 1,
+          "base_block": -1,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": 1,
+          "type": "ATTACK",
+          "ethereal": false,
+          "uuid": "17e3182b-eda4-466d-acad-9c19c52c794a",
+          "upgrades": 1,
+          "cost_modified_for_turn": false,
+          "base_damage": 9,
+          "has_target": true,
+          "target": "ENEMY",
+          "is_playable": true,
+          "name": "寒流+",
+          "block": -1,
+          "id": "Cold Snap",
+          "magic_number": 1,
+          "rarity": "COMMON",
+          "misc": 0
+        }
+      ],
+      "exhaust_pile": [],
+      "frame_delta_seconds": 0.022391196,
+      "facing_monster_index": 0,
+      "card_draw_per_turn": 5,
+      "monsters": [
+        {
+          "is_gone": false,
+          "internal": {
+            "debuffTurnCount": 0,
+            "isOut": false,
+            "asleep": true,
+            "idleCount": 1
+          },
+          "move_hits": 1,
+          "move_base_damage": -1,
+          "last_move_id": 5,
+          "half_dead": false,
+          "move_adjusted_damage": -1,
+          "max_hp": 111,
+          "intent": "SLEEP",
+          "move_history": [
+            5,
+            5,
+            5
+          ],
+          "second_last_move_id": 5,
+          "move_id": 5,
+          "name": "乐加维林",
+          "current_hp": 111,
+          "block": 8,
+          "id": "Lagavulin",
+          "powers": [
+            {
+              "amount": 8,
+              "name": "金属化",
+              "id": "Metallicize"
+            },
+            {
+              "amount": 3,
+              "name": "再生",
+              "id": "Regenerate"
+            }
+          ]
+        }
+      ],
+      "turn": 2,
+      "energy_per_turn": 3,
+      "skills_played_this_turn": 0,
+      "draw_pile": [
+        {
+          "exhausts": false,
+          "damage": -1,
+          "cost": 1,
+          "base_block": 5,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "4c92b11e-72db-484d-86f8-84adc14a808d",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "name": "防御",
+          "block": 5,
+          "id": "Defend_B",
+          "magic_number": -1,
+          "rarity": "BASIC",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": 6,
+          "cost": 1,
+          "base_block": -1,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "ATTACK",
+          "ethereal": false,
+          "uuid": "4ec9d37b-9951-4908-aa89-c4525bc4c9d9",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": 6,
+          "has_target": true,
+          "target": "ENEMY",
+          "is_playable": true,
+          "name": "打击",
+          "block": -1,
+          "id": "Strike_B",
+          "magic_number": -1,
+          "rarity": "BASIC",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": -1,
+          "cost": 0,
+          "base_block": -1,
+          "base_cost": 0,
+          "free_to_play_once": false,
+          "base_magic_number": 2,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "12091e12-985d-4fd2-9c6b-71ef5bce039a",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "name": "内核加速",
+          "block": -1,
+          "id": "Turbo",
+          "magic_number": 2,
+          "rarity": "COMMON",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": 6,
+          "cost": 1,
+          "base_block": -1,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "ATTACK",
+          "ethereal": false,
+          "uuid": "5254fb41-1618-4720-88c4-97e2e75581b6",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": 6,
+          "has_target": true,
+          "target": "ENEMY",
+          "is_playable": true,
+          "name": "打击",
+          "block": -1,
+          "id": "Strike_B",
+          "magic_number": -1,
+          "rarity": "BASIC",
+          "misc": 0
+        }
+      ],
+      "end_turn_shuffle": {
+        "mode": "basemod_seeded",
+        "shared_rng_initialized": true,
+        "shared_seed48": 110218929809153
+      },
+      "cards_played_this_turn": 0,
+      "cards_discarded_this_turn": 0,
+      "relic_combat_state": {},
+      "times_damaged": 0,
+      "is_bloodied": false,
+      "attacks_played_this_turn": 0,
+      "energy_wasted": 2,
+      "rngs": {
+        "potion": {
+          "seed1": "16486863804489609192",
+          "counter": 13,
+          "seed0": "5339155806612925171"
+        },
+        "card_random": {
+          "seed1": "7426663776538069226",
+          "counter": 8,
+          "seed0": "3865458920734083115"
+        },
+        "ai": {
+          "seed1": "1871868147126095080",
+          "counter": 2,
+          "seed0": "2962975173055261923"
+        },
+        "monster_hp": {
+          "seed1": "2962975173055261923",
+          "counter": 1,
+          "seed0": "6428805814210884896"
+        },
+        "shuffle": {
+          "seed1": "2962975173055261923",
+          "counter": 1,
+          "seed0": "6428805814210884896"
+        },
+        "misc": {
+          "seed1": "6428805814210884896",
+          "counter": 0,
+          "seed0": "9664368474538511175"
+        }
+      },
+      "cards_drawn": 10,
+      "limbo": [],
+      "hand": [
+        {
+          "exhausts": false,
+          "damage": 0,
+          "cost": 2,
+          "base_block": -1,
+          "base_cost": 2,
+          "free_to_play_once": false,
+          "base_magic_number": 1,
+          "type": "POWER",
+          "ethereal": false,
+          "uuid": "447504dc-495c-4ab1-a86c-3a4066405349",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "name": "缓冲",
+          "block": 0,
+          "id": "Buffer",
+          "magic_number": 1,
+          "rarity": "RARE",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": 0,
+          "cost": 1,
+          "base_block": -1,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": 1,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "46d63358-1b1d-40ab-9a65-5e0c6f9ab6b2",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "name": "电击",
+          "block": 0,
+          "id": "Zap",
+          "magic_number": 1,
+          "rarity": "BASIC",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": 6,
+          "cost": 1,
+          "base_block": -1,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "ATTACK",
+          "ethereal": false,
+          "uuid": "e34992ba-50d7-4013-8521-acfc944f2dcd",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": 6,
+          "has_target": true,
+          "target": "ENEMY",
+          "is_playable": true,
+          "name": "打击",
+          "block": 0,
+          "id": "Strike_B",
+          "magic_number": -1,
+          "rarity": "BASIC",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": 6,
+          "cost": 1,
+          "base_block": -1,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "ATTACK",
+          "ethereal": false,
+          "uuid": "6dce9f39-db94-4d17-b537-fe094a5448c4",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": 6,
+          "has_target": true,
+          "target": "ENEMY",
+          "is_playable": true,
+          "name": "打击",
+          "block": 0,
+          "id": "Strike_B",
+          "magic_number": -1,
+          "rarity": "BASIC",
+          "misc": 0
+        },
+        {
+          "exhausts": true,
+          "damage": 0,
+          "cost": 1,
+          "base_block": 3,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "650fb0aa-c5a9-4b3b-994c-0947eb0e2935",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "SELF",
+          "is_playable": true,
+          "name": "全息影像",
+          "block": 3,
+          "id": "Hologram",
+          "magic_number": -1,
+          "rarity": "COMMON",
+          "misc": 0
+        },
+        {
+          "exhausts": false,
+          "damage": 0,
+          "cost": 1,
+          "base_block": -1,
+          "base_cost": 1,
+          "free_to_play_once": false,
+          "base_magic_number": -1,
+          "type": "SKILL",
+          "ethereal": false,
+          "uuid": "5264ee5c-c270-4cc7-804a-638941a4bc19",
+          "upgrades": 0,
+          "cost_modified_for_turn": false,
+          "base_damage": -1,
+          "has_target": false,
+          "target": "NONE",
+          "is_playable": true,
+          "name": "双重释放",
+          "block": 0,
+          "id": "Dualcast",
+          "magic_number": -1,
+          "rarity": "BASIC",
+          "misc": 0
+        }
+      ],
+      "player": {
+        "orbs": [
+          {
+            "passive_amount": 3,
+            "name": "闪电",
+            "id": "Lightning",
+            "evoke_amount": 8
+          },
+          {
+            "passive_amount": 0,
+            "name": "充能球栏位",
+            "evoke_amount": 0
+          },
+          {
+            "passive_amount": 0,
+            "name": "充能球栏位",
+            "evoke_amount": 0
+          }
+        ],
+        "current_hp": 60,
+        "block": 0,
+        "max_hp": 68,
+        "powers": [
+          {
+            "amount": 1,
+            "name": "创造性AI",
+            "id": "Creative AI"
+          }
+        ],
+        "energy": 3
+      }
+    },
+    "relics": [
+      {
+        "name": "破损核心",
+        "id": "Cracked Core",
+        "counter": -1
+      },
+      {
+        "name": "熔火之蛋",
+        "id": "Molten Egg 2",
+        "counter": -1
+      }
+    ],
+    "is_screen_up": false,
+    "potions": [
+      {
+        "requires_target": false,
+        "can_use": false,
+        "can_discard": false,
+        "name": "药水栏",
+        "id": "Potion Slot"
+      },
+      {
+        "requires_target": false,
+        "can_use": false,
+        "can_discard": false,
+        "name": "药水栏",
+        "id": "Potion Slot"
+      },
+      {
+        "requires_target": false,
+        "can_use": false,
+        "can_discard": false,
+        "name": "药水栏",
+        "id": "Potion Slot"
+      }
+    ],
+    "solver_discovery_reroll": true,
+    "ascension_level": 3,
+    "room_type": "MonsterRoomElite",
+    "full_rng_state": {
+      "schema_version": 1,
+      "scope": "natural-run persistent RNGs; no daily-mode or third-party-mod RNGs",
+      "run_seed": "6756128769377989192",
+      "act": 1,
+      "floor": 7,
+      "turn": 2,
+      "streams": {
+        "Collections.r": {
+          "initialized": true,
+          "class": "java.util.Random",
+          "algorithm": "java_lcg48",
+          "seed48": "110218929809153",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          }
+        },
+        "MathUtils.random": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "6643903507671965794",
+          "seed1": "18309079311781698633",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          }
+        },
+        "NeowEvent.rng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "15945314447306639194",
+          "seed1": "9170269270248162147",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 5
+        },
+        "aiRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "2962975173055261923",
+          "seed1": "1871868147126095080",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 2
+        },
+        "cardRandomRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "3865458920734083115",
+          "seed1": "7426663776538069226",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 8
+        },
+        "cardRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "15436767746912641537",
+          "seed1": "10835832730361381000",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 39
+        },
+        "eventRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "10921964640758978303",
+          "seed1": "5911007547429006888",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 1
+        },
+        "mapRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "8792137531380738778",
+          "seed1": "15227321738406033237",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 96
+        },
+        "merchantRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "2030487321579309833",
+          "seed1": "13961592873762190313",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 16
+        },
+        "miscRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "9664368474538511175",
+          "seed1": "6428805814210884896",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 0
+        },
+        "monsterHpRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "6428805814210884896",
+          "seed1": "2962975173055261923",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 1
+        },
+        "monsterRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "2513363272078908507",
+          "seed1": "12076307487362348045",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 30
+        },
+        "potionRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "5339155806612925171",
+          "seed1": "16486863804489609192",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 13
+        },
+        "relicRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "15945314447306639194",
+          "seed1": "9170269270248162147",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 5
+        },
+        "shuffleRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "6428805814210884896",
+          "seed1": "2962975173055261923",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 1
+        },
+        "treasureRng": {
+          "initialized": true,
+          "class": "com.badlogic.gdx.math.RandomXS128",
+          "algorithm": "xorshift128plus",
+          "seed0": "13346451672565999365",
+          "seed1": "17205086043439100643",
+          "gaussian": {
+            "has_cached": false,
+            "cached_double_bits": "0"
+          },
+          "counter": 3
+        }
+      },
+      "complete": true
+    },
+    "solver_next_rest": false,
+    "solver_auto_context": {
+      "x": 0,
+      "y": 6,
+      "boss": "The Guardian",
+      "room": "MonsterRoomElite",
+      "boss_candidates_remaining": 3,
+      "boss_fast_finish": false,
+      "feed_mode": true,
+      "run_auto": true,
+      "smoke_probe_budget": 12000,
+      "smoke_loss_threshold": 15,
+      "smoke_opening": false,
+      "potion_reward_blocked": false,
+      "potion_drop_probability": 0.5,
+      "deck": [
+        {
+          "id": "Strike_B",
+          "cost": 1,
+          "base_damage": 6,
+          "base_block": -1,
+          "upgrades": 0
+        },
+        {
+          "id": "Strike_B",
+          "cost": 1,
+          "base_damage": 6,
+          "base_block": -1,
+          "upgrades": 0
+        },
+        {
+          "id": "Strike_B",
+          "cost": 1,
+          "base_damage": 6,
+          "base_block": -1,
+          "upgrades": 0
+        },
+        {
+          "id": "Strike_B",
+          "cost": 1,
+          "base_damage": 6,
+          "base_block": -1,
+          "upgrades": 0
+        },
+        {
+          "id": "Defend_B",
+          "cost": 1,
+          "base_damage": -1,
+          "base_block": 5,
+          "upgrades": 0
+        },
+        {
+          "id": "Defend_B",
+          "cost": 1,
+          "base_damage": -1,
+          "base_block": 5,
+          "upgrades": 0
+        },
+        {
+          "id": "Defend_B",
+          "cost": 1,
+          "base_damage": -1,
+          "base_block": 5,
+          "upgrades": 0
+        },
+        {
+          "id": "Defend_B",
+          "cost": 1,
+          "base_damage": -1,
+          "base_block": 5,
+          "upgrades": 0
+        },
+        {
+          "id": "Zap",
+          "cost": 1,
+          "base_damage": -1,
+          "base_block": -1,
+          "upgrades": 0
+        },
+        {
+          "id": "Dualcast",
+          "cost": 1,
+          "base_damage": -1,
+          "base_block": -1,
+          "upgrades": 0
+        },
+        {
+          "id": "Turbo",
+          "cost": 0,
+          "base_damage": -1,
+          "base_block": -1,
+          "upgrades": 0
+        },
+        {
+          "id": "Cold Snap",
+          "cost": 1,
+          "base_damage": 9,
+          "base_block": -1,
+          "upgrades": 1
+        },
+        {
+          "id": "Hologram",
+          "cost": 1,
+          "base_damage": -1,
+          "base_block": 3,
+          "upgrades": 0
+        },
+        {
+          "id": "Go for the Eyes",
+          "cost": 0,
+          "base_damage": 4,
+          "base_block": -1,
+          "upgrades": 1
+        }
+      ]
+    }
+  }
+}

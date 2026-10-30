@@ -26,6 +26,16 @@ namespace sts {
         int attackCount = 1;
     };
 
+    // DamageInfo.DamageType in the game. Only the distinction the engine needs
+    // today: orb damage is typed THORNS, so a monster power that reacts to being
+    // attacked (Curl Up, Malleable, Reactive, Flight) ignores it. Card and
+    // monster attacks use the two-argument DamageInfo constructor, which is
+    // NORMAL.
+    enum class DamageType {
+        NORMAL,
+        THORNS
+    };
+
     struct Monster {
 
         /*
@@ -133,8 +143,8 @@ namespace sts {
         void die(BattleContext &bc);
         void suicideAction(BattleContext &bc);
 
-        void attackedUnblockedHelper(BattleContext &bc, int damage);
-        void attacked(BattleContext &bc, int damage);
+        void attackedUnblockedHelper(BattleContext &bc, int damage, DamageType type);
+        void attacked(BattleContext &bc, int damage, DamageType type = DamageType::NORMAL);
         void damageUnblockedHelper(BattleContext &bc, int damage);
         void damage(BattleContext &bc, int damage);
         void onHpLost(BattleContext &bc, int amount);

@@ -72,6 +72,12 @@ namespace sts {
         void moveToDiscardPile(const CardInstance &c);
         void moveDiscardPileIntoToDrawPile();
 
+        // AbstractCard.resetAttributes(): a card that lands in draw/discard/exhaust
+        // goes back to its printed cost. X-cost cards must keep the -1 sentinel.
+        static void resetCostForTurn(CardInstance &c) {
+            c.costForTurn = (c.cost == -1) ? static_cast<int8_t>(-1) : c.cost;
+        }
+
         // **************
         void notifyAddCardToCombat(const CardInstance &c);
         void notifyRemoveFromCombat(const CardInstance &c);

@@ -15,7 +15,14 @@ sys.path.insert(0, str(SIM))
 
 import slaythespire as sts  # noqa: E402
 
-CARD_ALIASES = {"Strike_R": "STRIKE_RED", "Defend_R": "DEFEND_RED", "Ghostly": "APPARITION"}
+CARD_ALIASES = {"Strike_R": "STRIKE_RED", "Defend_R": "DEFEND_RED", "Ghostly": "APPARITION",
+                "J.A.X.": "JAX",
+                # Defect cards whose game cardID differs from the engine enum name.
+                "Strike_B": "STRIKE_BLUE", "Defend_B": "DEFEND_BLUE",
+                "Conserve Battery": "CHARGE_BATTERY", "Gash": "CLAW",
+                "Lockon": "BULLSEYE", "Redo": "RECURSION",
+                "Steam": "STEAM_BARRIER", "Steam Power": "OVERCLOCK",
+                "Undo": "EQUILIBRIUM"}
 MONSTER_ALIASES = {
     "FuzzyLouseNormal": "RED_LOUSE",
     "FuzzyLouseDefensive": "GREEN_LOUSE",
@@ -58,6 +65,9 @@ PLAYER_POWER_ALIASES = {
     "WaveOfTheHandPower": "WAVE_OF_THE_HAND",
     "EnergizedBlue": "ENERGIZED",
     "Hello": "HELLO_WORLD",
+    # Two Defect powers whose game ids differ from the engine's names.
+    "Heatsink": "HEATSINKS",
+    "Repair": "SELF_REPAIR",
 }
 MONSTER_POWER_ALIASES = {
     "Anger": "ENRAGE",
@@ -310,7 +320,20 @@ def card_snapshot(card):
         result["misc"] = int(card["base_damage"]) - 8
     if key == "RITUAL_DAGGER" and "base_damage" in card:
         result["misc"] = int(card["base_damage"])
+    if key == "STEAM_BARRIER" and "base_block" in card:
+        # SteamBarrier.java drops its own baseBlock by 1 on every play
+        # (ModifyBlockAction) and leaves misc at 0; the engine carries that count in
+        # misc/specialData instead, so it has to be derived from the block.
+        result["misc"] = (8 if int(card.get("upgrades") or 0) else 6) - int(card["base_block"])
     return result
+
+
+def orb_snapshot(orb):
+    """CommunicationMod's orb entry. A null id marks an empty slot; it is kept so
+    the list length stays the slot count."""
+    return {"id": orb.get("id"),
+            "passive": int(orb.get("passive_amount") or 0),
+            "evoke": int(orb.get("evoke_amount") or 0)}
 
 
 def power_snapshot(power, owner):
@@ -561,8 +584,9 @@ def build_snapshot(game_state, counters=None):
         relics.append({"id": sts.relic_id_from_name(identifier),
                        "counter": int(counter if counter is not None else -1)})
     snapshot = {
-        # Optional: the importer reads Ironclad when absent. Orbs, stance, mantra and retain are
-        # likewise optional and are only added once the Mod exports them.
+        # Optional: the importer reads Ironclad when absent. Stance, mantra and retain are
+        # likewise optional and are only added once the Mod exports them. Orbs come from
+        # CommunicationMod and are always present.
         **({"character": game_state["class"]} if game_state.get("class") else {}),
         "seed": int(game_state.get("seed") or 0),
         "floor": int(game_state.get("floor") or 0),
@@ -583,8 +607,16 @@ def build_snapshot(game_state, counters=None):
             "energy": int(player.get("energy") or 0),
             "energy_per_turn": int(combat.get("energy_per_turn") or 3) + berserk_energy,
             "card_draw_per_turn": int(combat.get("card_draw_per_turn", 5 - int(any(p.get("id")=="Draw Reduction" for p in player_powers)))) ,
+            # The engine folds two game powers into dedicated fields rather than
+            # importing them as statuses: Berserk's energy, and the DrawPower that
+            # Machine Learning applies (the engine tracks it as card_draw_per_turn,
+            # and the game already reports the raised value there). CommunicationMod
+            # lists both among the player's powers, so skip them by their game ids.
             "powers": [power_snapshot(power, "player") for power in player_powers
-                       if (power.get("id") or power.get("name")) != "Berserk"],
+                       if (power.get("id") or power.get("name")) not in ("Berserk", "Draw")],
+            # CommunicationMod always exports the orb list, empty slots included.
+            "orb_slots": len(player.get("orbs") or []),
+            "orbs": [orb_snapshot(orb) for orb in player.get("orbs") or []],
         },
         "hand": [card_snapshot(card) for card in combat.get("hand") or []],
         "draw_pile": [card_snapshot(card) for card in combat.get("draw_pile") or []],

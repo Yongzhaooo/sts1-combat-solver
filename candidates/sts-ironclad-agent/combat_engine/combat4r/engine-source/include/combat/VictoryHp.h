@@ -48,10 +48,14 @@ struct VictoryHpRelics {
         }
     }
 
-    [[nodiscard]] VictoryHp project(int hp, int maxHp) const {
+    // updateRelicsOnExit heals the relic hooks first and SelfRepairPower after them, so
+    // the projection takes the same order. Magic Flower only scales the relic heals:
+    // the real path hands the Self Repair amount straight to playerHeal.
+    [[nodiscard]] VictoryHp project(int hp, int maxHp, int selfRepair = 0) const {
         apply(hp, maxHp, [&](int amount) {
             if (!healingBlocked) hp = std::min(hp + amount, maxHp);
         });
+        if (!healingBlocked && hp > 0 && selfRepair > 0) hp = std::min(hp + selfRepair, maxHp);
         return {hp, maxHp};
     }
 };

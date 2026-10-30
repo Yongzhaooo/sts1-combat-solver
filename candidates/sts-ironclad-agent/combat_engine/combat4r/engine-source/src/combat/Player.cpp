@@ -3,6 +3,7 @@
 //
 
 #include <cassert>
+#include <iostream>
 
 #include <constants/PlayerStatusEffects.h>
 #include <combat/BattleContext.h>
@@ -178,15 +179,40 @@ void Player::gainEnergy(int amount) {
 }
 
 void Player::increaseOrbSlots(int amount) {
-    // todo
+    // Vanilla caps orb slots at 10 (AbstractPlayer.MAX_ORBS); slot loss (Consume)
+    // never goes below zero.
+    const int total = orbSlots + amount;
+    if (total > MAX_ORB_SLOTS) {
+        orbSlots = MAX_ORB_SLOTS;
+    } else if (total < 0) {
+        orbSlots = 0;
+    } else {
+        orbSlots = static_cast<int8_t>(total);
+    }
 }
 
-void Player::channelOrb(Orb orb) {
-    // todo
+void Player::channelOrb(Orb orb, std::int16_t darkCounter) {
+    // Requires an open slot: the caller (Actions::ChannelOrb) owns the vanilla
+    // policy of evoking the oldest orb when the bar is full, and of doing
+    // nothing at all when no slots exist.
+    if (!hasEmptyOrb()) {
+        return;
+    }
+    if (darkCounter < 0) {
+        // Vanilla Dark channels with an initial counter of 6 (Dark's
+        // constructor); Recursion passes the evoked orb's counter through.
+        darkCounter = orb == Orb::DARK ? 6 : 0;
+    }
+    orbs.push_back(OrbState{orb, darkCounter});
+    if (orb == Orb::LIGHTNING) {
+        ++lightningChanneledThisCombat;
+    } else if (orb == Orb::FROST) {
+        ++frostChanneledThisCombat;
+    }
 }
 
 bool Player::hasEmptyOrb() const {
-    return false;
+    return orbs.size() < orbSlots;
 }
 
 void Player::removeDebuffs() {
@@ -297,6 +323,9 @@ void Player::attacked(BattleContext &bc, int enemyIdx, int calculatedDamage) {
         decrementStatus<PS::BUFFER>();
         damage = 0;
     }
+    // Power onAttacked hooks (Static Discharge) see the damage before Torii (relic
+    // onAttacked) and Tungsten Rod (onLoseHpLast) reduce it.
+    const int onAttackedDamage = damage;
 
     if (hasStatus<PS::THORNS>()) {
         bc.addToTop( Actions::DamageEnemy(enemyIdx, getStatus<PS::THORNS>()) );
@@ -329,6 +358,19 @@ void Player::attacked(BattleContext &bc, int enemyIdx, int calculatedDamage) {
 
     } else {
         lastAttackUnblockedDamage = 0;
+    }
+
+    // StaticDischargePower.onAttacked: one Lightning orb per stack. The
+    // bytecode confirms this branch: AbstractPlayer.damage calls
+    // decrementBlock before the onAttacked loop, and onAttacked returns
+    // immediately when its damageAmount argument is <= 0, so an attack
+    // that is fully blocked channels nothing. Attacking only - poison and
+    // self-damage never reach this function.
+    if (onAttackedDamage > 0 && hasStatus<PS::STATIC_DISCHARGE>()) {
+        const int count = getStatus<PS::STATIC_DISCHARGE>();
+        for (int i = 0; i < count; ++i) {
+            bc.addToTop(Actions::ChannelOrb(Orb::LIGHTNING));
+        }
     }
 }
 
@@ -377,7 +419,9 @@ void Player::hpWasLost(BattleContext &bc, int amount, bool selfDamage) {
     }
 
     if (hasRelic<RelicId::EMOTION_CHIP>()) {
-        // todo
+        // EmotionChip.wasHPLost: any hp loss during combat arms the relic, so it
+        // also covers poison, self-damage and hits taken on the monster turn.
+        emotionChipPulse = true;
     }
 
     if (hasRelic<RelicId::SELF_FORMING_CLAY>()) {
@@ -476,6 +520,11 @@ void Player::applyEndOfTurnPowers(BattleContext &bc) {
 
             case PS::DOUBLE_TAP:
                 bc.addToBot(Actions::RemoveStatus<PS::DOUBLE_TAP>());
+                break;
+
+            case PS::AMPLIFY:
+                // AmplifyPower.atEndOfTurn removes the unused stacks.
+                bc.addToBot(Actions::RemoveStatus<PS::AMPLIFY>());
                 break;
 
             case PS::ENTANGLED:
@@ -615,7 +664,13 @@ void Player::applyStartOfTurnRelics(BattleContext &bc) {
     }
 
     if (hasRelic<R::EMOTION_CHIP>()) {
-        // todo if lost hp last turn addToBot(new ImpulseAction())
+        // EmotionChip.atTurnStart: ImpulseAction makes every orb run its
+        // start-of-turn and end-of-turn passive once. The relic pulses only once
+        // per hp loss, so a hit on turn N does not fire on turn N+2.
+        if (emotionChipPulse) {
+            emotionChipPulse = false;
+            bc.addToBot( Actions::ImpulseAction() );
+        }
     }
 
     if (hasRelic<R::HAPPY_FLOWER>()) {
@@ -641,11 +696,12 @@ void Player::applyStartOfTurnRelics(BattleContext &bc) {
     }
 
     if (hasRelic<R::INSERTER>()) {
+        // Inserter.atTurnStart adds two instead of one while the counter is -1, and only the
+        // pre-battle step ever sets -1. Once that step is in play the counter is never
+        // negative, so every start adds one.
         if (++inserterCounter == 2) {
-            inserterCounter = 0; // todo
-            bc.addToBot( {[=](BattleContext &bc) {
-                bc.player.increaseOrbSlots(1);
-            }});
+            inserterCounter = 0;
+            bc.addToBot( Actions::IncreaseOrbSlots(1) );
         }
     }
 
@@ -682,7 +738,11 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 break;
 
             case PS::CREATIVE_AI:
-//                bc.addToBot( Actions::SetState(InputState::CREATE_RANDOM_CARD_IN_HAND_POWER, pair.second) ); // todo
+                // CreativeAiPower.atStartOfTurn: add one random Power card to hand per
+                // stack, at its printed cost (the power never lowers it).
+                for (int i = 0; i < pair.second; ++i) {
+                    bc.addToBot(Actions::CreateRandomCardInHandAction(CardType::POWER));
+                }
                 break;
 
             case PS::ECHO_FORM:
@@ -709,8 +769,14 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 removeStatus<PS::FLAME_BARRIER>();
                 break;
 
-            case PS::HELLO_WORLD: // todo
-                removeStatus<PS::HELLO_WORLD>();
+            case PS::HELLO_WORLD:
+                // HelloPower.atStartOfTurn: one random Common card per stack, at its
+                // printed cost (the power never lowers it). It is a permanent power,
+                // not a one-shot, and the pool is the whole Common pool, not just
+                // Skills - the game calls AbstractDungeon.getCard(COMMON, rng).
+                for (int i = 0; i < pair.second; ++i) {
+                    bc.addToBot(Actions::CreateRandomRarityCardInHandAction(CardRarity::COMMON));
+                }
                 break;
 
             case PS::INFINITE_BLADES:
@@ -718,7 +784,11 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 break;
 
             case PS::LOOP:
-                // todo do amount times : call orb[0].onStartOfTurn, orb[0].onEndOfTurn
+                // LoopPower: for each stack, trigger the oldest orb's passive
+                // (onStartOfTurn then onEndOfTurn, as the game calls both).
+                for (int i = 0; i < pair.second; ++i) {
+                    bc.addToBot(Actions::TriggerOrbPassiveAction(0));
+                }
                 break;
 
             case PS::MAGNETISM:

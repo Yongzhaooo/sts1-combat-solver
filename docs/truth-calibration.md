@@ -101,10 +101,11 @@ rng                   13 个种子随机数流的计数（Random.counter）：
 - `character`：游戏的职业名 `IRONCLAD`、`THE_SILENT`、`DEFECT`、`WATCHER`，缺省为 `IRONCLAD`；其他值会被拒绝。
 - `player.stance`：`NEUTRAL`、`CALM`、`WRATH` 或 `DIVINITY`。
 - `player.mantra`：非负整数；快照的 `powers` 里也有 Mantra 时两者必须相等。
-- `player.orb_slots`：整数。`player.orbs`：宝珠列表。模拟器还没有宝珠状态，非空列表会被拒绝，而不是被忽略。
+- `player.orb_slots`：整数，原版上限 10；更大的 mod 栏位拒绝导入。
+- `player.orbs`：宝珠列表，长度等于栏位数，空栏的 `id` 为 null。每项 `{id, passive, evoke}`：`id` 是 CommunicationMod 的宝珠名（`Lightning`、`Frost`、`Dark`、`Plasma`，也接受引擎枚举名），`passive` 和 `evoke` 是游戏里已算过 Focus 的数值。没有原版卡牌会给宝珠加激发值，所以导入要求激发值恰好等于 `max(0, 基础激发值 + Focus)`，不等就拒绝（否则 Focus 为负时被截到 0 的数值会被反推成一个凭空的加成，Focus 回升后还留着）；黑暗珠的累计伤害存在 `evoke` 里。声明了 `orb_slots` 却没有 `orbs`、宝珠数超过栏位、或激发值与基础和 Focus 不符，都会被拒绝。
 - 牌堆里的牌可带 `retain`（布尔，单次保留位）。
 
-Focus 仍写在 `powers` 里。Mod 目前不导出这些字段，生产端现在只写 `character`；快照里宝珠和姿态的单项格式等 M2、M3 导出时再定。
+Focus 仍写在 `powers` 里。宝珠由 CommunicationMod 导出，生产端（`steam_mcts.build_snapshot`）原样透传；姿态和真言的单项格式等 M2 再定。
 
 原生夹具使用同一份 `observation` 格式：一个战斗开始的观测加后续动作和检查点。M0 只让快照导入器接受可选的职业字段（见上）；让导入器直接读 `observation` 格式是后续步骤，尚未排期，届时协作者就不需要实现 Mod 的导出。
 
@@ -200,6 +201,10 @@ calibration.rng         {aiRng, cardRng, cardRandomRng, eventRng, mapRng, mercha
 校准用例覆盖的机制有限。校准通过只说明你的真值在这些用例上与维护者一致，不说明它在新机制上一定对，所以合并前的私有复核不能省。
 
 公开 CI 运行 `python tools/truth_calibration/run.py --check fixtures/calibration`，只检查每个已提交用例的格式和观测字段，不需要真值。
+
+`run.py --check fixtures/native/<职业>` 同理只校验格式，不重放。真正把原生夹具和模拟器对起来的是 `python tools/check_coverage_gaps.py`：它把每个检查点的观测喂给快照导入器，用 `sim_patch/parity/core.py` 的严格比较逐字段核对，只需要构建好的运行时，不需要真值。夹具里 `fixtures/native/DEFECT` 那 8 个跨回合、多怪、负 Focus 的窗口是必过项；同目录更早的卡牌扫描夹具用的是 9999 HP 假怪，首个战斗检查点是 `intent: DEBUG, move: -1`，导入器无法重建，只能计为不可用而不是通过，任何能导入却不一致的检查点仍然是失败。
+
+原生夹具由真值侧的录制器产出，仓库里的 `tools/truth_calibration/gap_fixtures.py` 和 `coverage_fixtures.py` 只负责把录制结果投影成夹具格式。
 
 ## 不要提交
 

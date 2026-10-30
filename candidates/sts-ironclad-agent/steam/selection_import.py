@@ -88,14 +88,61 @@ def queued_power(comparator, view, action):
                 source_monster=action.get('source', {}).get('kind') == 'monster')
 
 
+MID_TURN_TASKS = {
+    # A Defect card opens these pickers after its own use has resolved. The card
+    # itself already sits in the pile the picker reads from, so the simulator
+    # only needs the task and the pick count; no queued action is replayed.
+    'Hologram': 'HOLOGRAM',
+    'Recycle': 'RECYCLE',
+    'Seek': 'SEEK',
+}
+
+
+def mid_turn_selection(comparator, view):
+    """The spec for a picker a card opened in the middle of a turn.
+
+    Unlike the battle-start pickers below there is no queue left to rebuild: the
+    card that opened this screen finished resolving before the click, and the
+    screen already lists the cards the simulator keeps in that pile.
+    """
+    game = view['game']
+    screen = game['screen_state']
+    card = game['combat_state'].get('card_in_play')
+    if not isinstance(card, dict) or card.get('id') not in MID_TURN_TASKS:
+        raise ValueError('only battle-start queues are supported')  # the message every other picker already got
+    task = MID_TURN_TASKS[card['id']]
+    if not screen.get('cards'):
+        raise ValueError('mid-turn picker has no candidates')
+    cards = [comparator.sts.CardId(comparator.bridge.card_snapshot(c)['id']) for c in screen['cards']]
+    if task == 'SEEK':
+        # Seek's grid keeps the picked cards on screen and only moves them when the
+        # last pick is confirmed, so a partly picked grid is a normal state: the
+        # remaining picks are num_cards minus what is already selected. Its order
+        # is the draw pile sorted by name and rarity, not the pile order, so the
+        # already picked cards travel as draw pile indices instead of positions.
+        picked = [c['uuid'] for c in screen.get('selected_cards') or []]
+        pile = [c['uuid'] for c in game['combat_state']['draw_pile']]
+        if len(set(picked)) != len(picked) or any(uuid not in pile for uuid in picked):
+            raise ValueError('Seek picker selects a card the draw pile does not hold')
+        if len(pile) != len(cards):
+            raise ValueError('Seek picker does not show the whole draw pile')
+        return dict(task='MID_TURN', select_task=task, pick_count=screen['num_cards'] - len(picked),
+                    cards=cards, selected_indices=[pile.index(uuid) for uuid in picked])
+    if screen.get('selected') or screen.get('num_cards') != 1:
+        raise ValueError('mid-turn picker is not an untouched single-card choice')
+    return dict(task='MID_TURN', select_task=task, pick_count=1, cards=cards)
+
+
 def start_selection(comparator, view):
     g, r = view['game'], view['live_run']
     screen = g['screen_type']
     current = r.get('current_action', {}).get('class')
     if screen == 'GRID' and current == 'DiscardPileToTopOfDeckAction':
         return headbutt_selection(comparator, view)
-    if g['combat_state']['turn'] != 1:
-        raise ValueError('only battle-start queues are supported')
+    card = g['combat_state'].get('card_in_play')
+    # Hologram, Recycle and Seek open their picker on any turn, turn 1 included.
+    if g['combat_state']['turn'] != 1 or (isinstance(card, dict) and card.get('id') in MID_TURN_TASKS):
+        return mid_turn_selection(comparator, view)
     relics = {a['id'] for a in g['relics']}
     if screen == 'CARD_REWARD' and 'Toolbox' in relics:
         if current != 'ChooseOneColorless':

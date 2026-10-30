@@ -52,6 +52,8 @@ jobs:
       - run: python tools/coverage_manifest.py --check
       - run: python tools/truth_calibration/self_test.py
       - run: python tools/truth_calibration/run.py --check fixtures/calibration
+      - name: Validate the native Defect fixtures
+        run: python tools/truth_calibration/run.py --check fixtures/native/DEFECT
       - run: python tools/check_distill2_artifact.py
       - run: python overlay/check_async_reports.py
       - run: python overlay/check_debug_export.py
@@ -73,6 +75,8 @@ jobs:
       - run: python tools/check_search_progress.py
       - run: python tools/check_search_memory.py
       - run: python tools/check_snapshot_import.py
+      - name: Compare the native Defect fixtures against the simulator
+        run: python tools/check_coverage_gaps.py
       - run: python tools/check_headbutt.py
       - run: python tools/check_discovery_frames.py
       - run: python tools/check_armaments_identity.py

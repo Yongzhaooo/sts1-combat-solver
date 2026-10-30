@@ -298,10 +298,61 @@ namespace {
             else if (stance == "DIVINITY") bc.player.stance = Stance::DIVINITY;
             else throw std::invalid_argument("unknown snapshot stance: " + stance);
         }
-        if (player.contains("orb_slots")) bc.player.orbSlots = static_cast<std::int8_t>(py::cast<int>(player["orb_slots"]));
-        // The simulator has no orb state yet, so a snapshot with orbs must not import as if it had none.
-        if (player.contains("orbs") && py::len(player["orbs"]) != 0)
-            throw std::invalid_argument("snapshot orbs are not supported by the simulator yet");
+        if (player.contains("orb_slots")) {
+            const int orbSlots = py::cast<int>(player["orb_slots"]);
+            if (orbSlots < 0 || orbSlots > Player::MAX_ORB_SLOTS)
+                // Vanilla caps slots at 10. Mods raising the cap are unsupported
+                // until orb storage is reworked; reject instead of truncating.
+                throw std::invalid_argument("snapshot orb_slots " + std::to_string(orbSlots) +
+                                            " outside the vanilla 0.." + std::to_string(Player::MAX_ORB_SLOTS) +
+                                            " range (modded slot counts are not supported yet)");
+            bc.player.orbSlots = static_cast<std::int8_t>(orbSlots);
+        }
+        // Orbs: CommunicationMod exports every slot, using a null id for an empty
+        // one, with the focus-applied passive/evoke amounts. The simulator stores
+        // only filled orbs and derives the card-granted evoke bonus from the
+        // exported evoke amount; Dark keeps its accumulated damage in evokeAmount.
+        if (!player.contains("orbs")) {
+            if (player.contains("orb_slots") && py::cast<int>(player["orb_slots"]) != 0)
+                throw std::invalid_argument("snapshot declares orb slots but no orbs");
+        } else {
+            const auto orbs = py::cast<py::list>(player["orbs"]);
+            if (!player.contains("orb_slots"))
+                bc.player.orbSlots = static_cast<std::int8_t>(py::len(orbs));
+            for (const auto item : orbs) {
+                const auto orb = py::cast<py::dict>(item);
+                py::object id = orb["id"];
+                if (id.is_none()) continue;  // empty slot
+                const auto name = py::cast<std::string>(id);
+                Orb type;
+                if (name == "Lightning" || name == "LIGHTNING") type = Orb::LIGHTNING;
+                else if (name == "Frost" || name == "FROST") type = Orb::FROST;
+                else if (name == "Dark" || name == "DARK") type = Orb::DARK;
+                else if (name == "Plasma" || name == "FUSION") type = Orb::FUSION;
+                else throw std::invalid_argument("unknown snapshot orb id: " + name);
+                if (!orb.contains("evoke"))
+                    throw std::invalid_argument("snapshot orb " + name + " is missing its evoke amount");
+                const int evoke = py::cast<int>(orb["evoke"]);
+                std::int16_t darkCounter = 0;
+                if (type == Orb::DARK) {
+                    darkCounter = static_cast<std::int16_t>(evoke);
+                } else if (type != Orb::FUSION) {
+                    // No vanilla card raises an orb's evoke amount, so the game's value
+                    // is exactly max(0, base + focus). Anything else means the snapshot
+                    // and the exported Focus disagree - refuse it instead of inventing
+                    // a per-orb bonus (the game would show a Zap+ the game never grants,
+                    // and Focus climbing back would keep it).
+                    const int baseEvoke = type == Orb::LIGHTNING ? 8 : 5;
+                    const int expected = std::max(0, baseEvoke + static_cast<int>(bc.player.focus));
+                    if (evoke != expected)
+                        throw std::invalid_argument("snapshot orb " + name + " evokes for " +
+                            std::to_string(evoke) + " but base + focus is " + std::to_string(expected));
+                }
+                bc.player.orbs.push_back(Player::OrbState{type, darkCounter});
+            }
+            if (static_cast<int>(bc.player.orbs.size()) > bc.player.orbSlots)
+                throw std::invalid_argument("snapshot has more orbs than orb slots");
+        }
         if (player.contains("mantra")) {
             const int mantra = py::cast<int>(player["mantra"]);
             if (mantra < 0) throw std::invalid_argument("snapshot mantra is negative");
@@ -679,6 +730,28 @@ PYBIND11_MODULE(slaythespire, m) {
             add("aiRng",gc.aiRng); add("mathUtilRng",gc.mathUtilRng);
             add("monsterHpRng",gc.monsterHpRng); add("neowRng",gc.neowRng);
             return values;
+        })
+        .def("set_rng_states", [](GameContext &gc, const pybind11::dict &values) {
+            // Replay support: a captured run records each stream's exact state, so a
+            // re-simulation has to start from those bits instead of re-rolling the
+            // dungeon. Only the streams the caller names are touched.
+            const auto read = [](const pybind11::dict &value) {
+                Random rng{};
+                rng.seed0 = value["seed0"].cast<std::uint64_t>();
+                rng.seed1 = value["seed1"].cast<std::uint64_t>();
+                rng.counter = value["counter"].cast<int>();
+                return rng;
+            };
+            const auto assign = [&](const char *name, Random &rng) {
+                if (values.contains(name)) rng = read(values[name].cast<pybind11::dict>());
+            };
+            assign("eventRng",gc.eventRng); assign("treasureRng",gc.treasureRng);
+            assign("relicRng",gc.relicRng); assign("potionRng",gc.potionRng);
+            assign("cardRng",gc.cardRng); assign("merchantRng",gc.merchantRng);
+            assign("monsterRng",gc.monsterRng); assign("miscRng",gc.miscRng);
+            assign("shuffleRng",gc.shuffleRng); assign("cardRandomRng",gc.cardRandomRng);
+            assign("aiRng",gc.aiRng); assign("mathUtilRng",gc.mathUtilRng);
+            assign("monsterHpRng",gc.monsterHpRng); assign("neowRng",gc.neowRng);
         })
         .def_property_readonly("potions", [](const GameContext &gc) {
             std::vector<int> values;
@@ -1578,6 +1651,17 @@ PYBIND11_MODULE(slaythespire, m) {
             return std::string(names[static_cast<int>(p.stance)]);
         })
         .def_readonly("orb_slots", &Player::orbSlots)
+        .def_property_readonly("orbs", [](const Player &p) {
+            static const char *const names[] = {"EMPTY", "DARK", "FROST", "FUSION", "LIGHTNING"};
+            pybind11::list result;
+            for (const auto &orb : p.orbs) {
+                pybind11::dict item;
+                item["id"] = std::string(names[static_cast<int>(orb.type)]);
+                item["dark_counter"] = static_cast<int>(orb.darkCounter);
+                result.append(item);
+            }
+            return result;
+        })
         .def_property_readonly("bombs", [](const Player &p) {
             // Legacy aggregate view; instances remain the authoritative state.
             std::vector<int> totals(3, 0);
