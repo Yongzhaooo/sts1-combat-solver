@@ -78,9 +78,9 @@ PYBIND11_MODULE(live_combat_search, m) {
             b.cardSelectInfo.pickCount=1;
         } else if(task=="MID_TURN") {
             // A picker a Defect card opened mid-turn (Hologram, Recycle, Seek).
-            // The queue that opened it resolved before the click, so only the
-            // task and picks are restored; the choose* helper then reads the same
-            // pile the game is showing. Check the candidate list first so a
+            // The task and picks are restored here and the opening card's own
+            // UseCardAction arrives as the queue; the choose* helper then reads
+            // the same pile the game is showing. Check the candidate list first so a
             // mismatch between game and simulator cannot silently pick a
             // different card.
             const auto selectTask=d["select_task"].cast<std::string>();
@@ -125,7 +125,6 @@ PYBIND11_MODULE(live_combat_search, m) {
                 }
             }
         } else throw std::invalid_argument("unsupported start selection");
-        // A mid-turn picker carries no queue: the card resolved before the click.
         if(!d.contains("queue"))return;
         for(auto value:d["queue"].cast<py::list>()) {
             auto a=value.cast<py::dict>();auto kind=a["kind"].cast<std::string>();
@@ -149,10 +148,11 @@ PYBIND11_MODULE(live_combat_search, m) {
             }});
             else if(kind=="gamble")b.addToBot(Actions::GambleAction());
             else if(kind=="upgrade_random")b.addToBot(Actions::UpgradeRandomCardAction());
-            else if(kind=="finish_headbutt") {
-                // Damage and on-use effects already happened in Java. Resume only
+            else if(kind=="finish_card") {
+                // The card that opened the picker (Headbutt, Seek, Hologram, Recycle):
+                // its on-use effects already happened in Java. Resume only
                 // UseCardAction's after-use callbacks and destination movement.
-                CardInstance card(CardId::HEADBUTT,a["upgrades"].cast<int>()>0);
+                CardInstance card(a["card"].cast<CardId>(),a["upgrades"].cast<int>()>0);
                 card.uniqueId=b.cards.nextUniqueCardId++;
                 card.cost=a["base_cost"].cast<int>();
                 card.costForTurn=a["cost"].cast<int>();

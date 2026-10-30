@@ -11,24 +11,34 @@ def headbutt_selection(comparator, view):
     discard = [c['uuid'] for c in combat['discard_pile']]
     if len(options) < 2 or len(set(options)) != len(options) or set(options) != set(discard):
         raise ValueError('Headbutt picker differs from the original discard pile')
+    return dict(task='HEADBUTT', queue=[resolving_card(comparator, view, 'Headbutt')])
+
+
+def resolving_card(comparator, view, name):
+    """The UseCardAction still queued behind a picker its own card opened.
+
+    The card left the hand when it was played but reaches its pile only when
+    UseCardAction resolves after the pick, so the import must finish it too.
+    """
+    live, combat = view['live_run'], view['game']['combat_state']
     actions = queued_actions(view)
     effects = [a for a in actions if a['class'] not in ('WaitAction', 'HandCheckAction')]
     if len(effects) != 1 or effects[0].get('class_full') != 'com.megacrit.cardcrawl.actions.utility.UseCardAction':
-        raise ValueError('unsupported continuation after Headbutt selection')
+        raise ValueError(f'unsupported continuation after {name} selection')
     finish = effects[0]
     card = finish.get('targetCard', {})
-    if card.get('id') != 'Headbutt' or card.get('uuid') != combat.get('card_in_play', {}).get('uuid'):
-        raise ValueError('Headbutt selection needs the resolving card export; restart with the updated mod')
+    if card.get('id') != name or card.get('uuid') != combat.get('card_in_play', {}).get('uuid'):
+        raise ValueError(f'{name} selection needs the resolving card export; restart with the updated mod')
     queued = live.get('queued_cards')
     if queued not in ([], [card['uuid']]):
-        raise ValueError('unsupported queued card replay after Headbutt')
+        raise ValueError(f'unsupported queued card replay after {name}')
     if card.get('return_to_hand') or finish.get('returnToHand') or finish.get('reboundCard'):
-        raise ValueError('unsupported redirected Headbutt continuation')
+        raise ValueError(f'unsupported redirected {name} continuation')
     if any(c['uuid'] == card['uuid'] for pile in ('hand','draw_pile','discard_pile','exhaust_pile') for c in combat[pile]):
-        raise ValueError('resolving Headbutt already belongs to a pile')
-    return dict(task='HEADBUTT', queue=[dict(kind='finish_headbutt', upgrades=card['upgrades'],
-        cost=card['cost'], base_cost=card['base_cost'], exhaust=finish['exhaustCard'],
-        purge=card['purge_on_use'], trigger=not card['dont_trigger_on_use'])])
+        raise ValueError(f'resolving {name} already belongs to a pile')
+    return dict(kind='finish_card', card=comparator.sts.CardId(comparator.bridge.card_snapshot(card)['id']),
+        upgrades=card['upgrades'], cost=card['cost'], base_cost=card['base_cost'], exhaust=finish['exhaustCard'],
+        purge=card['purge_on_use'], trigger=not card['dont_trigger_on_use'])
 
 
 def queued_actions(view):
@@ -89,9 +99,8 @@ def queued_power(comparator, view, action):
 
 
 MID_TURN_TASKS = {
-    # A Defect card opens these pickers after its own use has resolved. The card
-    # itself already sits in the pile the picker reads from, so the simulator
-    # only needs the task and the pick count; no queued action is replayed.
+    # A Defect card opens these pickers while it is still resolving: its own
+    # UseCardAction waits behind the pick, so the import finishes it like Headbutt.
     'Hologram': 'HOLOGRAM',
     'Recycle': 'RECYCLE',
     'Seek': 'SEEK',
@@ -101,9 +110,9 @@ MID_TURN_TASKS = {
 def mid_turn_selection(comparator, view):
     """The spec for a picker a card opened in the middle of a turn.
 
-    Unlike the battle-start pickers below there is no queue left to rebuild: the
-    card that opened this screen finished resolving before the click, and the
-    screen already lists the cards the simulator keeps in that pile.
+    Unlike the battle-start pickers below the only queued work is the opening
+    card's own UseCardAction; the screen already lists the cards the simulator
+    keeps in that pile.
     """
     game = view['game']
     screen = game['screen_state']
@@ -127,10 +136,12 @@ def mid_turn_selection(comparator, view):
         if len(pile) != len(cards):
             raise ValueError('Seek picker does not show the whole draw pile')
         return dict(task='MID_TURN', select_task=task, pick_count=screen['num_cards'] - len(picked),
-                    cards=cards, selected_indices=[pile.index(uuid) for uuid in picked])
+                    cards=cards, selected_indices=[pile.index(uuid) for uuid in picked],
+                    queue=[resolving_card(comparator, view, card['id'])])
     if screen.get('selected') or screen.get('num_cards') != 1:
         raise ValueError('mid-turn picker is not an untouched single-card choice')
-    return dict(task='MID_TURN', select_task=task, pick_count=1, cards=cards)
+    return dict(task='MID_TURN', select_task=task, pick_count=1, cards=cards,
+                queue=[resolving_card(comparator, view, card['id'])])
 
 
 def start_selection(comparator, view):
