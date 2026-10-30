@@ -1,5 +1,6 @@
 #include "combat/CharacterCards.h"
 #include <iostream>
+#include <memory>
 #include "combat/BattleContext.h"
 
 namespace sts {
