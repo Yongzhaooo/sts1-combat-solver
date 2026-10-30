@@ -139,7 +139,9 @@ def start_selection(comparator, view):
     current = r.get('current_action', {}).get('class')
     if screen == 'GRID' and current == 'DiscardPileToTopOfDeckAction':
         return headbutt_selection(comparator, view)
-    if g['combat_state']['turn'] != 1:
+    card = g['combat_state'].get('card_in_play')
+    # Hologram, Recycle and Seek open their picker on any turn, turn 1 included.
+    if g['combat_state']['turn'] != 1 or (isinstance(card, dict) and card.get('id') in MID_TURN_TASKS):
         return mid_turn_selection(comparator, view)
     relics = {a['id'] for a in g['relics']}
     if screen == 'CARD_REWARD' and 'Toolbox' in relics:

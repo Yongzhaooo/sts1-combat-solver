@@ -378,21 +378,26 @@ int main() {
         check(bc.player.orbs.back().type == Orb::LIGHTNING, "Ball Lightning should channel a Lightning orb");
     }
     {
-        // Chaos: one random orb from [Dark, Frost, Lightning]; vanilla excludes Plasma.
-        BattleContext bc = freshBattle();
-        playCard(bc, CardId::CHAOS);
-        const Orb type = bc.player.orbs.back().type;
-        check(type == Orb::DARK || type == Orb::FROST || type == Orb::LIGHTNING,
-              "Chaos should never channel Plasma");
+        // Chaos: AbstractOrb.getRandomOrb(true) rolls cardRandomRng.random(3) over
+        // [Dark, Frost, Lightning, Plasma], so every orb type shows up across rolls.
+        bool seen[5] = {};
+        for (int skip = 0; skip < 32; ++skip) {
+            BattleContext bc = freshBattle();
+            for (int i = 0; i < skip; ++i) {
+                bc.cardRandomRng.random(3);
+            }
+            playCard(bc, CardId::CHAOS);
+            seen[static_cast<int>(bc.player.orbs.back().type)] = true;
+        }
+        check(seen[static_cast<int>(Orb::DARK)] && seen[static_cast<int>(Orb::FROST)]
+              && seen[static_cast<int>(Orb::LIGHTNING)] && seen[static_cast<int>(Orb::FUSION)],
+              "Chaos should channel each of Dark, Frost, Lightning and Plasma");
         BattleContext up2 = freshBattle();
         up2.cards.createTempCardInHand(CardInstance(CardId::CHAOS, true));
         search::Action play(search::ActionType::CARD, 0, 0);
         check(play.isValidAction(up2), "upgraded Chaos should be playable");
         play.execute(up2);
         check(up2.player.orbs.size() == 3, "upgraded Chaos should channel two orbs");
-        for (int i = 0; i < up2.player.orbs.size(); ++i) {
-            check(up2.player.orbs[i].type != Orb::FUSION, "upgraded Chaos never channels Plasma");
-        }
     }
     {
         // Tempest: X-cost, channels X Lightning orbs and exhausts.
@@ -1209,6 +1214,68 @@ int main() {
         check(bc.cards.discardPile.empty(), "Reboot+ should empty the discard pile");
         check(bc.cards.drawPile.size() == 1,
               "Reboot+ should refill the draw pile from the discard pile and leave one card");
+    }
+
+    {
+        // Barrage: BarrageAction hits once per filled orb with the card's damage,
+        // so Strength applies to every hit.
+        BattleContext bc = freshBattle();
+        Actions::ChannelOrb(Orb::FROST).actFunc(bc);
+        Actions::ChannelOrb(Orb::FROST).actFunc(bc); // bar: lightning, frost, frost
+        Actions::BuffPlayer<PS::STRENGTH>(2).actFunc(bc);
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::BARRAGE);
+        check(hp - bc.monsters.arr[0].curHp == 18, "Barrage should hit 3 times for 4+2 strength");
+
+        BattleContext empty = freshBattle();
+        empty.player.orbs.clear();
+        const int emptyHp = empty.monsters.arr[0].curHp;
+        playCard(empty, CardId::BARRAGE);
+        check(empty.monsters.arr[0].curHp == emptyHp, "Barrage with no orbs should not hit");
+    }
+    {
+        // Thunder Strike: AttackDamageRandomEnemyAction runs calculateCardDamage on
+        // the rolled target, so Strength and Vulnerable apply to each hit.
+        BattleContext bc = freshBattle();
+        Actions::ChannelOrb(Orb::LIGHTNING).actFunc(bc); // 2 Lightning channeled
+        Actions::BuffPlayer<PS::STRENGTH>(2).actFunc(bc);
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::THUNDER_STRIKE);
+        check(hp - bc.monsters.arr[0].curHp == 18, "Thunder Strike should hit twice for 7+2 strength");
+
+        BattleContext vuln = freshBattle();
+        Actions::ChannelOrb(Orb::LIGHTNING).actFunc(vuln);
+        Actions::DebuffEnemy<MS::VULNERABLE>(0, 2, false).actFunc(vuln);
+        const int vulnHp = vuln.monsters.arr[0].curHp;
+        playCard(vuln, CardId::THUNDER_STRIKE);
+        check(vulnHp - vuln.monsters.arr[0].curHp == 20, "Thunder Strike should hit twice for 10 on a Vulnerable enemy");
+    }
+    {
+        // Amplify: the next Power card is played twice and the stack is spent.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::AMPLIFY);
+        playCard(bc, CardId::DEFRAGMENT);
+        check(bc.player.focus == 2, "Amplify should play Defragment twice");
+        check(!bc.player.hasStatus<PS::AMPLIFY>(), "Amplify should spend its stack on the Power");
+
+        // A non-Power card leaves the stack alone.
+        BattleContext attack = freshBattle();
+        playCard(attack, CardId::AMPLIFY);
+        playCard(attack, CardId::BEAM_CELL);
+        check(attack.player.getStatus<PS::AMPLIFY>() == 1, "Amplify should ignore an Attack");
+    }
+    {
+        // Lock-On: DarkOrbEvokeAction runs applyLockOn, so the Dark evoke hits 50% harder.
+        BattleContext bc = freshBattle();
+        bc.player.orbs.clear();
+        bc.player.channelOrb(Orb::DARK); // counter 6
+        Actions::DebuffEnemy<MS::LOCK_ON>(0, 2).actFunc(bc);
+        const int hp = bc.monsters.arr[0].curHp;
+        Actions::EvokeOrbAction(0).actFunc(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(hp - bc.monsters.arr[0].curHp == 9, "a Locked-On Dark evoke should deal 6 * 1.5");
     }
 
     std::cout << "Defect card behaviors hold\n";

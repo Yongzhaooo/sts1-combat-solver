@@ -1753,12 +1753,6 @@ void BattleContext::onUseAttackCard() {
         p.decrementStatus<PS::DUPLICATION>();
     }
 
-    // AmplifyPower: the next Power card played this turn is played twice.
-    if (!item.purgeOnUse && c.getType() == CardType::POWER && p.hasStatus<PS::AMPLIFY>()) {
-        queuePurgeCard(c, item.target);
-        p.decrementStatus<PS::AMPLIFY>();
-    }
-
     const auto echoForm = p.getStatus<PS::ECHO_FORM>();
     if (!item.purgeOnUse && echoForm) {
         // EchoFormPower: the first amount cards played each turn are played twice.
@@ -1894,6 +1888,12 @@ void BattleContext::onUsePowerCard() {
     if (!item.purgeOnUse && p.hasStatus<PS::DUPLICATION>()) {
         queuePurgeCard(c, item.target);
         p.decrementStatus<PS::DUPLICATION>();
+    }
+
+    // AmplifyPower.onUseCard: the next Power card played this turn is played twice.
+    if (!item.purgeOnUse && p.hasStatus<PS::AMPLIFY>()) {
+        queuePurgeCard(c, item.target);
+        p.decrementStatus<PS::AMPLIFY>();
     }
 
     const auto echoForm = p.getStatus<PS::ECHO_FORM>();

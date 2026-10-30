@@ -62,6 +62,19 @@ int main() {
         check(bc.player.block == 2, "the frost passive should still fire once");
     }
     {
+        // GoldPlatedCables: applyStartOfTurnOrbs runs orbs.get(0).onStartOfTurn()
+        // once more, so a Plasma in the first slot gives 2 energy.
+        BattleContext bc = freshBattle();
+        bc.player.setHasRelic<R::GOLD_PLATED_CABLES>(true);
+        bc.player.orbs.clear();
+        bc.player.channelOrb(Orb::FUSION);
+        bc.player.channelOrb(Orb::FUSION);
+        const int energy = bc.player.energy;
+        Actions::TriggerStartOfTurnOrbsAction().actFunc(bc);
+        drain(bc);
+        check(bc.player.energy - energy == 3, "Cables should repeat the first Plasma's start-of-turn energy");
+    }
+    {
         // EmotionChip: wasHPLost arms the relic and atTurnStart spends the pulse.
         BattleContext bc = freshBattle();
         bc.player.setHasRelic<R::EMOTION_CHIP>(true);

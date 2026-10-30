@@ -323,6 +323,9 @@ void Player::attacked(BattleContext &bc, int enemyIdx, int calculatedDamage) {
         decrementStatus<PS::BUFFER>();
         damage = 0;
     }
+    // Power onAttacked hooks (Static Discharge) see the damage before Torii (relic
+    // onAttacked) and Tungsten Rod (onLoseHpLast) reduce it.
+    const int onAttackedDamage = damage;
 
     if (hasStatus<PS::THORNS>()) {
         bc.addToTop( Actions::DamageEnemy(enemyIdx, getStatus<PS::THORNS>()) );
@@ -353,21 +356,21 @@ void Player::attacked(BattleContext &bc, int enemyIdx, int calculatedDamage) {
 
         hpWasLost(bc, damage, false);
 
-        // StaticDischargePower.onAttacked: one Lightning orb per stack. The
-        // bytecode confirms this branch: AbstractPlayer.damage calls
-        // decrementBlock before the onAttacked loop, and onAttacked returns
-        // immediately when its damageAmount argument is <= 0, so an attack
-        // that is fully blocked channels nothing. Attacking only - poison and
-        // self-damage never reach this function.
-        if (calculatedDamage > 0 && hasStatus<PS::STATIC_DISCHARGE>()) {
-            const int count = getStatus<PS::STATIC_DISCHARGE>();
-            for (int i = 0; i < count; ++i) {
-                bc.addToTop(Actions::ChannelOrb(Orb::LIGHTNING));
-            }
-        }
-
     } else {
         lastAttackUnblockedDamage = 0;
+    }
+
+    // StaticDischargePower.onAttacked: one Lightning orb per stack. The
+    // bytecode confirms this branch: AbstractPlayer.damage calls
+    // decrementBlock before the onAttacked loop, and onAttacked returns
+    // immediately when its damageAmount argument is <= 0, so an attack
+    // that is fully blocked channels nothing. Attacking only - poison and
+    // self-damage never reach this function.
+    if (onAttackedDamage > 0 && hasStatus<PS::STATIC_DISCHARGE>()) {
+        const int count = getStatus<PS::STATIC_DISCHARGE>();
+        for (int i = 0; i < count; ++i) {
+            bc.addToTop(Actions::ChannelOrb(Orb::LIGHTNING));
+        }
     }
 }
 
@@ -517,6 +520,11 @@ void Player::applyEndOfTurnPowers(BattleContext &bc) {
 
             case PS::DOUBLE_TAP:
                 bc.addToBot(Actions::RemoveStatus<PS::DOUBLE_TAP>());
+                break;
+
+            case PS::AMPLIFY:
+                // AmplifyPower.atEndOfTurn removes the unused stacks.
+                bc.addToBot(Actions::RemoveStatus<PS::AMPLIFY>());
                 break;
 
             case PS::ENTANGLED:

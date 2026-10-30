@@ -71,11 +71,20 @@ namespace sts {
                 return true;
             }
 
-            case CardId::BARRAGE:
-                // Barrage.java: attack once per orb in the bar.
-                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(
-                    c, t, (up ? 6 : 4) * static_cast<int>(bc.player.orbs.size()))));
+            case CardId::BARRAGE: {
+                // Barrage.java -> BarrageAction: when the action resolves it queues one
+                // DamageAction (addToTop) per filled orb, each carrying the card's
+                // damage, so Strength and Weak apply per hit and no orbs means no hit.
+                const int damage = bc.calculateCardDamage(c, t, up ? 6 : 4);
+                bc.addToBot({[=] (BattleContext &bc) {
+                    for (const auto &orb : bc.player.orbs) {
+                        if (orb.type != Orb::EMPTY) {
+                            bc.addToTop(Actions::AttackEnemy(t, damage));
+                        }
+                    }
+                }});
                 return true;
+            }
 
             case CardId::SWEEPING_BEAM:
                 // SweepingBeam.java: attack all enemies, then draw one card.
@@ -196,13 +205,14 @@ namespace sts {
                 return true;
 
             case CardId::CHAOS: {
-                // Chaos.java: channel one random orb, two when upgraded. The vanilla
-                // pool excludes Plasma: getRandomOrb(true) rolls cardRandomRng over
-                // [Dark, Frost, Lightning]. Both rolls happen at play time.
+                // Chaos.java: channel one random orb, two when upgraded.
+                // AbstractOrb.getRandomOrb(true) rolls cardRandomRng.random(3) over
+                // [Dark, Frost, Lightning, Plasma]. Both rolls happen at play time.
                 const int rolls = up ? 2 : 1;
                 for (int i = 0; i < rolls; ++i) {
                     const int roll = bc.cardRandomRng.random(3);
-                    const Orb orb = roll == 0 ? Orb::DARK : roll == 1 ? Orb::FROST : Orb::LIGHTNING;
+                    const Orb orb = roll == 0 ? Orb::DARK : roll == 1 ? Orb::FROST
+                                  : roll == 2 ? Orb::LIGHTNING : Orb::FUSION;
                     bc.addToBot(Actions::ChannelOrb(orb));
                 }
                 return true;
@@ -464,13 +474,18 @@ namespace sts {
 
             case CardId::THUNDER_STRIKE: {
                 // ThunderStrike.java: one random-target hit per Lightning orb
-                // channeled this combat, 7 (9) damage each.
+                // channeled this combat, 7 (9) damage each. NewThunderStrikeAction is
+                // an AttackDamageRandomEnemyAction: it rolls the target, then runs
+                // card.calculateCardDamage(target), so Strength and Vulnerable apply.
+                // Its DamageAction goes addToTop, so each hit lands before the next roll.
                 const int hits = bc.player.lightningChanneledThisCombat;
+                const CardInstance card = c;
                 for (int i = 0; i < hits; ++i) {
                     bc.addToBot({[=] (BattleContext &bc) {
                         const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
                         if (target >= 0) {
-                            bc.addToBot(Actions::AttackEnemy(target, up ? 9 : 7));
+                            bc.addToTop(Actions::AttackEnemy(target,
+                                bc.calculateCardDamage(card, target, up ? 9 : 7)));
                         }
                     }});
                 }
@@ -479,12 +494,10 @@ namespace sts {
 
             case CardId::BLIZZARD: {
                 // Blizzard.java: hit all enemies for 2 (3) per Frost orb channeled
-                // this combat.
+                // this combat. use() queues the DamageAllEnemiesAction even at 0.
                 const int count = bc.player.frostChanneledThisCombat;
-                if (count > 0) {
-                    bc.addToBot(Actions::AttackAllEnemy(
-                        bc.calculateCardDamageMatrix(c, (up ? 3 : 2) * count)));
-                }
+                bc.addToBot(Actions::AttackAllEnemy(
+                    bc.calculateCardDamageMatrix(c, (up ? 3 : 2) * count)));
                 return true;
             }
 
@@ -558,8 +571,8 @@ namespace sts {
                 return true;
 
             case CardId::HELLO_WORLD:
-                // HelloWorld.java: at the start of each turn add a random Common
-                // Skill, free to play. The Player start-of-turn hook does the work.
+                // HelloWorld.java: at the start of each turn add a random Common card
+                // at its printed cost. The Player start-of-turn hook does the work.
                 bc.addToBot(Actions::BuffPlayer<PS::HELLO_WORLD>(1));
                 return true;
 

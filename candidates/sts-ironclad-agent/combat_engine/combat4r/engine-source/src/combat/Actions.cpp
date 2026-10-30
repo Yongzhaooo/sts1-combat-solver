@@ -510,6 +510,11 @@ Action Actions::TriggerStartOfTurnOrbsAction() {
                 bc.addToBot(Actions::GainEnergy(1));
             }
         }
+        // AbstractPlayer.applyStartOfTurnOrbs: with Cables, orbs.get(0).onStartOfTurn() runs again.
+        if (bc.player.hasRelic<R::GOLD_PLATED_CABLES>() && bc.player.orbs.size() > 0
+                && bc.player.orbs[0].type == Orb::FUSION) {
+            bc.addToBot(Actions::GainEnergy(1));
+        }
     }};
 }
 
@@ -616,7 +621,8 @@ namespace {
                         }
                     }
                     if (target >= 0) {
-                        bc.addToTop(Actions::AttackEnemy(target, orb.darkCounter, DamageType::THORNS));
+                        // DarkOrbEvokeAction runs AbstractOrb.applyLockOn on its target.
+                        bc.addToTop(Actions::AttackEnemy(target, lockOnDamage(bc, target, orb.darkCounter), DamageType::THORNS));
                     }
                 }
                 break;
