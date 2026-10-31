@@ -53,7 +53,7 @@ The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher
   python tools/truth_calibration/run.py --adapter "<你的适配器>" fixtures/calibration   # M0 之后
   ```
 
-  这五条只是最小集：CI 实际跑三十多条，顺序与 CI 一致的那一份是 `python tools/diagnostics/check_local.py`（它直接读 workflow，维护者加检查时不会过时）。拿不准就跑它。
+  这五条只是最小集：CI 实际跑三十多条，顺序与 CI 一致的那一份是 `python tools/check_local.py`（它直接读 workflow，维护者加检查时不会过时）。拿不准就跑它。
 
 - 合并前维护者会用私有真值重放你新增的夹具。结果不一致时，维护者贴出第一处差异的路径，双方一起定位；问题出在你的真值时，维护者会补一个校准用例。
 
