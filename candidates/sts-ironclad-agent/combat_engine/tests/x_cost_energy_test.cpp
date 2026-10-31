@@ -151,6 +151,26 @@ int main() {
             defectXCost(CardId::REINFORCED_BODY, energy);
         }
 
+        // TempestAction and MulticastAction empty the pool inside their own update, before the
+        // orbs they queue resolve, so energy from an evoked Plasma orb stays (a Defect run diverged
+        // here: Tempest pushed Plasma out of a full bar, the game kept 2 energy, the engine 0).
+        // Multi-Cast with no orb in the bar does nothing at all and keeps the pool.
+        {
+            BattleContext battle = freshBattle(CharacterClass::DEFECT);
+            battle.player.orbs.clear();
+            battle.player.orbSlots = 1;
+            battle.addToBot(Actions::ChannelOrb(Orb::FUSION));
+            settle(battle);
+            playCard(battle, CardId::TEMPEST, 1, false);
+            check(battle.player.energy == 2, "Tempest should keep the 2 energy of the Plasma it evokes");
+        }
+        {
+            BattleContext battle = freshBattle(CharacterClass::DEFECT);
+            battle.player.orbs.clear();
+            playCard(battle, CardId::MULTI_CAST, 2, false);
+            check(battle.player.energy == 2, "Multi-Cast with no orb should keep the pool");
+        }
+
         std::cout << "PASS: paid X cards empty the pool, free-played ones keep it"
                      " (Whirlwind, Transmutation, Tempest, Multi-Cast, Reinforced Body)\n";
     } catch (const std::exception &e) {
