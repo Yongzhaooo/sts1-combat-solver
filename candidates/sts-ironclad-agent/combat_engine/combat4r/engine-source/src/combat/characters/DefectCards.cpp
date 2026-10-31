@@ -433,8 +433,10 @@ namespace sts {
                 return true;
 
             case CardId::RIP_AND_TEAR:
-                // RipAndTear.java: two hits, each picking its own random target.
-                bc.addToBot(Actions::RipAndTearAction(bc.calculateCardDamage(c, t, up ? 9 : 7), 2));
+                // RipAndTear.java: two NewRipAndTearActions, each picking its own random target.
+                for (int i = 0; i < 2; ++i) {
+                    bc.addToBot(Actions::RipAndTearAction(c, up ? 9 : 7));
+                }
                 return true;
 
             case CardId::FISSION:

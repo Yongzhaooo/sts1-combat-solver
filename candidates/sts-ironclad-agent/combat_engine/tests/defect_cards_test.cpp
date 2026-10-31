@@ -762,6 +762,22 @@ int main() {
         check(hp - bc.monsters.arr[0].curHp == 14, "Rip and Tear should hit twice for 7");
     }
     {
+        // NewRipAndTearAction rolls each target when it resolves and addToTops the hit, so a hit
+        // that kills is done before the next roll: two Louses at 1 HP always both die. The
+        // engine used to roll both targets first (a Defect run diverged on three Louses).
+        for (int k = 0; k < 8; ++k) {
+            BattleContext bc = freshBattle(MonsterEncounter::TWO_LOUSE);
+            for (int r = 0; r < k; ++r) {
+                (void)bc.cardRandomRng.random(1);
+            }
+            bc.monsters.arr[0].curHp = 1;
+            bc.monsters.arr[1].curHp = 1;
+            playCard(bc, CardId::RIP_AND_TEAR);
+            check(bc.monsters.arr[0].isDeadOrEscaped() && bc.monsters.arr[1].isDeadOrEscaped(),
+                  "Rip and Tear should kill two 1-HP Louses whatever the rolls");
+        }
+    }
+    {
         // Fission: remove every orb, gaining 1 energy and 1 card per orb.
         BattleContext bc = freshBattle();
         Actions::ChannelOrb(Orb::FROST).actFunc(bc);

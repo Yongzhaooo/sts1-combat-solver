@@ -51,7 +51,7 @@ namespace sts {
                                    DamageType type = DamageType::NORMAL);
         static Action SunderAction(int idx, int damage); // attack; +3 energy when the hit kills
         static Action FissionAction(bool upgraded); // remove (evoke when upgraded) all orbs: +1 energy/card each
-        static Action RipAndTearAction(int damage, int times); // one random-target hit per time
+        static Action RipAndTearAction(const CardInstance &card, int baseDamage); // one random-target hit
         // Random card of the player's class at its printed cost. commonOnly restricts the
         // pool to Common cards (Hello World); zeroCost is only for White Noise, whose
         // Java sets the generated card's turn cost to 0.
