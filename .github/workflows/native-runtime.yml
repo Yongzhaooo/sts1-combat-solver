@@ -75,7 +75,7 @@ jobs:
       - run: python tools/check_search_progress.py
       - run: python tools/check_search_memory.py
       - run: python tools/check_snapshot_import.py
-      - name: Compare the native fixtures of every character against the simulator
+      - name: Grade the native fixtures of every character against the simulator
         run: python tools/check_coverage_gaps.py
       - run: python tools/check_headbutt.py
       - run: python tools/check_mid_turn_picker.py

@@ -17,14 +17,20 @@ is compared. No seed-to-board reconstruction is needed -- the recorder saved the
 chosen from -- so this runs with no game jar, no save and no network, only the built runtime
 (tools/build_solver_runtime.py) that the other `tools/check_*.py` scripts also need.
 
-Two grades of result are reported:
+Three kinds of result are reported:
 
-* the eight coverage-gap windows below are REQUIRED: every checkpoint must import and match;
-* any other native fixture is graded where it can be. The legacy captures in the same directory
-  predate the harness fix that makes a hand-built monster announce its intent, so their first
-  in-combat checkpoint carries `intent: DEBUG, move: -1` and cannot be imported at all. Those
-  checkpoints are counted as unavailable rather than silently passed, and an importable checkpoint
-  that disagrees is still a failure.
+* the eight coverage-gap windows below are REQUIRED: every checkpoint must import and match, and a
+  missing window fails the run;
+* any other native fixture is graded where it can be. A checkpoint the importer cannot rebuild is
+  counted as unavailable rather than silently passed, and an importable checkpoint that disagrees
+  is still a failure;
+* a fixture with no importable checkpoint at all is printed as SKIP, so a character whose captures
+  were never really graded cannot read as a pass. That happens for two different reasons and the
+  reason matters: captures recorded before the harness fix that makes a hand-built monster
+  announce its intent read back `intent: DEBUG, move: -1`, while captures recorded after it can
+  still hit importer gaps -- a monster whose internal state, a card field or an orb id that the
+  observation does not carry. The per-character block at the end says how many checkpoints each
+  character actually got compared.
 """
 from pathlib import Path
 import copy
@@ -201,16 +207,24 @@ def main():
     graded = 0
     skipped = 0
     finished = 0
+    totals = {}
     for path in paths:
-        case_id = read_case(path)['id']
+        case = read_case(path)
+        case_id = case['id']
+        character = case.get('character', 'DEFECT')
         compared, unavailable, terminal, reasons, failures = check_case(path, root, RNG_NAMES)
         required = case_id in EXPECTED
-        card_id, purpose = EXPECTED.get(case_id, ('(legacy capture)', 'any in-combat checkpoint'))
+        card_id, purpose = EXPECTED.get(case_id, ('', 'any in-combat checkpoint'))
         if required:
             required_seen.add(case_id)
         graded += compared
         skipped += unavailable
         finished += terminal
+        per_character = totals.setdefault(character, {'fixtures': 0, 'compared': 0,
+                                                      'unavailable': 0, 'unimportable': 0})
+        per_character['fixtures'] += 1
+        per_character['compared'] += compared
+        per_character['unavailable'] += unavailable
         if failures:
             # An importable checkpoint that disagrees is a failure whatever the fixture is.
             failed.extend(failures)
@@ -223,12 +237,25 @@ def main():
         elif compared:
             note = f' ({purpose})' if required else ''
             print(f'PASS  {case_id:40s} {card_id:15s} {compared} checkpoints{note}')
-        # else: a legacy capture whose checkpoints are all unimportable -- counted in `skipped`.
+        else:
+            # Nothing was compared, so nothing about this fixture is proven either way. Say so
+            # instead of letting it sit silently inside the unimportable total.
+            per_character['unimportable'] += 1
+            why = reasons[0] if reasons else 'no in-combat checkpoint'
+            print(f'SKIP  {case_id:40s} {card_id:15s} nothing compared: {why}')
 
     missing = sorted(set(EXPECTED) - required_seen)
     for case_id in missing:
         failed.append(f'{case_id}: required coverage-gap fixture is missing')
         print(f'FAIL  {case_id:40s} {"":15s} missing')
+
+    print('\nper character:')
+    for character in sorted(totals):
+        per_character = totals[character]
+        print(f'  {character:12s} {per_character["fixtures"]:4d} fixtures, '
+              f'{per_character["compared"]:4d} checkpoints compared, '
+              f'{per_character["unavailable"]:4d} not importable, '
+              f'{per_character["unimportable"]:4d} fixtures with nothing compared')
 
     if failed:
         print(f'\n{len(failed)} problem(s); {graded} checkpoints matched, {skipped} not importable')
@@ -236,7 +263,7 @@ def main():
             print('  ' + problem)
         return 1
     print(f'\nALL {len(EXPECTED)} coverage-gap windows match the game; {graded} checkpoints matched, '
-          f'{finished} post-fight checkpoints skipped, {skipped} legacy checkpoints not importable')
+          f'{finished} post-fight checkpoints skipped, {skipped} checkpoints not importable')
     return 0
 
 

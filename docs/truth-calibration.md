@@ -200,9 +200,9 @@ calibration.rng         {aiRng, cardRng, cardRandomRng, eventRng, mapRng, mercha
 
 校准用例覆盖的机制有限。校准通过只说明你的真值在这些用例上与维护者一致，不说明它在新机制上一定对，所以合并前的私有复核不能省。
 
-公开 CI 运行 `python tools/truth_calibration/run.py --check fixtures/calibration`，只检查每个已提交用例的格式和观测字段，不需要真值。
+公开 CI 运行 `python tools/truth_calibration/run.py --check fixtures/calibration` 和 `python tools/truth_calibration/run.py --check fixtures/native`，只检查每个已提交用例的格式和观测字段，不需要真值。
 
-`run.py --check fixtures/native/<职业>` 同理只校验格式，不重放。真正把原生夹具和模拟器对起来的是 `python tools/check_coverage_gaps.py`：它把每个检查点的观测喂给快照导入器，用 `sim_patch/parity/core.py` 的严格比较逐字段核对，只需要构建好的运行时，不需要真值。夹具里 `fixtures/native/DEFECT` 那 8 个跨回合、多怪、负 Focus 的窗口是必过项；同目录更早的卡牌扫描夹具用的是 9999 HP 假怪，首个战斗检查点是 `intent: DEBUG, move: -1`，导入器无法重建，只能计为不可用而不是通过，任何能导入却不一致的检查点仍然是失败。
+真正把原生夹具和模拟器对起来的是 `python tools/check_coverage_gaps.py`：它把每个检查点的观测喂给快照导入器，用 `sim_patch/parity/core.py` 的严格比较逐字段核对，只需要构建好的运行时，不需要真值。不带参数时它扫 `fixtures/native/` 下每个职业目录，所以新职业的夹具会被自动纳入。夹具里 `fixtures/native/DEFECT` 那 8 个跨回合、多怪、负 Focus 的窗口是必过项，缺一个就失败。其余夹具能导入多少就核对多少：导入器重建不了的检查点计为不可用而不是通过，能导入却不一致的检查点仍然算失败；一个能导入的检查点都没有的夹具会打成 `SKIP`，免得出"没比较过"被读成"通过"。导入器重建不了的两种原因不同 —— 早于 harness 修复的录制读回来是 `intent: DEBUG, move: -1`，修复之后的录制也可能撞上导入器缺口（观测里没带上的怪物内部状态、卡牌字段或充能球 id）。末尾的每职业汇总给出各职业实际比较了多少检查点。
 
 原生夹具由真值侧的录制器产出，仓库里的 `tools/truth_calibration/gap_fixtures.py` 和 `coverage_fixtures.py` 只负责把录制结果投影成夹具格式。
 
