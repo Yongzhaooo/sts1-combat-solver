@@ -457,10 +457,12 @@ namespace {
                     // step behind and sending Coolheaded's evoke onto the wrong enemy).
                     // The roll is unconditional: the action picks its target before it
                     // looks at the damage, so Focus <= -3 still advances cardRandomRng.
+                    // Its DamageAction is addToTop'd, so this hit resolves before the next
+                    // orb's passive rolls: a monster this hit kills is no longer a candidate.
                     bc.addToBot({[damage] (BattleContext &bc) {
                         const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
                         if (target >= 0 && damage > 0) {
-                            bc.addToBot(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
+                            bc.addToTop(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
                         }
                     }});
                 }

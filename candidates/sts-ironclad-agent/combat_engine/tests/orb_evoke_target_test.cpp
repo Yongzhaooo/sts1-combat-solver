@@ -1,5 +1,6 @@
 #include "combat/BattleContext.h"
 #include "game/GameContext.h"
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -279,6 +280,31 @@ int main() {
             check(bc.cardRandomRng.counter == before + 1,
                   "a zero-damage Lightning evoke still spends its target roll");
             check(totalMonsterHp(bc) == hpBefore, "a zero-damage Lightning evoke deals nothing");
+        }
+
+        // End-of-turn passives work the same way: LightningOrbPassiveAction rolls its
+        // target and addToTop's the DamageAction, so the second orb's roll sees the
+        // first orb's kill. A Defect run diverged here (floor 41: the first passive
+        // killed a Lock-On'd Exploder, the game's second hit Repulsor, the engine's
+        // hit the corpse). Two Lightning passives on 3-HP slimes must kill two
+        // different slimes on every seed; rolling before the first hit resolved
+        // re-picks the dead slime one time in five.
+        for (std::uint64_t seed = 1; seed <= 40; ++seed) {
+            GameContext game(CharacterClass::DEFECT, seed, 0);
+            game.regainControlAction = [](GameContext&) {};
+            BattleContext bc;
+            bc.init(game, MonsterEncounter::LOTS_OF_SLIMES);
+            bc.cards = CardManager{};
+            bc.setState(InputState::PLAYER_NORMAL);
+            bc.player.orbs.clear();
+            channel_now(bc, Orb::LIGHTNING);
+            channel_now(bc, Orb::LIGHTNING);
+            for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                bc.monsters.arr[i].curHp = 3;
+            }
+            bc.addToBot(Actions::TriggerEndOfTurnOrbsAction());
+            drain(bc);
+            check(aliveCount(bc) == 3, "two Lightning passives must kill two different 3-HP slimes");
         }
 
         std::cout << "orb_evoke_target: ok\n";
