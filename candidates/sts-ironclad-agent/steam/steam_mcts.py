@@ -22,7 +22,13 @@ CARD_ALIASES = {"Strike_R": "STRIKE_RED", "Defend_R": "DEFEND_RED", "Ghostly": "
                 "Conserve Battery": "CHARGE_BATTERY", "Gash": "CLAW",
                 "Lockon": "BULLSEYE", "Redo": "RECURSION",
                 "Steam": "STEAM_BARRIER", "Steam Power": "OVERCLOCK",
-                "Undo": "EQUILIBRIUM"}
+                "Undo": "EQUILIBRIUM",
+                # Silent cards with the same problem: the basics carry the colour as a suffix, and
+                # four cards kept the game cardID they had before the card was renamed.
+                "Strike_G": "STRIKE_GREEN", "Defend_G": "DEFEND_GREEN",
+                "Crippling Poison": "CRIPPLING_CLOUD", "Night Terror": "NIGHTMARE",
+                "Underhanded Strike": "SNEAKY_STRIKE", "Venomology": "ALCHEMIZE",
+                "Wraith Form v2": "WRAITH_FORM"}
 MONSTER_ALIASES = {
     "FuzzyLouseNormal": "RED_LOUSE",
     "FuzzyLouseDefensive": "GREEN_LOUSE",

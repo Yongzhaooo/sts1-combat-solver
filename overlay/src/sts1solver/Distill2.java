@@ -88,6 +88,10 @@ final class Distill2 {
         String[][] pairs = {
             {"cards", "Strike_R", "STRIKE_RED"}, {"cards", "Defend_R", "DEFEND_RED"},
             {"cards", "Ghostly", "APPARITION"}, {"cards", "J.A.X.", "JAX"},
+            {"cards", "Strike_G", "STRIKE_GREEN"}, {"cards", "Defend_G", "DEFEND_GREEN"},
+            {"cards", "Crippling Poison", "CRIPPLING_CLOUD"}, {"cards", "Night Terror", "NIGHTMARE"},
+            {"cards", "Underhanded Strike", "SNEAKY_STRIKE"}, {"cards", "Venomology", "ALCHEMIZE"},
+            {"cards", "Wraith Form v2", "WRAITH_FORM"},
             {"potions", "Potion Slot", "EMPTY_POTION_SLOT"}, {"potions", "SteroidPotion", "FLEX_POTION"},
             {"potions", "Elixir", "ELIXIR_POTION"}, {"potions", "GhostInAJar", "GHOST_IN_A_JAR"},
             {"relics", "Boot", "THE_BOOT"}, {"relics", "CultistMask", "CULTIST_HEADPIECE"},
