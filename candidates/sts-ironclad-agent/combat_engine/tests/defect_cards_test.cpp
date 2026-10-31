@@ -817,6 +817,37 @@ int main() {
         playCard(bc, CardId::REBOUND);
         check(hp - bc.monsters.arr[0].curHp == 9, "Rebound should deal 9");
         check(bc.player.hasStatus<PS::REBOUND>(), "Rebound should apply its power");
+        // A new ReboundPower ships with justEvoked, so Rebound itself is filed normally and the
+        // next card goes on top of the draw pile, spending the stack.
+        check(bc.player.getStatus<PS::REBOUND>() == 1 && discardContains(bc, CardId::REBOUND),
+              "Rebound should not top itself");
+        playCard(bc, CardId::STRIKE_BLUE);
+        check(!bc.player.hasStatus<PS::REBOUND>() && !bc.cards.drawPile.empty()
+              && bc.cards.drawPile.back().getId() == CardId::STRIKE_BLUE,
+              "the card after Rebound should go on top of the draw pile");
+    }
+    {
+        // A second Rebound only stacks the existing power (justEvoked stays false), so it tops
+        // itself and leaves one stack.
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::REBOUND);
+        playCard(bc, CardId::REBOUND);
+        check(bc.player.getStatus<PS::REBOUND>() == 1 && !bc.cards.drawPile.empty()
+              && bc.cards.drawPile.back().getId() == CardId::REBOUND,
+              "a Rebound played under Rebound should top itself and leave one stack");
+        // A Power after it spends the stack without being topped.
+        playCard(bc, CardId::CAPACITOR);
+        check(!bc.player.hasStatus<PS::REBOUND>() && bc.cards.drawPile.size() == 1,
+              "a Power should spend the Rebound stack without going to the draw pile");
+    }
+    {
+        // Echo Form doubles Rebound: the copy stacks the power and its onAfterUseCard spends a
+        // stack, so one stack is left (a Defect run diverged here: 1 in the game, 3 in the engine).
+        BattleContext bc = freshBattle();
+        bc.player.buff<PS::ECHO_FORM>(1);
+        playCard(bc, CardId::REBOUND);
+        check(bc.player.getStatus<PS::REBOUND>() == 1 && discardContains(bc, CardId::REBOUND),
+              "Echo Form Rebound should leave one stack and file the card normally");
     }
     {
         // Rupture: gains Strength whenever a card costs HP.

@@ -123,6 +123,9 @@ namespace sts {
         int8_t  combustHpLoss = 0;
         int16_t  devaFormEnergyPerTurn = 0;
         int8_t  echoFormCardsDoubled = 0;
+        // ReboundPower.justEvoked: set when Rebound creates the power, cleared by the next card's
+        // onAfterUseCard (always Rebound's own), so it is never set at a decision point.
+        bool reboundJustEvoked = false;
         int8_t  panacheCounter = 0;
 
         int16_t  cardsPlayedThisTurn = 0;
