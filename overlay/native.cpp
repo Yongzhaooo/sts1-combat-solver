@@ -226,7 +226,7 @@ static int escapedThieves(const BattleContext &bc) {
 double overlayRecoveryBonus(const BattleContext &bc) {
     if(bc.outcome!=Outcome::PLAYER_VICTORY)return 0;
     if(requireThiefKill && escapedThieves(bc))return -100000000.0;
-    auto hp=bc.victoryHpRelics.project(bc.player.curHp,bc.player.maxHp);
+    auto hp=bc.victoryHp();
     const int curseGrowth=deckCurseHp(bc)>initialDeckCurseHp
         && bc.player.hasRelic<RelicId::DARKSTONE_PERIAPT>()
         && !bc.player.hasRelic<RelicId::OMAMORI>()
@@ -241,8 +241,8 @@ double overlayRecoveryBonus(const BattleContext &bc) {
 static bool overlaySameVictory(const BattleContext &a, const BattleContext &b) {
     if (a.outcome != Outcome::PLAYER_VICTORY || b.outcome != Outcome::PLAYER_VICTORY
             || a.player.curHp <= 0 || b.player.curHp <= 0) return false;
-    const auto ah = a.victoryHpRelics.project(a.player.curHp,a.player.maxHp);
-    const auto bh = b.victoryHpRelics.project(b.player.curHp,b.player.maxHp);
+    const auto ah = a.victoryHp();
+    const auto bh = b.victoryHp();
     auto inventory = [](const BattleContext &s) {
         const auto &p=s.player;
         return std::make_tuple(p.curHp,p.maxHp,p.gold,p.relicBits0,p.relicBits1,
@@ -290,7 +290,7 @@ static bool overlayBeamTick() {
 static bool macroFinish(const BattleContext &root, const BattleContext &end) {
     if (end.outcome != Outcome::PLAYER_VICTORY || end.player.curHp <= 0) return false;
     if (heartFight) return true;
-    auto hp = end.victoryHpRelics.project(end.player.curHp, end.player.maxHp);
+    auto hp = end.victoryHp();
     if (hp.curHp < hp.maxHp || end.player.maxHp < root.player.maxHp || !relicsHeld(end)
             || escapedThieves(end) || deckCurseHp(end) || goldWealth(end) < goldWealth(root)
             || fairyCount(end) < fairyCount(root)
@@ -559,7 +559,7 @@ PYBIND11_MODULE(overlay_search, m) {
         live.done=1;
         // Smoke Bomb still invokes AbstractRoom.endBattle and victory healing.
         auto hp=(predicted.outcome==Outcome::PLAYER_VICTORY || predicted.outcome==Outcome::PLAYER_ESCAPE)
-            ? predicted.victoryHpRelics.project(predicted.player.curHp,predicted.player.maxHp)
+            ? predicted.victoryHp()
             : VictoryHp{predicted.player.curHp,predicted.player.maxHp};
         py::dict out;
         int emptySlots=0;

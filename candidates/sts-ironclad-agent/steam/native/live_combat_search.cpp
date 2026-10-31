@@ -57,7 +57,8 @@ PYBIND11_MODULE(live_combat_search, m) {
         py::dict d;d["cards_drawn"]=b.cardsDrawn;d["energy_wasted"]=b.energyWasted;
         auto hp=b.victoryHp();
         d["victory_hp"]=hp.curHp;d["victory_max_hp"]=hp.maxHp;
-        if(b.killCurHp>=0)d["victory_hp_at_kill"]=b.victoryHpRelics.project(b.killCurHp,b.player.maxHp).curHp;
+        if(b.killCurHp>=0)d["victory_hp_at_kill"]=b.victoryHpRelics.project(b.killCurHp,b.player.maxHp,
+            b.player.hasStatus<PS::SELF_REPAIR>() ? b.player.getStatus<PS::SELF_REPAIR>() : 0).curHp;
         d["centennial_puzzle_used"]=!b.player.hasRelic<RelicId::CENTENNIAL_PUZZLE>();
         return d;
     });
