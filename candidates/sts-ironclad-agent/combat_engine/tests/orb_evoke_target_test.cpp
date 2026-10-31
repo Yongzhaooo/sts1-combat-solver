@@ -307,6 +307,39 @@ int main() {
             check(aliveCount(bc) == 3, "two Lightning passives must kill two different 3-HP slimes");
         }
 
+        // Dualcast under Hex: Dualcast.java queues both evokes at play time, and HexPower.onUseCard
+        // queues its Dazed after them, so cardRandomRng rolls target, target, then the Dazed's spot.
+        // A Defect run diverged here (Chosen, floor 22): the engine queued the evokes from inside a
+        // queued action, behind the Dazed, so the Dazed took the first roll.
+        int moved = 0;
+        for (std::uint64_t seed = 1; seed <= 40; ++seed) {
+            GameContext game(CharacterClass::DEFECT, seed, 0);
+            game.regainControlAction = [](GameContext&) {};
+            BattleContext bc;
+            bc.init(game, MonsterEncounter::CULTIST);
+            bc.cards = CardManager{};
+            bc.setState(InputState::PLAYER_NORMAL);
+            bc.player.orbs.clear();
+            channel_now(bc, Orb::LIGHTNING);
+            for (auto id : {CardId::STRIKE_BLUE, CardId::ZAP, CardId::DEFEND_BLUE, CardId::COOLHEADED, CardId::BALL_LIGHTNING}) {
+                bc.cards.drawPile.push_back(CardInstance(id));
+            }
+            bc.player.debuff<PS::HEX>(1, true);
+            Random expected = bc.cardRandomRng;
+            expected.random(0);
+            expected.random(0);
+            const int spot = expected.random(static_cast<int>(bc.cards.drawPile.size()) - 1);
+            Random oldOrder = bc.cardRandomRng;
+            moved += oldOrder.random(static_cast<int>(bc.cards.drawPile.size()) - 1) != spot;
+            bc.curCardQueueItem.card = CardInstance(CardId::DUALCAST);
+            bc.curCardQueueItem.target = 0;
+            bc.useCard();
+            drain(bc);
+            check(bc.cards.drawPile.size() == 6 && bc.cards.drawPile[spot].getId() == CardId::DAZED,
+                  "Hex's Dazed must take its spot from the roll after both Dualcast evokes");
+        }
+        check(moved > 0, "some seed must put the Dazed elsewhere under the old roll order");
+
         std::cout << "orb_evoke_target: ok\n";
         return 0;
     } catch (const std::exception &e) {
