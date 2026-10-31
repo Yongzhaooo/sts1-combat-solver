@@ -28,6 +28,7 @@ namespace sts {
         int regretCardCount = 0; // maybe use to indicate triggerOnUse too?
         int playTopDrawSize = -1; // draw-pile size when PlayTopCardAction ran applyPowers (Mind Blast)
         int stackDiscardSize = -1; // discard size behind Stack's baseBlock; purgeOnUse copies inherit it
+        int clawBonusOnUse = -1; // Claw bonus behind the original's baseDamage; purgeOnUse copies inherit it
 
         bool purgeOnUse = false;
         bool exhaustOnUse = false;
