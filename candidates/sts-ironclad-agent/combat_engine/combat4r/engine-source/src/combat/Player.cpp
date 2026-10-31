@@ -739,7 +739,7 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 break;
 
             case PS::BIAS:
-                bc.addToBot( Actions::DecrementStatus<PS::FOCUS>(pair.second) );
+                bc.addToBot( Actions::DebuffPlayer<PS::FOCUS>(-pair.second, false) );
                 break;
 
             case PS::CREATIVE_AI:

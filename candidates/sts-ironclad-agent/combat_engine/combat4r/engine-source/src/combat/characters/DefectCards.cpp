@@ -160,16 +160,16 @@ namespace sts {
                 return true;
 
             case CardId::REPROGRAM:
-                // Reprogram.java: lose Focus, gain Strength and Dexterity.
-                bc.addToBot(Actions::DecrementStatus<PS::FOCUS>(up ? 2 : 1));
+                // Reprogram.java: lose Focus (a FocusPower debuff, so Artifact blocks it), gain Strength and Dexterity.
+                bc.addToBot(Actions::DebuffPlayer<PS::FOCUS>(up ? -2 : -1, false));
                 bc.addToBot(Actions::BuffPlayer<PS::STRENGTH>(up ? 2 : 1));
                 bc.addToBot(Actions::BuffPlayer<PS::DEXTERITY>(up ? 2 : 1));
                 return true;
 
             case CardId::HYPERBEAM:
-                // Hyperbeam.java: attack all enemies, then lose 3 Focus.
+                // Hyperbeam.java: attack all enemies, then lose 3 Focus (a debuff Artifact blocks).
                 bc.addToBot(Actions::AttackAllEnemy(bc.calculateCardDamageMatrix(c, up ? 34 : 26)));
-                bc.addToBot(Actions::DecrementStatus<PS::FOCUS>(3));
+                bc.addToBot(Actions::DebuffPlayer<PS::FOCUS>(-3, false));
                 return true;
 
             case CardId::BIASED_COGNITION:
