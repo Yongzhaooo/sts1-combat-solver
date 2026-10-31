@@ -231,10 +231,15 @@ namespace sts {
                 }
                 const int count = item.energyOnUse + (up ? 1 : 0)
                     + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
-                for (int i = 0; i < count; ++i) {
-                    bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
-                }
-                bc.addToBot(Actions::EmptyEnergy(bc.curCardQueueItem.freeToPlay || c.freeToPlayOnce));
+                const bool free = bc.curCardQueueItem.freeToPlay || c.freeToPlayOnce;
+                // TempestAction queues the channels when it resolves, so they land behind on-use
+                // triggers such as Hex's Dazed (a full bar's evoke and the Dazed both roll cardRandomRng).
+                bc.addToBot({[=] (BattleContext &bc) {
+                    for (int i = 0; i < count; ++i) {
+                        bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
+                    }
+                    bc.addToBot(Actions::EmptyEnergy(free));
+                }});
                 return true;
             }
 

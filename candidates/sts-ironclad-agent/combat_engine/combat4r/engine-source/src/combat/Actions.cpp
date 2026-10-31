@@ -746,16 +746,18 @@ Action Actions::MultiCastAction(int times) {
 
 Action Actions::FissionAction(bool upgraded) {
     return {[=] (BattleContext &bc) {
-        // FissionAction: the orb count is read when the action resolves, then all
-        // orbs are removed (evoked when upgraded), and that many energy/cards are
-        // granted. Queued bottom-up so removal resolves before the rewards.
+        // FissionAction: the orb count is read when the action resolves, then it
+        // addToTop's the draw, the energy and the orb removal (evoked when upgraded),
+        // so removal resolves first and all three run before anything queued after
+        // the card, such as Hex's Dazed. Pushed to the top in reverse order.
         const int count = static_cast<int>(bc.player.orbs.size());
+        bc.addToTop(Actions::DrawCards(count));
+        bc.addToTop(Actions::GainEnergy(count));
         if (upgraded) {
             // EvokeAllOrbsAction addToTop's one EvokeOrbAction per orb, so each
             // evoke's target roll sees the monsters the previous evoke killed.
-            // One evoke per orb, queued in order, reproduces that.
             for (int i = 0; i < count; ++i) {
-                bc.addToBot({[] (BattleContext &bc) {
+                bc.addToTop({[] (BattleContext &bc) {
                     if (bc.player.orbs.empty()) {
                         return;
                     }
@@ -764,12 +766,10 @@ Action Actions::FissionAction(bool upgraded) {
                 }});
             }
         } else {
-            bc.addToBot({[] (BattleContext &bc) {
+            bc.addToTop({[] (BattleContext &bc) {
                 bc.player.orbs.clear();
             }});
         }
-        bc.addToBot(Actions::GainEnergy(count));
-        bc.addToBot(Actions::DrawCards(count));
     }};
 }
 
