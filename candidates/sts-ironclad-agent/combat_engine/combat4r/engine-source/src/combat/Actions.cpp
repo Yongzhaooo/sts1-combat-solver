@@ -25,16 +25,13 @@ Action Actions::AttackEnemy(int idx, int damage, DamageType type) {
     }};
 }
 
-Action Actions::RipAndTearAction(int damage, int times) {
+Action Actions::RipAndTearAction(const CardInstance &card, int baseDamage) {
     return {[=] (BattleContext &bc) {
-        // NewRipAndTearAction: each hit rolls its own random target when it resolves.
-        for (int i = 0; i < times; ++i) {
-            bc.addToBot({[=] (BattleContext &bc) {
-                const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
-                if (target >= 0) {
-                    bc.addToBot(Actions::AttackEnemy(target, damage));
-                }
-            }});
+        // NewRipAndTearAction (AttackDamageRandomEnemyAction): roll the target when it resolves,
+        // calculateCardDamage against it, and addToTop the hit, so it lands before the next roll.
+        const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+        if (target >= 0) {
+            bc.addToTop(Actions::AttackEnemy(target, bc.calculateCardDamage(card, target, baseDamage)));
         }
     }};
 }
