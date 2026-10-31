@@ -2097,6 +2097,15 @@ void BattleContext::onAfterUseCard() {
     c.freeToPlayOnce = false;
     if (c.getId() == CardId::STREAMLINE) {
         c.updateCost(-1);
+        if (item.purgeOnUse) {
+            // The original is filed by now (discard, exhaust, Rebound's draw pile or hand),
+            // and GetAllInBattleInstances finds it there.
+            const auto lower = [&](CardInstance &x) { if (x.uniqueId == c.uniqueId) x.updateCost(-1); };
+            for (int i = 0; i < cards.cardsInHand; ++i) lower(cards.hand[i]);
+            for (auto &x : cards.drawPile) lower(x);
+            for (auto &x : cards.discardPile) lower(x);
+            for (auto &x : cards.exhaustPile) lower(x);
+        }
     } else if (c.getId() == CardId::STEAM_BARRIER) {
         // Bumped in DefectCards.cpp, where use() reads it.
     } else if (c.getId() == CardId::GENETIC_ALGORITHM) {
@@ -3017,6 +3026,7 @@ void BattleContext::queuePurgeCard(const CardInstance &c, int target) {
     item.target = target;
     item.energyOnUse = curCardQueueItem.energyOnUse;
     item.stackDiscardSize = curCardQueueItem.stackDiscardSize;
+    item.clawBonusOnUse = curCardQueueItem.clawBonusOnUse;
     item.ignoreEnergyTotal = true;
     item.autoplay = true;
     item.freeToPlay = true;
