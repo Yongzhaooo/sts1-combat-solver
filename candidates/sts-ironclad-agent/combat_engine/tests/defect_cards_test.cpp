@@ -1048,6 +1048,23 @@ int main() {
         check(bc.cards.cardsInHand == 2, "All for One should return the two 0-cost cards");
         check(bc.cards.discardPile.size() == 2,
               "All for One should leave the 2-cost cards behind (Equilibrium and itself)");
+        // AllCostToHandAction walks the discard pile from the bottom, so the hand keeps that order
+        // (a Defect run diverged here: Steam Barrier, then Zap+).
+        check(bc.cards.hand[0].getId() == CardId::CLAW && bc.cards.hand[1].getId() == CardId::STEAM_BARRIER,
+              "All for One should return the cards in discard-pile order");
+    }
+    {
+        // It tests the printed cost or freeToPlayOnce, not this turn's cost.
+        BattleContext bc = freshBattle();
+        CardInstance cheap(CardId::DEFEND_BLUE);
+        cheap.setCostForTurn(0);
+        CardInstance free(CardId::STRIKE_BLUE);
+        free.freeToPlayOnce = true;
+        bc.cards.discardPile.push_back(cheap);
+        bc.cards.discardPile.push_back(free);
+        playCard(bc, CardId::ALL_FOR_ONE);
+        check(bc.cards.cardsInHand == 1 && bc.cards.hand[0].getId() == CardId::STRIKE_BLUE,
+              "All for One returns a freeToPlayOnce card but not one that is only 0 this turn");
     }
 
     {

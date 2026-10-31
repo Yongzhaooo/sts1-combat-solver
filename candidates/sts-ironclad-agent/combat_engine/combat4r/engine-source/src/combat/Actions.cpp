@@ -44,18 +44,21 @@ Action Actions::RipAndTearAction(int damage, int times) {
 
 Action Actions::AllForOneAction() {
     return {[] (BattleContext &bc) {
-        // AllForOneAction: every 0-cost card in the discard pile returns to hand as
-        // the same instance (no new unique id). Walking backwards keeps indices valid.
-        for (int i = static_cast<int>(bc.cards.discardPile.size()) - 1; i >= 0; --i) {
-            const auto &dc = bc.cards.discardPile[i];
-            if (dc.costForTurn != 0 && dc.cost != 0) {
+        // AllCostToHandAction(0) walks the discard pile from the bottom and queues one
+        // DiscardToHandAction per card whose printed cost is 0 (or that is freeToPlayOnce);
+        // each returns the same instance (no new unique id) while the hand has room, so the
+        // cards keep their discard-pile order. Those actions run back to back after the
+        // card's UseCardAction, which only adds the played card itself (never on the list), so
+        // they are done in place.
+        auto &pile = bc.cards.discardPile;
+        for (std::size_t i = 0; i < pile.size();) {
+            if ((pile[i].cost != 0 && !pile[i].freeToPlayOnce)
+                    || bc.cards.cardsInHand >= CardManager::MAX_HAND_SIZE) {
+                ++i;
                 continue;
             }
-            if (bc.cards.cardsInHand >= CardManager::MAX_HAND_SIZE) {
-                break;
-            }
-            bc.cards.hand[bc.cards.cardsInHand++] = dc;
-            bc.cards.discardPile.erase(bc.cards.discardPile.begin() + i);
+            bc.cards.hand[bc.cards.cardsInHand++] = pile[i];
+            pile.erase(pile.begin() + static_cast<std::ptrdiff_t>(i));
         }
     }};
 }
