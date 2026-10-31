@@ -40,8 +40,10 @@ namespace sts {
                 return true;
 
             case CardId::DUALCAST:
-                // Dualcast.java: evoke the next (leftmost) orb twice.
-                bc.addToBot(Actions::EvokeOrbAction(0, 2));
+                // Dualcast.java: evoke the next (leftmost) orb twice. It addToBot's both evokes at play
+                // time, ahead of on-use triggers such as Hex's Dazed (both roll cardRandomRng), so run
+                // EvokeOrbAction now: it queues the two evokes the same way.
+                Actions::EvokeOrbAction(0, 2).actFunc(bc);
                 return true;
 
             case CardId::COLD_SNAP:
