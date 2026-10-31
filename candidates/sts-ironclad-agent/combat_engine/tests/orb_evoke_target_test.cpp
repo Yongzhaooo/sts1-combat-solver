@@ -340,6 +340,55 @@ int main() {
         }
         check(moved > 0, "some seed must put the Dazed elsewhere under the old roll order");
 
+        // Tempest and Fission+ under Hex, the other way round from Dualcast. TempestAction queues its
+        // channels when it resolves, behind the Dazed, so a full bar's evoke rolls after the Dazed's spot
+        // (a Defect run diverged here, Chosen, floor 24). FissionAction addToTop's its evokes, energy and
+        // draw, so Fission+ evokes and draws before the Dazed goes in.
+        int tempestMoved = 0, fissionMoved = 0;
+        for (std::uint64_t seed = 1; seed <= 40; ++seed) {
+            for (const bool fission : {false, true}) {
+                GameContext game(CharacterClass::DEFECT, seed, 0);
+                game.regainControlAction = [](GameContext&) {};
+                BattleContext bc;
+                bc.init(game, MonsterEncounter::CULTIST);
+                bc.cards = CardManager{};
+                bc.setState(InputState::PLAYER_NORMAL);
+                bc.player.orbs.clear();
+                while (bc.player.orbs.size() < bc.player.orbSlots) {
+                    channel_now(bc, Orb::LIGHTNING);
+                }
+                const int orbs = static_cast<int>(bc.player.orbs.size());
+                check(orbs == 3, "a fresh Defect has three orb slots");
+                for (auto id : {CardId::STRIKE_BLUE, CardId::ZAP, CardId::DEFEND_BLUE, CardId::COOLHEADED,
+                                CardId::BALL_LIGHTNING, CardId::CHARGE_BATTERY, CardId::BEAM_CELL}) {
+                    bc.cards.drawPile.push_back(CardInstance(id));
+                }
+                bc.player.debuff<PS::HEX>(1, true);
+                bc.player.energy = 1;
+                const int pile = static_cast<int>(bc.cards.drawPile.size());
+                Random expected = bc.cardRandomRng, oldOrder = bc.cardRandomRng;
+                int spot;
+                if (fission) {
+                    for (int i = 0; i < orbs; ++i) expected.random(0);
+                    spot = expected.random(pile - orbs - 1);
+                    fissionMoved += oldOrder.random(pile - 1) != spot;
+                } else {
+                    spot = expected.random(pile - 1);
+                    oldOrder.random(0);
+                    tempestMoved += oldOrder.random(pile - 1) != spot;
+                }
+                bc.curCardQueueItem.card = CardInstance(fission ? CardId::FISSION : CardId::TEMPEST, fission);
+                bc.curCardQueueItem.energyOnUse = 1;
+                bc.curCardQueueItem.target = 0;
+                bc.useCard();
+                drain(bc);
+                check(bc.cards.drawPile[spot].getId() == CardId::DAZED,
+                      fission ? "Fission+ must evoke and draw before Hex's Dazed takes its spot"
+                              : "Tempest's full-bar evoke must roll after Hex's Dazed takes its spot");
+            }
+        }
+        check(tempestMoved > 0 && fissionMoved > 0, "some seed must put the Dazed elsewhere under the old order");
+
         std::cout << "orb_evoke_target: ok\n";
         return 0;
     } catch (const std::exception &e) {
