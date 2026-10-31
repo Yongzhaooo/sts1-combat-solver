@@ -106,11 +106,19 @@ namespace sts {
                 bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(up ? 12 : 9)));
                 return true;
 
-            case CardId::STACK:
+            case CardId::STACK: {
                 // Stack.java: block equal to the discard pile size; upgraded adds 3.
+                // applyPowers sets baseBlock; a copy (Echo Form, Burst, Duplication)
+                // keeps the original's baseBlock, because useCard only reruns
+                // applyPowersToBlock. specialData carries the count to the copy.
+                if (!bc.curCardQueueItem.purgeOnUse) {
+                    bc.curCardQueueItem.card.specialData =
+                        static_cast<std::int16_t>(bc.cards.discardPile.size());
+                }
                 bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(
-                    static_cast<int>(bc.cards.discardPile.size()) + (up ? 3 : 0))));
+                    static_cast<int>(c.specialData) + (up ? 3 : 0))));
                 return true;
+            }
 
             case CardId::TURBO:
                 // Turbo.java: gain energy, then add a Void to the discard pile.
