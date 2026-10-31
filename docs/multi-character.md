@@ -160,7 +160,7 @@ M2 与 M3 的先后取决于协作者兴趣；若只能选一个，观者规模�
 - `tools/check_headbutt.py`、`check_armaments_identity.py`、`check_corruption_snecko.py`：用记录下来的原版游戏前后状态回放（夹具在 `overlay/test/*.json`）。这是"原版结果作为真值"的现成模式，新职业的牌按同样方式加夹具。
 - `AG/sim_patch/alignment/tests/compare_cards.py`、`compare_powers.py`：用导入的原版夹具比较单个动作的结果，需要 `ALIGNMENT_BUILD` 与 `STS_AGENT_ROOT` 环境变量。
 - `tools/check_backend_launcher.py`、`check_backend_protocol.py`、`check_solver_runtime.py`：后端启动、拒绝不支持状态、取消、引擎身份。开关变化时 `check_backend_protocol.py` 需要加职业用例。
-- Java 侧检查（`overlay/test/*Check.java`，由 `overlay/build.py:76-100` 在本地构建时运行，需要 JDK 和游戏 JAR）：`OutsidePacketCheck` 覆盖局外门禁，改动 2.1 时要跟着改；`Distill2Check` 逐个解析已发布 ID 表里的每个 ID，证明它们都能映射到模拟器 ID。`overlay/build.py` 不在 CI 里，只想要 `Distill2Check` 时用 `python tools/diagnostics/run_distill2_check.py --jar <游戏 JAR>`（它自己拼 `javac --release 8` + 资源拷贝 + `java -cp`，不依赖 `overlay/build.py`）。
+- Java 侧检查（`overlay/test/*Check.java`，由 `overlay/build.py:76-100` 在本地构建时运行，需要 JDK 和游戏 JAR）：`OutsidePacketCheck` 覆盖局外门禁，改动 2.1 时要跟着改；`Distill2Check` 逐个解析已发布 ID 表里的每个 ID，证明它们都能映射到模拟器 ID。`overlay/build.py` 不在 CI 里，只想要 `Distill2Check` 时用 `python tools/run_distill2_check.py --jar <游戏 JAR>`（它自己拼 `javac --release 8` + 资源拷贝 + `java -cp`，不依赖 `overlay/build.py`）。
 - 与职业和牌 ID 直接相关的三项检查：`tools/check_character_registry.py`（三处职业开关一致）、`tools/check_card_aliases.py`（三张牌 ID 表对每张猎人牌一致，且池里每张牌都映射到引擎枚举名并进了已发布表）、`tools/check_coverage_gaps.py`（把每个职业的原生夹具逐检查点喂进模拟器，`fixtures/native/` 下新职业的目录会被自动扫到）。
 - `tools/check_line_endings.py`：断言索引里的每个文本文件存的是 LF（第 9 条）。它查索引不查工作区 —— 这台机器检出时是 CRLF，查工作区会误报。
 - 本地跑全部检查：`python tools/diagnostics/check_local.py`，它直接读 workflow 里的命令，维护者加检查时不会过时。
