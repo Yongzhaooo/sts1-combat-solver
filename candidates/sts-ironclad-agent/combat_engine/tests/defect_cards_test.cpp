@@ -193,6 +193,20 @@ int main() {
         check(bc.player.getStatus<PS::ELECTRO>() == 1, "a second Electrodynamics should not stack Electro");
     }
     {
+        // AllCostToHandAction queues one DiscardToHandAction per card, so a card added to the hand
+        // by an action queued before it resolves (a Bronze Orb's Stasis return when All for One's
+        // hit kills it) comes first (a Defect run diverged here: Storm before the returned cards).
+        BattleContext bc = freshBattle();
+        bc.cards.createTempCardInDiscard(CardInstance(CardId::ZAP, true)); // Zap+ costs 0
+        bc.addToBot(Actions::AllForOneAction());
+        bc.addToBot(Actions::MakeTempCardInHand(CardId::STORM));
+        bc.setState(InputState::EXECUTING_ACTIONS);
+        bc.executeActions();
+        check(bc.cards.cardsInHand == 2 && bc.cards.hand[0].getId() == CardId::STORM
+              && bc.cards.hand[1].getId() == CardId::ZAP,
+              "All for One's returns should follow an earlier queued card");
+    }
+    {
         // Turbo: gain 2 energy, then add a Void to the discard pile.
         BattleContext bc = freshBattle();
         playCard(bc, CardId::TURBO);
@@ -1061,9 +1075,10 @@ int main() {
     {
         // All for One: 0-cost cards in the discard pile return to hand.
         BattleContext bc = freshBattle();
-        bc.cards.discardPile.push_back(CardInstance(CardId::CLAW));
-        bc.cards.discardPile.push_back(CardInstance(CardId::STEAM_BARRIER));
-        bc.cards.discardPile.push_back(CardInstance(CardId::EQUILIBRIUM));
+        // Real piles give every card its own uniqueId, which each queued return looks up.
+        bc.cards.createTempCardInDiscard(CardInstance(CardId::CLAW));
+        bc.cards.createTempCardInDiscard(CardInstance(CardId::STEAM_BARRIER));
+        bc.cards.createTempCardInDiscard(CardInstance(CardId::EQUILIBRIUM));
         playCard(bc, CardId::ALL_FOR_ONE);
         check(bc.cards.cardsInHand == 2, "All for One should return the two 0-cost cards");
         check(bc.cards.discardPile.size() == 2,
@@ -1080,8 +1095,8 @@ int main() {
         cheap.setCostForTurn(0);
         CardInstance free(CardId::STRIKE_BLUE);
         free.freeToPlayOnce = true;
-        bc.cards.discardPile.push_back(cheap);
-        bc.cards.discardPile.push_back(free);
+        bc.cards.createTempCardInDiscard(cheap);
+        bc.cards.createTempCardInDiscard(free);
         playCard(bc, CardId::ALL_FOR_ONE);
         check(bc.cards.cardsInHand == 1 && bc.cards.hand[0].getId() == CardId::STRIKE_BLUE,
               "All for One returns a freeToPlayOnce card but not one that is only 0 this turn");
