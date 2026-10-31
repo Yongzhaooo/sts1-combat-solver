@@ -14,7 +14,7 @@ Close the game. Copy STS1CombatSolver.jar and the whole `sts1-solver-runtime` di
 
 Your language preference persists. Logs, diagnostic exports and voluntary experience recordings live in `%LOCALAPPDATA%\STS1CombatSolver`, outside the installation directory. Keys: Enter runs one step, F10 runs this fight, F9 stops, F8 folds the panel, F7 saves the act map with the planned route as a PNG on the desktop, F6 exports diagnostics; Shift+F6 finalizes experience parts. Experience recording starts Off each launch. Nothing uploads automatically. Read PRIVACY.md before sharing files. Removing or unsubscribing from the mod leaves your local data intact; delete that folder yourself after exiting the game if you no longer need it.
 
-If the backend is missing, verify Steam files or reinstall the complete package. If a fight fails, stop with F9 and export diagnostics with F6. Other characters and mods that change combat rules are not supported. The current scope is Ironclad and colorless cards; four-character coverage and RL are active development goals, with RL research and experiments underway.
+If the backend is missing, verify Steam files or reinstall the complete package. If a fight fails, stop with F9 and export diagnostics with F6. Combat covers the Ironclad, the Defect and colorless cards; full autopilot outside combat is Ironclad only. Other characters and mods that change combat rules are not supported. Four-character coverage and RL are active development goals, with RL research and experiments underway.
 
 ---
 
@@ -32,4 +32,4 @@ If the backend is missing, verify Steam files or reinstall the complete package.
 
 语言设置会保留。日志、诊断包与自愿录制的经验写入 `%LOCALAPPDATA%\STS1CombatSolver`，不会被模组更新覆盖。快捷键：回车执行一步，F10 执行这场战斗，F9 停止，F8 收起面板，F7 把本幕地图和计划路线存成桌面 PNG，F6 导出诊断；Shift+F6 封存经验分卷。经验每次启动默认关闭，不会自动上传。分享文件前阅读 PRIVACY.zh-CN.md。卸载或退订模组会保留本地数据；不再需要时，退出游戏后自行删除该目录。
 
-若提示后台缺失，请验证 Steam 文件或重新安装完整包。战斗出错时按 F9 停止，再按 F6 导出诊断。当前只支持战士牌和无色牌，不支持其它职业或修改战斗规则的模组。四职业覆盖和 RL 是正在推进的目标，RL 研究与实验已经在进行。
+若提示后台缺失，请验证 Steam 文件或重新安装完整包。战斗出错时按 F9 停止，再按 F6 导出诊断。战斗支持战士、机器人和无色牌；局外的全自动爬塔只支持战士。不支持其它职业或修改战斗规则的模组。四职业覆盖和 RL 是正在推进的目标，RL 研究与实验已经在进行。
