@@ -108,7 +108,7 @@ def main():
                 reply = send({'id': 4, 'op': 'advance', 'state': divergent, 'budget': 2000})
                 assert reply.get('id') == 4 and reply.get('status') == 'error', reply
                 # A card or class relic the coverage manifest lists as missing is refused before search.
-                for field, item in (('hand', 'Neutralize'), ('relics', 'Tingsha')):
+                for field, item in (('hand', 'Bane'), ('relics', 'Tingsha')):
                     gapped = json.loads(json.dumps(state))
                     target = gapped['game_state']['combat_state']['hand'] if field == 'hand' else gapped['game_state']['relics']
                     target[0]['id'] = item

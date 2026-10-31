@@ -17,7 +17,7 @@ static void check(bool value, const char *why) {
 int main() {
     struct Case { CharacterClass cc; CardId card; };
     const Case unimplemented[] = {
-        {CharacterClass::SILENT, CardId::NEUTRALIZE},   // attack
+        {CharacterClass::SILENT, CardId::BANE},         // attack
         {CharacterClass::SILENT, CardId::SURVIVOR},     // skill
         {CharacterClass::SILENT, CardId::ACCURACY},     // power
         {CharacterClass::WATCHER, CardId::ERUPTION},    // attack

@@ -115,9 +115,8 @@
       },
       "starter": {
         "total": 4,
-        "implemented": 2,
+        "implemented": 3,
         "missing": [
-          "NEUTRALIZE",
           "SURVIVOR"
         ]
       },
@@ -413,7 +412,6 @@
     "Meditate": "MEDITATE",
     "MentalFortress": "MENTAL_FORTRESS",
     "Miracle": "MIRACLE",
-    "Neutralize": "NEUTRALIZE",
     "Night Terror": "NIGHTMARE",
     "Nirvana": "NIRVANA",
     "Noxious Fumes": "NOXIOUS_FUMES",

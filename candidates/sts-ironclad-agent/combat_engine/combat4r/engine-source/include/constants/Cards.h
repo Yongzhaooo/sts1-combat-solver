@@ -728,6 +728,7 @@ namespace sts {
             case CardId::JAX:
             case CardId::MASTER_OF_STRATEGY:
             case CardId::MIRACLE:
+            case CardId::NEUTRALIZE:
             case CardId::OFFERING:
             case CardId::PANACEA:
             case CardId::PANACHE:
