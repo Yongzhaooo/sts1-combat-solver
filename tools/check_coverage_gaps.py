@@ -9,6 +9,9 @@ disagrees with the game.
 
     python tools/check_coverage_gaps.py [path ...]
 
+With no arguments every character directory under `fixtures/native/` is graded, so a new
+character's captures are picked up without editing this file.
+
 Each checkpoint is fed to the simulator's snapshot importer and every field the comparator can see
 is compared. No seed-to-board reconstruction is needed -- the recorder saved the state the play was
 chosen from -- so this runs with no game jar, no save and no network, only the built runtime
@@ -33,7 +36,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / 'overlay'))
 from backend import Advisor, view_from_state  # noqa: E402
 
-DEFAULT_DIR = REPO / 'fixtures' / 'native' / 'DEFECT'
+NATIVE_DIR = REPO / 'fixtures' / 'native'
 
 # The cards whose behaviour each required window exists to pin down.
 EXPECTED = {
@@ -57,7 +60,7 @@ def card(card_id, upgrades=0, cost=1):
             'type': 'SKILL', 'misc': 0, 'uuid': None, 'free_to_play_once': False}
 
 
-def to_game_state(observation, template):
+def to_game_state(observation, template, character):
     """Express one recorded observation as a CommunicationMod game_state.
 
     Only the fields the importer reads are filled; everything else comes from the captured
@@ -98,19 +101,19 @@ def to_game_state(observation, template):
     ]
     game['current_hp'] = player['hp']
     game['floor'] = observation['floor']
-    game['class'] = 'DEFECT'
+    game['class'] = character
     game['room_phase'] = 'COMBAT'
     game['screen_type'] = 'NONE'
     return game
 
 
-def to_view(observation, root, rng_names):
+def to_view(observation, root, rng_names, character):
     """The backend view for one observation: recorded state plus the streams the importer needs."""
     # view_from_state only knows how to describe an Ironclad fight, so the captured root is
     # turned into a view first and the recorded state is written over it afterwards. That keeps
     # the run context real while letting a Defect board through, as check_defect_parity does.
     view = view_from_state(copy.deepcopy(root))
-    view['game'] = to_game_state(observation, {'game': root['game_state']})
+    view['game'] = to_game_state(observation, {'game': root['game_state']}, character)
     view['rng'] = {name: _rng(observation['rng'][key]) for key, name in rng_names.items()}
     return view
 
@@ -158,7 +161,7 @@ def check_case(path, root, rng_names):
         what = f'{case["id"]} after {checkpoint["after"]} actions'
         try:
             # The fixture already stores the projected shape, so it goes to the importer as is.
-            view = to_view(observation, root, rng_names)
+            view = to_view(observation, root, rng_names, case.get('character', 'DEFECT'))
             compare(view, what)
             compared += 1
         except (ValueError, KeyError) as error:
@@ -174,7 +177,10 @@ def check_case(path, root, rng_names):
 def main():
     from sim_patch.parity.adapter import RNG_NAMES
 
-    targets = [Path(arg) for arg in sys.argv[1:]] or [DEFAULT_DIR]
+    targets = [Path(arg) for arg in sys.argv[1:]]
+    if not targets:
+        # Every character directory, so a new one is discovered instead of remembered.
+        targets = sorted(p for p in NATIVE_DIR.iterdir() if p.is_dir()) if NATIVE_DIR.is_dir() else []
     paths = []
     for target in targets:
         if target.is_dir():
