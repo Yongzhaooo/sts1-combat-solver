@@ -77,14 +77,19 @@ def top_level(body):
 
 
 def switch_cases(text, function):
-    """CardId case labels directly inside the first switch of `function`."""
+    """CardId case labels directly inside the first switch of `function`.
+
+    A missing function, or a function with no switch, is an error rather than an empty set: the
+    Silent pool below is built out of these labels, so an empty answer would quietly shrink what
+    this check looks at the day the dispatch function is renamed.
+    """
     match = re.search(r'\b' + re.escape(function) + r'\s*\([^)]*\)\s*\{', text)
     if not match:
-        return set()
+        raise ValueError('function not found: ' + function)
     body = block(text, match.end() - 1)
     switch = re.search(r'switch\s*\([^\n{]*\)\s*\{', body)
     if not switch:
-        return set()
+        raise ValueError('no switch in ' + function)
     return set(re.findall(r'\bcase\s+CardId::(\w+)\s*:', top_level(block(body, switch.end() - 1))))
 
 
@@ -123,7 +128,12 @@ def silent_pool(root, enum_to_java):
             names |= set(re.findall(r'deck\.obtain\(\*this,\s*CardId::(\w+)', body))
     manifest = json.loads((root / MANIFEST).read_text(encoding='utf-8'))
     names |= set(manifest['characters']['THE_SILENT']['generated']['missing'])
-    for path in sorted((root / ENGINE / 'src/combat/characters').glob('*.cpp')):
+    # Only the file that defines the dispatch function has the switch; the one that calls it has not.
+    defining = [path for path in sorted((root / ENGINE / 'src/combat/characters').glob('*.cpp'))
+                if re.search(r'\bbool\s+useSilentCard\s*\(', strip_comments(path.read_text(encoding='utf-8')))]
+    if not defining:
+        raise ValueError('no file under src/combat/characters defines useSilentCard')
+    for path in defining:
         names |= switch_cases(strip_comments(path.read_text(encoding='utf-8')), 'useSilentCard')
     unknown = sorted(name for name in names if name not in enum_to_java)
     if unknown:
@@ -225,9 +235,10 @@ def main():
         for line in found:
             print('FAIL: ' + line)
         sys.exit('%d card-ID mapping problems' % len(found))
-    print('PASS: the {steam} steam_mcts aliases and the {distill} Distill2 aliases agree, all {pool} Silent '
-          'cards resolve to their engine enum name, and all of them are in the published table of {published} '
-          'IDs ({fixtures} of them touched by the recorded Silent fixtures)'.format(**counts))
+    print('PASS: steam_mcts.CARD_ALIASES ({steam} entries) and the Distill2 ALIASES cards ({distill} entries) '
+          'agree on every Silent card, all {pool} Silent cards resolve to their engine enum name, and all of '
+          'them are in the published table of {published} IDs ({fixtures} of them touched by the recorded '
+          'Silent fixtures)'.format(**counts))
 
 
 if __name__ == '__main__':
