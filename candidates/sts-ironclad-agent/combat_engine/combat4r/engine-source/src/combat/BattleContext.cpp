@@ -3016,6 +3016,7 @@ void BattleContext::queuePurgeCard(const CardInstance &c, int target) {
     item.purgeOnUse = true;
     item.target = target;
     item.energyOnUse = curCardQueueItem.energyOnUse;
+    item.stackDiscardSize = curCardQueueItem.stackDiscardSize;
     item.ignoreEnergyTotal = true;
     item.autoplay = true;
     item.freeToPlay = true;

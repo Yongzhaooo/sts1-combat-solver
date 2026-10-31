@@ -154,6 +154,10 @@ int main() {
         }
         playCard(bc, CardId::STACK);
         check(bc.player.block == 6, "Echo Form Stack should grant 3 + 3 block");
+        for (const auto &dc : bc.cards.discardPile) {
+            // The game keeps misc at 0 on Stack; the count must not ride on the card.
+            check(dc.specialData == 0, "Echo Form Stack should leave specialData at 0");
+        }
     }
     {
         // Turbo: gain 2 energy, then add a Void to the discard pile.
