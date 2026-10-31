@@ -145,6 +145,17 @@ int main() {
         check(bc.player.block == 3, "Stack should grant block equal to the discard pile");
     }
     {
+        // Echo Form Stack: the copy keeps the original's baseBlock, so 3 + 3, not 3 + 4 after
+        // the original reached the discard pile (a Defect run diverged here: 22 in the game, 23).
+        BattleContext bc = freshBattle();
+        bc.player.buff<PS::ECHO_FORM>(1);
+        for (int i = 0; i < 3; ++i) {
+            bc.cards.createTempCardInDiscard(CardInstance(CardId::STRIKE_BLUE));
+        }
+        playCard(bc, CardId::STACK);
+        check(bc.player.block == 6, "Echo Form Stack should grant 3 + 3 block");
+    }
+    {
         // Turbo: gain 2 energy, then add a Void to the discard pile.
         BattleContext bc = freshBattle();
         playCard(bc, CardId::TURBO);
