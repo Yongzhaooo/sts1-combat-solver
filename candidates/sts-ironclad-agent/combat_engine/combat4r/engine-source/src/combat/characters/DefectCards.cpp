@@ -233,12 +233,16 @@ namespace sts {
                     + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
                 const bool free = bc.curCardQueueItem.freeToPlay || c.freeToPlayOnce;
                 // TempestAction queues the channels when it resolves, so they land behind on-use
-                // triggers such as Hex's Dazed (a full bar's evoke and the Dazed both roll cardRandomRng).
+                // triggers such as Hex's Dazed (a full bar's evoke and the Dazed both roll cardRandomRng),
+                // and empties the pool right away, so energy from an evoked Plasma orb is kept.
                 bc.addToBot({[=] (BattleContext &bc) {
+                    if (count <= 0) {
+                        return;
+                    }
                     for (int i = 0; i < count; ++i) {
                         bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
                     }
-                    bc.addToBot(Actions::EmptyEnergy(free));
+                    Actions::EmptyEnergy(free).actFunc(bc);
                 }});
                 return true;
             }
@@ -327,15 +331,26 @@ namespace sts {
             case CardId::MULTI_CAST: {
                 // MultiCast.java -> MulticastAction: evoke the oldest orb X times,
                 // consuming it once. X = energyOnUse + Chemical X (2) + upgraded (1).
-                // The evokes resolve first, then the card empties the energy pool.
+                // MulticastAction queues the evokes and empties the pool in the same update, and does
+                // neither when the bar holds no orb.
                 auto &item = bc.curCardQueueItem;
                 if (!item.ignoreEnergyTotal && bc.player.energy < item.energyOnUse) {
                     item.energyOnUse = bc.player.energy;
                 }
                 const int times = item.energyOnUse + (up ? 1 : 0)
                     + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
-                bc.addToBot(Actions::MultiCastAction(times));
-                bc.addToBot(Actions::EmptyEnergy(bc.curCardQueueItem.freeToPlay || c.freeToPlayOnce));
+                const bool free = bc.curCardQueueItem.freeToPlay || c.freeToPlayOnce;
+                bc.addToBot({[=] (BattleContext &bc) {
+                    bool hasOrb = false;  // AbstractPlayer.hasOrb: any slot that is not an empty one
+                    for (const auto &orb : bc.player.orbs) {
+                        hasOrb |= orb.type != Orb::EMPTY;
+                    }
+                    if (!hasOrb || times <= 0) {
+                        return;
+                    }
+                    Actions::MultiCastAction(times).actFunc(bc);
+                    Actions::EmptyEnergy(free).actFunc(bc);
+                }});
                 return true;
             }
 
