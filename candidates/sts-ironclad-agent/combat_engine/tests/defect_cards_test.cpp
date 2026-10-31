@@ -297,6 +297,19 @@ int main() {
         check(bc.player.focus == -2, "Hyperbeam should lose 3 focus below zero (1 -> -2)");
     }
     {
+        // A negative FocusPower is a debuff, so Artifact (here from Core Surge) blocks Hyperbeam's
+        // and Reprogram's Focus loss (a Defect run diverged here: Focus -3 and Artifact 1 natively).
+        BattleContext bc = freshBattle();
+        Actions::BuffPlayer<PS::ARTIFACT>(1).actFunc(bc);
+        playCard(bc, CardId::HYPERBEAM);
+        check(bc.player.focus == 0 && bc.player.getStatus<PS::ARTIFACT>() == 0,
+              "Artifact should block Hyperbeam's Focus loss");
+        Actions::BuffPlayer<PS::ARTIFACT>(1).actFunc(bc);
+        playCard(bc, CardId::REPROGRAM);
+        check(bc.player.focus == 0 && bc.player.getStatus<PS::ARTIFACT>() == 0,
+              "Artifact should block Reprogram's Focus loss");
+    }
+    {
         // Biased Cognition: gain Focus, apply BIAS; turn start drains Focus.
         BattleContext bc = freshBattle();
         playCard(bc, CardId::BIASED_COGNITION);
