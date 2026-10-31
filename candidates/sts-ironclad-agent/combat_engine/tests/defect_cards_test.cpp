@@ -185,6 +185,14 @@ int main() {
         check(bc.player.clawBonus == 4, "Echo Form Claw should raise the bonus twice");
     }
     {
+        // Electrodynamics applies ElectroPower only without one, so a second play (here Echo Form's
+        // copy) leaves it at 1 (a Defect run diverged here: ELECTRO 1 in the game, 2).
+        BattleContext bc = freshBattle();
+        bc.player.buff<PS::ECHO_FORM>(1);
+        playCard(bc, CardId::ELECTRODYNAMICS);
+        check(bc.player.getStatus<PS::ELECTRO>() == 1, "a second Electrodynamics should not stack Electro");
+    }
+    {
         // Turbo: gain 2 energy, then add a Void to the discard pile.
         BattleContext bc = freshBattle();
         playCard(bc, CardId::TURBO);

@@ -261,8 +261,11 @@ namespace sts {
                 return true;
 
             case CardId::ELECTRODYNAMICS:
-                // Electro.java: lightning orbs hit all enemies, then channel 2 (3).
-                bc.addToBot(Actions::BuffPlayer<PS::ELECTRO>(1));
+                // Electrodynamics.java: applies ElectroPower only when the player has none
+                // (checked at use time, so a second copy never stacks it), then channels 2 (3).
+                if (!bc.player.hasStatus<PS::ELECTRO>()) {
+                    bc.addToBot(Actions::BuffPlayer<PS::ELECTRO>(1));
+                }
                 for (int i = 0; i < (up ? 3 : 2); ++i) {
                     bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
                 }
