@@ -101,7 +101,7 @@ Last confirmed: 2026-10-15，基于分支 `fix/search-timeout-handling`（6dc1e8
 - 导入固定为铁甲：`ES/bindings/slaythespire.cpp:228` 写死 `bc.player.cc = CharacterClass::IRONCLAD`（这会影响发现、随机牌、随机药水用的职业，见 `Actions.cpp:563`、`580`、`588`，`BattleContext.cpp:163`、`2333`、`2898`）。
 - 快照不含宝珠、姿态、保留位：`AG/steam/steam_mcts.py:544-631`（`build_snapshot`）只带血量、格挡、能量、powers、四堆牌、怪物、遗物、药水、随机数。`slaythespire.cpp:61-65`（`snapshotCard`）和 228-380 的玩家导入也没有这些字段。
 - 游戏侧导出：CommunicationMod 已导出宝珠（`references/CommunicationMod/src/main/java/communicationmod/GameStateConverter.java:735-739`，字段 id、名称、evoke、被动），但不导出姿态，也不导出牌的保留位。`AG/steam/state_export_mod/src/steamstateexport/CombatStatePatch.java:57-97` 补充的是随机数、遗物状态、怪物内部字段，没有这些。`overlay/src/sts1solver/CardExportPatch.java:13-23` 给牌补了费用、伤害、格挡、`misc`，没有保留。
-- 卡牌别名：`steam_mcts.py:18` 的 `CARD_ALIASES`、`Distill2.java:85` 的 `ALIASES` 与 `overlay/test/original-game-ids.json` 只靠手工同步，`tools/check_card_aliases.py` 在 CI 里断言这三处对每张猎人牌一致。猎人池 76 张（`CardPools.h` 的 `RarityCardPool` 第 1 行 + `GameContext::initPlayer()` 的起始牌库 + `SHIV` + `useSilentCard` 已实现项）现在全部在表里；其中 7 张 Java ID 不等于枚举名：`Strike_G`/`Defend_G`（颜色后缀是 `_GREEN`）、`Crippling Poison`（现名 Crippling Cloud）、`Night Terror`（现名 Nightmare）、`Underhanded Strike`（现名 Sneaky Strike）、`Venomology`（现名 Alchemize）、`Wraith Form v2`（枚举名 `WRAITH_FORM`）。已发布 ID 表从 131 个红/无色牌扩到 207 个（多了 76 个猎人牌）。
+- 卡牌别名：`steam_mcts.py:18` 的 `CARD_ALIASES`、`Distill2.java:86` 的 `ALIASES`（`id()` 在 `:115`）与 `overlay/test/original-game-ids.json` 只靠手工同步，`tools/check_card_aliases.py` 在 CI 里断言这三处对每张猎人牌一致。猎人池 76 张（`CardPools.h` 的 `RarityCardPool` 第 1 行 + `GameContext::initPlayer()` 的起始牌库 + `SHIV` + `useSilentCard` 已实现项）现在全部在表里；其中 7 张 Java ID 不等于枚举名：`Strike_G`/`Defend_G`（颜色后缀是 `_GREEN`）、`Crippling Poison`（现名 Crippling Cloud）、`Night Terror`（现名 Nightmare）、`Underhanded Strike`（现名 Sneaky Strike）、`Venomology`（现名 Alchemize）、`Wraith Form v2`（枚举名 `WRAITH_FORM`）。已发布 ID 表从 131 个红/无色牌扩到 207 个（多了 76 个猎人牌）。
 - 牌池导出本身与职业无关：`overlay/src/sts1solver/RecoveryExportPatch.java:41-49` 读取实时牌池，`overlay/backend.py:173-174` 和 `overlay/native.cpp:188-196` 以此覆盖发现和随机牌（`overlay/build_native.py:54-62`）。这一路径换职业后不用改，前提是所有牌 ID 都能映射。
 - 步骤核对只比较血量、格挡、能量、牌堆、怪物、药水、随机数：`steam_mcts.py:676-692`（`assert_snapshot_matches`）与 `AG/sim_patch/parity/adapter.py:128-146`（`simulator_state`）。宝珠、姿态、集中、真言的偏差不会被发现，所以这些字段进入模拟器的同时必须进入核对。
 - Python 绑定没有暴露宝珠和姿态的读取接口（`slaythespire.cpp` 中无相关 def）。
@@ -160,7 +160,10 @@ M2 与 M3 的先后取决于协作者兴趣；若只能选一个，观者规模�
 - `tools/check_headbutt.py`、`check_armaments_identity.py`、`check_corruption_snecko.py`：用记录下来的原版游戏前后状态回放（夹具在 `overlay/test/*.json`）。这是"原版结果作为真值"的现成模式，新职业的牌按同样方式加夹具。
 - `AG/sim_patch/alignment/tests/compare_cards.py`、`compare_powers.py`：用导入的原版夹具比较单个动作的结果，需要 `ALIGNMENT_BUILD` 与 `STS_AGENT_ROOT` 环境变量。
 - `tools/check_backend_launcher.py`、`check_backend_protocol.py`、`check_solver_runtime.py`：后端启动、拒绝不支持状态、取消、引擎身份。开关变化时 `check_backend_protocol.py` 需要加职业用例。
-- Java 侧检查（`overlay/test/*Check.java`，由 `overlay/build.py:76-100` 在本地构建时运行，需要 JDK 和游戏 JAR）：`OutsidePacketCheck` 覆盖局外门禁，改动 2.1 时要跟着改。
+- Java 侧检查（`overlay/test/*Check.java`，由 `overlay/build.py:76-100` 在本地构建时运行，需要 JDK 和游戏 JAR）：`OutsidePacketCheck` 覆盖局外门禁，改动 2.1 时要跟着改；`Distill2Check` 逐个解析已发布 ID 表里的每个 ID，证明它们都能映射到模拟器 ID。`overlay/build.py` 不在 CI 里，只想要 `Distill2Check` 时用 `python tools/diagnostics/run_distill2_check.py --jar <游戏 JAR>`（它自己拼 `javac --release 8` + 资源拷贝 + `java -cp`，不依赖 `overlay/build.py`）。
+- 与职业和牌 ID 直接相关的三项检查：`tools/check_character_registry.py`（三处职业开关一致）、`tools/check_card_aliases.py`（三张牌 ID 表对每张猎人牌一致，且池里每张牌都映射到引擎枚举名并进了已发布表）、`tools/check_coverage_gaps.py`（把每个职业的原生夹具逐检查点喂进模拟器，`fixtures/native/` 下新职业的目录会被自动扫到）。
+- `tools/check_line_endings.py`：断言索引里的每个文本文件存的是 LF（第 9 条）。它查索引不查工作区 —— 这台机器检出时是 CRLF，查工作区会误报。
+- 本地跑全部检查：`python tools/diagnostics/check_local.py`，它直接读 workflow 里的命令，维护者加检查时不会过时。
 - 双 Mod 构建（`docs/mod-pair-ci.md`、`mod-pair.yml`）是自托管机器上的手动流程，不接受外部 PR。
 
 按里程碑：

@@ -42,7 +42,7 @@ The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher
 
 - PR 必须通过 `.github/workflows/native-runtime.yml` 的全部作业（三个操作系统、两个 Python 版本）。四职业 M0 之后，其中包括覆盖清单检查和全部原生夹具的重放。
 - 不删除、不跳过已有检查。期望值只能来自已校准的真值，不能为了通过检查手改。
-- 克隆后运行一次 `python tools/install_git_hooks.py`。它安装 pre-push 钩子：向本仓库推送时，检查被推送的提交及其新历史里没有 `reports/`、`evidence/`，有就拒绝推送。
+- 克隆后运行一次 `python tools/install_git_hooks.py`。它安装两个钩子：pre-push 在向本仓库推送时检查被推送的提交及其新历史里没有 `reports/`、`evidence/`，有就拒绝推送；pre-commit 检查暂存内容是不是 LF 行尾（第 9 条），不是就拒绝提交。
 - 提交前在本地先跑：
 
   ```bash
@@ -52,6 +52,8 @@ The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher
   python tools/coverage_manifest.py --check     # 清单是否最新，已支持的职业有没有缺口
   python tools/truth_calibration/run.py --adapter "<你的适配器>" fixtures/calibration   # M0 之后
   ```
+
+  这五条只是最小集：CI 实际跑三十多条，顺序与 CI 一致的那一份是 `python tools/diagnostics/check_local.py`（它直接读 workflow，维护者加检查时不会过时）。拿不准就跑它。
 
 - 合并前维护者会用私有真值重放你新增的夹具。结果不一致时，维护者贴出第一处差异的路径，双方一起定位；问题出在你的真值时，维护者会补一个校准用例。
 
