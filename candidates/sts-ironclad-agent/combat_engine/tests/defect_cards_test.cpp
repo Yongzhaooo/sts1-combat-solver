@@ -160,6 +160,31 @@ int main() {
         }
     }
     {
+        // Echo Form Streamline: the copy's ReduceCostAction(uuid) walks GetAllInBattleInstances and
+        // lowers the filed original again, 2 -> 0 (a Defect run diverged here: 0 in the game, 1).
+        BattleContext bc = freshBattle();
+        bc.player.buff<PS::ECHO_FORM>(1);
+        playCard(bc, CardId::STREAMLINE);
+        bool found = false;
+        for (const auto &dc : bc.cards.discardPile) {
+            if (dc.getId() == CardId::STREAMLINE) {
+                check(dc.cost == 0 && dc.costForTurn == 0, "Echo Form Streamline should cost 0 afterwards");
+                found = true;
+            }
+        }
+        check(found, "Echo Form Streamline should be in the discard pile");
+    }
+    {
+        // Echo Form Claw: the copy waits in limbo, which GashAction skips, so it hits for the
+        // original's 3; the copy's own Gash then raises the bonus again, to 4.
+        BattleContext bc = freshBattle();
+        bc.player.buff<PS::ECHO_FORM>(1);
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::CLAW);
+        check(hp - bc.monsters.arr[0].curHp == 6, "Echo Form Claw should hit 3 + 3");
+        check(bc.player.clawBonus == 4, "Echo Form Claw should raise the bonus twice");
+    }
+    {
         // Turbo: gain 2 energy, then add a Void to the discard pile.
         BattleContext bc = freshBattle();
         playCard(bc, CardId::TURBO);
