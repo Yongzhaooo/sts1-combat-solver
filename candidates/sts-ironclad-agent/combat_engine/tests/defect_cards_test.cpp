@@ -310,6 +310,18 @@ int main() {
               "Artifact should block Reprogram's Focus loss");
     }
     {
+        // Orb damage is THORNS, which The Boot skips: at Focus -5 Dualcast's two Lightning evokes
+        // hit for 3 each, not 5 (a Defect run diverged here on a Lightning passive: 3 in the game, 5).
+        BattleContext bc = freshBattle();
+        bc.player.setHasRelic<RelicId::THE_BOOT>(true);
+        Actions::DebuffPlayer<PS::FOCUS>(-5, false).actFunc(bc);
+        bc.player.orbs.clear();
+        bc.player.orbs.push_back({Orb::LIGHTNING, 0});
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::DUALCAST);
+        check(hp - bc.monsters.arr[0].curHp == 6, "The Boot should not raise orb damage");
+    }
+    {
         // Biased Cognition: gain Focus, apply BIAS; turn start drains Focus.
         BattleContext bc = freshBattle();
         playCard(bc, CardId::BIASED_COGNITION);

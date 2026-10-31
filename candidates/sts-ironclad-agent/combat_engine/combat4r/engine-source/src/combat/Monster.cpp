@@ -386,7 +386,8 @@ void Monster::suicideAction(BattleContext &bc) {
 }
 
 void Monster::attackedUnblockedHelper(BattleContext &bc, int damage, DamageType type) { // todo, is this supposed to be only damage > 0 ????
-    if (bc.player.hasRelic<RelicId::THE_BOOT>() && damage > 0 && damage < 5) {
+    // Boot.onAttackToChangeDamage skips HP_LOSS and THORNS, so orb damage is never raised to 5.
+    if (bc.player.hasRelic<RelicId::THE_BOOT>() && type == DamageType::NORMAL && damage > 0 && damage < 5) {
         damage = 5;
     }
 
