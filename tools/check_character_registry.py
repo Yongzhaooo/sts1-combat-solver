@@ -1,7 +1,9 @@
-"""Check that the three supported-character gates list the same characters.
+"""Check that the supported-character gates agree.
 
-The gates are backend.SUPPORTED_CLASSES, SolverMod.SUPPORTED and the class tests
-in OutsidePacket. They use the game's PlayerClass names. Needs no game.
+The combat gates, backend.SUPPORTED_CLASSES and SolverMod.SUPPORTED, must list the same
+characters. The out-of-combat gate, the class tests in OutsidePacket, may list fewer: a
+class can be solved in combat before its outside rules exist. They use the game's
+PlayerClass names. Needs no game.
 """
 import argparse
 import ast
@@ -50,10 +52,11 @@ def main():
         unknown = classes - CLASSES
         if unknown:
             sys.exit(f'FAIL: {name} names unknown classes {sorted(unknown)}')
-    if len({frozenset(v) for v in found.values()}) != 1:
+    combat, outside = found['overlay/backend.py'], found['OutsidePacket.java']
+    if found['SolverMod.java'] != combat or not outside <= combat:
         sys.exit('FAIL: supported-character gates disagree: '
                  + '; '.join(f'{k}={sorted(v)}' for k, v in found.items()))
-    print('PASS: all gates support', sorted(next(iter(found.values()))))
+    print('PASS: combat supports', sorted(combat), '; outside supports', sorted(outside))
 
 
 if __name__ == '__main__':

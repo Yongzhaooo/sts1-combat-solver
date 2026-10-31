@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-《杀戮尖塔 1》战士的本地战斗求解器：搜索整场战斗的出牌和用药路线，可以逐步执行、自动打每场战斗，也可以全自动爬塔。觉得有用的话，请给仓库点个 Star。
+《杀戮尖塔 1》战士与故障机器人的本地战斗求解器：搜索整场战斗的出牌和用药路线，可以逐步执行、自动打每场战斗，也可以全自动爬塔。觉得有用的话，请给仓库点个 Star。
 
 QQ 交流群：**232459269**。欢迎交流使用经验、反馈问题。
 
@@ -10,7 +10,7 @@ QQ 交流群：**232459269**。欢迎交流使用经验、反馈问题。
 
 ## 安装
 
-- [订阅 Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)，同时订阅 ModTheSpire 和 BaseMod。选择“使用模组启动”，勾选 BaseMod 和求解器，开始战士对局。也可以从 [Releases](https://github.com/Yongzhaooo/sts1-combat-solver/releases) 下载安装包。
+- [订阅 Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843)，同时订阅 ModTheSpire 和 BaseMod。选择“使用模组启动”，勾选 BaseMod 和求解器，开始战士或机器人对局。也可以从 [Releases](https://github.com/Yongzhaooo/sts1-combat-solver/releases) 下载安装包。
 - 支持 Windows 10/11 x64 和 Apple Silicon（M 系列）Mac 上的 macOS 11+，不支持 Intel Mac。无需另装 Python。详见 [Windows 安装说明](WINDOWS_INSTALL.md)和 [Mac 安装说明](MACOS_INSTALL.md)。
 - 从源码构建见 [BUILDING.md](BUILDING.md)。
 
@@ -49,13 +49,13 @@ agent 负责局外决策，求解器负责战斗。需要 v0.9.0 或更新版本
 
 ## 局限
 
-- 只支持战士和无色牌。搜索量有上限，不保证最优；七月流火（猫火）的实测表明，在一些特殊解上求解器仍不如顶尖玩家，例如燃烧契约调牌序、异蛇之油，以及有时算不出的小循环。
+- 战斗支持战士、机器人和无色牌；局外的全自动爬塔只支持战士。搜索量有上限，不保证最优；七月流火（猫火）的实测表明，在一些特殊解上求解器仍不如顶尖玩家，例如燃烧契约调牌序、异蛇之油，以及有时算不出的小循环。
 - 修改战斗规则或随机数的模组不兼容，例如 `SaveStateMod`、Undo（`undothespire`）；求解器检测到这类模组时会在设置页提示。
 - 种子预知会显示正常游玩看不到的事件、遭遇和变牌结果；辉眼（默认关闭）另外控制地图后续房间、事件战斗奖励和涅奥各选项的随机结果。
 
 ## 参与开发
 
-静默猎手、故障机器人和观者的求解器欢迎协作开发：现状见[四职业范围](docs/multi-character.md)，代码与 CI 要求见[参与开发](CONTRIBUTING.md)，组件结构见[架构](docs/architecture.md)。调路线权重前先看[路线调参数据包](docs/route-tuning.md)（110 局 A20 战士实测路线，能回答什么、不能回答什么）。联系邮箱：yongzhao.derek@gmail.com。
+静默猎手和观者的求解器欢迎协作开发：现状见[四职业范围](docs/multi-character.md)，代码与 CI 要求见[参与开发](CONTRIBUTING.md)，组件结构见[架构](docs/architecture.md)。调路线权重前先看[路线调参数据包](docs/route-tuning.md)（110 局 A20 战士实测路线，能回答什么、不能回答什么）。联系邮箱：yongzhao.derek@gmail.com。
 
 ## 致谢
 

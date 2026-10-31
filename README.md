@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-A local combat solver for the Ironclad in *Slay the Spire 1*. It searches card and potion lines for the whole fight and can run them step by step, fight every combat automatically, or climb the Spire on full autopilot. If you find it useful, please star the repository.
+A local combat solver for the Ironclad and the Defect in *Slay the Spire 1*. It searches card and potion lines for the whole fight and can run them step by step, fight every combat automatically, or climb the Spire on full autopilot. If you find it useful, please star the repository.
 
 QQ community group: **232459269**. Share your experience and report issues.
 
@@ -10,7 +10,7 @@ QQ community group: **232459269**. Share your experience and report issues.
 
 ## Install
 
-- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843) together with ModTheSpire and BaseMod. Choose **Play with Mods**, enable BaseMod and the solver, and start an Ironclad run. Packages are also on [Releases](https://github.com/Yongzhaooo/sts1-combat-solver/releases).
+- [Subscribe on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3814773843) together with ModTheSpire and BaseMod. Choose **Play with Mods**, enable BaseMod and the solver, and start an Ironclad or Defect run. Packages are also on [Releases](https://github.com/Yongzhaooo/sts1-combat-solver/releases).
 - Windows 10/11 x64 and macOS 11+ on Apple Silicon (M-series) Macs; Intel Macs are not supported. No separate Python is needed. See [Windows installation](WINDOWS_INSTALL.md) and [Mac installation](MACOS_INSTALL.md).
 - To build from source, see [BUILDING.md](BUILDING.md).
 
@@ -49,13 +49,13 @@ The agent makes the decisions outside combat and the solver fights. Requires v0.
 
 ## Limits
 
-- Ironclad and colorless cards only. Search is finite and does not guarantee optimal play; 七月流火（猫火）'s play shows it still trails top players on some special lines, such as ordering cards for Burning Pact, Snecko Oil, and small loops it sometimes fails to find.
+- Combat covers the Ironclad, the Defect and colorless cards. Full autopilot outside combat is Ironclad only. Search is finite and does not guarantee optimal play; 七月流火（猫火）'s play shows it still trails top players on some special lines, such as ordering cards for Burning Pact, Snecko Oil, and small loops it sometimes fails to find.
 - Mods that change combat rules or RNG are not compatible, for example `SaveStateMod` and Undo (`undothespire`); the solver warns on its Settings page when it detects one.
 - Seeded foresight shows events, encounters and transforms beyond what normal play reveals; Glowing Eye (off by default) also covers map rooms ahead, event-fight rewards and what each Neow blessing would give.
 
 ## Contributing
 
-Silent, Defect and Watcher solvers are open for collaboration: see the [multi-character scope](docs/multi-character.md) (Chinese), [Contributing](CONTRIBUTING.md) for code and CI requirements, and [Architecture](docs/architecture.md). Before changing a route weight, read the [route-tuning bundle](docs/route-tuning.md) (110 measured A20 Ironclad routes; what it can and cannot answer). Contact: yongzhao.derek@gmail.com.
+Silent and Watcher solvers are open for collaboration: see the [multi-character scope](docs/multi-character.md) (Chinese), [Contributing](CONTRIBUTING.md) for code and CI requirements, and [Architecture](docs/architecture.md). Before changing a route weight, read the [route-tuning bundle](docs/route-tuning.md) (110 measured A20 Ironclad routes; what it can and cannot answer). Contact: yongzhao.derek@gmail.com.
 
 ## Thanks
 

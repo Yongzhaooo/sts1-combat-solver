@@ -38,7 +38,7 @@ REPO = ROOT / 'candidates/sts-ironclad-agent'
 sys.path.insert(0, str(REPO))
 # Classes the combat engine imports exactly. Adding one also needs its card/relic
 # coverage in the engine and the same entry in SolverMod.SUPPORTED.
-SUPPORTED_CLASSES = {'IRONCLAD': '战士'}
+SUPPORTED_CLASSES = {'IRONCLAD': '战士', 'DEFECT': '机器人'}
 COVERAGE_MANIFEST = Path(__file__).with_name('coverage_manifest.json')
 # A Heart win longer than this many actions is searched again at the deep budget, past the loop macro shortcut, and the
 # shorter win is kept: any Heart win ends the run, and hundreds of plays are a poor watch (user, 2026-10-24).

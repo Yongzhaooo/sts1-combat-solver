@@ -85,7 +85,7 @@ def main():
                 reply = send({'id': 1, 'op': 'solve',
                               'state': {'game_state': {'seed': 123, 'floor': 1}}, 'budget': 256})
                 assert reply.get('id') == 1 and reply.get('status') == 'error', reply
-                assert '仅支持战士' in reply.get('message', '') and 'worker_init_seconds' in reply, reply
+                assert '仅支持战士、机器人的战斗阶段' in reply.get('message', '') and 'worker_init_seconds' in reply, reply
                 reply = send({'id': 2, 'op': 'cancel'})
                 assert reply.get('id') == 2 and reply.get('status') == 'cancelled', reply
                 state = json.loads((Path(__file__).resolve().parents[1] / 'overlay/test/live-root.json').read_text(encoding='utf-8'))
@@ -102,6 +102,11 @@ def main():
                     assert limited['status'] == 'ready' and 1 <= limited['search_workers'] <= workers, limited
                     for key in ('outcome', 'hp', 'loss', 'command', 'route', 'remaining'):
                         assert limited.get(key) == first_plan.get(key), (workers, key)
+                # The Defect gate is open: a recorded Defect root solves through the same worker.
+                defect = json.loads((Path(__file__).resolve().parents[1] / 'overlay/test/recorded/DEFECT/steam-barrier-root.json')
+                                    .read_text(encoding='utf-8'))
+                reply = send({'id': 'defect', 'op': 'solve', 'state': defect, 'budget': 2000})
+                assert reply.get('status') == 'ready' and reply.get('command'), reply
                 divergent = json.loads(json.dumps(state))
                 divergent['game_state']['current_hp'] -= 7
                 divergent['game_state']['combat_state']['player']['current_hp'] -= 7

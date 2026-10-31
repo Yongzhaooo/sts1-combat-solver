@@ -14,7 +14,6 @@ import uuid
 
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root / 'overlay'))
-import backend
 from backend import Advisor, view_from_state, start_selection
 from sim_patch.parity.adapter import ActionMapper
 
@@ -47,12 +46,7 @@ game['solver_selection'] = dict(queued_cards=[], current_action=dict(
                              'class_full': 'com.megacrit.cardcrawl.actions.utility.UseCardAction'})])
 state['available_commands'] = ['choose', 'key', 'click', 'wait', 'state']
 
-saved = backend.SUPPORTED_CLASSES
-backend.SUPPORTED_CLASSES = {**saved, 'DEFECT': 'test only'}
-try:
-    picker = view_from_state(copy.deepcopy(state))
-finally:
-    backend.SUPPORTED_CLASSES = saved
+picker = view_from_state(copy.deepcopy(state))
 imported = {**picker, 'game': {**picker['game'], 'seed': int(picker['game']['seed']) % (1 << 64)}}
 
 advisor = Advisor()

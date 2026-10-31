@@ -144,23 +144,15 @@ except ValueError:
 else:
     raise AssertionError('an unknown player power must not be silently dropped')
 
-# States recorded from real games, not hand-written. The class gate guards the live
-# product only, so it is widened while a Defect root becomes a view and put back after;
-# each state is then imported and re-checked by the same comparison the live gate runs.
+# States recorded from real games, not hand-written. Each Defect root becomes a view, is
+# imported and re-checked by the same comparison the live gate runs.
 # overlay/test/recorded/ holds only the fixtures this contribution added; see its README.
-import backend
-
 RECORDED_DEFECT = root / 'overlay/test/recorded/DEFECT'
 
 
 def recorded_defect(name):
     state = json.loads((RECORDED_DEFECT / name).read_text(encoding='utf-8'))
-    saved = backend.SUPPORTED_CLASSES
-    backend.SUPPORTED_CLASSES = {**saved, 'DEFECT': 'test only'}
-    try:
-        view = view_from_state(copy.deepcopy(state))
-    finally:
-        backend.SUPPORTED_CLASSES = saved
+    view = view_from_state(copy.deepcopy(state))
     # backend.py normalizes the signed Java seed for the native importer only.
     imported = {**view, 'game': {**view['game'], 'seed': int(view['game']['seed']) % (1 << 64)}}
     battle = s.comparator.import_battle(imported, require_search_state=True)
