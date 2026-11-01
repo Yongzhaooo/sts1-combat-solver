@@ -183,7 +183,8 @@ int main() {
         const int hp = bc.monsters.arr[0].curHp;
         playCard(bc, CardId::CLAW);
         check(hp - bc.monsters.arr[0].curHp == 6, "Echo Form Claw should hit 3 + 3");
-        check(bc.player.clawBonus == 4, "Echo Form Claw should raise the bonus twice");
+        check(bc.cards.discardPile.back().getId() == CardId::CLAW && bc.cards.discardPile.back().specialData == 4,
+              "Echo Form Claw should raise the original twice");
     }
     {
         // Electrodynamics applies ElectroPower only without one, so a second play (here Echo Form's
@@ -1028,15 +1029,23 @@ int main() {
         check(bc.player.hasStatus<PS::EQUILIBRIUM>(), "Equilibrium should apply its power");
     }
     {
-        // Claw: damage, then every Claw card gains 2 for the rest of combat.
+        // Claw: damage, then GashAction raises this card and every Claw in discard, draw and hand
+        // by 2. A Claw made afterwards starts at 3 (a Defect run diverged here on a Claw from Hello
+        // World: 3 in the game, more natively).
         BattleContext bc = freshBattle();
+        bc.cards.createTempCardInHand(CardInstance(CardId::CLAW));
         const int hp = bc.monsters.arr[0].curHp;
         playCard(bc, CardId::CLAW);
         check(hp - bc.monsters.arr[0].curHp == 3, "Claw should deal 3 the first time");
-        check(bc.player.clawBonus == 2, "Claw should raise the shared Claw bonus by 2");
+        check(bc.cards.hand[0].specialData == 2, "Claw should raise a Claw in hand by 2");
+        check(bc.cards.discardPile.back().specialData == 2, "Claw should raise itself by 2");
         const int hp2 = bc.monsters.arr[0].curHp;
         playCard(bc, CardId::CLAW);
-        check(hp2 - bc.monsters.arr[0].curHp == 5, "the second Claw should deal 3+2");
+        check(hp2 - bc.monsters.arr[0].curHp == 3, "a Claw made after the first one should deal 3");
+        const int hp3 = bc.monsters.arr[0].curHp;
+        search::Action play(search::ActionType::CARD, 0, 0);
+        play.execute(bc);
+        check(hp3 - bc.monsters.arr[0].curHp == 7, "the Claw held through both plays should deal 3+2+2");
     }
     {
         // Streamline: its own cost drops by 1 for the rest of combat.

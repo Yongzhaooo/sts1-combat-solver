@@ -320,6 +320,9 @@ def card_snapshot(card):
         result["misc"] = int(card["base_damage"]) - 8
     if key == "RITUAL_DAGGER" and "base_damage" in card:
         result["misc"] = int(card["base_damage"])
+    if key == "CLAW" and "base_damage" in card:
+        # GashAction raises each Claw's baseDamage; the engine keeps that raise per card.
+        result["misc"] = int(card["base_damage"]) - (5 if int(card.get("upgrades") or 0) else 3)
     if key == "STEAM_BARRIER" and "base_block" in card:
         # SteamBarrier.java drops its own baseBlock by 1 on every play
         # (ModifyBlockAction) and leaves misc at 0; the engine carries that count in
