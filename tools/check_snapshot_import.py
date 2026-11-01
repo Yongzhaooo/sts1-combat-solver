@@ -130,11 +130,13 @@ later = copy.deepcopy(with_orbs)
 for key in ('lightning_channeled_this_combat', 'frost_channeled_this_combat'):
     del later['combat_state'][key]
 later['combat_state'].update(turn=2, cards_played_this_turn=0)
-assert 'lightning_channeled_this_combat' not in s.comparator.bridge.build_snapshot(later)['player']
-later['combat_state']['discard_pile'] = [{'id': 'Thunder Strike'}]
+later_snap = s.comparator.bridge.build_snapshot(later)
+assert 'lightning_channeled_this_combat' not in later_snap['player']
+s.comparator.bridge.require_channel_counts(later_snap)
+later['combat_state']['discard_pile'] = [{'id': 'Thunder Strike', 'upgrades': 0, 'cost': 3}]
 try:
-    s.comparator.bridge.build_snapshot(later)
-    raise AssertionError('a mid-combat export without channel counts must be refused once Thunder Strike can read them')
+    s.comparator.bridge.require_channel_counts(s.comparator.bridge.build_snapshot(later))
+    raise AssertionError('a mid-combat import without channel counts must be refused once Thunder Strike can read them')
 except ValueError:
     pass
 

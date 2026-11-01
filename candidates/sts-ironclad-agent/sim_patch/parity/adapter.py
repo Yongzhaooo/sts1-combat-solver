@@ -127,6 +127,7 @@ class Comparator:
         game = copy.deepcopy(view["game"])
         game["combat_state"]["rngs"] = {k: view["rng"][name] for k, name in RNG_NAMES.items()}
         snapshot = self.bridge.build_snapshot(game)
+        self.bridge.require_channel_counts(snapshot)
         # Historical captures already contain the original private flags in the
         # audit record. Use them only at the initial import, never during replay.
         for name, (value, _) in self.health_flags(view).items():

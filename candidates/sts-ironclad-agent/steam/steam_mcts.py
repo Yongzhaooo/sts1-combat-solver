@@ -350,14 +350,21 @@ def channeled_this_combat(combat):
     if not orbs:
         return {}
     if int(combat.get("turn") or 1) != 1 or int(combat.get("cards_played_this_turn") or 0) != 0:
-        piles = ("hand", "draw_pile", "discard_pile", "exhaust_pile")
-        if any(card.get("id") in ("Thunder Strike", "Blizzard") for pile in piles for card in combat.get(pile) or []):
-            raise ValueError("Defect snapshot needs the Lightning/Frost channel counts; reload the game with the new Mod")
-        # shortcut: unknown counts stay out while no counting card is in the piles; a card made
-        # mid-combat (Dead Branch) would then undercount until the next import with the Mod's counts.
-        return {}
+        return {}  # unknown; require_channel_counts refuses the import when a card reads them
     return {"lightning_channeled_this_combat": sum(o.get("id") == "Lightning" for o in orbs),
             "frost_channeled_this_combat": sum(o.get("id") == "Frost" for o in orbs)}
+
+
+def require_channel_counts(snapshot):
+    """Refuse a battle import that lacks the channel counts while Thunder Strike or Blizzard
+    is in a pile. shortcut: a counting card made mid-combat (Dead Branch) would still
+    undercount, until the next import carries the Mod's counts."""
+    if "lightning_channeled_this_combat" in snapshot["player"]:
+        return
+    piles = ("hand", "draw_pile", "discard_pile", "exhaust_pile")
+    counting = {sts.CardId.THUNDER_STRIKE, sts.CardId.BLIZZARD}
+    if any(sts.CardId(card["id"]) in counting for pile in piles for card in snapshot[pile]):
+        raise ValueError("Defect snapshot needs the Lightning/Frost channel counts; reload the game with the new Mod")
 
 
 def power_snapshot(power, owner):
@@ -763,6 +770,7 @@ def assert_snapshot_matches(snapshot, battle):
 
 def recommend(game_state, simulations=2000, determinizations=3, counters=None):
     snapshot = build_snapshot(game_state, counters)
+    require_channel_counts(snapshot)
     started = time.perf_counter()
     votes, samples = Counter(), {}
     for index in range(determinizations):
