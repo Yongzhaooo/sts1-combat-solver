@@ -503,7 +503,7 @@ namespace sts {
             case CardId::WHITE_NOISE:
                 // WhiteNoise.java: add a random Power card, free to play this turn
                 // (it is the one generator that calls setCostForTurn(0)).
-                bc.addToBot(Actions::CreateRandomCardInHandAction(CardType::POWER, false, true));
+                bc.addToBot(Actions::CreateRandomCardInHandAction(bc, CardType::POWER, false, true));
                 return true;
 
             case CardId::CREATIVE_AI:

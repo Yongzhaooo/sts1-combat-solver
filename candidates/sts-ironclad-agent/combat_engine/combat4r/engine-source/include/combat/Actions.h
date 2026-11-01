@@ -54,12 +54,15 @@ namespace sts {
         static Action RipAndTearAction(const CardInstance &card, int baseDamage); // one random-target hit
         // Random card of the player's class at its printed cost. commonOnly restricts the
         // pool to Common cards (Hello World); zeroCost is only for White Noise, whose
-        // Java sets the generated card's turn cost to 0.
-        static Action CreateRandomCardInHandAction(CardType type, bool commonOnly = false,
+        // Java sets the generated card's turn cost to 0. The card is rolled on
+        // cardRandomRng now, as the Java callers roll before queueing
+        // MakeTempCardInHandAction; the returned action only adds it to the hand.
+        static Action CreateRandomCardInHandAction(BattleContext &bc, CardType type, bool commonOnly = false,
                                                    bool zeroCost = false);
         // AbstractDungeon.getCard(rarity, rng): a random card of the player's class with
         // that rarity and no type filter, which is what HelloPower.atStartOfTurn uses.
-        static Action CreateRandomRarityCardInHandAction(CardRarity rarity, bool zeroCost = false);
+        // Rolled now, like CreateRandomCardInHandAction.
+        static Action CreateRandomRarityCardInHandAction(BattleContext &bc, CardRarity rarity, bool zeroCost = false);
         static Action AllForOneAction(); // return every 0-cost discard pile card to hand
 
         // Per-target damage is captured when the card is used.

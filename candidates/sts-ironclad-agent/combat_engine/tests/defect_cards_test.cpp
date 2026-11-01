@@ -1,5 +1,6 @@
 #include "combat/BattleContext.h"
 #include "game/GameContext.h"
+#include "game/Game.h"
 #include "sim/search/Action.h"
 #include <iostream>
 #include <stdexcept>
@@ -1173,6 +1174,26 @@ int main() {
         // HelloPower.atStartOfTurn never lowers the cost; only White Noise does.
         check(bc.cards.hand[0].costForTurn == bc.cards.hand[0].cost,
               "Hello World should add the card at its printed cost");
+    }
+    {
+        // HelloPower.atStartOfTurn rolls the card before queueing MakeTempCardInHandAction, so a
+        // cardRandomRng roll queued before it (Loop's Lightning target) comes after the card roll
+        // (a Defect run diverged here: Rebound in the game, Hologram natively).
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::HELLO_WORLD);
+        auto early = bc.cardRandomRng;
+        const CardId expected = getRandomClassCardOfRarity(early, bc.player.cc, CardRarity::COMMON);
+        auto late = bc.cardRandomRng;
+        late.random(9);
+        check(getRandomClassCardOfRarity(late, bc.player.cc, CardRarity::COMMON) != expected,
+              "the two roll orders should pick different cards");
+        bc.addToBot({[] (BattleContext &bc) { bc.cardRandomRng.random(9); }});
+        bc.player.applyStartOfTurnPowers(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(bc.cards.cardsInHand == 1 && bc.cards.hand[0].getId() == expected,
+              "Hello World should roll its card when the power fires");
     }
 
     {
