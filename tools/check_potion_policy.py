@@ -98,6 +98,21 @@ assert recommend({**flex, 'solver_auto_context': {**flex['solver_auto_context'],
     'deck': [{'id': 'Immolate', 'cost': 2, 'base_damage': 21}]}}, comparison)['branch'] == 'potion-0'
 print('PASS: Flex uses its actual game id, retains the burst reserve, and preserves safe-use and survival choices')
 
+# Blood Potion heals the same HP now or later, so its own heal is not saved loss (max HP 80 -> heals 16).
+blood = {**deck_game, 'potions': [{'id': 'BloodPotion'}]}
+sozu_blood = {**blood, 'relics': [{'id': 'Sozu'}]}
+assert recommend(sozu_blood, [dict(baseline, loss=10), bottle])['branch'] == 'no-potion'  # A: reported case
+assert recommend(sozu_blood, [bottle])['branch'] == 'potion-0'  # B: survival still drinks
+refill = {**blood, 'solver_auto_context': {**blood['solver_auto_context'], 'potion_drop_probability': .8}}
+assert recommend(refill, [dict(baseline, loss=10), bottle])['branch'] == 'potion-0'  # C: full bar, likely drop
+assert recommend(blood, [dict(baseline, loss=16), bottle])['branch'] == 'no-potion'  # D: saving == heal keeps it
+bark = {**blood, 'relics': [{'id': 'SacredBark'}]}
+assert recommend(bark, [dict(baseline, loss=30), bottle])['branch'] == 'no-potion'  # E: Bark heals 32
+assert recommend(blood, [dict(baseline, loss=30), bottle])['branch'] == 'potion-0'  # without Bark 30 > 16 + 5
+regen = {**sozu_blood, 'potions': [{'id': 'Regen Potion'}]}
+assert recommend(regen, [dict(baseline, loss=10), bottle])['branch'] == 'potion-0'  # G': Regen keeps its old price
+print('PASS: Blood Potion costs its heal plus 5 unless a refill frees the slot; Sacred Bark doubles it; Regen unchanged')
+
 if not args.native_root:
     raise SystemExit(0)
 from backend import Advisor, TERMINAL_PENDING, unexplained_differences
