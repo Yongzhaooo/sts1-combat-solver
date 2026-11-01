@@ -746,7 +746,7 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 // CreativeAiPower.atStartOfTurn: add one random Power card to hand per
                 // stack, at its printed cost (the power never lowers it).
                 for (int i = 0; i < pair.second; ++i) {
-                    bc.addToBot(Actions::CreateRandomCardInHandAction(CardType::POWER));
+                    bc.addToBot(Actions::CreateRandomCardInHandAction(bc, CardType::POWER));
                 }
                 break;
 
@@ -780,7 +780,7 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 // not a one-shot, and the pool is the whole Common pool, not just
                 // Skills - the game calls AbstractDungeon.getCard(COMMON, rng).
                 for (int i = 0; i < pair.second; ++i) {
-                    bc.addToBot(Actions::CreateRandomRarityCardInHandAction(CardRarity::COMMON));
+                    bc.addToBot(Actions::CreateRandomRarityCardInHandAction(bc, CardRarity::COMMON));
                 }
                 break;
 

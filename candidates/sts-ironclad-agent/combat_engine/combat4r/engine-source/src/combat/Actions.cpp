@@ -70,8 +70,8 @@ Action Actions::AllForOneAction() {
     }};
 }
 
-Action Actions::CreateRandomCardInHandAction(CardType type, bool commonOnly, bool zeroCost) {
-    return {[=] (BattleContext &bc) {
+Action Actions::CreateRandomCardInHandAction(BattleContext &bc, CardType type, bool commonOnly, bool zeroCost) {
+    {
         // Hello World and Creative AI add the card at its printed cost: neither
         // HelloPower.atStartOfTurn nor CreativeAIPower.atStartOfTurn touches the cost,
         // and MakeTempCardInHandAction never zeroes one. Only WhiteNoise.java calls
@@ -83,20 +83,20 @@ Action Actions::CreateRandomCardInHandAction(CardType type, bool commonOnly, boo
                 : getTrulyRandomCardInCombat(bc.cardRandomRng, bc.player.cc, type);
         CardInstance generated = bc.createGeneratedCard(cid);
         if (zeroCost) generated.setCostForTurn(0);
-        bc.addToTop(Actions::MakeTempCardInHand(generated));
-    }};
+        return Actions::MakeTempCardInHand(generated);
+    }
 }
 
-Action Actions::CreateRandomRarityCardInHandAction(CardRarity rarity, bool zeroCost) {
-    return {[=] (BattleContext &bc) {
+Action Actions::CreateRandomRarityCardInHandAction(BattleContext &bc, CardRarity rarity, bool zeroCost) {
+    {
         // HelloPower.atStartOfTurn: AbstractDungeon.getCard(COMMON, cardRandomRng), which
         // rolls over the whole rarity pool - attacks included - so it is not the
         // type-filtered pool CreateRandomCardInHandAction draws from.
         const auto cid = getRandomClassCardOfRarity(bc.cardRandomRng, bc.player.cc, rarity);
         CardInstance generated = bc.createGeneratedCard(cid);
         if (zeroCost) generated.setCostForTurn(0);
-        bc.addToTop(Actions::MakeTempCardInHand(generated));
-    }};
+        return Actions::MakeTempCardInHand(generated);
+    }
 }
 
 Action Actions::SunderAction(int idx, int damage) {
