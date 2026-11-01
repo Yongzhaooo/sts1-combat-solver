@@ -1504,6 +1504,41 @@ int main() {
         check(hp - bc.monsters.arr[0].curHp == 9, "a Locked-On Dark evoke should deal 6 * 1.5");
     }
 
+    {
+        // UseCardAction runs the player's onUseCard hooks in power-list order. With Storm
+        // gained before Hex, a Power card channels Lightning (the full slots evoke one, whose
+        // target rolls cardRandomRng) before Hex rolls the Dazed spot; a Defect run diverged
+        // here on Buffer vs Chosen. Hex-only battles show which roll each spot came from.
+        auto dazedSpot = [](std::uint64_t seed, bool stormFirst, bool storm, bool burnTargetRoll) {
+            BattleContext bc = freshBattle();
+            bc.player.energy = 3;
+            bc.cardRandomRng = sts::Random(seed);
+            for (int i = 0; i < 10; ++i) {
+                bc.cards.createTempCardInDrawPile(i, CardInstance(CardId::STRIKE_BLUE));
+            }
+            bc.player.orbs.clear();
+            for (int i = 0; i < bc.player.orbSlots; ++i) bc.player.channelOrb(Orb::LIGHTNING);
+            if (storm && stormFirst) bc.player.buff<PS::STORM>(1);
+            bc.player.debuff<PS::HEX>(1);
+            if (storm && !stormFirst) bc.player.buff<PS::STORM>(1);
+            if (burnTargetRoll) bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+            playCard(bc, CardId::BUFFER);
+            for (int i = 0; i < static_cast<int>(bc.cards.drawPile.size()); ++i) {
+                if (bc.cards.drawPile[i].getId() == CardId::DAZED) return i;
+            }
+            throw std::runtime_error("Hex should shuffle a Dazed into the draw pile");
+        };
+        bool ordersDiffer = false;
+        for (std::uint64_t seed = 1; seed <= 20; ++seed) {
+            const int stormFirst = dazedSpot(seed, true, true, false);
+            const int hexFirst = dazedSpot(seed, false, true, false);
+            check(stormFirst == dazedSpot(seed, true, false, true), "Storm gained first should roll the Lightning target before the Dazed spot");
+            check(hexFirst == dazedSpot(seed, true, false, false), "Hex gained first should roll the Dazed spot first");
+            ordersDiffer = ordersDiffer || stormFirst != hexFirst;
+        }
+        check(ordersDiffer, "some seed should place the Dazed differently for the two orders");
+    }
+
     std::cout << "Defect card behaviors hold\n";
     return 0;
     } catch (const std::exception &e) {
