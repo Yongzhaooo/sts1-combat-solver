@@ -2932,10 +2932,6 @@ int BattleContext::calculateCardDamage(const CardInstance &card, int targetIdx, 
         damage += 3;
     }
 
-    if (card.getId() == CardId::CLAW) {
-        damage += player.clawBonus;
-    }
-
     if (player.hasRelic<R::WRIST_BLADE>() && card.costForTurn == 0) {
         damage += 4;
     }
@@ -3022,7 +3018,6 @@ void BattleContext::queuePurgeCard(const CardInstance &c, int target) {
     item.target = target;
     item.energyOnUse = curCardQueueItem.energyOnUse;
     item.stackDiscardSize = curCardQueueItem.stackDiscardSize;
-    item.clawBonusOnUse = curCardQueueItem.clawBonusOnUse;
     item.ignoreEnergyTotal = true;
     item.autoplay = true;
     item.freeToPlay = true;

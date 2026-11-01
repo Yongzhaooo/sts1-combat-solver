@@ -547,19 +547,22 @@ namespace sts {
                 return true;
 
             case CardId::CLAW: {
-                // Claw.java: damage, then every Claw card gains 2 damage for the
-                // rest of combat. calculateCardDamage reads the shared bonus before
-                // this action resolves, so the current hit is not boosted.
-                // GashAction walks discard, draw and hand but not limbo, where a copy
-                // (Echo Form, Duplication) waits, so the copy keeps the original's
-                // baseDamage; the queue item carries the bonus it was built on.
-                auto &item = bc.curCardQueueItem;
-                if (!item.purgeOnUse || item.clawBonusOnUse < 0) {
-                    item.clawBonusOnUse = bc.player.clawBonus;
-                }
-                const int base = (up ? 5 : 3) + item.clawBonusOnUse - bc.player.clawBonus;
-                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, base)));
-                bc.addToBot({[] (BattleContext &bc) { bc.player.clawBonus += 2; }});
+                // Claw.java: damage, then GashAction raises baseDamage by 2 on this card
+                // and on every Claw in discard, draw and hand. Each card keeps its own
+                // raise in specialData: a copy waiting in limbo (Echo Form, Duplication)
+                // keeps the original's baseDamage, and a Claw made later (Hello World)
+                // starts at 3.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, (up ? 5 : 3) + c.specialData)));
+                bc.addToBot({[] (BattleContext &bc) {
+                    // The played card is still in flight (OnAfterCardUsed files it next).
+                    const auto gash = [] (CardInstance &x) {
+                        if (x.getId() == CardId::CLAW) x.specialData = static_cast<std::int16_t>(x.specialData + 2);
+                    };
+                    gash(bc.curCardQueueItem.card);
+                    for (auto &x : bc.cards.discardPile) gash(x);
+                    for (auto &x : bc.cards.drawPile) gash(x);
+                    for (int i = 0; i < bc.cards.cardsInHand; ++i) gash(bc.cards.hand[i]);
+                }});
                 return true;
             }
 

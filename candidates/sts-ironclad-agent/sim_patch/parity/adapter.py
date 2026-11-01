@@ -88,6 +88,8 @@ class Comparator:
             misc = raw["base_damage"] - 8
         elif name == "RITUAL_DAGGER":
             misc = raw["base_damage"]
+        elif name == "CLAW":
+            misc = raw["base_damage"] - (5 if raw["upgrades"] else 3)
         elif name == "STEAM_BARRIER":
             # SteamBarrier.java drops its own baseBlock by 1 on every play and leaves
             # misc at 0; the engine keeps that count in specialData. build_snapshot
@@ -307,7 +309,7 @@ class Comparator:
             for index, card in enumerate(cards):
                 for field in ("id", "upgrades", "cost", "base_cost", "free_to_play_once"):
                     observation.consume(f"/game/combat_state/{pile}/{index}/{field}")
-                for field in (("base_damage",) if card["id"] in ("Rampage", "RitualDagger") else ("misc",)):
+                for field in (("base_damage",) if card["id"] in ("Rampage", "RitualDagger", "Gash") else ("misc",)):
                     if field in card:
                         observation.consume(f"/game/combat_state/{pile}/{index}/{field}")
         canonical, _ = self.bridge.canonical_monsters(combat["monsters"], lambda m: m)
