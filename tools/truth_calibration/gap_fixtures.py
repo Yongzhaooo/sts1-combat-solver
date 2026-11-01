@@ -94,6 +94,21 @@ SCENARIOS = {
                                 'Silent starter deck after a campfire smith upgraded Neutralize: the '
                                 'upgraded card is played in the next fight, so the Weak it applies '
                                 'has to be two stacks'),
+    'silent-neutralize-many': ('silent-neutralize-plain-many-monsters',
+                               'Neutralize played unupgraded on a crowded board: two monsters announce '
+                               'real intents and the card picks one, so the Weak lands next to a '
+                               'monster that keeps its own move'),
+    'silent-neutralize-kill': ('silent-neutralize-plain-kill',
+                               'Neutralize played unupgraded for the killing blow, with a second '
+                               'monster alive and announcing: the window stops on the death rather '
+                               'than carrying a whole extra turn'),
+    'silent-neutralize-plus-many': ('silent-neutralize-upgraded-many-monsters',
+                                    'Neutralize after a campfire smith, played on a crowded board: two '
+                                    'stacks of Weak land next to monsters that keep announcing'),
+    'silent-neutralize-plus-kill': ('silent-neutralize-upgraded-kill',
+                                    'Neutralize after a campfire smith, played for the killing blow: the '
+                                    'upgraded damage is what removes a monster while another one '
+                                    'still announces'),
     'biased-focus': ('defect-biased-focus-negative',
                       'Biased Cognition with two Lightning orbs, then eight end-of-turn cycles: Focus '
                       'falls through zero to -4, the passive clamps to zero damage and the evoke '
