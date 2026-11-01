@@ -87,7 +87,11 @@ jobs:
       - name: Grade the native fixtures of every character against the simulator
         run: python tools/check_coverage_gaps.py
       - name: Play each card and grade the powers it applies
-        run: python tools/check_neutralize_fixtures.py
+        run: python tools/check_card_play.py
+      - run: python tools/card_play_windows_test.py
+      - run: python tools/check_card_play_test.py
+      - name: Hold the campfire-upgrade helper against the game's own published card
+        run: python tools/check_campfire_upgrade.py
       - run: python tools/parity_differences_test.py
       - run: python tools/check_headbutt.py
       - run: python tools/check_mid_turn_picker.py
