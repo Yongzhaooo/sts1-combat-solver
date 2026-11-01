@@ -17,7 +17,6 @@ reuse it.
 With no arguments the Silent native directory is scanned for the from-scratch upgraded windows.
 """
 import gzip
-import importlib.util
 import json
 from pathlib import Path
 import sys
@@ -28,17 +27,6 @@ sys.path.insert(0, str(REPO / 'overlay'))
 # The card the from-scratch upgraded windows were recorded with.
 NEUTRALIZE = 'Neutralize'
 WEAK = 'WEAKENED'
-# The one `/legacy/` row this script forgives: it is the recorded intent restated, not Weak.
-ATTACK_COUNT = '/legacy/monster_attack_damage_and_count'
-
-
-def bulk_grade():
-    """`check_coverage_gaps` as a module: its view and compare are the bulk grade."""
-    path = REPO / 'tools' / 'check_coverage_gaps.py'
-    spec = importlib.util.spec_from_file_location('check_coverage_gaps', path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def read_fixture(path):
@@ -71,8 +59,64 @@ def first_target(observation):
     return 0 if observation.get("monsters") else -1
 
 
-def find_upgraded_window(published_dir, card_id, upgrades):
-    """The first published `card_id` at `upgrades` whose own play the next recorded board confirms."""
+def weak_in(observation, index):
+    """The Weak stacks a recorded board shows on one monster, or 0 when it has none."""
+    if index < 0 or index >= len(observation.get("monsters", [])):
+        return 0
+    for power in observation["monsters"][index].get("powers") or []:
+        if power.get("id") in (WEAK, "Weakened", "Weak"):
+            return power.get("amount") or 0
+    return 0
+
+
+def weak_of(observation, monster_id):
+    """The Weak stacks a recorded board shows on the monster with this id, or 0 if it is gone."""
+    for index, monster in enumerate(observation.get("monsters", [])):
+        if monster.get("id") == monster_id:
+            return weak_in(observation, index)
+    return 0
+
+
+def outcome(board, followed, index):
+    """What one recorded play did to the monster at `index`: (damage dealt, Weak left).
+
+    A dead monster is not the pre-play monster at the same index: the recording removes it and the
+    monsters behind it shift down. So the follow-up board is matched by id. A monster that is gone
+    took exactly its remaining HP, and carries no Weak on a board it is not on.
+    """
+    before = board["monsters"][index]
+    after = [monster for monster in followed.get("monsters", []) if monster.get("id") == before["id"]]
+    if not after:
+        return before["hp"], 0
+    return before["hp"] - after[0]["hp"], weak_of(followed, before["id"])
+
+
+def play_target(scratch, slot):
+    """The monster the from-scratch window aimed the card at, from its recorded action."""
+    for action in scratch.get("actions") or []:
+        if action.get("card") == NEUTRALIZE and "target" in action:
+            return action["target"]
+    # No recorded target: fall back to the only monster, and refuse an ambiguous board rather than
+    # guessing which one the play hit.
+    if len(scratch["checkpoints"][0]["observation"].get("monsters", [])) == 1:
+        return 0
+    raise AssertionError(
+        f"{scratch['id']}: boards several monsters but records no target for the {NEUTRALIZE} play")
+
+
+def find_upgraded_window(published_dir, card_id, upgrades, want_kill):
+    """The first window in a published case where `card_id` at `upgrades` is really played.
+
+    A window is two adjacent checkpoints. The card is in the opening hand and gone from the closing
+    one, which is what a play looks like in a recording. `want_kill` picks the kind: a window whose
+    play removed a monster, or one that left every monster standing. A killing window and a
+    non-killing window record different numbers for the same card (damage is capped by the target's
+    HP, and a dead monster carries no Weak), so they are only ever compared with their own kind.
+
+    `after` is the number of actions taken at the *opening* checkpoint, so it names the window's
+    start, not its index; the caller must treat the returned boards as the comparison, never
+    re-index the case with that number.
+    """
     for path in sorted(Path(published_dir).rglob("*.json.gz")):
         case = read_fixture(path)
         checkpoints = case.get("checkpoints", [])
@@ -88,18 +132,26 @@ def find_upgraded_window(published_dir, card_id, upgrades):
             if held:
                 # The card is still in hand afterwards, so this window played something else.
                 continue
+            killed = len(followed.get("monsters", [])) < len(board.get("monsters", []))
+            if killed != want_kill:
+                continue
             return case, board, followed, checkpoint.get("after")
     return None
 
 
-def diff_against_published(fixture_path, published_dir, bulk, root, rng_names, sts, advisor):
+def diff_against_published(fixture_path, published_dir):
     """Hold a from-scratch upgraded window against the game's own published upgraded Neutralize.
 
-    The two are separate runs, so their boards differ; what this compares is the machinery the
-    ticket is nervous about -- that the recorded card really is Neutralize+ and costs what an
-    upgraded card costs, and that replaying it lands the same board the game itself recorded. Both
-    sides go through the same import, so anything reported here is the simulator's, not this
-    script's.
+    What this checks is the *recording*, not the simulator: that the from-scratch window really
+    carries Neutralize at the upgrade level its name claims, at the cost an upgraded Neutralize
+    costs, and that its board reacts to the play the way the game's own board reacts.
+
+    The published side is the game's recording of the same card. Its two checkpoints bracket one
+    play of Neutralize+, so the difference between them is what the game itself did -- the damage
+    it dealt and the Weak it left. That difference is the expected value this script holds a
+    from-scratch window to. Comparing the two *recordings* is the only comparison that says
+    anything about the recording: replaying the published board and diffing the result against
+    that same board agrees whatever the from-scratch window contained.
     """
     scratch = read_fixture(fixture_path)
     before = scratch["checkpoints"][0]["observation"]
@@ -113,58 +165,63 @@ def diff_against_published(fixture_path, published_dir, bulk, root, rng_names, s
     assert held.get("cost") == 0, \
         f"{scratch['id']}: {wanted}+ costs 0, the recording says {held.get('cost')}"
 
-    published = find_upgraded_window(published_dir, wanted, upgrades)
+    # What the from-scratch recording says the same play did. Read this first: the recorded board
+    # decides which kind of published window can serve as a control.
+    scratch_after = scratch["checkpoints"][1]["observation"]
+    scratch_target = play_target(scratch, slot)
+    scratch_dealt, scratch_left = outcome(before, scratch_after, scratch_target)
+    scratch_kill = scratch_dealt >= before["monsters"][scratch_target]["hp"]
+
+    published = find_upgraded_window(published_dir, wanted, upgrades, scratch_kill)
     if published is None:
-        return f"no published case holds {wanted}+ to compare against (cannot be trusted yet)"
+        # Not a pass: nothing was compared, and the caller must not read this as agreement.
+        raise AssertionError(
+            f"no published case records a {'killing' if scratch_kill else 'non-killing'} "
+            f"{wanted}+{upgrades} play to compare {scratch['id']} against; the campfire-upgrade "
+            f"helper is unverified for this kind of window")
 
     case, board, followed, at = published
-    when = f"{case['id']} after {at}"
+    when = f"{case['id']} at action {at}"
     target = first_target(board)
-    battle = bulk.compare(bulk.to_view(board, root, rng_names, case.get("character", "THE_SILENT")),
-                          f"published {when}")
-    hit_before = battle.monsters[target].cur_hp
-    play = sts.SearchAction(sts.SearchActionType.CARD, neutralize_slot(board), target)
-    if not play.is_valid(battle):
-        return f"differs: the simulator refuses the published {wanted}+ at {when}"
-    play.execute(battle)
-    dealt = hit_before - battle.monsters[target].cur_hp
-    left = battle.monsters[target].get_status(sts.MonsterStatus.WEAK)
 
-    blind = [difference for difference in
-             advisor.search.comparator.compare_battle(
-                 bulk.to_view(followed, root, rng_names, case.get("character", "THE_SILENT")),
-                 battle)["differences"]
-             if not difference["path"].startswith(ATTACK_COUNT)]
-    if blind:
-        shown = ', '.join(sorted({difference["path"] for difference in blind}))
-        return (f"differs at {when}: replaying the game's own {wanted}+ disagrees with the board it "
-                f"recorded, at {shown}")
-    return (f"{scratch['id']} carries {wanted}+{upgrades} at cost {held.get('cost')} and replays "
-            f"cleanly; the game's own {when} carries {wanted}+{upgrades}, {dealt} damage and "
-            f"{left} {WEAK} land on the monster it hit, and the board after it matches field for field")
+    # What the game itself did, read from its own two checkpoints: the card was played between
+    # `board` and `followed`, so the difference is the game's answer, not the simulator's.
+    game_dealt, game_left = outcome(board, followed, target)
+
+    # Both sides are the same kind of window now, so their recorded numbers are comparable. Damage
+    # is still capped by the target's HP and a killed monster leaves no Weak behind; in a killing
+    # window the only thing both recordings can be held to is that the hit removed the monster.
+    game_kill = game_dealt >= board["monsters"][target]["hp"]
+    assert game_kill == scratch_kill, \
+        f"{scratch['id']}: window kind changed under us ({scratch_kill} vs {game_kill})"
+
+    if scratch_kill:
+        return (f"{scratch['id']} carries {wanted}+{upgrades} at cost {held.get('cost')} and, like the "
+                f"game's own {when}, its recorded {wanted}+{upgrades} removes the monster it hits; "
+                f"damage is capped by that monster's HP, so the many-monster windows carry the number")
+
+    if (scratch_dealt, scratch_left) != (game_dealt, game_left):
+        return (f"differs: {scratch['id']} records {scratch_dealt} damage and {scratch_left} "
+                f"{WEAK}, while the game's own {when} records {game_dealt} damage and "
+                f"{game_left} {WEAK} for the same {wanted}+{upgrades}")
+
+    return (f"{scratch['id']} carries {wanted}+{upgrades} at cost {held.get('cost')} and its recorded "
+            f"play matches the game's own {when} field for field: {game_dealt} damage and "
+            f"{game_left} {WEAK} onto the monster it hit")
 
 
 def main():
-    from backend import Advisor
-    from sim_patch.parity.adapter import RNG_NAMES
-
-    bulk = bulk_grade()
-    advisor = Advisor()
-    sts = advisor.search.comparator.sts
-    root = json.loads((REPO / "overlay" / "test" / "live-root.json").read_text(encoding="utf-8"))
-
     paths = silent_fixtures(sys.argv[1:])
     upgraded = [path for path in paths if "upgraded" in read_fixture(path)["id"]]
     assert upgraded, \
         "no from-scratch upgraded window to check the campfire-upgrade helper against"
 
-    # The upgraded windows were recorded from scratch, with the card upgraded by the game's own
-    # smith, so the helper that upgrades at a campfire has never been checked against anything the
-    # maintainer published. Diff each from-scratch upgraded window against the published upgraded
-    # case, field by field, and report whoever disagrees first.
+    # Each from-scratch upgraded window is held against the play the game itself recorded, read
+    # from the published case's own two checkpoints. Both sides are recordings, so agreement here
+    # is evidence about the helper that produced the from-scratch window. No simulator is involved:
+    # importing a board to replay it would answer a question about the simulator, not the recording.
     published = REPO / "fixtures" / "calibration" / "THE_SILENT"
-    origins = [diff_against_published(path, published, bulk, root, RNG_NAMES, sts, advisor)
-               for path in upgraded]
+    origins = [diff_against_published(path, published) for path in upgraded]
     for origin in origins:
         print(f"from-scratch upgraded window: {origin}")
     trusted = all(not origin.startswith("differs") for origin in origins)
