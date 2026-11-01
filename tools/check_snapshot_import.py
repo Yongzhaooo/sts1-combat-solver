@@ -102,6 +102,7 @@ retained['hand'][0]['retain'] = True
 assert sts.BattleContext.from_snapshot(retained, seed).hand[0].retain
 # End to end: CommunicationMod's orb list survives the Python producer and the importer.
 with_orbs = copy.deepcopy(game)
+with_orbs['combat_state'].update(lightning_channeled_this_combat=1, frost_channeled_this_combat=0)
 with_orbs['combat_state']['player']['orbs'] = [
     {'id': 'Lightning', 'passive_amount': 3, 'evoke_amount': 8},
     {'id': None, 'passive_amount': 0, 'evoke_amount': 0},
@@ -113,6 +114,31 @@ assert [orb['id'] for orb in orbed['player']['orbs']] == ['Lightning', None, 'Da
 assert sts.BattleContext.from_snapshot(orbed, seed).player.orbs == [
     {'id': 'LIGHTNING', 'dark_counter': 0},
     {'id': 'DARK', 'dark_counter': 18}]
+# Thunder Strike and Blizzard count the orbs channeled this combat: the Mod exports the
+# counts; an older export is accepted only at the turn-1 import before any play.
+counted = copy.deepcopy(with_orbs)
+counted['combat_state'].update(lightning_channeled_this_combat=4, frost_channeled_this_combat=1)
+battle = sts.BattleContext.from_snapshot(s.comparator.bridge.build_snapshot(counted), seed)
+assert (battle.player.lightning_channeled_this_combat, battle.player.frost_channeled_this_combat) == (4, 1)
+opening = copy.deepcopy(with_orbs)
+for key in ('lightning_channeled_this_combat', 'frost_channeled_this_combat'):
+    del opening['combat_state'][key]
+opening['combat_state'].update(turn=1, cards_played_this_turn=0)
+opening_snap = s.comparator.bridge.build_snapshot(opening)
+assert (opening_snap['player']['lightning_channeled_this_combat'], opening_snap['player']['frost_channeled_this_combat']) == (1, 0)
+later = copy.deepcopy(with_orbs)
+for key in ('lightning_channeled_this_combat', 'frost_channeled_this_combat'):
+    del later['combat_state'][key]
+later['combat_state'].update(turn=2, cards_played_this_turn=0)
+later_snap = s.comparator.bridge.build_snapshot(later)
+assert 'lightning_channeled_this_combat' not in later_snap['player']
+s.comparator.bridge.require_channel_counts(later)
+later['combat_state']['discard_pile'] = [{'id': 'Thunder Strike', 'upgrades': 0, 'cost': 3}]
+try:
+    s.comparator.bridge.require_channel_counts(later)
+    raise AssertionError('a mid-combat import without channel counts must be refused once Thunder Strike can read them')
+except ValueError:
+    pass
 
 # Defect powers that the game exports under a different id, or folds into another
 # field. Machine Learning applies the game's DrawPower, whose id is "Draw"; the

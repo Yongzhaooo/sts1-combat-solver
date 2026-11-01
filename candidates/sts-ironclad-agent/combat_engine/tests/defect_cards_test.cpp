@@ -1,5 +1,6 @@
 #include "combat/BattleContext.h"
 #include "game/GameContext.h"
+#include "game/Game.h"
 #include "sim/search/Action.h"
 #include <iostream>
 #include <stdexcept>
@@ -175,6 +176,25 @@ int main() {
         check(found, "Echo Form Streamline should be in the discard pile");
     }
     {
+        // Echo Form Streamline that kills its target: the copy's target isDying, so canUse fails,
+        // and as an Echo Form copy (no autoplay) it leaves limbo without use(); only the
+        // original's ReduceCostAction runs, 2 -> 1 (a Defect run diverged here: 1 in the game, 0).
+        BattleContext bc = freshBattle(MonsterEncounter::TWO_LOUSE);
+        bc.player.buff<PS::ECHO_FORM>(1);
+        bc.monsters.arr[0].curHp = 1;
+        bc.monsters.arr[0].block = 0;
+        playCard(bc, CardId::STREAMLINE);
+        check(!bc.monsters.areMonstersBasicallyDead(), "the second louse should still be alive");
+        bool found = false;
+        for (const auto &dc : bc.cards.discardPile) {
+            if (dc.getId() == CardId::STREAMLINE) {
+                check(dc.cost == 1 && dc.costForTurn == 1, "an unplayed Echo Form copy should not lower Streamline");
+                found = true;
+            }
+        }
+        check(found, "Echo Form Streamline should be in the discard pile");
+    }
+    {
         // Echo Form Claw: the copy waits in limbo, which GashAction skips, so it hits for the
         // original's 3; the copy's own Gash then raises the bonus again, to 4.
         BattleContext bc = freshBattle();
@@ -182,7 +202,8 @@ int main() {
         const int hp = bc.monsters.arr[0].curHp;
         playCard(bc, CardId::CLAW);
         check(hp - bc.monsters.arr[0].curHp == 6, "Echo Form Claw should hit 3 + 3");
-        check(bc.player.clawBonus == 4, "Echo Form Claw should raise the bonus twice");
+        check(bc.cards.discardPile.back().getId() == CardId::CLAW && bc.cards.discardPile.back().specialData == 4,
+              "Echo Form Claw should raise the original twice");
     }
     {
         // Electrodynamics applies ElectroPower only without one, so a second play (here Echo Form's
@@ -191,6 +212,20 @@ int main() {
         bc.player.buff<PS::ECHO_FORM>(1);
         playCard(bc, CardId::ELECTRODYNAMICS);
         check(bc.player.getStatus<PS::ELECTRO>() == 1, "a second Electrodynamics should not stack Electro");
+    }
+    {
+        // AllCostToHandAction queues one DiscardToHandAction per card, so a card added to the hand
+        // by an action queued before it resolves (a Bronze Orb's Stasis return when All for One's
+        // hit kills it) comes first (a Defect run diverged here: Storm before the returned cards).
+        BattleContext bc = freshBattle();
+        bc.cards.createTempCardInDiscard(CardInstance(CardId::ZAP, true)); // Zap+ costs 0
+        bc.addToBot(Actions::AllForOneAction());
+        bc.addToBot(Actions::MakeTempCardInHand(CardId::STORM));
+        bc.setState(InputState::EXECUTING_ACTIONS);
+        bc.executeActions();
+        check(bc.cards.cardsInHand == 2 && bc.cards.hand[0].getId() == CardId::STORM
+              && bc.cards.hand[1].getId() == CardId::ZAP,
+              "All for One's returns should follow an earlier queued card");
     }
     {
         // Turbo: gain 2 energy, then add a Void to the discard pile.
@@ -281,6 +316,31 @@ int main() {
         playCard(bc, CardId::HYPERBEAM);
         check(hp - bc.monsters.arr[0].curHp == 26, "Hyperbeam should deal 26");
         check(bc.player.focus == -2, "Hyperbeam should lose 3 focus below zero (1 -> -2)");
+    }
+    {
+        // A negative FocusPower is a debuff, so Artifact (here from Core Surge) blocks Hyperbeam's
+        // and Reprogram's Focus loss (a Defect run diverged here: Focus -3 and Artifact 1 natively).
+        BattleContext bc = freshBattle();
+        Actions::BuffPlayer<PS::ARTIFACT>(1).actFunc(bc);
+        playCard(bc, CardId::HYPERBEAM);
+        check(bc.player.focus == 0 && bc.player.getStatus<PS::ARTIFACT>() == 0,
+              "Artifact should block Hyperbeam's Focus loss");
+        Actions::BuffPlayer<PS::ARTIFACT>(1).actFunc(bc);
+        playCard(bc, CardId::REPROGRAM);
+        check(bc.player.focus == 0 && bc.player.getStatus<PS::ARTIFACT>() == 0,
+              "Artifact should block Reprogram's Focus loss");
+    }
+    {
+        // Orb damage is THORNS, which The Boot skips: at Focus -5 Dualcast's two Lightning evokes
+        // hit for 3 each, not 5 (a Defect run diverged here on a Lightning passive: 3 in the game, 5).
+        BattleContext bc = freshBattle();
+        bc.player.setHasRelic<RelicId::THE_BOOT>(true);
+        Actions::DebuffPlayer<PS::FOCUS>(-5, false).actFunc(bc);
+        bc.player.orbs.clear();
+        bc.player.orbs.push_back({Orb::LIGHTNING, 0});
+        const int hp = bc.monsters.arr[0].curHp;
+        playCard(bc, CardId::DUALCAST);
+        check(hp - bc.monsters.arr[0].curHp == 6, "The Boot should not raise orb damage");
     }
     {
         // Biased Cognition: gain Focus, apply BIAS; turn start drains Focus.
@@ -469,6 +529,21 @@ int main() {
         BattleContext bc = freshBattle();
         playCard(bc, CardId::CAPACITOR);
         check(bc.player.orbSlots == 5, "Capacitor should gain 2 orb slots");
+    }
+    {
+        // LoopPower.atStartOfTurn calls the orb's passive at once, so with Bias earlier in the
+        // power order the Lightning passive uses Focus before Bias's queued loss (a Defect run
+        // diverged here: 3 + 4 in the game, 3 + 3 natively).
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::BIASED_COGNITION);
+        playCard(bc, CardId::LOOP);
+        const int hp = bc.monsters.arr[0].curHp;
+        bc.player.applyStartOfTurnPowers(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(hp - bc.monsters.arr[0].curHp == 7, "Loop's passive should read Focus before Bias drains it");
+        check(bc.player.focus == 3, "Bias should still drain 1 focus");
     }
     {
         // Loop: at turn start, trigger the oldest orb's passive once per stack.
@@ -973,15 +1048,53 @@ int main() {
         check(bc.player.hasStatus<PS::EQUILIBRIUM>(), "Equilibrium should apply its power");
     }
     {
-        // Claw: damage, then every Claw card gains 2 for the rest of combat.
+        // EquilibriumPower.atEndOfTurnPreEndTurnCards retains every non-Ethereal card, so the
+        // end-of-turn shuffle sees only the Ethereal ones; each triggers addToTop, so they exhaust
+        // in reverse shuffled order (a Defect run diverged here: two Dazed exhausted swapped).
         BattleContext bc = freshBattle();
+        playCard(bc, CardId::EQUILIBRIUM);
+        bc.cards.createTempCardInHand(CardInstance(CardId::DEFEND_BLUE));
+        bc.cards.createTempCardInHand(CardInstance(CardId::DAZED));
+        bc.cards.createTempCardInHand(CardInstance(CardId::VOID));
+        const auto exhaustOrder = [&](std::vector<CardId> shuffled, int turn) {
+            java::Collections::shuffle(shuffled.begin(), shuffled.end(),
+                    java::Random(bc.seed + static_cast<std::uint64_t>(bc.floorNum) * 55ULL + turn + 1));
+            std::vector<CardId> out;
+            for (auto it = shuffled.rbegin(); it != shuffled.rend(); ++it) {
+                if (*it != CardId::DEFEND_BLUE) out.push_back(*it);
+            }
+            return out;
+        };
+        int turn = 0;
+        while (exhaustOrder({CardId::DAZED, CardId::VOID}, turn)
+               == exhaustOrder({CardId::DEFEND_BLUE, CardId::DAZED, CardId::VOID}, turn)) {
+            ++turn;
+        }
+        bc.turn = turn;
+        const auto expected = exhaustOrder({CardId::DAZED, CardId::VOID}, turn);
+        search::Action(search::ActionType::END_TURN).execute(bc);
+        check(bc.cards.exhaustPile.size() == 2 && bc.cards.exhaustPile[0].getId() == expected[0]
+              && bc.cards.exhaustPile[1].getId() == expected[1],
+              "Equilibrium's retained cards should stay out of the end-of-turn shuffle");
+    }
+    {
+        // Claw: damage, then GashAction raises this card and every Claw in discard, draw and hand
+        // by 2. A Claw made afterwards starts at 3 (a Defect run diverged here on a Claw from Hello
+        // World: 3 in the game, more natively).
+        BattleContext bc = freshBattle();
+        bc.cards.createTempCardInHand(CardInstance(CardId::CLAW));
         const int hp = bc.monsters.arr[0].curHp;
         playCard(bc, CardId::CLAW);
         check(hp - bc.monsters.arr[0].curHp == 3, "Claw should deal 3 the first time");
-        check(bc.player.clawBonus == 2, "Claw should raise the shared Claw bonus by 2");
+        check(bc.cards.hand[0].specialData == 2, "Claw should raise a Claw in hand by 2");
+        check(bc.cards.discardPile.back().specialData == 2, "Claw should raise itself by 2");
         const int hp2 = bc.monsters.arr[0].curHp;
         playCard(bc, CardId::CLAW);
-        check(hp2 - bc.monsters.arr[0].curHp == 5, "the second Claw should deal 3+2");
+        check(hp2 - bc.monsters.arr[0].curHp == 3, "a Claw made after the first one should deal 3");
+        const int hp3 = bc.monsters.arr[0].curHp;
+        search::Action play(search::ActionType::CARD, 0, 0);
+        play.execute(bc);
+        check(hp3 - bc.monsters.arr[0].curHp == 7, "the Claw held through both plays should deal 3+2+2");
     }
     {
         // Streamline: its own cost drops by 1 for the rest of combat.
@@ -1061,9 +1174,10 @@ int main() {
     {
         // All for One: 0-cost cards in the discard pile return to hand.
         BattleContext bc = freshBattle();
-        bc.cards.discardPile.push_back(CardInstance(CardId::CLAW));
-        bc.cards.discardPile.push_back(CardInstance(CardId::STEAM_BARRIER));
-        bc.cards.discardPile.push_back(CardInstance(CardId::EQUILIBRIUM));
+        // Real piles give every card its own uniqueId, which each queued return looks up.
+        bc.cards.createTempCardInDiscard(CardInstance(CardId::CLAW));
+        bc.cards.createTempCardInDiscard(CardInstance(CardId::STEAM_BARRIER));
+        bc.cards.createTempCardInDiscard(CardInstance(CardId::EQUILIBRIUM));
         playCard(bc, CardId::ALL_FOR_ONE);
         check(bc.cards.cardsInHand == 2, "All for One should return the two 0-cost cards");
         check(bc.cards.discardPile.size() == 2,
@@ -1080,8 +1194,8 @@ int main() {
         cheap.setCostForTurn(0);
         CardInstance free(CardId::STRIKE_BLUE);
         free.freeToPlayOnce = true;
-        bc.cards.discardPile.push_back(cheap);
-        bc.cards.discardPile.push_back(free);
+        bc.cards.createTempCardInDiscard(cheap);
+        bc.cards.createTempCardInDiscard(free);
         playCard(bc, CardId::ALL_FOR_ONE);
         check(bc.cards.cardsInHand == 1 && bc.cards.hand[0].getId() == CardId::STRIKE_BLUE,
               "All for One returns a freeToPlayOnce card but not one that is only 0 this turn");
@@ -1118,6 +1232,26 @@ int main() {
         // HelloPower.atStartOfTurn never lowers the cost; only White Noise does.
         check(bc.cards.hand[0].costForTurn == bc.cards.hand[0].cost,
               "Hello World should add the card at its printed cost");
+    }
+    {
+        // HelloPower.atStartOfTurn rolls the card before queueing MakeTempCardInHandAction, so a
+        // cardRandomRng roll queued before it (Loop's Lightning target) comes after the card roll
+        // (a Defect run diverged here: Rebound in the game, Hologram natively).
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::HELLO_WORLD);
+        auto early = bc.cardRandomRng;
+        const CardId expected = getRandomClassCardOfRarity(early, bc.player.cc, CardRarity::COMMON);
+        auto late = bc.cardRandomRng;
+        late.random(9);
+        check(getRandomClassCardOfRarity(late, bc.player.cc, CardRarity::COMMON) != expected,
+              "the two roll orders should pick different cards");
+        bc.addToBot({[] (BattleContext &bc) { bc.cardRandomRng.random(9); }});
+        bc.player.applyStartOfTurnPowers(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(bc.cards.cardsInHand == 1 && bc.cards.hand[0].getId() == expected,
+              "Hello World should roll its card when the power fires");
     }
 
     {
@@ -1259,13 +1393,11 @@ int main() {
     }
 
     {
-        // Reboot: ShuffleAllAction queues PutOnDeckAction(p, p, 99, true) and then
-        // shuffles the discard pile. With isRandom set, PutOnDeckAction pulls
-        // hand.getRandomCard(cardRandomRng) (one random(hand.size()-1) per card) and
-        // moves it with Soul.onToDeck -> drawPile.addToRandomSpot, which inserts at
-        // random(size-1) - appending only when the pile is empty. So the hand leaves
-        // in random order, never in hand order. The played Reboot is still in hand
-        // when ShuffleAllAction is constructed, so it is transferred too.
+        // Reboot: ShuffleAllAction shuffles the discard pile and moves it onto the draw pile,
+        // then PutOnDeckAction(99, random) moves each hand card (hand.getRandomCard(cardRandomRng))
+        // onto it, and ShuffleAction shuffles the draw pile before the draw. Reboot itself has
+        // left the hand and is exhausted (a Defect run diverged here: the game's discard pile
+        // was empty after Reboot, and native kept a second Reboot in hand).
         //
         // cardRandomRng is reseeded so the picks are fixed and repeatable.
         BattleContext bc = freshBattle();
@@ -1279,10 +1411,14 @@ int main() {
 
         playCard(bc, CardId::REBOOT);
         check(bc.cards.cardsInHand == 4, "Reboot should draw 4 cards");
-        check(bc.cards.discardPile.size() == 2,
-              "the discard pile is only shuffled, never moved into the draw pile");
-        check(bc.cards.drawPile.empty(),
-              "the three hand cards and the one pile card are all drawn");
+        check(bc.cards.discardPile.empty(), "Reboot should move the discard pile into the draw pile");
+        check(bc.cards.drawPile.size() == 1, "the two hand, one draw and two discard cards leave one undrawn");
+        int reboots = 0;
+        for (int i = 0; i < bc.cards.cardsInHand; ++i) reboots += bc.cards.hand[i].getId() == CardId::REBOOT;
+        for (const auto &x : bc.cards.drawPile) reboots += x.getId() == CardId::REBOOT;
+        for (const auto &x : bc.cards.exhaustPile) reboots += x.getId() == CardId::REBOOT;
+        check(reboots == 1 && bc.cards.exhaustPile.back().getId() == CardId::REBOOT,
+              "Reboot should only be exhausted, not shuffled in as well");
     }
     {
         // Reboot puts the hand into the draw pile at *random* spots, so the order the
@@ -1309,9 +1445,7 @@ int main() {
               "Reboot should be deterministic for a given cardRandomRng state");
     }
     {
-        // Reboot+: draws 6. Only 4 cards exist after the hand transfer minus the
-        // drawn ones, so the draw runs the discard pile through EmptyDeckShuffle,
-        // which consumes a second shuffleRng draw and feeds the remaining cards.
+        // Reboot+: draws 6 from the two hand cards and four discard cards it shuffled in.
         BattleContext bc = freshBattle();
         bc.player.energy = 3;
         bc.cards.createTempCardInHand(CardInstance(CardId::DEFEND_BLUE));
@@ -1324,8 +1458,7 @@ int main() {
 
         check(bc.cards.cardsInHand == 6, "Reboot+ should draw 6 cards");
         check(bc.cards.discardPile.empty(), "Reboot+ should empty the discard pile");
-        check(bc.cards.drawPile.size() == 1,
-              "Reboot+ should refill the draw pile from the discard pile and leave one card");
+        check(bc.cards.drawPile.empty(), "Reboot+ should draw every card it shuffled in");
     }
 
     {
@@ -1388,6 +1521,41 @@ int main() {
             bc.actionQueue.popFront()(bc);
         }
         check(hp - bc.monsters.arr[0].curHp == 9, "a Locked-On Dark evoke should deal 6 * 1.5");
+    }
+
+    {
+        // UseCardAction runs the player's onUseCard hooks in power-list order. With Storm
+        // gained before Hex, a Power card channels Lightning (the full slots evoke one, whose
+        // target rolls cardRandomRng) before Hex rolls the Dazed spot; a Defect run diverged
+        // here on Buffer vs Chosen. Hex-only battles show which roll each spot came from.
+        auto dazedSpot = [](std::uint64_t seed, bool stormFirst, bool storm, bool burnTargetRoll) {
+            BattleContext bc = freshBattle();
+            bc.player.energy = 3;
+            bc.cardRandomRng = sts::Random(seed);
+            for (int i = 0; i < 10; ++i) {
+                bc.cards.createTempCardInDrawPile(i, CardInstance(CardId::STRIKE_BLUE));
+            }
+            bc.player.orbs.clear();
+            for (int i = 0; i < bc.player.orbSlots; ++i) bc.player.channelOrb(Orb::LIGHTNING);
+            if (storm && stormFirst) bc.player.buff<PS::STORM>(1);
+            bc.player.debuff<PS::HEX>(1);
+            if (storm && !stormFirst) bc.player.buff<PS::STORM>(1);
+            if (burnTargetRoll) bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
+            playCard(bc, CardId::BUFFER);
+            for (int i = 0; i < static_cast<int>(bc.cards.drawPile.size()); ++i) {
+                if (bc.cards.drawPile[i].getId() == CardId::DAZED) return i;
+            }
+            throw std::runtime_error("Hex should shuffle a Dazed into the draw pile");
+        };
+        bool ordersDiffer = false;
+        for (std::uint64_t seed = 1; seed <= 20; ++seed) {
+            const int stormFirst = dazedSpot(seed, true, true, false);
+            const int hexFirst = dazedSpot(seed, false, true, false);
+            check(stormFirst == dazedSpot(seed, true, false, true), "Storm gained first should roll the Lightning target before the Dazed spot");
+            check(hexFirst == dazedSpot(seed, true, false, false), "Hex gained first should roll the Dazed spot first");
+            ordersDiffer = ordersDiffer || stormFirst != hexFirst;
+        }
+        check(ordersDiffer, "some seed should place the Dazed differently for the two orders");
     }
 
     std::cout << "Defect card behaviors hold\n";

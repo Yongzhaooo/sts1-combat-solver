@@ -160,16 +160,16 @@ namespace sts {
                 return true;
 
             case CardId::REPROGRAM:
-                // Reprogram.java: lose Focus, gain Strength and Dexterity.
-                bc.addToBot(Actions::DecrementStatus<PS::FOCUS>(up ? 2 : 1));
+                // Reprogram.java: lose Focus (a FocusPower debuff, so Artifact blocks it), gain Strength and Dexterity.
+                bc.addToBot(Actions::DebuffPlayer<PS::FOCUS>(up ? -2 : -1, false));
                 bc.addToBot(Actions::BuffPlayer<PS::STRENGTH>(up ? 2 : 1));
                 bc.addToBot(Actions::BuffPlayer<PS::DEXTERITY>(up ? 2 : 1));
                 return true;
 
             case CardId::HYPERBEAM:
-                // Hyperbeam.java: attack all enemies, then lose 3 Focus.
+                // Hyperbeam.java: attack all enemies, then lose 3 Focus (a debuff Artifact blocks).
                 bc.addToBot(Actions::AttackAllEnemy(bc.calculateCardDamageMatrix(c, up ? 34 : 26)));
-                bc.addToBot(Actions::DecrementStatus<PS::FOCUS>(3));
+                bc.addToBot(Actions::DebuffPlayer<PS::FOCUS>(-3, false));
                 return true;
 
             case CardId::BIASED_COGNITION:
@@ -503,7 +503,7 @@ namespace sts {
             case CardId::WHITE_NOISE:
                 // WhiteNoise.java: add a random Power card, free to play this turn
                 // (it is the one generator that calls setCostForTurn(0)).
-                bc.addToBot(Actions::CreateRandomCardInHandAction(CardType::POWER, false, true));
+                bc.addToBot(Actions::CreateRandomCardInHandAction(bc, CardType::POWER, false, true));
                 return true;
 
             case CardId::CREATIVE_AI:
@@ -550,19 +550,22 @@ namespace sts {
                 return true;
 
             case CardId::CLAW: {
-                // Claw.java: damage, then every Claw card gains 2 damage for the
-                // rest of combat. calculateCardDamage reads the shared bonus before
-                // this action resolves, so the current hit is not boosted.
-                // GashAction walks discard, draw and hand but not limbo, where a copy
-                // (Echo Form, Duplication) waits, so the copy keeps the original's
-                // baseDamage; the queue item carries the bonus it was built on.
-                auto &item = bc.curCardQueueItem;
-                if (!item.purgeOnUse || item.clawBonusOnUse < 0) {
-                    item.clawBonusOnUse = bc.player.clawBonus;
-                }
-                const int base = (up ? 5 : 3) + item.clawBonusOnUse - bc.player.clawBonus;
-                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, base)));
-                bc.addToBot({[] (BattleContext &bc) { bc.player.clawBonus += 2; }});
+                // Claw.java: damage, then GashAction raises baseDamage by 2 on this card
+                // and on every Claw in discard, draw and hand. Each card keeps its own
+                // raise in specialData: a copy waiting in limbo (Echo Form, Duplication)
+                // keeps the original's baseDamage, and a Claw made later (Hello World)
+                // starts at 3.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, (up ? 5 : 3) + c.specialData)));
+                bc.addToBot({[] (BattleContext &bc) {
+                    // The played card is still in flight (OnAfterCardUsed files it next).
+                    const auto gash = [] (CardInstance &x) {
+                        if (x.getId() == CardId::CLAW) x.specialData = static_cast<std::int16_t>(x.specialData + 2);
+                    };
+                    gash(bc.curCardQueueItem.card);
+                    for (auto &x : bc.cards.discardPile) gash(x);
+                    for (auto &x : bc.cards.drawPile) gash(x);
+                    for (int i = 0; i < bc.cards.cardsInHand; ++i) gash(bc.cards.hand[i]);
+                }});
                 return true;
             }
 
@@ -633,61 +636,41 @@ namespace sts {
                 return true;
 
             case CardId::REBOOT: {
-                // Reboot.java: addToBot(new ShuffleAllAction()); addToBot(new DrawCardAction(p, 4|6));
-                //
-                // ShuffleAllAction.update() on its first tick does exactly two things:
-                //   1. addToTop(new PutOnDeckAction(p, p, 99, true))
-                //   2. player.discardPile.shuffle(AbstractDungeon.shuffleRng)
-                // and it never moves the discard pile into the draw pile: the discard
-                // cards only come back when the draw pile runs out during the draw
-                // below (DrawCardAction -> EmptyDeckShuffleAction).
-                //
-                // PutOnDeckAction with isRandom=true runs, hand.size() times:
-                //   card = hand.getRandomCard(AbstractDungeon.cardRandomRng)  // random(hand.size()-1)
-                //   hand.moveToDeck(card, isRandom=true)
-                // so the hand leaves in a *random* order, not in hand order, and each
-                // pick consumes one cardRandomRng draw. moveToDeck ends in
-                // Soul.onToDeck(card, isRandom, isRandomSpot=false) ->
-                // drawPile.addToRandomSpot(card) -> group.add(random(size-1), card),
-                // i.e. a second cardRandomRng draw places the card at a random spot in
-                // the draw pile (or appends it when the pile is empty). Java's
-                // Random.random(n) is inclusive of n, hence the -1 bounds below.
-                //
-                // Reboot itself is still in hand when ShuffleAllAction is constructed
-                // (AbstractPlayer.useCard calls card.use() before hand.removeCard), so it
-                // is part of that transfer like any other hand card. This engine removes
-                // the played card from hand before the queued actions run, so we put it
-                // back into the hand array first.
-                const int draw = up ? 6 : 4;
-                const CardInstance played = c;
-                bc.addToBot({[played] (BattleContext &bc) {
-                    if (bc.cards.cardsInHand < CardManager::MAX_HAND_SIZE) {
-                        bc.cards.hand[bc.cards.cardsInHand++] = played;
+                // Reboot.java: ShuffleAllAction, ShuffleAction(drawPile, false), DrawCardAction(4|6).
+                // ShuffleAllAction's constructor runs every relic's onShuffle. Its first tick
+                // addToTop's PutOnDeckAction(99, random) and shuffles the discard pile
+                // (shuffleRng), then moves the discard pile card by card, from index 0, onto the
+                // top of the draw pile (Soul.shuffle -> drawPile.addToTop). PutOnDeckAction then
+                // takes hand.getRandomCard(cardRandomRng) once per hand card and moves it with
+                // moveToDeck(card, false), onto the top. ShuffleAction shuffles the whole draw
+                // pile (CardGroup.shuffle(), one shuffleRng.randomLong) before the draw. Reboot
+                // itself left the hand before these actions run and is exhausted as usual.
+                bc.onShuffle();
+                bc.addToBot({[] (BattleContext &bc) {
+                    auto &cards = bc.cards;
+                    java::Collections::shuffle(cards.discardPile.begin(), cards.discardPile.end(),
+                            java::Random(bc.shuffleRng.randomLong()));
+                    for (const auto &card : cards.discardPile) {
+                        cards.notifyRemoveFromDiscardPile(card);
+                        cards.moveToDrawPileTop(card);
                     }
-                    while (bc.cards.cardsInHand > 0) {
-                        // PutOnDeckAction: hand.getRandomCard(cardRandomRng)
-                        const int pick = bc.cardRandomRng.random(bc.cards.cardsInHand - 1);
-                        const CardInstance card = bc.cards.hand[pick];
-                        for (int i = pick; i + 1 < bc.cards.cardsInHand; ++i) {
-                            bc.cards.hand[i] = bc.cards.hand[i + 1];
+                    cards.discardPile.clear();
+                    while (cards.cardsInHand > 0) {
+                        const int pick = bc.cardRandomRng.random(cards.cardsInHand - 1);
+                        const CardInstance card = cards.hand[pick];
+                        for (int i = pick; i + 1 < cards.cardsInHand; ++i) {
+                            cards.hand[i] = cards.hand[i + 1];
                         }
-                        --bc.cards.cardsInHand;
-                        // Soul.onToDeck -> drawPile.addToRandomSpot(card)
-                        if (bc.cards.drawPile.empty()) {
-                            bc.cards.moveToDrawPileTop(card);
-                        } else {
-                            const int spot = bc.cardRandomRng.random(
-                                    static_cast<int>(bc.cards.drawPile.size()) - 1);
-                            bc.cards.drawPile.insert(bc.cards.drawPile.begin() + spot, card);
-                        }
+                        --cards.cardsInHand;
+                        cards.notifyRemoveFromHand(card);
+                        cards.moveToDrawPileTop(card);
                     }
-                    // player.discardPile.shuffle(AbstractDungeon.shuffleRng)
-                    java::Collections::shuffle(
-                            bc.cards.discardPile.begin(),
-                            bc.cards.discardPile.end(),
+                }});
+                bc.addToBot({[] (BattleContext &bc) {
+                    java::Collections::shuffle(bc.cards.drawPile.begin(), bc.cards.drawPile.end(),
                             java::Random(bc.shuffleRng.randomLong()));
                 }});
-                bc.addToBot(Actions::DrawCards(draw));
+                bc.addToBot(Actions::DrawCards(up ? 6 : 4));
                 return true;
             }
 

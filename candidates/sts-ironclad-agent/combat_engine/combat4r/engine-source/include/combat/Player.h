@@ -138,7 +138,6 @@ namespace sts {
         // because the game re-channels the evoked orb object.
         // Claw.java raises the damage of every Claw card for the rest of combat by
         // walking the hand/draw/discard piles; one shared bonus is equivalent.
-        int16_t  clawBonus = 0;
         int16_t  lightningChanneledThisCombat = 0;
         int16_t  frostChanneledThisCombat = 0;
 

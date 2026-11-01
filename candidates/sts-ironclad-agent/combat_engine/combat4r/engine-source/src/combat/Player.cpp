@@ -532,7 +532,12 @@ void Player::applyEndOfTurnPowers(BattleContext &bc) {
                 break;
 
             case PS::EQUILIBRIUM:
-                // todo if card is ethereal set to retain
+                // EquilibriumPower.atEndOfTurnPreEndTurnCards: every non-Ethereal card in hand
+                // retains, so DiscardAtEndOfTurnAction moves it to limbo before its shuffle
+                // and RestoreRetainedCardsAction puts it back at the end of the hand.
+                for (int i = 0; i < bc.cards.cardsInHand; ++i) {
+                    if (!bc.cards.hand[i].isEthereal()) bc.cards.hand[i].retain = true;
+                }
                 break;
 
             case PS::ESTABLISHMENT:
@@ -734,14 +739,14 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 break;
 
             case PS::BIAS:
-                bc.addToBot( Actions::DecrementStatus<PS::FOCUS>(pair.second) );
+                bc.addToBot( Actions::DebuffPlayer<PS::FOCUS>(-pair.second, false) );
                 break;
 
             case PS::CREATIVE_AI:
                 // CreativeAiPower.atStartOfTurn: add one random Power card to hand per
                 // stack, at its printed cost (the power never lowers it).
                 for (int i = 0; i < pair.second; ++i) {
-                    bc.addToBot(Actions::CreateRandomCardInHandAction(CardType::POWER));
+                    bc.addToBot(Actions::CreateRandomCardInHandAction(bc, CardType::POWER));
                 }
                 break;
 
@@ -775,7 +780,7 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
                 // not a one-shot, and the pool is the whole Common pool, not just
                 // Skills - the game calls AbstractDungeon.getCard(COMMON, rng).
                 for (int i = 0; i < pair.second; ++i) {
-                    bc.addToBot(Actions::CreateRandomRarityCardInHandAction(CardRarity::COMMON));
+                    bc.addToBot(Actions::CreateRandomRarityCardInHandAction(bc, CardRarity::COMMON));
                 }
                 break;
 
@@ -785,9 +790,11 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
 
             case PS::LOOP:
                 // LoopPower: for each stack, trigger the oldest orb's passive
-                // (onStartOfTurn then onEndOfTurn, as the game calls both).
+                // (onStartOfTurn then onEndOfTurn, as the game calls both). It calls them
+                // right here, so the passive's amount is read before an earlier power's
+                // queued change (Bias's Focus loss) resolves.
                 for (int i = 0; i < pair.second; ++i) {
-                    bc.addToBot(Actions::TriggerOrbPassiveAction(0));
+                    Actions::TriggerOrbPassiveAction(0).actFunc(bc);
                 }
                 break;
 

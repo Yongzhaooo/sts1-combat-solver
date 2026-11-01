@@ -152,6 +152,7 @@ namespace sts {
         void onUseAttackCard();
         void onUseSkillCard();
         void onUsePowerCard();
+        void onUseNonAttackCardPowers(CardType type);
         void onUseCardRelics();
 
         void onUseStatusOrCurseCard();

@@ -38,27 +38,34 @@ Action Actions::RipAndTearAction(const CardInstance &card, int baseDamage) {
 
 Action Actions::AllForOneAction() {
     return {[] (BattleContext &bc) {
-        // AllCostToHandAction(0) walks the discard pile from the bottom and queues one
-        // DiscardToHandAction per card whose printed cost is 0 (or that is freeToPlayOnce);
-        // each returns the same instance (no new unique id) while the hand has room, so the
-        // cards keep their discard-pile order. Those actions run back to back after the
-        // card's UseCardAction, which only adds the played card itself (never on the list), so
-        // they are done in place.
-        auto &pile = bc.cards.discardPile;
-        for (std::size_t i = 0; i < pile.size();) {
-            if ((pile[i].cost != 0 && !pile[i].freeToPlayOnce)
-                    || bc.cards.cardsInHand >= CardManager::MAX_HAND_SIZE) {
-                ++i;
+        // AllCostToHandAction(0) walks the discard pile from the bottom and addToBots one
+        // DiscardToHandAction per card whose printed cost is 0 (or that is freeToPlayOnce).
+        // Each moves the same instance only if it is still in the discard pile and the hand
+        // has room when it resolves, so whatever was queued first (a Bronze Orb's Stasis
+        // return after All for One's hit) reaches the hand first.
+        for (const auto &card : bc.cards.discardPile) {
+            if (card.cost != 0 && !card.freeToPlayOnce) {
                 continue;
             }
-            bc.cards.hand[bc.cards.cardsInHand++] = pile[i];
-            pile.erase(pile.begin() + static_cast<std::ptrdiff_t>(i));
+            const auto uniqueId = card.uniqueId;
+            bc.addToBot({[=] (BattleContext &bc) {
+                auto &pile = bc.cards.discardPile;
+                for (std::size_t i = 0; i < pile.size(); ++i) {
+                    if (pile[i].uniqueId == uniqueId) {
+                        if (bc.cards.cardsInHand < CardManager::MAX_HAND_SIZE) {
+                            bc.cards.hand[bc.cards.cardsInHand++] = pile[i];
+                            pile.erase(pile.begin() + static_cast<std::ptrdiff_t>(i));
+                        }
+                        return;
+                    }
+                }
+            }});
         }
     }};
 }
 
-Action Actions::CreateRandomCardInHandAction(CardType type, bool commonOnly, bool zeroCost) {
-    return {[=] (BattleContext &bc) {
+Action Actions::CreateRandomCardInHandAction(BattleContext &bc, CardType type, bool commonOnly, bool zeroCost) {
+    {
         // Hello World and Creative AI add the card at its printed cost: neither
         // HelloPower.atStartOfTurn nor CreativeAIPower.atStartOfTurn touches the cost,
         // and MakeTempCardInHandAction never zeroes one. Only WhiteNoise.java calls
@@ -70,20 +77,20 @@ Action Actions::CreateRandomCardInHandAction(CardType type, bool commonOnly, boo
                 : getTrulyRandomCardInCombat(bc.cardRandomRng, bc.player.cc, type);
         CardInstance generated = bc.createGeneratedCard(cid);
         if (zeroCost) generated.setCostForTurn(0);
-        bc.addToTop(Actions::MakeTempCardInHand(generated));
-    }};
+        return Actions::MakeTempCardInHand(generated);
+    }
 }
 
-Action Actions::CreateRandomRarityCardInHandAction(CardRarity rarity, bool zeroCost) {
-    return {[=] (BattleContext &bc) {
+Action Actions::CreateRandomRarityCardInHandAction(BattleContext &bc, CardRarity rarity, bool zeroCost) {
+    {
         // HelloPower.atStartOfTurn: AbstractDungeon.getCard(COMMON, cardRandomRng), which
         // rolls over the whole rarity pool - attacks included - so it is not the
         // type-filtered pool CreateRandomCardInHandAction draws from.
         const auto cid = getRandomClassCardOfRarity(bc.cardRandomRng, bc.player.cc, rarity);
         CardInstance generated = bc.createGeneratedCard(cid);
         if (zeroCost) generated.setCostForTurn(0);
-        bc.addToTop(Actions::MakeTempCardInHand(generated));
-    }};
+        return Actions::MakeTempCardInHand(generated);
+    }
 }
 
 Action Actions::SunderAction(int idx, int damage) {

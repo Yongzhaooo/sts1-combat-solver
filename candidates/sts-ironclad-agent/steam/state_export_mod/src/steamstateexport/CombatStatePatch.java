@@ -86,6 +86,14 @@ public class CombatStatePatch {
             if (!monster.isDeadOrEscaped() && (monster.drawX < AbstractDungeon.player.drawX) == AbstractDungeon.player.flipHorizontal) facing = i;
         }
         result.put("facing_monster_index", facing);
+        int lightning = 0, frost = 0;
+        for (com.megacrit.cardcrawl.orbs.AbstractOrb orb : AbstractDungeon.actionManager.orbsChanneledThisCombat) {
+            if (orb instanceof com.megacrit.cardcrawl.orbs.Lightning) lightning++;
+            if (orb instanceof com.megacrit.cardcrawl.orbs.Frost) frost++;
+        }
+        // Thunder Strike and Blizzard count these; the orb bar alone loses evoked orbs.
+        result.put("lightning_channeled_this_combat", lightning);
+        result.put("frost_channeled_this_combat", frost);
         Map<String, Object> relicState = new HashMap<>();
         for (com.megacrit.cardcrawl.relics.AbstractRelic relic : AbstractDungeon.player.relics) {
             if (relic.relicId.equals("Centennial Puzzle")) {

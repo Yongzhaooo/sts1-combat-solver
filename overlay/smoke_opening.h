@@ -24,7 +24,7 @@ static SmokeOpeningPlan smokeOpeningPlan(const BattleContext &root,int smokeSlot
         reaper |= root.cards.hand[i].id==CardId::REAPER;
     }
     if(!reaper)return best;
-    auto hp=[](const BattleContext &b) { return b.victoryHpRelics.project(b.player.curHp,b.player.maxHp).curHp; };
+    auto hp=[](const BattleContext &b) { return b.victoryHp().curHp; };
     auto rank=[&](const BattleContext &b,const std::vector<int> &actions) {
         return std::make_tuple(hp(b),b.outcome==Outcome::PLAYER_VICTORY,b.potionCount,-static_cast<int>(actions.size()));
     };
