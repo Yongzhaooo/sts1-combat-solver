@@ -350,7 +350,12 @@ def channeled_this_combat(combat):
     if not orbs:
         return {}
     if int(combat.get("turn") or 1) != 1 or int(combat.get("cards_played_this_turn") or 0) != 0:
-        raise ValueError("Defect snapshot needs the Lightning/Frost channel counts; reload the game with the new Mod")
+        piles = ("hand", "draw_pile", "discard_pile", "exhaust_pile")
+        if any(card.get("id") in ("Thunder Strike", "Blizzard") for pile in piles for card in combat.get(pile) or []):
+            raise ValueError("Defect snapshot needs the Lightning/Frost channel counts; reload the game with the new Mod")
+        # shortcut: unknown counts stay out while no counting card is in the piles; a card made
+        # mid-combat (Dead Branch) would then undercount until the next import with the Mod's counts.
+        return {}
     return {"lightning_channeled_this_combat": sum(o.get("id") == "Lightning" for o in orbs),
             "frost_channeled_this_combat": sum(o.get("id") == "Frost" for o in orbs)}
 
