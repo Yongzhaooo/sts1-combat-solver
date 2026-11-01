@@ -532,7 +532,12 @@ void Player::applyEndOfTurnPowers(BattleContext &bc) {
                 break;
 
             case PS::EQUILIBRIUM:
-                // todo if card is ethereal set to retain
+                // EquilibriumPower.atEndOfTurnPreEndTurnCards: every non-Ethereal card in hand
+                // retains, so DiscardAtEndOfTurnAction moves it to limbo before its shuffle
+                // and RestoreRetainedCardsAction puts it back at the end of the hand.
+                for (int i = 0; i < bc.cards.cardsInHand; ++i) {
+                    if (!bc.cards.hand[i].isEthereal()) bc.cards.hand[i].retain = true;
+                }
                 break;
 
             case PS::ESTABLISHMENT:
