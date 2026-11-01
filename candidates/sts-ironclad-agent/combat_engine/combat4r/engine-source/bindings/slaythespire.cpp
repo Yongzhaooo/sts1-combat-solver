@@ -353,6 +353,14 @@ namespace {
             if (static_cast<int>(bc.player.orbs.size()) > bc.player.orbSlots)
                 throw std::invalid_argument("snapshot has more orbs than orb slots");
         }
+        // Optional: Thunder Strike and Blizzard count the orbs channeled this combat; absent means none.
+        for (const auto &[key, field] : {std::pair{"lightning_channeled_this_combat", &bc.player.lightningChanneledThisCombat},
+                                         std::pair{"frost_channeled_this_combat", &bc.player.frostChanneledThisCombat}}) {
+            if (!player.contains(key)) continue;
+            const int count = py::cast<int>(player[key]);
+            if (count < 0) throw std::invalid_argument(std::string("snapshot ") + key + " is negative");
+            *field = static_cast<std::int16_t>(count);
+        }
         if (player.contains("mantra")) {
             const int mantra = py::cast<int>(player["mantra"]);
             if (mantra < 0) throw std::invalid_argument("snapshot mantra is negative");
@@ -1643,6 +1651,8 @@ PYBIND11_MODULE(slaythespire, m) {
         .def_readonly("card_draw_per_turn", &Player::cardDrawPerTurn)
         .def_readonly("panache_counter", &Player::panacheCounter)
         .def_readonly("combust_hp_loss", &Player::combustHpLoss)
+        .def_readonly("lightning_channeled_this_combat", &Player::lightningChanneledThisCombat)
+        .def_readonly("frost_channeled_this_combat", &Player::frostChanneledThisCombat)
         .def_property_readonly("character", [](const Player &p) {
             return std::string(characterClassEnumNames[static_cast<int>(p.cc)]);
         })

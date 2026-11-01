@@ -339,6 +339,22 @@ def orb_snapshot(orb):
             "evoke": int(orb.get("evoke_amount") or 0)}
 
 
+def channeled_this_combat(combat):
+    """Lightning and Frost channeled this combat (Thunder Strike and Blizzard count them).
+    The Mod exports both; an older export is exact only at the turn-1 import before any
+    play, when the orbs in the slots are all that start-of-combat relics channeled."""
+    orbs = (combat.get("player") or {}).get("orbs") or []
+    if "lightning_channeled_this_combat" in combat or "frost_channeled_this_combat" in combat:
+        return {"lightning_channeled_this_combat": int(combat["lightning_channeled_this_combat"]),
+                "frost_channeled_this_combat": int(combat["frost_channeled_this_combat"])}
+    if not orbs:
+        return {}
+    if int(combat.get("turn") or 1) != 1 or int(combat.get("cards_played_this_turn") or 0) != 0:
+        raise ValueError("Defect snapshot needs the Lightning/Frost channel counts; reload the game with the new Mod")
+    return {"lightning_channeled_this_combat": sum(o.get("id") == "Lightning" for o in orbs),
+            "frost_channeled_this_combat": sum(o.get("id") == "Frost" for o in orbs)}
+
+
 def power_snapshot(power, owner):
     helper = sts.player_status_id_from_name if owner == "player" else sts.monster_status_id_from_name
     identifier = power.get("id") or power.get("name")
@@ -620,6 +636,7 @@ def build_snapshot(game_state, counters=None):
             # CommunicationMod always exports the orb list, empty slots included.
             "orb_slots": len(player.get("orbs") or []),
             "orbs": [orb_snapshot(orb) for orb in player.get("orbs") or []],
+            **channeled_this_combat(combat),
         },
         "hand": [card_snapshot(card) for card in combat.get("hand") or []],
         "draw_pile": [card_snapshot(card) for card in combat.get("draw_pile") or []],
