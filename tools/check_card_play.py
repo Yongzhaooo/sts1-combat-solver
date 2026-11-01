@@ -165,13 +165,17 @@ def main():
         expect_fight(window, bulk, root, RNG_NAMES, sts, advisor)
         card_id, upgrades = card_id_of(window.case, window)
         print(f"PASS  {window.id:34s} {card_id}{'+' * upgrades:2s} {window.purpose}")
-    print(f"\nALL {len(windows)} recorded card plays replay, the powers they apply included")
+    # Coverage, not just success. A green run over 6 of 221 recorded plays is honest only when
+    # the line says 6 of 221: "ALL card plays replay" would read as the repository being graded.
+    total = len(windows) + len(undeclared)
+    print(f"\nGRADED {len(windows)} of {total} recorded card plays replay, "
+          f"the powers they apply included")
 
     # Reported, not dropped. A card play that states no purpose has not been accounted for, and
     # saying so is the difference between a grade that covers the repository and one that covers
     # the windows somebody happened to name. The count grows as recordings declare themselves.
     if undeclared:
-        print(f"SKIPPED {len(undeclared)} recorded card plays state no purpose in their fixture, "
+        print(f"SKIPPED {len(undeclared)} have no purpose in their fixture, "
               f"so nothing here grades them (the first few: {', '.join(undeclared[:5])})")
     return 0
 
