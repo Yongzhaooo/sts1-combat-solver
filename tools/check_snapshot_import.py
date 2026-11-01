@@ -132,10 +132,10 @@ for key in ('lightning_channeled_this_combat', 'frost_channeled_this_combat'):
 later['combat_state'].update(turn=2, cards_played_this_turn=0)
 later_snap = s.comparator.bridge.build_snapshot(later)
 assert 'lightning_channeled_this_combat' not in later_snap['player']
-s.comparator.bridge.require_channel_counts(later_snap)
+s.comparator.bridge.require_channel_counts(later)
 later['combat_state']['discard_pile'] = [{'id': 'Thunder Strike', 'upgrades': 0, 'cost': 3}]
 try:
-    s.comparator.bridge.require_channel_counts(s.comparator.bridge.build_snapshot(later))
+    s.comparator.bridge.require_channel_counts(later)
     raise AssertionError('a mid-combat import without channel counts must be refused once Thunder Strike can read them')
 except ValueError:
     pass
