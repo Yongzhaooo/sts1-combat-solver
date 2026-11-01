@@ -4,3 +4,6 @@ runtime/
 __pycache__/
 *.pyc
 *.log
+
+# Local tool state (gh CLI, etc.)
+.local/

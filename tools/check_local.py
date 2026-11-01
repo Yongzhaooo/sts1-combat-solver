@@ -56,6 +56,38 @@ GAME_JAR = os.environ.get("STS_GAME_JAR", "")
 GAME_CLASSES = os.environ.get("STS_GAME_CLASSES", "")
 
 
+def msbuild_safe_environ() -> dict[str, str]:
+    """The environment with each proxy variable kept in one spelling only."""
+    names = set(_raw_environment_names())
+    upper = {name for name in names if name.isupper()}
+    lowered = {name.lower() for name in upper}
+    safe = dict(os.environ)
+    for name in names:
+        if name.lower() in lowered and name not in upper:
+            safe.pop(name, None)
+    return safe
+
+
+def _raw_environment_names() -> list[str]:
+    """Variable names in this process's Win32 environment block, spelling intact."""
+    if sys.platform != "win32":
+        return list(os.environ)
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetEnvironmentStringsW.restype = ctypes.POINTER(ctypes.c_wchar)
+    kernel32.GetEnvironmentStringsW.argtypes = []
+    block = kernel32.GetEnvironmentStringsW()
+    names, index = [], 0
+    while block[index] != "\x00":
+        end = index
+        while block[end] != "\x00":
+            end += 1
+        names.append(block[index:end].split("=", 1)[0])
+        index = end + 1
+    return names
+
+
 def local_only() -> list[tuple[str, str, object]]:
     """(command, what it needs, is-that-input-here) for checks CI cannot run."""
     return [
@@ -179,12 +211,21 @@ def run(command: str) -> tuple[bool, float, str]:
     # which is how `cmake` and `ninja` from the venv become reachable; the
     # build fails with FileNotFoundError on `cmake` without it.
     # MSBUILDDISABLENODEREUSE keeps MSBuild from reusing a node across steps.
-    # Without it the build dies in CL.exe's wrapper: this machine has both
-    # `NO_PROXY` (registry) and `no_proxy` (injected by the shell), and MSBuild
-    # folds them into one Hashtable, which throws on the case-duplicate key:
-    #   MSB6001 ... System.ArgumentException: 已添加项。字典中的关键字:"NO_PROXY"
+    #
+    # It does not prevent MSB6001 on this machine: that one is caused by the
+    # process environment carrying the same proxy variable in two spellings
+    # (`HTTPS_PROXY` from the user registry, `https_proxy` from the MSYS shell).
+    # MSBuild copies the environment into a StringDictionaryWithComparer, which
+    # ignores key case, and throws "已添加项。字典中的关键字" on the second one --
+    # from ToolTask.GetProcessStartInfo, before cl.exe ever starts. When it hits
+    # cmake's compiler probe instead of a real build, the symptom is the
+    # misleading "No CMAKE_CXX_COMPILER could be found". Keeping one spelling
+    # per variable is the fix; see pitfall 3 in docs/local-environment.md.
+    # os.environ cannot deduplicate these: it is case-insensitive on Windows and
+    # collapses HTTPS_PROXY/https_proxy into one entry, so the duplicate has to be
+    # read from the raw environment block. See pitfall 3 in docs/local-environment.md.
     env = {
-        **os.environ,
+        **msbuild_safe_environ(),
         "PYTHONUTF8": "1",
         "PYTHONIOENCODING": "utf-8",
         "MSBUILDDISABLENODEREUSE": "1",
