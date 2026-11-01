@@ -112,6 +112,37 @@ def is_setup(command: str) -> bool:
     return command.startswith(SETUP_PREFIXES)
 
 
+def machine_path() -> list[str]:
+    """The machine's own PATH, in the order Windows resolves it.
+
+    Appending `os.environ["PATH"]` instead is not enough: a launcher can hand a
+    child process a PATH that is only its own tools directory, and this machine's
+    agent harness does exactly that. The four checks that shell out to `git` and
+    `node` then die with `[WinError 2]` and a subprocess traceback that never
+    names the missing executable, which reads as "the check is broken" rather
+    than "the environment is". Reading both the user and the machine PATH is what
+    CI gets from `$GITHUB_PATH` plus the runner image, and it is what a plain
+    terminal on this machine gets too.
+    """
+    if os.name != "nt":
+        return [os.environ.get("PATH", "")]
+    import winreg
+
+    parts = [os.environ.get("PATH", "")]
+    keys = (
+        (winreg.HKEY_CURRENT_USER, "Environment"),
+        (winreg.HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment"),
+    )
+    for root, key in keys:
+        try:
+            with winreg.OpenKey(root, key) as handle:
+                value, _ = winreg.QueryValueEx(handle, "Path")
+        except OSError:
+            continue
+        parts.append(os.path.expandvars(value))
+    return parts
+
+
 def run(command: str) -> tuple[bool, float, str]:
     started = time.monotonic()
     args = command.split()
@@ -131,7 +162,7 @@ def run(command: str) -> tuple[bool, float, str]:
         "PYTHONUTF8": "1",
         "PYTHONIOENCODING": "utf-8",
         "MSBUILDDISABLENODEREUSE": "1",
-        "PATH": os.pathsep.join([str(Path(sys.executable).parent), os.environ.get("PATH", "")]),
+        "PATH": os.pathsep.join([str(Path(sys.executable).parent), *machine_path()]),
     }
     result = subprocess.run(
         args, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env
