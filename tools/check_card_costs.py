@@ -23,17 +23,22 @@ check -- otherwise the card that upgrades cheaper would be blamed on the wrong s
 
 The class files are game assets and cannot be committed, and javap is not on CI,
 so the check is only as strong as its inputs: point `--classes` at a directory
-holding `com/megacrit/cardcrawl/cards/<color>/*.class`. Without one it reports
-that it was skipped instead of passing a comparison it never made, and it exits
+holding `com/megacrit/cardcrawl/cards/<color>/*.class`, or put that same
+directory in `STS_GAME_CLASSES` and say nothing. Without either it reports that
+it was skipped instead of passing a comparison it never made, and it exits
 non-zero unless `--allow-skip` says a missing class tree is expected -- that way
 CI, which has no game assets, still runs the step while `check_local.py` on a
-machine that does have them cannot silently 0-check the run.
+machine that does have them cannot silently 0-check the run. That file runs the
+CI command verbatim, so its step had no way to pass a path at all: on a machine
+with the class tree "local passed" meant "skipped", and looked exactly like
+"compared 201 cards". A skip now always prints `SKIP` and its reason.
 
   python tools/check_card_costs.py --classes E:/sts-devkit/jar-scratch/curlfull
   python tools/check_card_costs.py --color green --classes ... --show
 """
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -48,6 +53,10 @@ SCHEMA = 'overlay/resources/sts1solver/distill2-schema.json'
 # javap needs the fully qualified name, and the card's color is its package.
 PACKAGE = 'com.megacrit.cardcrawl.cards.%s'
 COLORS = ('blue', 'green', 'purple', 'red', 'colorless', 'curse', 'status')
+
+# The same directory as `--classes`, for callers that run one fixed command:
+# the CI step, and `check_local.py`, which copies the CI command verbatim.
+CLASSES_ENV = 'STS_GAME_CLASSES'
 
 _DECL = re.compile(r'^  (?:public|private|protected|static|final|abstract|synchronized|native)\b.*;\s*$')
 
@@ -268,7 +277,6 @@ def read_costs(class_root, package):
 
 
 def javap_path():
-    import os
     named = os.environ.get('STS_JAVAP')
     if named:
         return named
@@ -320,12 +328,35 @@ def problems(root, class_root, colors):
     return base_found, upgrade_found, compared, skipped
 
 
+def resolve_classes(given):
+    """The class tree to compare against, or None when there is none to compare.
+
+    `--classes` wins over the environment so a one-off run can point somewhere else
+    without unsetting it. A path that is not a directory counts as no input at all:
+    comparing against it would find 0 cards and report every package unreadable,
+    which buries the real reason (the path is wrong) under seven SKIP lines.
+    """
+    from_env = (os.environ.get(CLASSES_ENV) or "").strip() or None
+    for candidate, origin in ((given, "--classes"), (from_env, "$" + CLASSES_ENV)):
+        if not candidate:
+            continue
+        path = Path(candidate).expanduser()
+        if path.is_dir():
+            return path.resolve()
+        print("SKIP: %s names %s, which is not a directory" % (origin, path))
+        # Not fatal on its own: falling through to no input says the same thing
+        # louder (and exits non-zero unless --allow-skip), so a stale value in the
+        # environment does not crash a run that only meant to pass --classes.
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--classes', type=Path,
-                        help='a directory holding com/megacrit/cardcrawl/cards/<color>/*.class')
+                        help='a directory holding com/megacrit/cardcrawl/cards/<color>/*.class '
+                             '(default: the one in STS_GAME_CLASSES)')
     parser.add_argument('--color', action='append', choices=COLORS,
                         help='restrict to one color (repeatable; default: every color present)')
     parser.add_argument('--show', action='store_true', help='print every card that was compared')
@@ -333,10 +364,16 @@ def main():
                         help='exit 0 when there is no class tree to compare against (CI has none)')
     args = parser.parse_args()
     root = args.root.resolve()
-    if args.classes is None:
-        message = 'SKIP: no --classes directory, so no card cost was compared against the game'
-        sys.exit(0 if args.allow_skip else 'FAIL: ' + message[6:] + ' (pass --allow-skip to accept that)')
-    class_root = args.classes.resolve()
+    class_root = resolve_classes(args.classes)
+    if class_root is None:
+        # Printed even when --allow-skip accepts it: a silent exit 0 reads as
+        # "201 card costs match", which is the one thing this step must not imply.
+        print('SKIP: no --classes directory and no {0} set, so no card cost was '
+              'compared against the game'.format(CLASSES_ENV))
+        if not args.allow_skip:
+            sys.exit('FAIL: no card cost was compared against the game (pass '
+                     '--allow-skip to accept that, or set {0})'.format(CLASSES_ENV))
+        return
     colors = args.color or COLORS
     found, upgrade_found, compared, skipped = problems(root, class_root, colors)
     for reason in skipped:
