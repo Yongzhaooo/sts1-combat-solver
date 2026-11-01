@@ -1374,13 +1374,11 @@ int main() {
     }
 
     {
-        // Reboot: ShuffleAllAction queues PutOnDeckAction(p, p, 99, true) and then
-        // shuffles the discard pile. With isRandom set, PutOnDeckAction pulls
-        // hand.getRandomCard(cardRandomRng) (one random(hand.size()-1) per card) and
-        // moves it with Soul.onToDeck -> drawPile.addToRandomSpot, which inserts at
-        // random(size-1) - appending only when the pile is empty. So the hand leaves
-        // in random order, never in hand order. The played Reboot is still in hand
-        // when ShuffleAllAction is constructed, so it is transferred too.
+        // Reboot: ShuffleAllAction shuffles the discard pile and moves it onto the draw pile,
+        // then PutOnDeckAction(99, random) moves each hand card (hand.getRandomCard(cardRandomRng))
+        // onto it, and ShuffleAction shuffles the draw pile before the draw. Reboot itself has
+        // left the hand and is exhausted (a Defect run diverged here: the game's discard pile
+        // was empty after Reboot, and native kept a second Reboot in hand).
         //
         // cardRandomRng is reseeded so the picks are fixed and repeatable.
         BattleContext bc = freshBattle();
@@ -1394,10 +1392,14 @@ int main() {
 
         playCard(bc, CardId::REBOOT);
         check(bc.cards.cardsInHand == 4, "Reboot should draw 4 cards");
-        check(bc.cards.discardPile.size() == 2,
-              "the discard pile is only shuffled, never moved into the draw pile");
-        check(bc.cards.drawPile.empty(),
-              "the three hand cards and the one pile card are all drawn");
+        check(bc.cards.discardPile.empty(), "Reboot should move the discard pile into the draw pile");
+        check(bc.cards.drawPile.size() == 1, "the two hand, one draw and two discard cards leave one undrawn");
+        int reboots = 0;
+        for (int i = 0; i < bc.cards.cardsInHand; ++i) reboots += bc.cards.hand[i].getId() == CardId::REBOOT;
+        for (const auto &x : bc.cards.drawPile) reboots += x.getId() == CardId::REBOOT;
+        for (const auto &x : bc.cards.exhaustPile) reboots += x.getId() == CardId::REBOOT;
+        check(reboots == 1 && bc.cards.exhaustPile.back().getId() == CardId::REBOOT,
+              "Reboot should only be exhausted, not shuffled in as well");
     }
     {
         // Reboot puts the hand into the draw pile at *random* spots, so the order the
@@ -1424,9 +1426,7 @@ int main() {
               "Reboot should be deterministic for a given cardRandomRng state");
     }
     {
-        // Reboot+: draws 6. Only 4 cards exist after the hand transfer minus the
-        // drawn ones, so the draw runs the discard pile through EmptyDeckShuffle,
-        // which consumes a second shuffleRng draw and feeds the remaining cards.
+        // Reboot+: draws 6 from the two hand cards and four discard cards it shuffled in.
         BattleContext bc = freshBattle();
         bc.player.energy = 3;
         bc.cards.createTempCardInHand(CardInstance(CardId::DEFEND_BLUE));
@@ -1439,8 +1439,7 @@ int main() {
 
         check(bc.cards.cardsInHand == 6, "Reboot+ should draw 6 cards");
         check(bc.cards.discardPile.empty(), "Reboot+ should empty the discard pile");
-        check(bc.cards.drawPile.size() == 1,
-              "Reboot+ should refill the draw pile from the discard pile and leave one card");
+        check(bc.cards.drawPile.empty(), "Reboot+ should draw every card it shuffled in");
     }
 
     {

@@ -636,61 +636,41 @@ namespace sts {
                 return true;
 
             case CardId::REBOOT: {
-                // Reboot.java: addToBot(new ShuffleAllAction()); addToBot(new DrawCardAction(p, 4|6));
-                //
-                // ShuffleAllAction.update() on its first tick does exactly two things:
-                //   1. addToTop(new PutOnDeckAction(p, p, 99, true))
-                //   2. player.discardPile.shuffle(AbstractDungeon.shuffleRng)
-                // and it never moves the discard pile into the draw pile: the discard
-                // cards only come back when the draw pile runs out during the draw
-                // below (DrawCardAction -> EmptyDeckShuffleAction).
-                //
-                // PutOnDeckAction with isRandom=true runs, hand.size() times:
-                //   card = hand.getRandomCard(AbstractDungeon.cardRandomRng)  // random(hand.size()-1)
-                //   hand.moveToDeck(card, isRandom=true)
-                // so the hand leaves in a *random* order, not in hand order, and each
-                // pick consumes one cardRandomRng draw. moveToDeck ends in
-                // Soul.onToDeck(card, isRandom, isRandomSpot=false) ->
-                // drawPile.addToRandomSpot(card) -> group.add(random(size-1), card),
-                // i.e. a second cardRandomRng draw places the card at a random spot in
-                // the draw pile (or appends it when the pile is empty). Java's
-                // Random.random(n) is inclusive of n, hence the -1 bounds below.
-                //
-                // Reboot itself is still in hand when ShuffleAllAction is constructed
-                // (AbstractPlayer.useCard calls card.use() before hand.removeCard), so it
-                // is part of that transfer like any other hand card. This engine removes
-                // the played card from hand before the queued actions run, so we put it
-                // back into the hand array first.
-                const int draw = up ? 6 : 4;
-                const CardInstance played = c;
-                bc.addToBot({[played] (BattleContext &bc) {
-                    if (bc.cards.cardsInHand < CardManager::MAX_HAND_SIZE) {
-                        bc.cards.hand[bc.cards.cardsInHand++] = played;
+                // Reboot.java: ShuffleAllAction, ShuffleAction(drawPile, false), DrawCardAction(4|6).
+                // ShuffleAllAction's constructor runs every relic's onShuffle. Its first tick
+                // addToTop's PutOnDeckAction(99, random) and shuffles the discard pile
+                // (shuffleRng), then moves the discard pile card by card, from index 0, onto the
+                // top of the draw pile (Soul.shuffle -> drawPile.addToTop). PutOnDeckAction then
+                // takes hand.getRandomCard(cardRandomRng) once per hand card and moves it with
+                // moveToDeck(card, false), onto the top. ShuffleAction shuffles the whole draw
+                // pile (CardGroup.shuffle(), one shuffleRng.randomLong) before the draw. Reboot
+                // itself left the hand before these actions run and is exhausted as usual.
+                bc.onShuffle();
+                bc.addToBot({[] (BattleContext &bc) {
+                    auto &cards = bc.cards;
+                    java::Collections::shuffle(cards.discardPile.begin(), cards.discardPile.end(),
+                            java::Random(bc.shuffleRng.randomLong()));
+                    for (const auto &card : cards.discardPile) {
+                        cards.notifyRemoveFromDiscardPile(card);
+                        cards.moveToDrawPileTop(card);
                     }
-                    while (bc.cards.cardsInHand > 0) {
-                        // PutOnDeckAction: hand.getRandomCard(cardRandomRng)
-                        const int pick = bc.cardRandomRng.random(bc.cards.cardsInHand - 1);
-                        const CardInstance card = bc.cards.hand[pick];
-                        for (int i = pick; i + 1 < bc.cards.cardsInHand; ++i) {
-                            bc.cards.hand[i] = bc.cards.hand[i + 1];
+                    cards.discardPile.clear();
+                    while (cards.cardsInHand > 0) {
+                        const int pick = bc.cardRandomRng.random(cards.cardsInHand - 1);
+                        const CardInstance card = cards.hand[pick];
+                        for (int i = pick; i + 1 < cards.cardsInHand; ++i) {
+                            cards.hand[i] = cards.hand[i + 1];
                         }
-                        --bc.cards.cardsInHand;
-                        // Soul.onToDeck -> drawPile.addToRandomSpot(card)
-                        if (bc.cards.drawPile.empty()) {
-                            bc.cards.moveToDrawPileTop(card);
-                        } else {
-                            const int spot = bc.cardRandomRng.random(
-                                    static_cast<int>(bc.cards.drawPile.size()) - 1);
-                            bc.cards.drawPile.insert(bc.cards.drawPile.begin() + spot, card);
-                        }
+                        --cards.cardsInHand;
+                        cards.notifyRemoveFromHand(card);
+                        cards.moveToDrawPileTop(card);
                     }
-                    // player.discardPile.shuffle(AbstractDungeon.shuffleRng)
-                    java::Collections::shuffle(
-                            bc.cards.discardPile.begin(),
-                            bc.cards.discardPile.end(),
+                }});
+                bc.addToBot({[] (BattleContext &bc) {
+                    java::Collections::shuffle(bc.cards.drawPile.begin(), bc.cards.drawPile.end(),
                             java::Random(bc.shuffleRng.randomLong()));
                 }});
-                bc.addToBot(Actions::DrawCards(draw));
+                bc.addToBot(Actions::DrawCards(up ? 6 : 4));
                 return true;
             }
 
