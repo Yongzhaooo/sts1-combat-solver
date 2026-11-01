@@ -803,6 +803,9 @@ namespace sts {
             case CardId::ENTRENCH:
                 return upgraded ? 1 : 2;
 
+            case CardId::VAULT:
+                return 3;
+
             case CardId::HAVOC:
             case CardId::INFERNAL_BLADE:
             case CardId::SEEING_RED:

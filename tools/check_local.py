@@ -42,16 +42,22 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "native-runtime.yml"
 JOB = "smoke"
 SETUP_PREFIXES = ("python -m pip", "pip install")
-# The game JAR is a machine-local path, not something the repository carries,
-# so it comes from the environment. Unset means the check is skipped.
+# The game JAR and the card class tree are machine-local paths, not something the
+# repository carries, so they come from the environment. Unset means the check is
+# skipped; the workflow step runs the same command with --allow-skip instead.
 GAME_JAR = os.environ.get("STS_GAME_JAR", "")
+GAME_CLASSES = os.environ.get("STS_GAME_CLASSES", "")
 
 
-def local_only() -> list[tuple[str, str]]:
-    """Checks that prove something CI cannot, each with what it needs."""
+def local_only() -> list[tuple[str, str, object]]:
+    """(command, what it needs, is-that-input-here) for checks CI cannot run."""
     return [
         (f"python tools/run_distill2_check.py --jar {GAME_JAR}",
-         f"the game JAR (set STS_GAME_JAR), currently {'unset' if not GAME_JAR else GAME_JAR}"),
+         f"the game JAR (set STS_GAME_JAR), currently {'unset' if not GAME_JAR else GAME_JAR}",
+         lambda: Path(GAME_JAR).exists() if GAME_JAR else False),
+        (f"python tools/check_card_costs.py --classes {GAME_CLASSES}",
+         f"the extracted card classes (set STS_GAME_CLASSES), currently {'unset' if not GAME_CLASSES else GAME_CLASSES}",
+         lambda: Path(GAME_CLASSES).is_dir() if GAME_CLASSES else False),
     ]
 
 
@@ -188,9 +194,8 @@ def main() -> int:
     say()
     say("Beyond CI (needs inputs the repository does not carry):")
     skipped = passed = 0
-    for command, need in local_only():
-        jar = Path(GAME_JAR) if GAME_JAR else None
-        if jar is None or not jar.exists():
+    for command, need, available in local_only():
+        if not available():
             say(f"  skip {command}")
             say(f"       needs {need}")
             skipped += 1

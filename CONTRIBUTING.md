@@ -42,18 +42,20 @@ The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher
 
 - PR 必须通过 `.github/workflows/native-runtime.yml` 的全部作业（三个操作系统、两个 Python 版本）。四职业 M0 之后，其中包括覆盖清单检查和全部原生夹具的重放。
 - 不删除、不跳过已有检查。期望值只能来自已校准的真值，不能为了通过检查手改。
+- `getEnergyCost` 的 `default` 对所有没写 case 的牌答 1，所以新牌即使按 0 费或 2 费实现也能编译、能出牌、能进夹具，只是费用错。加牌时要么给它一个 case，要么在 PR 里说明它确实是 1 费。
 - 克隆后运行一次 `python tools/install_git_hooks.py`。它安装两个钩子：pre-push 在向本仓库推送时检查被推送的提交及其新历史里没有 `reports/`、`evidence/`，有就拒绝推送；pre-commit 检查暂存内容是不是 LF 行尾（第 9 条），不是就拒绝提交。
 - 提交前在本地先跑：
 
   ```bash
   python tools/build_solver_runtime.py          # 构建原生引擎并运行 CTest
   python tools/check_backend_protocol.py        # 以及与你改动相关的其他 tools/check_*.py
+  python tools/check_card_costs.py              # 加牌、改牌或动 getEnergyCost 后：费用是否等于字节码。需要本机 javap 与 .class 树，见 docs/local-environment.md
   python tools/coverage_manifest.py             # 实现或删除牌、遗物后重新生成覆盖清单，连同改动一起提交
   python tools/coverage_manifest.py --check     # 清单是否最新，已支持的职业有没有缺口
   python tools/truth_calibration/run.py --adapter "<你的适配器>" fixtures/calibration   # M0 之后
   ```
 
-  这五条只是最小集：CI 实际跑三十多条，顺序与 CI 一致的那一份是 `python tools/check_local.py`（它直接读 workflow，维护者加检查时不会过时）。拿不准就跑它。
+  这几条只是最小集：CI 实际跑三十多条，顺序与 CI 一致的那一份是 `python tools/check_local.py`（它直接读 workflow，维护者加检查时不会过时）。拿不准就跑它。
 
 - 合并前维护者会用私有真值重放你新增的夹具。结果不一致时，维护者贴出第一处差异的路径，双方一起定位；问题出在你的真值时，维护者会补一个校准用例。
 
