@@ -2105,7 +2105,9 @@ void BattleContext::onAfterUseCard() {
     // too; Steam Barrier's own bump lives in DefectCards.cpp for the same reason.
     bool rebound = false;
     c.freeToPlayOnce = false;
-    if (c.getId() == CardId::STREAMLINE) {
+    // These rewrites live in use(), which a card the queue could not play never runs.
+    if (!item.triggerOnUse) {
+    } else if (c.getId() == CardId::STREAMLINE) {
         c.updateCost(-1);
         if (item.purgeOnUse) {
             // The original is filed by now (discard, exhaust, Rebound's draw pile or hand),

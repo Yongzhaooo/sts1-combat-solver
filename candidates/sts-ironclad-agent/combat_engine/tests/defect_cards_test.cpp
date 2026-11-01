@@ -176,6 +176,25 @@ int main() {
         check(found, "Echo Form Streamline should be in the discard pile");
     }
     {
+        // Echo Form Streamline that kills its target: the copy's target isDying, so canUse fails,
+        // and as an Echo Form copy (no autoplay) it leaves limbo without use(); only the
+        // original's ReduceCostAction runs, 2 -> 1 (a Defect run diverged here: 1 in the game, 0).
+        BattleContext bc = freshBattle(MonsterEncounter::TWO_LOUSE);
+        bc.player.buff<PS::ECHO_FORM>(1);
+        bc.monsters.arr[0].curHp = 1;
+        bc.monsters.arr[0].block = 0;
+        playCard(bc, CardId::STREAMLINE);
+        check(!bc.monsters.areMonstersBasicallyDead(), "the second louse should still be alive");
+        bool found = false;
+        for (const auto &dc : bc.cards.discardPile) {
+            if (dc.getId() == CardId::STREAMLINE) {
+                check(dc.cost == 1 && dc.costForTurn == 1, "an unplayed Echo Form copy should not lower Streamline");
+                found = true;
+            }
+        }
+        check(found, "Echo Form Streamline should be in the discard pile");
+    }
+    {
         // Echo Form Claw: the copy waits in limbo, which GashAction skips, so it hits for the
         // original's 3; the copy's own Gash then raises the bonus again, to 4.
         BattleContext bc = freshBattle();
