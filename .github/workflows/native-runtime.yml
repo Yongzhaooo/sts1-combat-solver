@@ -86,6 +86,9 @@ jobs:
       - run: python tools/check_snapshot_import.py
       - name: Grade the native fixtures of every character against the simulator
         run: python tools/check_coverage_gaps.py
+      - name: Play each card and grade the powers it applies
+        run: python tools/check_neutralize_fixtures.py
+      - run: python tools/parity_differences_test.py
       - run: python tools/check_headbutt.py
       - run: python tools/check_mid_turn_picker.py
       - run: python tools/check_discovery_frames.py

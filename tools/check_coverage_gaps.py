@@ -40,7 +40,9 @@ import sys
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / 'overlay'))
+sys.path.insert(0, str(REPO / 'tools'))
 from backend import Advisor, view_from_state  # noqa: E402
+import parity_differences  # noqa: E402
 
 NATIVE_DIR = REPO / 'fixtures' / 'native'
 
@@ -133,7 +135,7 @@ def compare(view, what):
     search = Advisor().search
     battle = search.comparator.import_battle(view, require_search_state=True)
     result = search.comparator.compare_battle(view, battle)
-    found = [d for d in result['differences'] if not d['path'].startswith('/legacy/')]
+    found = [d for d in result['differences'] if parity_differences.kept(d)]
     if found:
         raise AssertionError(f'{what}: {len(found)} differences; first: {json.dumps(found[0], ensure_ascii=False)}')
     return battle
