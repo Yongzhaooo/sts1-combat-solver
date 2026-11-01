@@ -20,6 +20,11 @@ your build uses, not whatever `python` happens to be first on PATH. `python -m
 pip install ...` steps are listed as setup and skipped, since the environment
 already has the pinned pybind11/cmake.
 
+Each step's `ok` means "exited 0", so a step that skipped its work reads like a
+step that did it. `skipped_work()` is the short list of checks that report a skip
+on stdout, and a step that skipped is marked `skip` and named in the summary
+instead of counting as a pass.
+
 The macos-package job is skipped: it is self-hosted on the maintainer's Mac and
 external pull requests never reach it.
 
@@ -42,6 +47,8 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "native-runtime.yml"
 JOB = "smoke"
 SETUP_PREFIXES = ("python -m pip", "pip install")
+# The one check that answers `SKIP` on stdout when it has nothing to compare.
+SKIPPABLE = "check_card_costs.py"
 # The game JAR and the card class tree are machine-local paths, not something the
 # repository carries, so they come from the environment. Unset means the check is
 # skipped; the workflow step runs the same command with --allow-skip instead.
@@ -110,6 +117,25 @@ def smoke_commands(workflow: Path = WORKFLOW) -> list[str]:
 
 def is_setup(command: str) -> bool:
     return command.startswith(SETUP_PREFIXES)
+
+
+# Checks that exit 0 without doing their work. `check_card_costs.py` is the one
+# known case: it cannot compare without the game's class tree, CI has none, so the
+# workflow passes `--allow-skip` and the command this file runs verbatim exits 0
+# and says it skipped. On a machine that does have the tree that looked identical
+# to "201 card costs match" -- the step was an `ok` that checked nothing.
+def skipped_work(command: str, output: str) -> bool:
+    """True when this step ran without comparing anything.
+
+    Keyed on the check rather than on the output alone because every other step
+    here prints on a pass, and reading any `SKIP` line as a skipped step would
+    mislabel them. Only `--classes`/`STS_GAME_CLASSES` reaches the comparison, so
+    a run that names the check and never says `PASS` compared nothing -- including
+    the packages it may have read before stopping at its first `FAIL`.
+    """
+    if SKIPPABLE not in command:
+        return False
+    return not any(line.startswith("PASS:") for line in output.splitlines())
 
 
 def machine_path() -> list[str]:
@@ -195,11 +221,20 @@ def main() -> int:
 
     say(f"{len(checks)} checks, one per CI step. Interpreter: {sys.executable}")
     failures: list[tuple[str, str]] = []
+    skipped_steps: list[tuple[str, str]] = []
     started = time.monotonic()
     for index, command in enumerate(checks, start=1):
         ok, elapsed, output = run(command)
-        mark = "ok  " if ok else "FAIL"
+        # A skip is not a pass and not a failure: the step ran, exited 0, and said
+        # it compared nothing. Counting it as `ok` is what made this file unable to
+        # tell "all green" from "one check was asleep".
+        skipped = ok and skipped_work(command, output)
+        mark = "skip" if skipped else ("ok  " if ok else "FAIL")
         say(f"[{index:>2}/{len(checks)}] {mark} {elapsed:6.1f}s  {command}")
+        if skipped:
+            skipped_steps.append((command, output))
+            if args.verbose:
+                say(f"        {output.replace(chr(10), chr(10) + '        ')}")
         if not ok:
             failures.append((command, output))
             tail = "\n".join(output.splitlines()[-12:])
@@ -212,8 +247,22 @@ def main() -> int:
 
     elapsed = time.monotonic() - started
     say()
+    if skipped_steps:
+        say(f"{len(skipped_steps)} of {len(checks)} checks skipped their own work "
+            f"(exit 0, nothing compared) in {elapsed:.0f}s:")
+        for command, output in skipped_steps:
+            say(f"  {command}")
+            for line in output.splitlines():
+                if line.startswith("SKIP:"):
+                    say(f"       {line}")
+        say()
+        say("A skipped check is not a passing one: give it its input, or say why.")
+        say()
+
     if not failures:
-        say(f"All {len(checks)} checks passed in {elapsed:.0f}s. CI should agree.")
+        passed = len(checks) - len(skipped_steps)
+        say(f"{passed} of {len(checks)} checks passed in {elapsed:.0f}s"
+            + (f", {len(skipped_steps)} skipped." if skipped_steps else ". CI should agree."))
     else:
         say(f"{len(failures)} of {len(checks)} checks failed in {elapsed:.0f}s:")
         for command, _ in failures:
