@@ -3,7 +3,9 @@ package sts1solver;
 import com.badlogic.gdx.Gdx;
 import com.evacipated.cardcrawl.modthespire.lib.SpirePatch;
 import com.evacipated.cardcrawl.modthespire.lib.SpirePrefixPatch;
+import com.megacrit.cardcrawl.actions.GameActionManager;
 import com.megacrit.cardcrawl.core.Settings;
+import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.monsters.AbstractMonster;
 
 /** Shorten only the exit animations; the game's own methods still finish them. */
@@ -16,11 +18,18 @@ public class MonsterExitAnimationPatch {
         return Gdx.graphics.getRawDeltaTime() * EXTRA_SPEED;
     }
 
+    static boolean queueIdle() {
+        GameActionManager manager = AbstractDungeon.actionManager;
+        return manager.actions.isEmpty() && manager.currentAction == null;
+    }
+
     @SpirePatch(clz=AbstractMonster.class, method="updateDeathAnimation")
     public static class Death {
         @SpirePrefixPatch
         public static void before(AbstractMonster monster) {
-            if (monster.isDying && !monster.isDead && monster.deathTimer > 0f)
+            // The last death ends the battle and clears the action queue, so a
+            // queued heal (Reaper) must resolve before the timer is shortened.
+            if (monster.isDying && !monster.isDead && monster.deathTimer > 0f && queueIdle())
                 monster.deathTimer -= extraTime();
         }
     }
