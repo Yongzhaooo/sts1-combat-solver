@@ -61,4 +61,6 @@ Silent, Defect and Watcher solvers are open for collaboration: see the [multi-ch
 
 Special thanks to 七月流火（猫火） for long-term testing and feedback.
 
+Thanks to co-developer [有事问春风](https://github.com/yang6688866), who built the foundation of the Defect branch and keeps maintaining it. Thank you for all the work.
+
 Thanks to [gamerpuppy/sts_lightspeed](https://github.com/gamerpuppy/sts_lightspeed) for the C++ combat simulator and search foundation, [destire-mio/sts-ironclad-agent](https://github.com/destire-mio/sts-ironclad-agent) for its modified `combat4r` and Python bindings, and [ForgottenArbiter/CommunicationMod](https://github.com/ForgottenArbiter/CommunicationMod) for the game communication bridge; pinned versions and licenses are in [Third-party notices](THIRD_PARTY_NOTICES.md). [hotwords123/StS2.RandomForeseer](https://github.com/hotwords123/StS2.RandomForeseer) informed the RNG foresight approach, and we studied [Torch1230/CombatSolver](https://github.com/Torch1230/CombatSolver) for its mirror simulation and action verification. These are *Slay the Spire 2* projects; their code is not included here.
