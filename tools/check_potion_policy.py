@@ -113,6 +113,37 @@ regen = {**sozu_blood, 'potions': [{'id': 'Regen Potion'}]}
 assert recommend(regen, [dict(baseline, loss=10), bottle])['branch'] == 'potion-0'  # G': Regen keeps its old price
 print('PASS: Blood Potion costs its heal plus 5 unless a refill frees the slot; Sacred Bark doubles it; Regen unchanged')
 
+# #101 fixtures: every combat HP price, read through effective_loss. A change here is a policy change.
+from auto_policy import assess_deck, effective_loss, smoke_threshold
+def hp(g, bottles=(), free=0, loss=0, **revival):
+    g = {**g, 'potions': [{'id': p} for p in bottles] or g.get('potions', [])}
+    b = dict(loss=loss, potion_uses=[{'slot': i} for i in range(len(bottles))], empty_potion_slots=free, **revival)
+    return effective_loss(g, b, assess_deck(g))
+likely = {**deck_game, 'solver_auto_context': {**deck_game['solver_auto_context'], 'potion_drop_probability': .8}}
+wbs = {**deck_game, 'relics': [{'id': 'White Beast Statue'}]}
+brew_near_elite = {**flex, 'potions': [{'id': 'GamblersBrew'}]}
+cases = [  # (game, bottles, free slots, expected bottle HP)
+    (deck_game, ['Swift Potion'], 1, 15), (deck_game, ['Strength Potion'], 1, 10), (deck_game, ['Block Potion'], 1, 5),
+    ({**deck_game, 'act': 2}, ['Ancient Potion'], 1, 10), (deck_game, ['Ancient Potion'], 1, 5),
+    (deck_game, ['Regen Potion'], 1, 5), (deck_game, ['Swift Potion', 'Block Potion'], 2, 20),
+    (flex, ['SteroidPotion'], 1, 20), (brew_near_elite, ['GamblersBrew'], 1, 25),  # kept for a near elite
+    (wbs, ['GamblersBrew'], 1, 8), (wbs, ['Strength Potion'], 1, 5), (wbs, ['Block Potion'], 1, 3),
+    (wbs, ['Strength Potion'], 0, 10),  # a guaranteed drop only helps if a slot is free
+    (likely, ['GamblersBrew', 'Strength Potion'], 2, 13), (likely, ['Block Potion', 'Strength Potion'], 1, 8),
+    (deck_game, ['BloodPotion'], 1, 21), ({**deck_game, 'max_hp': 60}, ['BloodPotion'], 1, 17),
+    ({**deck_game, 'relics': [{'id': 'SacredBark'}]}, ['BloodPotion'], 1, 37),
+    ({**likely, 'potions': [{'id': 'BloodPotion'}]}, ['BloodPotion'], 1, 3),  # full-bar refill frees the slot
+    ({**wbs, 'relics': [{'id': 'White Beast Statue'}, {'id': 'SacredBark'}]}, ['BloodPotion'], 1, 3),
+]
+for g, bottles, free, expected in cases:
+    assert hp(g, bottles, free)['potions'] == expected, (bottles, free, hp(g, bottles, free))
+assert hp(deck_game, used_tail=True)['revival'] == 100 and hp(deck_game, used_fairy=2)['revival'] == 200
+assert hp({**deck_game, 'max_hp': 60}, used_tail=True, used_fairy=1)['revival'] == 160
+assert hp(boss, loss=40)['loss'] == 10 and hp({**boss, 'ascension_level': 4}, loss=40)['loss'] == 0
+assert hp(deck_game, loss=40)['loss'] == 40 and hp(boss, ['Block Potion'], 1, 40)['total'] == 15
+assert smoke_threshold(deck_game) == 15
+print('PASS: #101 HP prices pinned: bottles 15/10/5, near threat 25/20, refill 8/5/3, Blood heal, revival max HP + 20, Boss 1/4, Smoke 15')
+
 if not args.native_root:
     raise SystemExit(0)
 from backend import Advisor, TERMINAL_PENDING, unexplained_differences
