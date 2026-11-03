@@ -19,7 +19,7 @@ import json
 from pathlib import Path
 import sys
 
-SCHEMA = 'sts1-route-history/1'
+SCHEMA = 'sts1-route-history/2'  # /2: acts[k].entry is the state entering act k; /1 stored it on act k-1
 ENCODINGS = ('utf-8-sig', 'utf-8', 'gbk', 'cp1252')
 ROOMS = frozenset('MER?$TB')
 # Acts 1-3 are 16-17 rows (boss included) on every standard map; below this one the run stopped early.
@@ -121,12 +121,16 @@ def build_record(raw, source):
 
 
 def entry_state(raw, floors):
-    """The separator row after an act is the act transition: its HP/gold are the next act's start."""
-    index = floors[-1][0] if floors else 0
+    """HP/gold this act starts with: the separator row just before its first floor (the act transition).
+
+    Act 1 has no such row (the save starts at floor 1), so its entry is all null. The last act's entry
+    is the row before it, which every run has, Act 4 included.
+    """
+    index = floors[0][0] - 2 if floors else -1
     state = {}
     for key, field in (('hp', 'current_hp_per_floor'), ('max_hp', 'max_hp_per_floor'), ('gold', 'gold_per_floor')):
         values = raw.get(field)
-        state[key] = values[index] if isinstance(values, list) and index < len(values) else None
+        state[key] = values[index] if isinstance(values, list) and 0 <= index < len(values) else None
     return state
 
 

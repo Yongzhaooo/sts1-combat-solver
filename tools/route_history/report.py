@@ -19,7 +19,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA = ROOT / 'tools/route_history/data/ironclad-a20.jsonl'
 DEFAULT_WEIGHTS = ROOT / 'overlay/resources/route-preferences.json'
-SCHEMA = 'sts1-route-history/1'
+SCHEMA = 'sts1-route-history/2'
 ROOMS = ('M', 'E', 'R', '?', '$', 'T', 'B')
 NAMES = {'M': 'monster', 'E': 'elite', 'R': 'campfire', '?': 'unknown', '$': 'shop', 'T': 'treasure',
          'B': 'boss'}
@@ -179,13 +179,13 @@ def print_spread(records, acts_wanted):
         print(f'act {act}: ' + '   '.join(cells))
 
 
-def print_entry_state(records):
+def print_entry_state(records, acts_wanted):
     print()
-    print('## state entering each act (the row after the previous act\'s boss)')
+    print('## state entering each act (the row after the previous act\'s boss; act 1 has none)')
     rows = []
-    for act in (2, 3, 4):
-        states = [record['acts'][act - 2]['entry'] for record in records
-                  if len(record['acts']) >= act and record['acts'][act - 2].get('entry')]
+    for act in acts_wanted:
+        states = [entry['entry'] for record in records for entry in record['acts']
+                  if entry['act'] == act and entry.get('entry')]
         hp = [state['hp'] for state in states]
         max_hp = [state['max_hp'] for state in states]
         gold = [state['gold'] for state in states]
@@ -254,7 +254,7 @@ def main(argv=None):
     print_coverage(records, args.data)
     print_room_mix(records, acts_wanted)
     print_spread(records, acts_wanted)
-    print_entry_state(records)
+    print_entry_state(records, acts_wanted)
     print_campfires(records, acts_wanted)
     if args.weights:
         if not args.weights.is_file():

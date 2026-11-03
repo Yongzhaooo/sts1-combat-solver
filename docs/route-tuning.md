@@ -48,7 +48,7 @@ Python 绑定暴露为 `slaythespire.SpireMap(seed, asc, act, bool)`；各幕的
 
 # 文件与字段
 
-`data/ironclad-a20.jsonl` 一行一局，`schema` 固定为 `sts1-route-history/1`：
+`data/ironclad-a20.jsonl` 一行一局，`schema` 固定为 `sts1-route-history/2`：
 
 | 字段 | 含义 |
 | --- | --- |
@@ -66,9 +66,10 @@ Python 绑定暴露为 `slaythespire.SpireMap(seed, asc, act, bool)`；各幕的
   所以第 1 幕第 16 层打完 Boss，第 2 幕从第 18 层开始。A20 第 3 幕末尾有两行 `B`（双 Boss），正常。
 - **`hp`/`max_hp`/`gold` 按层对齐**：索引 = 层号 − 1，记的是**该层结算后**的值。
   存档里这三个数组常比 `path_per_floor` 少一项，只是末尾那个 `null` 分隔行没有对应记录，房间层都齐全。
-- **`entry` 取的是幕后分隔那一行**，也就是下一幕开打前的血量/金币。它比 Boss 战结束时高，
-  因为游戏自己在 Boss 后回血（这批局都是 A20：补缺失血量的 75%，例：31/75 → 64/75），不是 mod 的行为；
-  `entry` 里出现 `null` 表示存档没记到这一行。
+- **`acts[k].entry` 是进入第 k 幕时的血量/金币**，取这一幕之前那条分隔行（上一幕 Boss 之后）。它比 Boss 战结束时高，
+  因为游戏自己在 Boss 后回血（这批局都是 A20：补缺失血量的 75%，例：31/75 → 64/75），不是 mod 的行为。
+  第 1 幕前面没有分隔行，它的 `entry` 恒为 `null`；其他幕出现 `null` 表示存档没记到这一行。
+  旧版 `sts1-route-history/1` 把这个值记在上一幕上（第 4 幕的进幕状态在 `acts[2]`，`acts[3].entry` 恒空），读旧数据时要错开一幕。
 - **`issues` 在 jsonl 里只标记、不过滤**（`report.py` 的各幕房型均值会跳过被标 `short_act` 的那一幕，例如种子 `56088640055118359` 第 3 幕只有 `M?BB`，是秘密传送门）：`short_act`（1–3 幕不足 12 格，即不是标准 16 格的局）、
   `odd_boss`（Boss 行异常）、`path_taken_differs`（存档自带的 `path_taken` 与 `path_per_floor` 不一致，
   存档普遍如此，`path_taken` 会把 `M`/`$`/`T` 写成 `?`，一律以 `path_per_floor` 为准）。
@@ -98,7 +99,7 @@ act  runs  rooms  M     E     R     ?     $     T     B
 3    108   17.0   4.69  1.90  2.77  2.61  1.66  1.37  1.99
 4    108   4.0    0.00  1.00  1.00  0.00  1.00  0.00  1.00
 
-## state entering each act
+## state entering each act (the row after the previous act's boss; act 1 has none)
 act  runs  hp   p25  p50  p75   gold
 2    109   90%  86%  89%  94%   263
 3    109   92%  87%  92%  99%   271
@@ -116,7 +117,12 @@ act  runs  hp   p25  p50  p75   gold
 2. 只改 `overlay/resources/route-preferences.json` 里的 `N:balanced` 三组（`RoutePlanner` 只用这三组，
    `:upgrade`/`:removal` 是别的模式在用，别顺手改）。
 3. 用 `overlay/test/RoutePlannerCheck.java` 验证地图枚举的不变量没被破坏。
-4. 实机跑，用「每局精英数/进幕血量/胜率」对比改动前后；不要拿这包里的现状当验收标准。
+4. 实机 A/B，两臂用同一批种子，先看行为层再看结果层；不要拿这包里的现状当验收标准。
+   行为层（每局精英数、营火里 `REST`/`SMITH` 的次数、商店数）先回答权重有没有改变选择：这些量的标准差约 1–1.7 次，
+   每臂 109 局能分出约 0.4–0.6 次/局的差。行为没变，结果层不用跑；`fire` 这类会把升级换成休息的改动，
+   进幕血量可能两头抵消，要同时看 `REST`/`SMITH` 计数。结果层看 2–4 幕的平均进幕血量：标准差 4.7pp，
+   每臂约 87 局能分出 2pp，约 350 局分出 1pp（不配对的估计，同种子配对后会更少）。胜率在 99% 附近做不了验收：
+   99%→98% 每臂要约 2300 局。以上按这包 109 局、α=0.05、功效 80% 算。
 
 # 重新导出别的存档
 
