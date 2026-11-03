@@ -1,6 +1,20 @@
 """Explainable potion choice over replay-validated routes, never executable commands."""
 from collections import deque
 
+# Combat HP prices (#101): every hand-set HP equivalent the automatic choice uses, on one
+# scale and in one place. Search and health()['loss'] do not read them. check_potion_policy pins them.
+SMOKE_LOSS_HP = 15  # raw loss a T1 Smoke probe win may cost before escaping is preferred
+REVIVAL_HP = 20  # a spent Lizard Tail or Fairy costs max HP plus this
+BOSS_HEAL_WEIGHT = .25  # the next act heals 75% of missing HP after a healing Boss (A5+; full below)
+# Keep cost of one bottle: (a refill frees its slot, kept for a near threat, otherwise).
+POTION_HP = {'premium': (8, 25, 15), 'strong': (5, 20, 10), 'ordinary': (3, 20, 5)}
+# A bottle that heals the same HP whenever it is drunk does not save that heal by being drunk now.
+POTION_HEAL_PCT = {'BloodPotion': 20}  # % of max HP; Sacred Bark doubles it
+# Hand access and long-fight scaling: kept above the other strong bottles.
+PREMIUM = {'Swift Potion', 'GamblersBrew', 'DistilledChaos', 'HeartOfIron', 'CultistPotion'}
+STRONG = PREMIUM | {'GhostInAJar', 'DuplicationPotion', 'Dexterity Potion', 'Strength Potion', 'PowerPotion',
+                    'SkillPotion', 'AttackPotion', 'ColorlessPotion', 'EntropicBrew', 'SneckoOil'}
+
 
 def key(value):
     return ''.join(c for c in value.lower() if c.isalnum())
@@ -73,8 +87,8 @@ def smoke_opening(game):
 
 
 def smoke_threshold(game):
-    threshold = game.get('solver_auto_context', {}).get('smoke_loss_threshold', 15)
-    return threshold if type(threshold) is int and threshold >= 0 else 15
+    threshold = game.get('solver_auto_context', {}).get('smoke_loss_threshold', SMOKE_LOSS_HP)
+    return threshold if type(threshold) is int and threshold >= 0 else SMOKE_LOSS_HP
 
 
 def smoke_probe_keeps(plan, game):
@@ -86,12 +100,8 @@ def smoke_probe_keeps(plan, game):
             and max(0, game['current_hp'] - plan['hp']) < threshold)
 
 
-def recommend(game, branches):
-    profile = assess_deck(game)
-    fallback = next((b for b in branches if b.get('available') and b.get('smoke_stop_loss')
-                     and not b.get('new_permanent_curse')), None)
-    if fallback and game.get('solver_auto_context', {}).get('run_auto') is True:
-        return dict(branch=fallback['id'], reason='无药预算内未找到低战损胜线，执行T1烟雾止损候选', assessment=profile)
+def potion_supply(game):
+    """Post-combat drop chance, and whether a drunk bottle's slot is likely or surely refilled."""
     context = game.get('solver_auto_context', {})
     relics = {r['id'] for r in game.get('relics', [])}
     probability = context.get('potion_drop_probability')
@@ -102,6 +112,60 @@ def recommend(game, branches):
     full = bool(potions) and all(p['id'] != 'Potion Slot' for p in potions)
     supply = isinstance(probability, (int, float)) and probability >= .6
     guaranteed = probability == 1 and 'White Beast Statue' in relics and 'Sozu' not in relics
+    return probability, supply and full, guaranteed
+
+
+def hp_weight(game):
+    """Share of this fight's HP loss that is still missing when the next fight starts."""
+    if game.get('solver_auto_context', {}).get('boss_heal') is not True:
+        return 1
+    return BOSS_HEAL_WEIGHT if game.get('ascension_level', 20) >= 5 else 0
+
+
+def effective_loss(game, branch, profile):
+    """A winning branch's cost on one HP scale: weighted loss, bottle keep costs, revivals (#101)."""
+    _, likely_refill, guaranteed = potion_supply(game)
+    relics = {r['id'] for r in game.get('relics', [])}
+    max_hp = game.get('max_hp', 80)
+    potions = game.get('potions', [])
+    bottles = 0
+    for use in branch.get('potion_uses', []):
+        potion = potions[use['slot']]['id']
+        valuable = potion in STRONG or (potion == 'Ancient Potion' and game.get('act') == 2)
+        covers_gap = ((potion in {'Fire Potion', 'SteroidPotion', 'Energy Potion'} and '爆发不足' in profile['weaknesses'])
+                      or (potion == 'Explosive Potion' and '群攻不足' in profile['weaknesses'])
+                      or (potion in {'Block Potion', 'SpeedPotion'} and '防御不足' in profile['weaknesses']))
+        reserve = profile['reserve'] and (valuable or covers_gap)
+        refill_hp, reserve_hp, keep_hp = POTION_HP['premium' if potion in PREMIUM else 'strong' if valuable else 'ordinary']
+        # Full inventory discounts strong bottles too; otherwise it hoards
+        # Strength/Dexterity even when the next drop is likely to be wasted.
+        # A consumed bottle creates a real slot. A guaranteed refill lowers its
+        # reserve cost even when the deck screen recommends keeping that type.
+        free_slot = branch.get('empty_potion_slots', 0) > 0
+        if guaranteed and free_slot:
+            bottles += refill_hp
+        elif reserve:
+            bottles += reserve_hp
+        elif likely_refill and free_slot:
+            bottles += refill_hp
+        else:
+            bottles += keep_hp
+        # Kept, the bottle heals the same later; only drinking to free a slot for a refill skips this.
+        if not ((guaranteed or likely_refill) and free_slot):
+            bottles += max_hp * POTION_HEAL_PCT.get(potion, 0) * (2 if 'SacredBark' in relics else 1) // 100
+    # A winning line consuming a revival is not equivalent to preserving it.
+    revival = (max_hp + REVIVAL_HP) * (bool(branch.get('used_tail')) + branch.get('used_fairy', 0))
+    loss = branch['loss'] * hp_weight(game)
+    return dict(loss=loss, potions=bottles, revival=revival, total=loss + bottles + revival)
+
+
+def recommend(game, branches):
+    profile = assess_deck(game)
+    fallback = next((b for b in branches if b.get('available') and b.get('smoke_stop_loss')
+                     and not b.get('new_permanent_curse')), None)
+    if fallback and game.get('solver_auto_context', {}).get('run_auto') is True:
+        return dict(branch=fallback['id'], reason='无药预算内未找到低战损胜线，执行T1烟雾止损候选', assessment=profile)
+    probability, likely_refill, guaranteed = potion_supply(game)
     winners = [b for b in branches if b.get('available') and b.get('won')]
     if not winners:
         return dict(branch=None, reason='未找到可验证的获胜路线，停止自动', assessment=profile)
@@ -111,49 +175,14 @@ def recommend(game, branches):
     if clean:
         winners = clean
     baseline = min((b for b in winners if not b.get('potion_uses')), key=lambda b: b['loss'], default=None)
-    # Hand access and long-fight scaling: kept above the other strong bottles.
-    premium = {'Swift Potion', 'GamblersBrew', 'DistilledChaos', 'HeartOfIron', 'CultistPotion'}
-    strong = premium | {'GhostInAJar', 'DuplicationPotion',
-              'Dexterity Potion', 'Strength Potion', 'PowerPotion',
-              'SkillPotion', 'AttackPotion', 'ColorlessPotion', 'EntropicBrew', 'SneckoOil'}
-
-    # The next act heals 75% of missing HP after this Boss (A5+; full below), so only the rest counts.
-    hp_weight = (.25 if game.get('ascension_level', 20) >= 5 else 0) if context.get('boss_heal') is True else 1
-    heal_note = {1: '', .25: '；首领战后回血，战损按 1/4 计', 0: '；首领战后回满血，战损不计'}[hp_weight]
+    weight = hp_weight(game)
+    heal_note = {1: '', BOSS_HEAL_WEIGHT: '；首领战后回血，战损按 1/4 计', 0: '；首领战后回满血，战损不计'}[weight]
 
     def price(branch):
-        total = 0
-        for use in branch.get('potion_uses', []):
-            potion = potions[use['slot']]['id']
-            valuable = potion in strong or (potion == 'Ancient Potion' and game.get('act') == 2)
-            covers_gap = ((potion in {'Fire Potion', 'SteroidPotion', 'Energy Potion'} and '爆发不足' in profile['weaknesses'])
-                          or (potion == 'Explosive Potion' and '群攻不足' in profile['weaknesses'])
-                          or (potion in {'Block Potion', 'SpeedPotion'} and '防御不足' in profile['weaknesses']))
-            reserve = profile['reserve'] and (valuable or covers_gap)
-            # Full inventory discounts strong bottles too; otherwise it hoards
-            # Strength/Dexterity even when the next drop is likely to be wasted.
-            # A consumed bottle creates a real slot. A guaranteed refill lowers its
-            # reserve cost even when the deck screen recommends keeping that type.
-            free_slot = branch.get('empty_potion_slots', 0) > 0
-            top = potion in premium
-            if guaranteed and free_slot:
-                total += 8 if top else 5 if valuable else 3
-            elif reserve:
-                total += 25 if top else 20
-            elif supply and full and free_slot:
-                total += 8 if top else 5 if valuable else 3
-            else:
-                total += 15 if top else 10 if valuable else 5
-            # Blood Potion heals the same HP if kept, so its own heal is not saved loss.
-            # Only the refill cases above (drink to free a slot) skip this.
-            refill = (guaranteed or (supply and full)) and free_slot
-            if potion == 'BloodPotion' and not refill:
-                total += game.get('max_hp', 80) * (40 if 'SacredBark' in relics else 20) // 100
-        return total
+        return effective_loss(game, branch, profile)['potions']
 
     def score(b):
-        # A winning line consuming a revival is not equivalent to preserving it.
-        return b['loss'] * hp_weight + price(b) + (game.get('max_hp', 80) + 20) * (bool(b.get('used_tail')) + b.get('used_fairy', 0))
+        return effective_loss(game, b, profile)['total']
 
     chosen = min(winners, key=lambda b: (score(b), b['loss'], len(b.get('potion_uses', []))))
     saved = round(baseline['loss'] - chosen['loss'], 1) if baseline else None
@@ -161,7 +190,7 @@ def recommend(game, branches):
         reason = '无药未找到胜线，优先保命' if baseline is None else f'省 {saved:g} 血；用药门槛 {price(chosen)}'
         if baseline is not None: reason += heal_note
         if guaranteed and chosen.get('empty_potion_slots', 0) > 0: reason += '；白兽雕像，合法用药腾槽后可接战后药水'
-        elif supply and full and chosen.get('empty_potion_slots', 0) > 0: reason += '；满栏且掉药概率高'
+        elif likely_refill and chosen.get('empty_potion_slots', 0) > 0: reason += '；满栏且掉药概率高'
     else:
         reason = '保留药水；收益未超过用药/保留价值' + heal_note
     if chosen.get('used_tail') or chosen.get('used_fairy'):
