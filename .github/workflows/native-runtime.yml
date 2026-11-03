@@ -82,6 +82,7 @@ jobs:
       - run: python tools/check_discovery_frames.py
       - run: python tools/check_armaments_identity.py
       - run: python tools/check_corruption_snecko.py
+      - run: python tools/check_equilibrium_ethereal.py
       - run: python tools/check_backend_protocol.py
       - run: python tools/check_loop_gate.py
       - run: python tools/check_executor_tiers.py
