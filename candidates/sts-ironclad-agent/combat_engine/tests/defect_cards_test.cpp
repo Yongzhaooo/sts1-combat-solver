@@ -878,6 +878,36 @@ int main() {
         check(bc.player.hasStatus<PS::EQUILIBRIUM>(), "Equilibrium should apply its power");
     }
     {
+        // EquilibriumPower.atEndOfTurnPreEndTurnCards retains every non-Ethereal card, so the
+        // end-of-turn shuffle sees only the Ethereal ones; each triggers addToTop, so they exhaust
+        // in reverse shuffled order (a Defect run diverged here: two Dazed exhausted swapped).
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::EQUILIBRIUM);
+        bc.cards.createTempCardInHand(CardInstance(CardId::DEFEND_BLUE));
+        bc.cards.createTempCardInHand(CardInstance(CardId::DAZED));
+        bc.cards.createTempCardInHand(CardInstance(CardId::VOID));
+        const auto exhaustOrder = [&](std::vector<CardId> shuffled, int turn) {
+            java::Collections::shuffle(shuffled.begin(), shuffled.end(),
+                    java::Random(bc.seed + static_cast<std::uint64_t>(bc.floorNum) * 55ULL + turn + 1));
+            std::vector<CardId> out;
+            for (auto it = shuffled.rbegin(); it != shuffled.rend(); ++it) {
+                if (*it != CardId::DEFEND_BLUE) out.push_back(*it);
+            }
+            return out;
+        };
+        int turn = 0;
+        while (exhaustOrder({CardId::DAZED, CardId::VOID}, turn)
+               == exhaustOrder({CardId::DEFEND_BLUE, CardId::DAZED, CardId::VOID}, turn)) {
+            ++turn;
+        }
+        bc.turn = turn;
+        const auto expected = exhaustOrder({CardId::DAZED, CardId::VOID}, turn);
+        search::Action(search::ActionType::END_TURN).execute(bc);
+        check(bc.cards.exhaustPile.size() == 2 && bc.cards.exhaustPile[0].getId() == expected[0]
+              && bc.cards.exhaustPile[1].getId() == expected[1],
+              "Equilibrium's retained cards should stay out of the end-of-turn shuffle");
+    }
+    {
         // Claw: damage, then every Claw card gains 2 for the rest of combat.
         BattleContext bc = freshBattle();
         const int hp = bc.monsters.arr[0].curHp;
