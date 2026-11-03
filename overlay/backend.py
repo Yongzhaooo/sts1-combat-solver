@@ -636,8 +636,16 @@ class Advisor:
                 self.native_search.execute(replay, int(action.bits))
             smoke = any(view['game']['potions'][slot]['id'] == 'SmokeBomb' for slot in slots)
             if not uses and not (smoke and plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)):
+                # The native result does not say whether bottle lines were explored, only whether
+                # the search was cut short and whether its best line wins while keeping the bottles.
+                if self.interrupt.is_set() or plan.get('memory_capped'):
+                    message = '搜索提前结束，未找到使用路线'
+                elif plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY):
+                    message = '搜索完成，最佳胜线保留药水'
+                else:
+                    message = '本轮搜索未找到使用路线'
                 self.branch_info.append({'id': branch_id, 'name': name, 'available': False,
-                                         'message': '本轮搜索未找到使用路线'})
+                                         'message': message})
                 return
             from plan_reduction import drop_potions
             won = plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
@@ -672,6 +680,10 @@ class Advisor:
             for u in uses:
                 turns.setdefault(u['turn'], []).append(names[u['slot']])
             label = ' '.join(f"T{turn} " + '+'.join(bottles) for turn, bottles in turns.items())
+            # A bottle set whose plan leaves some allowed bottles undrunk must not read like the single-bottle row.
+            unused = [names[slot] for slot in slots if slot not in initial_slots_used]
+            if unused and not smoke:
+                label += ' · ' + '+'.join(unused) + ' 未用'
             if smoke:
                 label = ('T1 收割致胜 · 保留烟雾弹' if plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
                          else 'T1 收割后烟雾弹逃跑' if len(plan['actions']) > 1 else 'T1 烟雾弹 · 立即逃跑')
