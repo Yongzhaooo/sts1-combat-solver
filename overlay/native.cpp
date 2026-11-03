@@ -113,6 +113,25 @@ thread_local int initialMaxHp=0;
 thread_local double initialDeckCurseHp=0;
 thread_local bool initialParasiteRisk=false;
 thread_local int initialGoldWealth=0;
+thread_local std::vector<std::pair<int,int>> initialGenetic;  // (uniqueId, misc) of each Genetic Algorithm at the root
+// Genetic Algorithm's IncreaseMiscAction persists in the deck, so this fight's growth is run value.
+// shortcut: the snapshot has no master-deck link, so a copy generated before the root (Hello World) also counts; rare.
+static int geneticGrowth(const BattleContext &bc) {
+    int total=0;
+    for(const auto &[id,start]:initialGenetic) {
+        int end=start;
+        auto card=[&](const CardInstance &c) {
+            if(c.id==CardId::GENETIC_ALGORITHM && c.uniqueId==id) end=std::max(end,static_cast<int>(c.specialData));
+        };
+        for(int i=0;i<bc.cards.cardsInHand;++i) card(bc.cards.hand[i]);
+        for(const auto &c:bc.cards.drawPile) card(c);
+        for(const auto &c:bc.cards.discardPile) card(c);
+        for(const auto &c:bc.cards.exhaustPile) card(c);
+        for(const auto &c:bc.cards.stasisCards) card(c);
+        total+=end-start;
+    }
+    return total;
+}
 static int fairyCount(const BattleContext &bc) {
     int count=0;
     for(int i=0;i<bc.potionCapacity;++i) count+=bc.potions[i]==Potion::FAIRY_POTION;
@@ -235,6 +254,9 @@ double overlayRecoveryBonus(const BattleContext &bc) {
         + EXTRA_PER_MAX_HP*std::max(0,bc.player.maxHp-initialMaxHp)
         // Implant's relic reward must not earn Feed's growth premium.
         - (EXTRA_PER_MAX_HP+search::BattleScumSearcher2::maxHpGainWeight)*curseGrowth
+        // A growth point blocks one more damage in every later fight it is played, as a max HP point holds one
+        // more HP: price it at Feed's permanent max-HP premium (the engine weight plus EXTRA_PER_MAX_HP).
+        + (EXTRA_PER_MAX_HP+search::BattleScumSearcher2::maxHpGainWeight)*geneticGrowth(bc)
         + carriedRelicValue(bc) - deckCurseHp(bc)
         + std::max(0,goldWealth(bc)-initialGoldWealth)/GOLD_PER_HP);
 }
@@ -298,7 +320,8 @@ static bool macroFinish(const BattleContext &root, const BattleContext &end) {
     for (int i = 0; i < root.potionCapacity; ++i) if (root.potions[i] != end.potions[i]) return false;
     // Full HP is not an upper bound on permanent card rewards.
     auto reward = [](const CardInstance &c) { return c.id == CardId::FEED || c.id == CardId::HAND_OF_GREED
-        || c.id == CardId::RITUAL_DAGGER || c.id == CardId::WISH || c.id == CardId::LESSON_LEARNED; };
+        || c.id == CardId::RITUAL_DAGGER || c.id == CardId::WISH || c.id == CardId::LESSON_LEARNED
+        || c.id == CardId::GENETIC_ALGORITHM; };
     for (int i = 0; i < root.cards.cardsInHand; ++i) if (reward(root.cards.hand[i])) return false;
     for (auto &c : root.cards.drawPile) if (reward(c)) return false;
     for (auto &c : root.cards.discardPile) if (reward(c)) return false;
@@ -415,6 +438,15 @@ PYBIND11_MODULE(overlay_search, m) {
         initialParasiteRisk=root.monsters.arr[0].id==MonsterId::WRITHING_MASS
             && !root.monsters.arr[0].miscInfo && !root.player.hasRelic<RelicId::OMAMORI>();
         initialGoldWealth=goldWealth(root);
+        initialGenetic.clear();
+        auto genetic=[](const CardInstance &c) {
+            if(c.id==CardId::GENETIC_ALGORITHM) initialGenetic.emplace_back(c.uniqueId,c.specialData);
+        };
+        for(int i=0;i<root.cards.cardsInHand;++i) genetic(root.cards.hand[i]);
+        for(const auto &c:root.cards.drawPile) genetic(c);
+        for(const auto &c:root.cards.discardPile) genetic(c);
+        for(const auto &c:root.cards.exhaustPile) genetic(c);
+        for(const auto &c:root.cards.stasisCards) genetic(c);
         searchGeneration=generation.load();
         finishedRounds=0;
         memoryPeak=memoryMcts=memoryBeam=0; memoryCapped=false;
