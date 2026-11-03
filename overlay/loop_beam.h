@@ -48,7 +48,7 @@ struct Node {
     std::shared_ptr<BattleContext> state;
     std::shared_ptr<const Path> path;
     double powers = 0;
-    std::array<double, 3> scores{};
+    std::array<double, 4> scores{};
     std::string key;
     std::size_t keyHash = 0;
     std::shared_ptr<const Path> base;  // deferred: parent path of `step`; `path` is null until materialize()
@@ -232,6 +232,10 @@ inline Features features(const BattleContext &b) {
 inline double score(const Node &n, int lane, const Features &f) {
     const auto &b = *n.state;
     const int enemy = f.enemy, incoming = f.incoming;
+    // Patience lane (pass() ranks it only for pay-HP families): HP first, then progress, with no charge per turn and no
+    // credit for energy, hand, block or the next attack. A pay-HP circuit (Bloodletting) buys energy, cards and block now;
+    // the other lanes count those and charge every turn, so a free loop over many turns was pruned (issue #73).
+    if (lane == 3) return 8 * b.player.curHp - 0.1 * enemy + 5 * n.powers;
     // Separate preferences retain setup, immediate progress, and survival alternatives.
     const double hpWeight[] = {4, 2, 8};
     const double setupWeight[] = {10, 3, 5};
@@ -344,12 +348,18 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
         return legalActions.edges;
     };
     auto stop = [&]() { return stats.transitions >= cap || cancelled(); };
+    const bool payHp = loop_gate::pseudo(loop_gate::matches(root));
+    const int lanes = payHp ? 4 : 3;  // lane 3 (patience) only for pay-HP families
+    // The patience lane keeps a quarter width: its HP-first order is narrow, and every extra state spends transitions the
+    // other lanes had before (a full-width lane lost Boss lines elsewhere).
+    const auto laneWidth = [&](int lane) { return lane == 3 ? std::max(1, width / 4) : width; };
     // A terminal-run HP floor retains the per-turn heuristic; other shortening charges the whole path.
     auto rank = [&](Node &n) {
         const int length = n.deferred ? (n.base ? n.base->length : 0) + 1 : (n.path ? n.path->length : 0);
         const double charge = playWeight * (winFloor >= 0 ? n.state->player.cardsPlayedThisTurn : length);
         const auto f = features(*n.state);
-        n.scores = {score(n, 0, f) - charge, score(n, 1, f) - charge, score(n, 2, f) - charge};
+        n.scores = {score(n, 0, f) - charge, score(n, 1, f) - charge, score(n, 2, f) - charge,
+                    payHp ? score(n, 3, f) - charge : 0.0};
     };
     std::vector<Node> frontier{{std::make_shared<BattleContext>(root), nullptr, 0}};
     // Buffers reused by every layer and every compaction.
@@ -360,7 +370,6 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
     std::vector<Ranked> keyed;
     KeySet seen;
     // Damage caps, Intangible and revival phases need an exit from the current turn even while loop lanes score well.
-    const bool payHp = loop_gate::pseudo(loop_gate::matches(root));
     const bool turnExits = retainTurnExits(root);
     // The transition cap bounds a pass; 256 actions did not reach the end of long loop fights (Awakened One, 320+300 HP).
     for (int depth = 0; depth < 4096 && !frontier.empty() && !stop(); ++depth) {
@@ -391,10 +400,10 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
             order.resize(candidates.size());
             std::iota(order.begin(), order.end(), 0);
             keep.assign(candidates.size(), 0);
-            for (int lane = 0; lane < 3; ++lane) {
+            for (int lane = 0; lane < lanes; ++lane) {
                 sortByLane(order, lane);
                 seen.clear();
-                for (std::size_t k = 0; k < order.size() && seen.size() < std::size_t(lane + 1) * width; ++k)
+                for (std::size_t k = 0; k < order.size() && seen.size() < std::size_t(lane) * width + laneWidth(lane); ++k)
                     if (seen.insert(keyRef(candidates[order[k]])).second) keep[order[k]] = 1;
             }
             // Each turn's leaders for the per-turn quota below. Later candidates only add turns, so the final quota is no
@@ -476,10 +485,10 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
         next.clear();
         // Only survivors get a Path; the next layer needs neither their scores nor their keys.
         const auto advance = [&](Node &n) { materialize(n); next.push_back(Node{n.state, n.path, n.powers}); };
-        for (int lane = 0; lane < 3; ++lane) {
+        for (int lane = 0; lane < lanes; ++lane) {
             sortByLane(order, lane);
             int kept = 0;
-            for (std::size_t k = 0; k < order.size() && kept < width; ++k) {
+            for (std::size_t k = 0; k < order.size() && kept < laneWidth(lane); ++k) {
                 auto &n = candidates[order[k]];
                 if (seen.insert(keyRef(n)).second) { advance(n); ++kept; }
             }
