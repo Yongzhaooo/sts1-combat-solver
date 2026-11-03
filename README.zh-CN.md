@@ -61,4 +61,6 @@ agent 负责局外决策，求解器负责战斗。需要 v0.9.0 或更新版本
 
 特别感谢七月流火（猫火）长期测试与反馈。
 
+感谢合作开发者[有事问春风](https://github.com/yang6688866)：故障机器人（Defect）分支的底座由有事问春风完成，并在持续维护。感谢付出。
+
 感谢 [gamerpuppy/sts_lightspeed](https://github.com/gamerpuppy/sts_lightspeed) 提供 C++ 战斗模拟与搜索基础，[destire-mio/sts-ironclad-agent](https://github.com/destire-mio/sts-ironclad-agent) 提供改写的 `combat4r` 和 Python 绑定，[ForgottenArbiter/CommunicationMod](https://github.com/ForgottenArbiter/CommunicationMod) 提供游戏通信桥；锁定版本和许可证见[第三方声明](THIRD_PARTY_NOTICES.md)。[hotwords123/StS2.RandomForeseer](https://github.com/hotwords123/StS2.RandomForeseer) 启发了随机预知的做法，[Torch1230/CombatSolver](https://github.com/Torch1230/CombatSolver) 的规则镜像和动作核对设计也给了参考；这两项是《杀戮尖塔 2》的项目，本仓库未包含它们的代码。
