@@ -144,6 +144,11 @@ def recommend(game, branches):
                 total += 8 if top else 5 if valuable else 3
             else:
                 total += 15 if top else 10 if valuable else 5
+            # Blood Potion heals the same HP if kept, so its own heal is not saved loss.
+            # Only the refill cases above (drink to free a slot) skip this.
+            refill = (guaranteed or (supply and full)) and free_slot
+            if potion == 'BloodPotion' and not refill:
+                total += game.get('max_hp', 80) * (40 if 'SacredBark' in relics else 20) // 100
         return total
 
     def score(b):
