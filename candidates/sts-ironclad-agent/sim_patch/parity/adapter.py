@@ -25,6 +25,11 @@ PILES = ("hand", "draw_pile", "discard_pile", "exhaust_pile")
 ORB_IDS = {"Lightning": "LIGHTNING", "Frost": "FROST", "Dark": "DARK", "Plasma": "FUSION"}
 ORB_PASSIVE_EVOKE = {"LIGHTNING": (3, 8), "FROST": (2, 5), "DARK": (6, 8), "FUSION": (1, 2)}
 ORB_IGNORES_FOCUS = {"FUSION"}
+# An empty orb slot should export a null id, and usually does, but the same combat
+# can also report the literal string "Empty" for one slot and null for the next.
+# Both mean "no orb here", so a comparison must not treat "Empty" as a filled slot
+# (it is truthy, which is exactly how it slipped through).
+EMPTY_ORB_IDS = frozenset({None, "", "Empty"})
 PRESENTATION = {"name", "raw_description", "description", "description_visible",
                 "spire_lab_observer_version", "screen_name"}
 
@@ -286,7 +291,7 @@ class Comparator:
             slots = combat["player"]["orbs"]
             expected["player"]["orbs"] = [
                 self.original_orb(observation.consume(f"/game/combat_state/player/orbs/{index}"))
-                for index, raw in enumerate(slots) if raw.get("id")]
+                for index, raw in enumerate(slots) if raw.get("id") not in EMPTY_ORB_IDS]
             expected["player"]["orb_slots"] = len(slots)
             actual["player"]["orbs"] = [self.simulator_orb(orb, battle.player.focus)
                                         for orb in battle.player.orbs]

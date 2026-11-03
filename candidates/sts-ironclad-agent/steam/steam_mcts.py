@@ -328,10 +328,20 @@ def card_snapshot(card):
     return result
 
 
+# An empty orb slot is reported as a null id, but the export is not consistent
+# about it: the same combat can report a missing id on one slot and the literal
+# string "Empty" on the next. Only the null form imports, so both are folded to
+# None here and the engine keeps rejecting anything it does not recognise.
+EMPTY_ORB_IDS = frozenset({None, "", "Empty"})
+
+
 def orb_snapshot(orb):
-    """CommunicationMod's orb entry. A null id marks an empty slot; it is kept so
-    the list length stays the slot count."""
-    return {"id": orb.get("id"),
+    """CommunicationMod's orb entry. An empty slot keeps a null id so the list
+    length stays the slot count."""
+    identifier = orb.get("id")
+    if identifier in EMPTY_ORB_IDS:
+        identifier = None
+    return {"id": identifier,
             "passive": int(orb.get("passive_amount") or 0),
             "evoke": int(orb.get("evoke_amount") or 0)}
 
