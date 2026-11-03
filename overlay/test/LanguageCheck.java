@@ -19,6 +19,9 @@ public class LanguageCheck {
         require(I18n.backend("使用 火焰药水 / 金刚杵").equals("Use  火焰药水 / 金刚杵"), "Chinese game names are not partially translated");
         require(I18n.backend("本轮搜索未找到使用路线").equals("No potion-use route found"), "route search reason");
         require(I18n.backend("药水不改变结果，已并入不用药路线").equals("Potion does not change the result; merged into the no-potion route"), "merged potion route reason");
+        require(I18n.backend("搜索完成，最佳胜线保留药水").equals("Search finished; the best winning route keeps the potion"), "kept potion reason");
+        require(I18n.backend("搜索提前结束，未找到使用路线").equals("Search ended early; no potion-use route found"), "cut search reason");
+        require(I18n.backend("T1 熔炉的祝福 · 爆炸药水 未用").equals("T1 熔炉的祝福 · 爆炸药水 unused"), "bottle set marks undrunk bottles");
         require(I18n.t("本轮无可选路线").equals("No selectable route this search"), "route availability is not bottle usability");
         require(I18n.backend("Unexpected solver error: original details").equals("Unexpected solver error: original details"), "unknown route error remains intact");
         String longError = "Failed to validate potion route at turn 12: " + String.join(" ", java.util.Collections.nCopies(30, "original-error-detail"));

@@ -19,13 +19,16 @@
 打钱|Gold recovery
 执行动作与路线不一致|Action differs from planned route
 拒绝非战斗命令|Non-combat command rejected
+搜索完成，最佳胜线保留药水|Search finished; the best winning route keeps the potion
 搜索修改了输入快照|Search modified the input snapshot
+搜索提前结束，未找到使用路线|Search ended early; no potion-use route found
 搜索战斗路线|Searching combat routes
 搜索超时，请手动接管当前战斗并选择路线（或在设置中降低预算）。|Search timed out; take over combat and choose route (or reduce budget).
 敌人|Enemy 
 无效搜索预算|Invalid search budget
 无效的|Invalid 
 未知操作|Unknown operation
+未用|unused
 本轮尚无可用路线，请增加搜索预算|No available route; increase search budget
 本轮搜索未找到使用路线|No potion-use route found
 本轮未找到完整路线|No complete route found
