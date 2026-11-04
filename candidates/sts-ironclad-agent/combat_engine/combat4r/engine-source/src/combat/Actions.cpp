@@ -1483,7 +1483,7 @@ Action Actions::CodexAction() {
         bc.inputState = InputState::CARD_SELECT;
         bc.cardSelectInfo.cardSelectTask = CardSelectTask::CODEX;
         bc.cardSelectInfo.codexCards() =
-                generateDiscoveryCards(bc.cardRandomRng, CharacterClass::IRONCLAD, CardType::INVALID);
+                generateDiscoveryCards(bc.cardRandomRng, bc.player.cc, CardType::INVALID);
     }};
 }
 
