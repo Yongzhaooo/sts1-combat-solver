@@ -19,6 +19,8 @@ game = dict(current_hp=80, max_hp=80, act=1, screen_type='NONE',
 assert smoke_opening(game)
 assert not smoke_opening({**game, 'solver_auto_context': {}})
 assert not smoke_opening({**game, 'combat_state': {'turn': 2}})
+# #117: a battle-start picker (Gambling Chip) is not an opening; the mod must not wait for a smoke policy there.
+assert not smoke_opening({**game, 'screen_type': 'HAND_SELECT'})
 assert not smoke_opening({**game, 'solver_auto_context': {'smoke_opening': False}})
 for loss, keep in [(14, True), (15, False), (16, False)]:
     assert smoke_probe_keeps(dict(outcome=1, hp=80-loss, post_hp=80), game) is keep

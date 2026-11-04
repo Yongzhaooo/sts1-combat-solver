@@ -446,6 +446,12 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         return turn==1 && played==0 && received==0 && hpLoss==0;
     }
 
+    /** The backend owns the smoke-opening rule; a plan it solved outside the opening (a battle-start picker) never asks again (#117). */
+    static boolean smokePolicyMissing(JsonObject result) {
+        return result.has("smoke_opening") && result.get("smoke_opening").getAsBoolean()
+            && !(result.has("smoke_policy") && result.get("smoke_policy").getAsBoolean());
+    }
+
     /** The Settings switch gates the rule; off means a Boss gets the standard budget and the full search like any fight. */
     static boolean bossFastFinish(boolean enabled,boolean bossRoom,int act,int ascension,int remainingBosses,boolean noHealing) {
         return enabled && bossFastFinish(bossRoom,act,ascension,remainingBosses,noHealing);
@@ -560,10 +566,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(!ready())return;
         if(smokeOpening(GameActionManager.turn,AbstractDungeon.actionManager.cardsPlayedThisCombat.size(),
                 GameActionManager.damageReceivedThisCombat,GameActionManager.hpLossThisCombat)
-                && (!result.has("smoke_policy") || !result.get("smoke_policy").getAsBoolean())) {
-            for(com.megacrit.cardcrawl.potions.AbstractPotion potion:AbstractDungeon.player.potions)
-                if("SmokeBomb".equals(potion.ID) && potion.canUse()) {recalculate("smoke_opening");return;}
-        }
+                && smokePolicyMissing(result)) {recalculate("smoke_opening");return;}
         JsonObject advice=result.getAsJsonObject("auto_recommendation");
         if(advice==null || !advice.has("branch") || advice.get("branch").isJsonNull()) {
             fail(I18n.t("自动模式未找到获胜路线，请手动检查"));return;

@@ -15,6 +15,13 @@ public final class ModeCheck {
         require(!SolverMod.smokeOpening(1,0,1,0), "real damage closes entry even after healing");
         require(!SolverMod.smokeOpening(1,0,0,1), "HP loss closes entry");
         require(!SolverMod.smokeOpening(2,0,0,0), "T2 closes entry");
+        com.google.gson.JsonParser smokeJson = new com.google.gson.JsonParser();
+        require(SolverMod.smokePolicyMissing(smokeJson.parse("{\"smoke_opening\":true,\"smoke_policy\":false}").getAsJsonObject()),
+            "a smoke opening solved without the policy (run_auto off) is solved again");
+        require(!SolverMod.smokePolicyMissing(smokeJson.parse("{\"smoke_opening\":true,\"smoke_policy\":true}").getAsJsonObject()),
+            "the smoke policy answer is used");
+        require(!SolverMod.smokePolicyMissing(smokeJson.parse("{\"smoke_opening\":false,\"smoke_policy\":false}").getAsJsonObject()),
+            "#117: a root the backend does not take as a smoke opening (Gambling Chip picker) never loops");
         // Flags -> mode. outsideMode: 0 no outside suggestions, 1 the agent confirms each outside step, 2 pilot.
         for (boolean run : new boolean[]{false, true})
             require(RunMode.of(2, run) == RunMode.PILOT, "pilot ignores runAuto");
