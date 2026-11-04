@@ -30,7 +30,14 @@ def cut(export_path, name):
             command = None
         elif event['k'] == 'fault':
             break
-    fixture = {'source': Path(export_path).name, 'root': export['recent_battles']['current']['root'], 'steps': steps}
+    # The fight that faulted may already be in completed; a potion picked up on the reward screen
+    # opens a partial record whose root is that screen, so only a combat root counts.
+    floor = events[start].get('f')
+    battles = [b for b in [*export['recent_battles'].get('completed', []), export['recent_battles'].get('current')]
+               if b and b.get('root') and b['root']['game_state'].get('floor') == floor
+               and b['root']['game_state'].get('room_phase') == 'COMBAT']
+    assert battles, 'no recorded root for floor %s' % floor
+    fixture = {'source': Path(export_path).name, 'root': battles[-1]['root'], 'steps': steps}
     target = FIXTURES / (name + '.json')
     target.write_text(json.dumps(fixture, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     print('wrote %s: %d steps' % (target, len(steps)))

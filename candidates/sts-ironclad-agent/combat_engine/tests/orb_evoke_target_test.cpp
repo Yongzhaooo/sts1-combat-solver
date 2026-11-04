@@ -1,5 +1,6 @@
 #include "combat/BattleContext.h"
 #include "game/GameContext.h"
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -14,8 +15,8 @@ namespace {
     // A player-turn fight vs Lots of Slimes (three Small Spike Slimes and two
     // Small Acid Slimes, so five targets). Cracked Core is not equipped here;
     // the tests channel their own Lightning orb into the first empty slot.
-    BattleContext freshBattle() {
-        GameContext game(CharacterClass::DEFECT, 123, 0);
+    BattleContext freshBattle(std::uint64_t seed = 123) {
+        GameContext game(CharacterClass::DEFECT, seed, 0);
         game.regainControlAction = [](GameContext&) {};
         BattleContext battle;
         battle.init(game, MonsterEncounter::LOTS_OF_SLIMES);
@@ -143,8 +144,11 @@ int main() {
         // rolled all three targets while every monster was still alive: the game
         // hit monsters 0, 1 and 2, the engine hit 1, 2 and 2, so two of the
         // three rolls landed on the same slime and one of them was wasted.
-        {
-            BattleContext bc = freshBattle();
+        // The damage must also land before the next roll (addToTop): F12 slimes
+        // diverged when it was queued behind the later rolls. One seed can pass
+        // by luck, so every seed here must kill three.
+        for (std::uint64_t seed = 1; seed <= 64; ++seed) {
+            BattleContext bc = freshBattle(seed);
             // Cracked Core already filled slot 0; two channels fill the other two.
             for (int i = 0; i < 2; ++i) {
                 channel_now(bc, Orb::LIGHTNING);
@@ -168,6 +172,18 @@ int main() {
             check(aliveBefore - aliveCount(bc) == 3,
                   "each of the three passives must kill its own target, which requires "
                   "every roll to happen after the previous one resolved");
+        }
+
+        // NewRipAndTearAction addToTop's each hit, so the second roll skips the
+        // slime the first hit killed: two 7s against 7-HP slimes kill two.
+        for (std::uint64_t seed = 1; seed <= 64; ++seed) {
+            BattleContext bc = freshBattle(seed);
+            for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                bc.monsters.arr[i].curHp = 7;
+            }
+            bc.addToBot(Actions::RipAndTearAction(7, 2));
+            drain(bc);
+            check(aliveCount(bc) == 3, "each Rip and Tear hit must kill its own 7-HP slime");
         }
 
         // F30 (Byrd and Chosen, floor 30): every orb passive must roll its own
