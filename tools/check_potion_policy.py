@@ -411,3 +411,10 @@ assert feed_win['curse_hp'] == 0 and feed_win['max_hp'] == 83
 assert feed_win['value'] > clean['value'], (feed_win, clean)
 assert abs(sunk['value']-parasite_plan(implanted=True)['value']-1200) < 1e-6
 print('PASS: 1-HP clean victory outranks Darkstone/Feed curse rewards, cursed rescue survives, Omamori blocks permanent curse, sunk Implant preserves later Feed')
+
+# SelfRepairPower heals on victory: post_hp feeds the panel loss, deep refinement and branch choice.
+repair = snapshot(['STRIKE_RED'], hp=30, enemy_hp=1, potions=(),
+                  powers=[{'id': int(engine.PlayerStatus.SELF_REPAIR), 'amount': 7}])
+repaired = native.plan(battle(repair), 64, [], 0, 0)
+assert repaired['outcome'] == 1 and repaired['hp'] == 30 and repaired['post_hp'] == 37, repaired
+print('PASS: Self Repair victory heal counts in the projected post-combat HP')
