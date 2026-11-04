@@ -627,6 +627,8 @@ def build_snapshot(game_state, counters=None):
             # CommunicationMod always exports the orb list, empty slots included.
             "orb_slots": len(player.get("orbs") or []),
             "orbs": [orb_snapshot(orb) for orb in player.get("orbs") or []],
+            "lightning_channeled_this_combat": int(combat.get("lightning_channeled_this_combat") or 0),
+            "frost_channeled_this_combat": int(combat.get("frost_channeled_this_combat") or 0),
         },
         "hand": [card_snapshot(card) for card in combat.get("hand") or []],
         "draw_pile": [card_snapshot(card) for card in combat.get("draw_pile") or []],
