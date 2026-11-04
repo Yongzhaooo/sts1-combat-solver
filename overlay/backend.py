@@ -239,6 +239,7 @@ class Advisor:
         self.selected_branch = 'no-potion'
         self.root = None
         self.root_game = None
+        self.smoke_opening = False
         self.searching = []
         self.interrupt = threading.Event()
         self.manual_choice = False
@@ -280,6 +281,7 @@ class Advisor:
         s.actions.clear()
         s.pending_multi = None
         self.plan = None
+        self.smoke_opening = False
         self.branches = {}
         self.branch_info = []
         self.manual_choice = False
@@ -314,6 +316,8 @@ class Advisor:
         brew_order = (bool(brew_slots) and not any(r['id'] == 'Sozu' for r in self.root_game.get('relics', []))) and any(view['game']['potions'][slot]['id'] not in ('EntropicBrew', 'SmokeBomb')
                                              for slot, _ in potions)
         smoke_slots = [slot for slot, _ in potions if view['game']['potions'][slot]['id'] == 'SmokeBomb']
+        # The mod asks for the smoke policy only when this says the root is a smoke opening (#117).
+        self.smoke_opening = bool(smoke_slots)
         if smoke_slots and self.root_game.get('solver_auto_context', {}).get('run_auto') is True:
             self.solve_smoke_opening(view, smoke_slots[0], credit, started, before)
             return
@@ -872,6 +876,7 @@ class Advisor:
                 'won': won,
                 'boss_fast_finish': self.plan.get('boss_fast_finish', False),
                 'smoke_policy': self.plan.get('smoke_policy', False),
+                'smoke_opening': self.smoke_opening,
                 'seconds': self.plan['seconds'], 'simulations': self.plan['simulations'],
                 'remaining': len(s.actions), 'branch': self.selected_branch,
                 'branches': self.branch_info,
