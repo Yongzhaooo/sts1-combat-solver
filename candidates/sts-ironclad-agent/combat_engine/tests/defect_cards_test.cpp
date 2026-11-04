@@ -829,6 +829,39 @@ int main() {
         playCard(bc, CardId::REBOUND);
         check(hp - bc.monsters.arr[0].curHp == 9, "Rebound should deal 9");
         check(bc.player.hasStatus<PS::REBOUND>(), "Rebound should apply its power");
+        check(bc.cards.drawPile.empty(), "Rebound does not top itself (justEvoked)");
+        playCard(bc, CardId::STRIKE_BLUE);
+        check(!bc.cards.drawPile.empty() && bc.cards.drawPile.back().getId() == CardId::STRIKE_BLUE,
+              "the card after Rebound goes on top of the draw pile");
+        check(!bc.player.hasStatus<PS::REBOUND>(), "one Rebound tops one card");
+    }
+    {
+        // F33 (Bronze Automaton): Echo Form doubles Rebound. ReboundPower.onAfterUseCard
+        // runs for the purgeOnUse copy too, so the copy's stack and its own reduce
+        // cancel and one stack is left (the engine skipped the copy and kept 3).
+        BattleContext bc = freshBattle();
+        bc.player.buff<PS::ECHO_FORM>(1);
+        playCard(bc, CardId::REBOUND);
+        check(bc.player.getStatus<PS::REBOUND>() == 1, "Echo Form Rebound leaves one Rebound stack");
+        playCard(bc, CardId::STRIKE_BLUE);
+        check(!bc.cards.drawPile.empty() && bc.cards.drawPile.back().getId() == CardId::STRIKE_BLUE,
+              "the card after an Echo Form Rebound is topped");
+        check(!bc.player.hasStatus<PS::REBOUND>(), "that stack is spent");
+    }
+    {
+        // A second Rebound while one is active stacks to 2, is itself topped and
+        // leaves one stack for the next card.
+        BattleContext bc = freshBattle();
+        bc.player.energy = 5;
+        playCard(bc, CardId::REBOUND);
+        playCard(bc, CardId::REBOUND);
+        check(!bc.cards.drawPile.empty() && bc.cards.drawPile.back().getId() == CardId::REBOUND,
+              "the second Rebound is topped by the first");
+        check(bc.player.getStatus<PS::REBOUND>() == 1, "the second Rebound leaves one stack");
+        // A Power consumes the stack without being topped.
+        playCard(bc, CardId::DEFRAGMENT);
+        check(!bc.player.hasStatus<PS::REBOUND>(), "a Power spends the Rebound stack");
+        check(bc.cards.drawPile.size() == 1, "a Power is never topped");
     }
     {
         // Rupture: gains Strength whenever a card costs HP.

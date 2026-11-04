@@ -450,10 +450,13 @@ namespace sts {
                 // Rebound.java: damage, then the next card played goes on top of
                 // the draw pile (handled in BattleContext's card-purge path).
                 bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 12 : 9)));
-                // ReboundPower ships with justEvoked = true, so the Rebound card
-                // itself is not topped. The engine consumes one stack per played
-                // card, so seeding two stacks encodes that skip plus the real one.
-                bc.addToBot(Actions::BuffPlayer<PS::REBOUND>(2));
+                // ApplyPowerAction: a new ReboundPower ships with justEvoked = true, so
+                // the Rebound card itself is not topped; stacking onto an existing
+                // power adds 1 and keeps that power's flag (Echo Form's copy).
+                bc.addToBot({[] (BattleContext &bc) {
+                    if (!bc.player.hasStatus<PS::REBOUND>()) bc.player.reboundJustEvoked = true;
+                    bc.player.buff<PS::REBOUND>(1);
+                }});
                 return true;
 
             case CardId::RUPTURE:

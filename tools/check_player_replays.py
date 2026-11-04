@@ -1,4 +1,4 @@
-"""Replay recorded player fights action by action and require the game's monster HP after every action.
+"""Replay recorded player fights action by action and require the game's monster HP, energy and block after every action.
 
 Each fixture under fixtures/player-replays is cut from a player's state_divergence export: the
 combat root the solver imported, the commands the mod executed, and the monster HP the game
@@ -20,13 +20,20 @@ FIXTURES = ROOT / 'fixtures/player-replays'
 def cut(export_path, name):
     export = json.loads(Path(export_path).read_text(encoding='utf-8'))
     events = export['events']
-    start = max(i for i, e in enumerate(events) if e['k'] == 'combat_open')
+    # The panel reopens mid-fight (one combat_open per open); the fight's commands start at its first open.
+    opens = [i for i, e in enumerate(events) if e['k'] == 'combat_open']
+    start = opens[-1]
+    while len(opens) > 1 and events[opens[-2]].get('f') == events[start].get('f'):
+        opens.pop()
+        start = opens[-1]
     steps, command = [], None
     for event in events[start:]:
         if event['k'] == 'diag' and event.get('event') == 'execute':
             command = event['message']
         elif event['k'] == 'request' and command is not None and 'snap' in event:
-            steps.append({'command': command, 'monster_hp': [m[1] for m in event['snap']['monsters']]})
+            snap = event['snap']
+            steps.append({'command': command, 'monster_hp': [m[1] for m in snap['monsters']],
+                          'energy': snap['energy'], 'block': snap['block']})
             command = None
         elif event['k'] == 'fault':
             break
@@ -61,13 +68,23 @@ def check():
                 action = S.SearchAction(S.SearchActionType.END_TURN, 0, 0)
             elif words[0] == 'play':
                 action = S.SearchAction(S.SearchActionType.CARD, int(words[1]) - 1, int(words[2]) if len(words) > 2 else 0)
+            elif words[0] == 'choose':
+                # A hand-select screen lists the hand in order, so the choice index is the hand index.
+                action = S.SearchAction(S.SearchActionType.SINGLE_CARD_SELECT, int(words[1]))
             else:
                 raise ValueError('%s step %d: unsupported command %r' % (path.name, number, step['command']))
             assert action.is_valid(battle), (path.name, number, step['command'])
             action.execute(battle)
             got = [int(m.cur_hp) for m in battle.monsters]
+            if len(got) > len(step['monster_hp']):
+                # The engine keeps slots for unspawned monsters (Bronze Orbs before Spawn Orbs); the game lists none.
+                got = [hp for hp in got if hp > 0]
             assert got == step['monster_hp'], '%s step %d (%s): game %s, simulator %s' % (
                 path.name, number, step['command'], step['monster_hp'], got)
+            # Older fixtures recorded monster HP only.
+            for field, value in (('energy', battle.player.energy), ('block', battle.player.block)):
+                assert field not in step or int(value) == step[field], '%s step %d (%s): %s game %s, simulator %s' % (
+                    path.name, number, step['command'], field, step[field], int(value))
     print('PASS: %d player replays match the game after every action' % len(paths))
 
 
