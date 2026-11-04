@@ -1,9 +1,10 @@
 #pragma once
 namespace growth_gate {
-// shortcut: audit other character cards before extending this Ironclad pilot.
+// Ironclad and Defect cards; shortcut: audit Silent and Watcher cards before extending further.
 inline bool ordinary(CardId id) {
     if (id == CardId::INVALID) return false;
     if (getCardColor(id) == CardColor::RED) return id != CardId::INFERNAL_BLADE;
+    if (getCardColor(id) == CardColor::BLUE) return true;  // no Defect card gains max HP; Echo Form counts as a repeat below
     if (cardTypes[static_cast<int>(id)] == CardType::CURSE || cardTypes[static_cast<int>(id)] == CardType::STATUS) return true;
     switch (id) {
     case CardId::APOTHEOSIS: case CardId::APPARITION: case CardId::BANDAGE_UP: case CardId::BITE:
@@ -30,7 +31,7 @@ inline int remaining(const BattleContext &root, unsigned mask, bool generatedPot
     auto scan = [&](const CardInstance &c) {
         feeds += c.id == CardId::FEED;
         restore |= c.id == CardId::EXHUME;
-        repeat |= c.id == CardId::DUAL_WIELD || c.id == CardId::DOUBLE_TAP;
+        repeat |= c.id == CardId::DUAL_WIELD || c.id == CardId::DOUBLE_TAP || c.id == CardId::ECHO_FORM;
         unknown |= !ordinary(c.id);
     };
     for (int i=0; i<root.cards.cardsInHand; ++i) scan(root.cards.hand[i]);
