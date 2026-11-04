@@ -2,6 +2,8 @@
 
 QQ community group: **232459269**. If you find it useful, please star the repository on [GitHub](https://github.com/Yongzhaooo/sts1-combat-solver).
 
+v0.9.8.1: Opens the character gate v0.9.8 left closed, so the solver now really plays Defect fights (v0.9.8 did so only in the test build). Nilry's Codex offers Defect cards in a Defect run instead of Ironclad cards. Choosing AI autopilot in a Defect run now says to use Combat auto. Thanks to 有事问春风 for the fix and the reminder.
+
 v0.9.8: The Defect is now supported in combat: all 75 Defect cards, the 4 orbs and the 9 class relics. Full autopilot outside combat is still Ironclad only. A card-selection screen opened mid-turn (Burning Pact, Seek) is completed with the plan and the card that opened it is finished. Reaper no longer loses its heal on the killing blow; Equilibrium retains the hand at end of turn as the game does; Blood Potion is priced by its heal and not drunk needlessly; Genetic Algorithm's permanent growth counts in the score; pay-HP loops (Bloodletting, Shrug It Off with Body Slam) find lines that block for many turns; potion rows say why a bottle went unused. Thanks to 有事问春风 for building and maintaining the Defect engine, and to 七月流火（猫火） for testing, diagnoses and fixes.
 
 You build the deck and pick the path; it fights the Ironclad and the Defect: one step, one turn or the whole fight. It uses potions, swaps them after combat, and plans relic counters (Happy Flower, Incense Burner, Pen Nib) and Hand of Greed and Feed kills. Search effort follows act and room; Settings offer High speed (1/20 search) and Streak (full search in acts 1-3).

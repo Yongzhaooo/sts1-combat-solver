@@ -66,7 +66,7 @@ final class OutsidePacket {
             throw new NotReady("Outside decision is not ready");
         JsonObject game = state.getAsJsonObject("game_state");
         if (!"IRONCLAD".equals(string(game, "class")))
-            throw new IllegalArgumentException("Student only supports Ironclad");
+            throw new IllegalArgumentException(I18n.t("AI全自动目前只支持战士，机器人请选战斗全自动"));
         OutsidePacket packet = new OutsidePacket(model, game, visible, array(state, "available_commands"));
         packet.observation();
         packet.extra();
