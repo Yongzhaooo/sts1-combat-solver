@@ -296,6 +296,10 @@ class Comparator:
             actual["player"]["orbs"] = [self.simulator_orb(orb, battle.player.focus)
                                         for orb in battle.player.orbs]
             actual["player"]["orb_slots"] = int(battle.player.orb_slots)
+        for field in ("lightning_channeled_this_combat", "frost_channeled_this_combat"):
+            if field in combat:
+                expected["player"][field] = observation.consume("/game/combat_state/" + field)
+                actual["player"][field] = int(getattr(battle.player, field))
         expected["piles"] = {}
         for pile in PILES:
             cards = combat[pile]

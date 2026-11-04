@@ -251,6 +251,9 @@ namespace {
         bc.player.gold = player.contains("gold") ? py::cast<int>(player["gold"]) : 0;
         bc.player.haveUsedNecronomiconThisTurn = player.contains("necronomicon_used") && py::cast<bool>(player["necronomicon_used"]);
         bc.player.orangePelletsCardTypesPlayed = player.contains("orange_pellets_mask") ? py::cast<unsigned>(player["orange_pellets_mask"]) : 0;
+        // GameActionManager.orbsChanneledThisCombat by type, for Thunder Strike and Blizzard.
+        bc.player.lightningChanneledThisCombat = player.contains("lightning_channeled_this_combat") ? py::cast<int>(player["lightning_channeled_this_combat"]) : 0;
+        bc.player.frostChanneledThisCombat = player.contains("frost_channeled_this_combat") ? py::cast<int>(player["frost_channeled_this_combat"]) : 0;
         if (player.contains("last_targeted_monster")) bc.player.lastTargetedMonster = py::cast<int>(player["last_targeted_monster"]);
         bc.player.energyPerTurn = static_cast<std::int8_t>(player.contains("energy_per_turn") ? py::cast<int>(player["energy_per_turn"]) : 3);
         bc.player.cardDrawPerTurn = player.contains("card_draw_per_turn") ? py::cast<int>(player["card_draw_per_turn"]) : 5;
@@ -1651,6 +1654,8 @@ PYBIND11_MODULE(slaythespire, m) {
             return std::string(names[static_cast<int>(p.stance)]);
         })
         .def_readonly("orb_slots", &Player::orbSlots)
+        .def_readonly("lightning_channeled_this_combat", &Player::lightningChanneledThisCombat)
+        .def_readonly("frost_channeled_this_combat", &Player::frostChanneledThisCombat)
         .def_property_readonly("orbs", [](const Player &p) {
             static const char *const names[] = {"EMPTY", "DARK", "FROST", "FUSION", "LIGHTNING"};
             pybind11::list result;

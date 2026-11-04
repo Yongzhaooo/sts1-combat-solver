@@ -72,6 +72,15 @@ public class CombatStatePatch {
         result.put("card_draw_per_turn", AbstractDungeon.player.gameHandSize);
         result.put("is_bloodied", AbstractDungeon.player.isBloodied);
         result.put("cards_discarded_this_turn", GameActionManager.totalDiscardedThisTurn);
+        // ThunderStrike and Blizzard count orbsChanneledThisCombat by type; Cracked Core's
+        // battle-start Lightning is in it before the first search.
+        int lightning = 0, frost = 0;
+        for (com.megacrit.cardcrawl.orbs.AbstractOrb orb : AbstractDungeon.actionManager.orbsChanneledThisCombat) {
+            if (orb instanceof com.megacrit.cardcrawl.orbs.Lightning) lightning++;
+            if (orb instanceof com.megacrit.cardcrawl.orbs.Frost) frost++;
+        }
+        result.put("lightning_channeled_this_combat", lightning);
+        result.put("frost_channeled_this_combat", frost);
         int attacks = 0, skills = 0;
         for (AbstractCard card : AbstractDungeon.actionManager.cardsPlayedThisTurn) {
             if (card.type == AbstractCard.CardType.ATTACK) attacks++;

@@ -113,6 +113,17 @@ assert [orb['id'] for orb in orbed['player']['orbs']] == ['Lightning', None, 'Da
 assert sts.BattleContext.from_snapshot(orbed, seed).player.orbs == [
     {'id': 'LIGHTNING', 'dark_counter': 0},
     {'id': 'DARK', 'dark_counter': 18}]
+# Thunder Strike and Blizzard scale with the orbs channeled this combat; Cracked Core's
+# battle-start Lightning is already counted at the first search.
+channeled = copy.deepcopy(game)
+channeled['combat_state'].update(lightning_channeled_this_combat=2, frost_channeled_this_combat=1)
+player = sts.BattleContext.from_snapshot(s.comparator.bridge.build_snapshot(channeled), seed).player
+assert (player.lightning_channeled_this_combat, player.frost_channeled_this_combat) == (2, 1)
+assert (load().lightning_channeled_this_combat, load().frost_channeled_this_combat) == (0, 0)
+channeled_view = {**view, 'game': channeled}
+compared = s.comparator.compare_battle(channeled_view, s.comparator.import_battle(channeled_view))
+assert compared['expected']['player']['lightning_channeled_this_combat'] == 2
+assert not [d for d in compared['differences'] if 'channeled' in d['path']], compared['differences']
 
 # Defect powers that the game exports under a different id, or folds into another
 # field. Machine Learning applies the game's DrawPower, whose id is "Draw"; the

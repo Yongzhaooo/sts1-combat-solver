@@ -202,6 +202,18 @@ int main() {
               "lightning passive should deal 3+1 focus damage");
     }
     {
+        // The Boot raises only NORMAL damage; a Lightning passive (THORNS) stays 3.
+        // F8 Lagavulin, v0.9.8.2: the plan dealt 5 per Lightning and diverged every turn.
+        BattleContext bc = freshBattle();
+        bc.player.setHasRelic<RelicId::THE_BOOT>(true);
+        const int hpBefore = bc.monsters.arr[0].curHp;
+        Actions::TriggerEndOfTurnOrbsAction().actFunc(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(hpBefore - bc.monsters.arr[0].curHp == 3, "The Boot should not raise a Lightning passive");
+    }
+    {
         // Consume: gain Focus, then lose one orb slot; the newest orb drops
         // without evoking (no block gained from a dropped Frost).
         BattleContext bc = freshBattle();
