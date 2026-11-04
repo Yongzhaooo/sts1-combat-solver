@@ -119,6 +119,8 @@ namespace sts {
         bool haveUsedNecronomiconThisTurn = false;
         // EmotionChip.wasHPLost arms the relic; atTurnStart consumes it once.
         bool emotionChipPulse = false;
+        // ReboundPower.justEvoked: a new power skips the onAfterUseCard of the Rebound that applied it.
+        bool reboundJustEvoked = false;
 
         int8_t  combustHpLoss = 0;
         int16_t  devaFormEnergyPerTurn = 0;

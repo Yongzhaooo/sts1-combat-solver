@@ -2114,9 +2114,22 @@ void BattleContext::onAfterUseCard() {
         c.specialData = static_cast<std::int16_t>(c.specialData + growth);
     }
 
-    // UseCardAction drops a purgeOnUse card instead of moving it to a pile, so
-    // the powers it would otherwise notify never see it. Its self-rewrite above
-    // still applies, because the game runs it in the card's own use().
+    // ReboundPower.onAfterUseCard: UseCardAction.update notifies it before checking
+    // purgeOnUse, so Echo Form's copy and Powers count too. The first call clears
+    // justEvoked; later ones top a non-Power card and ReducePowerAction(1).
+    if (item.triggerOnUse && player.hasStatus<PS::REBOUND>()) {
+        if (player.reboundJustEvoked) {
+            player.reboundJustEvoked = false;
+        } else {
+            rebound = c.getType() != CardType::POWER;
+            const int left = player.getStatus<PS::REBOUND>() - 1;
+            if (left > 0) player.setStatusValueNoChecks<PS::REBOUND>(left);
+            else player.setHasStatus<PS::REBOUND>(false);
+        }
+    }
+
+    // UseCardAction drops a purgeOnUse card instead of moving it to a pile. Its
+    // self-rewrite above still applies, because the game runs it in use().
     if (item.purgeOnUse) {
         return;
     }
@@ -2134,16 +2147,6 @@ void BattleContext::onAfterUseCard() {
         for (auto &fc : cards.discardPile) lowerForceField(fc);
         c.id = CardId::INVALID;
         return;
-    }
-
-    if (player.hasStatus<PS::REBOUND>()) {
-        if (player.getStatus<PS::REBOUND>() == 1) {
-            rebound = true;
-            player.setHasStatus<PS::REBOUND>(false);
-
-        } else {
-            player.setStatusValueNoChecks<PS::REBOUND>(1);
-        }
     }
 
     bool spoonProc = false;
