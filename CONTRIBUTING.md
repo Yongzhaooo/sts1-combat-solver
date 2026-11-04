@@ -42,17 +42,19 @@ The maintainer focuses on the Ironclad solver and RL; Silent, Defect and Watcher
 
 - PR 必须通过 `.github/workflows/native-runtime.yml` 的全部作业（三个操作系统、两个 Python 版本）。四职业 M0 之后，其中包括覆盖清单检查和全部原生夹具的重放。
 - 不删除、不跳过已有检查。期望值只能来自已校准的真值，不能为了通过检查手改。
-- 克隆后运行一次 `python tools/install_git_hooks.py`。它安装 pre-push 钩子：向本仓库推送时，检查被推送的提交及其新历史里没有 `reports/`、`evidence/`，有就拒绝推送。
+- 克隆后运行一次 `python tools/install_git_hooks.py`。它装两个钩子：pre-push 在向本仓库推送时检查被推送的提交及其新历史里没有 `reports/`、`evidence/`；pre-commit 检查文本文件是不是 LF 行尾——`core.autocrlf=false` 时一个写 CRLF 的工具会让整个文件显示为改动，真正的内容变化淹在噪音里。
 - 提交前在本地先跑：
 
   ```bash
   python tools/build_solver_runtime.py          # 构建原生引擎并运行 CTest
+  python tools/check_local.py                   # 按 workflow 跑 smoke job 的全部步骤；跳过的不算通过
   python tools/check_backend_protocol.py        # 以及与你改动相关的其他 tools/check_*.py
   python tools/coverage_manifest.py             # 实现或删除牌、遗物后重新生成覆盖清单，连同改动一起提交
   python tools/coverage_manifest.py --check     # 清单是否最新，已支持的职业有没有缺口
   python tools/truth_calibration/run.py --adapter "<你的适配器>" fixtures/calibration   # M0 之后
   ```
 
+- 卡牌费用的真值来自游戏字节码：本地把解出的 class 树放进 `STS_GAME_CLASSES` 后，`python tools/check_card_costs.py` 会逐张比对已实现的牌；CI 没有游戏资源，那一步是 `--allow-skip`，它会打印 `SKIP` 和原因，而不是假装比对过。
 - 合并前维护者会用私有真值重放你新增的夹具。结果不一致时，维护者贴出第一处差异的路径，双方一起定位；问题出在你的真值时，维护者会补一个校准用例。
 
 ## 许可
