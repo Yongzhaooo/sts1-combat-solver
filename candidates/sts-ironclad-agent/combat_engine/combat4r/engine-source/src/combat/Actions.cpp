@@ -27,12 +27,13 @@ Action Actions::AttackEnemy(int idx, int damage, DamageType type) {
 
 Action Actions::RipAndTearAction(int damage, int times) {
     return {[=] (BattleContext &bc) {
-        // NewRipAndTearAction: each hit rolls its own random target when it resolves.
+        // NewRipAndTearAction: each hit rolls its own random target when it resolves
+        // and addToTop's its DamageAction, so the next roll sees this hit's kill.
         for (int i = 0; i < times; ++i) {
             bc.addToBot({[=] (BattleContext &bc) {
                 const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
                 if (target >= 0) {
-                    bc.addToBot(Actions::AttackEnemy(target, damage));
+                    bc.addToTop(Actions::AttackEnemy(target, damage));
                 }
             }});
         }
@@ -457,10 +458,12 @@ namespace {
                     // step behind and sending Coolheaded's evoke onto the wrong enemy).
                     // The roll is unconditional: the action picks its target before it
                     // looks at the damage, so Focus <= -3 still advances cardRandomRng.
+                    // Its DamageAction is addToTop'd, so the hit lands before the next
+                    // passive rolls (F12 slimes: addToBot let all three roll first).
                     bc.addToBot({[damage] (BattleContext &bc) {
                         const int target = bc.monsters.getRandomMonsterIdx(bc.cardRandomRng);
                         if (target >= 0 && damage > 0) {
-                            bc.addToBot(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
+                            bc.addToTop(Actions::AttackEnemy(target, lockOnDamage(bc, target, damage), DamageType::THORNS));
                         }
                     }});
                 }
