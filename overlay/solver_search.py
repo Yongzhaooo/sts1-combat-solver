@@ -8,6 +8,9 @@ import time
 from recovery import health
 
 DEEP_BUDGET = 128000
+# A winning bottle line that saves under this much HP over the winning potion-free line gets the potion-free line
+# searched again at twice the deep budget before they are compared (user, 2026-11-06).
+POTION_MARGIN_HP = 3
 FOCUS_TARGET = 25  # High Focus mode (user, 2026-11-05): look for a win ending with at least this much Focus
 
 
@@ -23,6 +26,17 @@ def focus_short(game, plan):
 def better_plan(candidate, best):
     return (candidate['value'] > best['value']
             or (candidate['value'] == best['value'] and len(candidate['actions']) < len(best['actions'])))
+
+
+def potion_margin_close(game, branches):
+    """True when the best winning bottle line saves under POTION_MARGIN_HP over the winning potion-free line."""
+    base = next((b for b in branches if b['id'] == 'no-potion' and b.get('available') and b.get('won')), None)
+    if base is None:
+        return False
+    saved = [base['loss'] - b['loss'] for b in branches
+             if b['id'] != 'no-potion' and b.get('available') and b.get('won') and b.get('potion_uses')
+             and focus_short(game, b) == focus_short(game, base)]
+    return bool(saved) and 0 < max(saved) < POTION_MARGIN_HP
 
 
 def boss_fast_plan(game, plan, slots):

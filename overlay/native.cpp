@@ -560,11 +560,11 @@ PYBIND11_MODULE(overlay_search, m) {
                     || cost>(simulations>=128000 ? 0 : std::max(6,root.player.maxHp*15/100)))) {
                 beamRan=true;
                 live.phase=3; live.transitionLimit=LOOP_BEAM_PER_SIM*simulations;
-                const int growth = simulations == 128000 ? growth_gate::remaining(root,allowedMask,allowGeneratedPotions) : -1;
+                const int growth = simulations >= 128000 ? growth_gate::remaining(root,allowedMask,allowGeneratedPotions) : -1;
                 auto best=loop_beam::portfolio(root,LOOP_BEAM_PER_SIM*simulations,
                     [](const BattleContext &b){return search::BattleScumSearcher2::evaluateEndState4r(b,initialMaxHp);},
                     [](){return overlayBeamTick();},std::move(quick),loop_beam::stats,
-                    simulations == 128000 ? &predicted : nullptr, growth < 0 ? -1 : root.player.maxHp+growth);
+                    simulations >= 128000 ? &predicted : nullptr, growth < 0 ? -1 : root.player.maxHp+growth);
                 const int mctsHp=predicted.player.curHp;
                 if(best.found && (!mctsWin || best.value>mctsValue
                         || (best.value==mctsValue && best.actions.size()<result.actions.size()))) {
