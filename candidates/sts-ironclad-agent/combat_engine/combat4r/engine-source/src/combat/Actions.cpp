@@ -3,6 +3,8 @@
 //
 
 #include "combat/Actions.h"
+#include <cstdio>
+#include <cstdlib>
 #include "combat/BattleContext.h"
 #include "game/Game.h"
 
@@ -423,8 +425,8 @@ namespace {
     // DarkOrb.onEndOfTurn: the accumulated counter grows by max(0, 6 + focus).
     // Negative focus never reduces the counter (Dark.applyFocus clamps only the
     // growth rate, and never touches the accumulated value itself).
-    void growDarkOrb(BattleContext &bc, Player::OrbState &orb) {
-        const int growth = 6 + bc.player.focus;
+    void growDarkOrb(BattleContext &bc, Player::OrbState &orb, int focus) {
+        const int growth = 6 + focus;
         if (growth > 0) {
             orb.darkCounter = static_cast<std::int16_t>(orb.darkCounter + growth);
         }
@@ -433,13 +435,13 @@ namespace {
     // One orb's end-of-turn passive: Lightning and Frost settle, Dark grows and
     // Plasma has none (Plasma overrides onStartOfTurn only). Shared by the
     // end-of-turn trigger, Loop's extra trigger and Emotion Chip's ImpulseAction.
-    void triggerOrbEndOfTurnPassive(BattleContext &bc, Player::OrbState &orb) {
+    void triggerOrbEndOfTurnPassive(BattleContext &bc, Player::OrbState &orb, int focus) {
         switch (orb.type) {
             case Orb::LIGHTNING: {
                 // LightningOrb.onEndOfTurn: deal 3 (+focus) to a random enemy.
                 // With Electrodynamics (ElectroPower) it hits all enemies and
                 // consumes no target roll (Lightning checks hasPower("Electro")).
-                const int damage = 3 + bc.player.focus;
+                const int damage = 3 + focus;
                 if (bc.player.hasStatus<PS::ELECTRO>()) {
                     for (int i = 0; i < bc.monsters.monsterCount; ++i) {
                         if (!bc.monsters.arr[i].isDeadOrEscaped()) {
@@ -471,7 +473,7 @@ namespace {
             }
             case Orb::FROST: {
                 // FrostOrb.onEndOfTurn: gain 2 (+focus) block.
-                const int block = 2 + bc.player.focus;
+                const int block = 2 + focus;
                 if (block > 0) {
                     bc.addToBot(Actions::GainBlock(block));
                 }
@@ -479,7 +481,7 @@ namespace {
             }
             case Orb::DARK:
                 // DarkOrb.onEndOfTurn: the counter grows; no damage, the orb stays.
-                growDarkOrb(bc, orb);
+                growDarkOrb(bc, orb, focus);
                 break;
             default:
                 // Plasma has no end-of-turn passive.
@@ -488,10 +490,14 @@ namespace {
     }
 }
 
-Action Actions::TriggerOrbPassiveAction(int orbIdx) {
-    return {[=] (BattleContext &bc) {
-        // LoopPower: for each stack, trigger the oldest orb's passive by calling
-        // both onStartOfTurn and onEndOfTurn (only Plasma overrides the former).
+namespace {
+    // LoopPower triggers the oldest orb's passive by calling both onStartOfTurn and
+    // onEndOfTurn (only Plasma overrides the former). The game reads the orb's stored
+    // passiveAmount, which only refreshes when Focus changes - and BiasPower queues its
+    // decrement on atStartOfTurn instead of applying it, so a Loop trigger that runs
+    // later must still use the Focus that was in effect when the power fired (F22:
+    // Shelled Parasite, Focus 3 with Bias 1, game keeps block 2 = 14 - 2 * 6, not 4).
+    void triggerOrbPassive(BattleContext &bc, int orbIdx, int focus) {
         if (orbIdx < 0 || orbIdx >= bc.player.orbs.size()) {
             return;
         }
@@ -499,7 +505,19 @@ Action Actions::TriggerOrbPassiveAction(int orbIdx) {
         if (orb.type == Orb::FUSION) {
             bc.addToBot(Actions::GainEnergy(1));
         }
-        triggerOrbEndOfTurnPassive(bc, orb);
+        triggerOrbEndOfTurnPassive(bc, orb, focus);
+    }
+}
+
+Action Actions::TriggerOrbPassiveAction(int orbIdx) {
+    return {[=] (BattleContext &bc) {
+        triggerOrbPassive(bc, orbIdx, bc.player.focus);
+    }};
+}
+
+Action Actions::TriggerOrbPassiveAction(int orbIdx, int focusAtTrigger) {
+    return {[=] (BattleContext &bc) {
+        triggerOrbPassive(bc, orbIdx, focusAtTrigger);
     }};
 }
 
@@ -525,7 +543,7 @@ Action Actions::TriggerEndOfTurnOrbsAction() {
     return {[] (BattleContext &bc) {
         // End-of-turn passives trigger left to right and never consume the orb.
         for (int i = 0; i < bc.player.orbs.size(); ++i) {
-            triggerOrbEndOfTurnPassive(bc, bc.player.orbs[i]);
+            triggerOrbEndOfTurnPassive(bc, bc.player.orbs[i], bc.player.focus);
         }
         // GoldPlatedCables lives inside TriggerEndOfTurnOrbsAction in the game:
         // after the full pass it triggers orbs.get(0) - the orb evokeOrb removes
@@ -537,7 +555,7 @@ Action Actions::TriggerEndOfTurnOrbsAction() {
         if (bc.player.hasRelic<R::GOLD_PLATED_CABLES>() && bc.player.orbs.size() > 0) {
             bc.addToBot({[] (BattleContext &bc) {
                 if (bc.player.orbs.size() > 0) {
-                    triggerOrbEndOfTurnPassive(bc, bc.player.orbs[0]);
+                    triggerOrbEndOfTurnPassive(bc, bc.player.orbs[0], bc.player.focus);
                 }
             }});
         }
@@ -554,14 +572,14 @@ Action Actions::ImpulseAction() {
             if (orb.type == Orb::FUSION) {
                 bc.addToBot(Actions::GainEnergy(1));
             }
-            triggerOrbEndOfTurnPassive(bc, orb);
+            triggerOrbEndOfTurnPassive(bc, orb, bc.player.focus);
         }
         if (bc.player.hasRelic<R::GOLD_PLATED_CABLES>() && bc.player.orbs.size() > 0) {
             auto &orb = bc.player.orbs[0];
             if (orb.type == Orb::FUSION) {
                 bc.addToBot(Actions::GainEnergy(1));
             }
-            triggerOrbEndOfTurnPassive(bc, orb);
+            triggerOrbEndOfTurnPassive(bc, orb, bc.player.focus);
         }
     }};
 }
@@ -672,12 +690,12 @@ Action Actions::DarkImpulseAction() {
         // when that orb is Dark, like the other orb-trigger actions.
         for (auto &orb : bc.player.orbs) {
             if (orb.type == Orb::DARK) {
-                growDarkOrb(bc, orb);
+                growDarkOrb(bc, orb, bc.player.focus);
             }
         }
         if (bc.player.hasRelic<R::GOLD_PLATED_CABLES>() && bc.player.orbs.size() > 0
                 && bc.player.orbs[0].type == Orb::DARK) {
-            growDarkOrb(bc, bc.player.orbs[0]);
+            growDarkOrb(bc, bc.player.orbs[0], bc.player.focus);
         }
     }};
 }
