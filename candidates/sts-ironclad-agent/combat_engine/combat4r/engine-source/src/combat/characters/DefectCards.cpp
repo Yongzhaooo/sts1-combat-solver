@@ -175,8 +175,9 @@ namespace sts {
             case CardId::BIASED_COGNITION:
                 // BiasedCognition.java: gain Focus, then apply BIAS. The turn-start
                 // BIAS hook in Player::applyStartOfTurnPowers drains Focus per turn.
+                // BiasPower is a DEBUFF, so Artifact blocks it and the Focus stays (F51).
                 bc.addToBot(Actions::BuffPlayer<PS::FOCUS>(up ? 5 : 4));
-                bc.addToBot(Actions::BuffPlayer<PS::BIAS>(1));
+                bc.addToBot(Actions::DebuffPlayer<PS::BIAS>(1, false));
                 return true;
 
             case CardId::DARKNESS:
