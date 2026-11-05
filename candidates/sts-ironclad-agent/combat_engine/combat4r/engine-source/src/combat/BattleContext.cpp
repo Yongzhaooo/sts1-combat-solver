@@ -2125,11 +2125,13 @@ void BattleContext::onAfterUseCard() {
         const std::int16_t growth = static_cast<std::int16_t>(c.isUpgraded() ? 3 : 2);
         if (item.purgeOnUse) {
             cards.findAndUpgradeSpecialData(c.uniqueId, growth);
-            for (int i = 0; i < cardQueue.size; ++i) {
-                auto &pending = cardQueue.arr[(cardQueue.frontIdx + i) % CardQueue::capacity];
-                if (!pending.isEndTurn && pending.card.uniqueId == c.uniqueId) {
-                    pending.card.specialData = static_cast<std::int16_t>(pending.card.specialData + growth);
-                }
+        }
+        // Copies still queued wait in limbo, which GetAllInBattleInstances also walks: the original's
+        // growth reaches Echo Form's copy before it plays (F18/F22: the game's copy blocked 2 more).
+        for (int i = 0; i < cardQueue.size; ++i) {
+            auto &pending = cardQueue.arr[(cardQueue.frontIdx + i) % CardQueue::capacity];
+            if (!pending.isEndTurn && pending.card.uniqueId == c.uniqueId) {
+                pending.card.specialData = static_cast<std::int16_t>(pending.card.specialData + growth);
             }
         }
         c.specialData = static_cast<std::int16_t>(c.specialData + growth);

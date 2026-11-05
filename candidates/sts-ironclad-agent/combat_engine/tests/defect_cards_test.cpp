@@ -1359,6 +1359,17 @@ int main() {
         }
         check(grew, "Genetic Algorithm should be in the exhaust pile");
     }
+    {
+        // Echo Form Genetic Algorithm: the copy waits in limbo, where the original's IncreaseMiscAction
+        // reaches it, so it blocks 3, not 1; its own growth raises the original to 5 (a Defect run
+        // diverged here: 26 block in the game, 24).
+        BattleContext bc = freshBattle();
+        bc.player.buff<PS::ECHO_FORM>(1);
+        playCard(bc, CardId::GENETIC_ALGORITHM);
+        check(bc.player.block == 4, "Echo Form Genetic Algorithm should block 1 + 3");
+        check(!bc.cards.exhaustPile.empty() && bc.cards.exhaustPile.back().getId() == CardId::GENETIC_ALGORITHM
+              && bc.cards.exhaustPile.back().specialData == 5, "Echo Form Genetic Algorithm should grow twice");
+    }
 
     {
         // Scrape: draws 4 and discards every drawn card that does not cost 0.
