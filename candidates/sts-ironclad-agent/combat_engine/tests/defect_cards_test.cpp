@@ -343,6 +343,16 @@ int main() {
               "Artifact should block Reprogram's Focus loss");
     }
     {
+        // BiasPower itself is a DEBUFF: Artifact blocks Biased Cognition's Bias and the Focus stays
+        // (F51 Donu and Deca: the game kept Focus 9 with no Bias and no Artifact left).
+        BattleContext bc = freshBattle();
+        Actions::BuffPlayer<PS::ARTIFACT>(1).actFunc(bc);
+        playCard(bc, CardId::BIASED_COGNITION);
+        check(bc.player.focus == 4 && !bc.player.hasStatus<PS::BIAS>()
+              && bc.player.getStatus<PS::ARTIFACT>() == 0,
+              "Artifact should block Biased Cognition's Bias, not its Focus");
+    }
+    {
         // Biased Cognition: gain Focus, apply BIAS; turn start drains Focus.
         BattleContext bc = freshBattle();
         playCard(bc, CardId::BIASED_COGNITION);
