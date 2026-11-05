@@ -289,6 +289,8 @@ class Advisor:
         # needs uint64 representation; keep the authoritative RNG envelope intact.
         import_view = {**view, 'game': {**view['game'],
                        'seed': int(view['game']['seed']) % (1 << 64)}}
+        # A search needs the channel counts once Thunder Strike or Blizzard can read them.
+        s.comparator.bridge.require_channel_counts(import_view['game'])
         s.battle = s.comparator.import_battle(import_view, require_search_state=True)
         if view['game']['screen_type'] != 'NONE':
             if 'live_run' not in view:
@@ -552,7 +554,9 @@ class Advisor:
                 future = futures[index]
                 try:
                     plan = dict(future.result())
-                    if plan['outcome'] != int(s.sts.Outcome.PLAYER_VICTORY):
+                    won = plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
+                    # min-loss keeps a losing line when nothing wins (1 HP), as solve() does.
+                    if not won and branch_id != 'min-loss':
                         continue
                     if forced and plan['escaped_thieves']:
                         continue
@@ -565,7 +569,8 @@ class Advisor:
                     if branch_id == 'kill-thief-potion' and not used:
                         continue
                     old = best.get(branch_id)
-                    if old is None or (plan['value'], -len(option)) > (old['value'], -len(old['potion_slots'])):
+                    old_won = old is not None and old['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
+                    if old is None or (won, plan['value'], -len(option)) > (old_won, old['value'], -len(old['potion_slots'])):
                         best[branch_id] = plan
                         self.branches[branch_id] = plan
                         label = name + (' · 用药' if used and branch_id == 'min-loss' else '')

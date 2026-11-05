@@ -44,24 +44,34 @@ Action Actions::RipAndTearAction(int damage, int times) {
 
 Action Actions::AllForOneAction() {
     return {[] (BattleContext &bc) {
-        // AllForOneAction: every 0-cost card in the discard pile returns to hand as
-        // the same instance (no new unique id). Walking backwards keeps indices valid.
-        for (int i = static_cast<int>(bc.cards.discardPile.size()) - 1; i >= 0; --i) {
-            const auto &dc = bc.cards.discardPile[i];
-            if (dc.costForTurn != 0 && dc.cost != 0) {
+        // AllCostToHandAction(0) walks the discard pile from the bottom and addToBots one
+        // DiscardToHandAction per card whose printed cost is 0 (or that is freeToPlayOnce).
+        // Each moves the same instance only if it is still in the discard pile and the hand
+        // has room when it resolves, so whatever was queued first (a Bronze Orb's Stasis
+        // return after All for One's hit) reaches the hand first.
+        for (const auto &card : bc.cards.discardPile) {
+            if (card.cost != 0 && !card.freeToPlayOnce) {
                 continue;
             }
-            if (bc.cards.cardsInHand >= CardManager::MAX_HAND_SIZE) {
-                break;
-            }
-            bc.cards.hand[bc.cards.cardsInHand++] = dc;
-            bc.cards.discardPile.erase(bc.cards.discardPile.begin() + i);
+            const auto uniqueId = card.uniqueId;
+            bc.addToBot({[=] (BattleContext &bc) {
+                auto &pile = bc.cards.discardPile;
+                for (std::size_t i = 0; i < pile.size(); ++i) {
+                    if (pile[i].uniqueId == uniqueId) {
+                        if (bc.cards.cardsInHand < CardManager::MAX_HAND_SIZE) {
+                            bc.cards.hand[bc.cards.cardsInHand++] = pile[i];
+                            pile.erase(pile.begin() + static_cast<std::ptrdiff_t>(i));
+                        }
+                        return;
+                    }
+                }
+            }});
         }
     }};
 }
 
-Action Actions::CreateRandomCardInHandAction(CardType type, bool commonOnly, bool zeroCost) {
-    return {[=] (BattleContext &bc) {
+Action Actions::CreateRandomCardInHandAction(BattleContext &bc, CardType type, bool commonOnly, bool zeroCost) {
+    {
         // Hello World and Creative AI add the card at its printed cost: neither
         // HelloPower.atStartOfTurn nor CreativeAIPower.atStartOfTurn touches the cost,
         // and MakeTempCardInHandAction never zeroes one. Only WhiteNoise.java calls
@@ -73,20 +83,20 @@ Action Actions::CreateRandomCardInHandAction(CardType type, bool commonOnly, boo
                 : getTrulyRandomCardInCombat(bc.cardRandomRng, bc.player.cc, type);
         CardInstance generated = bc.createGeneratedCard(cid);
         if (zeroCost) generated.setCostForTurn(0);
-        bc.addToTop(Actions::MakeTempCardInHand(generated));
-    }};
+        return Actions::MakeTempCardInHand(generated);
+    }
 }
 
-Action Actions::CreateRandomRarityCardInHandAction(CardRarity rarity, bool zeroCost) {
-    return {[=] (BattleContext &bc) {
+Action Actions::CreateRandomRarityCardInHandAction(BattleContext &bc, CardRarity rarity, bool zeroCost) {
+    {
         // HelloPower.atStartOfTurn: AbstractDungeon.getCard(COMMON, cardRandomRng), which
         // rolls over the whole rarity pool - attacks included - so it is not the
         // type-filtered pool CreateRandomCardInHandAction draws from.
         const auto cid = getRandomClassCardOfRarity(bc.cardRandomRng, bc.player.cc, rarity);
         CardInstance generated = bc.createGeneratedCard(cid);
         if (zeroCost) generated.setCostForTurn(0);
-        bc.addToTop(Actions::MakeTempCardInHand(generated));
-    }};
+        return Actions::MakeTempCardInHand(generated);
+    }
 }
 
 Action Actions::SunderAction(int idx, int damage) {
@@ -746,16 +756,18 @@ Action Actions::MultiCastAction(int times) {
 
 Action Actions::FissionAction(bool upgraded) {
     return {[=] (BattleContext &bc) {
-        // FissionAction: the orb count is read when the action resolves, then all
-        // orbs are removed (evoked when upgraded), and that many energy/cards are
-        // granted. Queued bottom-up so removal resolves before the rewards.
+        // FissionAction: the orb count is read when the action resolves, then it
+        // addToTop's the draw, the energy and the orb removal (evoked when upgraded),
+        // so removal resolves first and all three run before anything queued after
+        // the card, such as Hex's Dazed. Pushed to the top in reverse order.
         const int count = static_cast<int>(bc.player.orbs.size());
+        bc.addToTop(Actions::DrawCards(count));
+        bc.addToTop(Actions::GainEnergy(count));
         if (upgraded) {
             // EvokeAllOrbsAction addToTop's one EvokeOrbAction per orb, so each
             // evoke's target roll sees the monsters the previous evoke killed.
-            // One evoke per orb, queued in order, reproduces that.
             for (int i = 0; i < count; ++i) {
-                bc.addToBot({[] (BattleContext &bc) {
+                bc.addToTop({[] (BattleContext &bc) {
                     if (bc.player.orbs.empty()) {
                         return;
                     }
@@ -764,12 +776,10 @@ Action Actions::FissionAction(bool upgraded) {
                 }});
             }
         } else {
-            bc.addToBot({[] (BattleContext &bc) {
+            bc.addToTop({[] (BattleContext &bc) {
                 bc.player.orbs.clear();
             }});
         }
-        bc.addToBot(Actions::GainEnergy(count));
-        bc.addToBot(Actions::DrawCards(count));
     }};
 }
 

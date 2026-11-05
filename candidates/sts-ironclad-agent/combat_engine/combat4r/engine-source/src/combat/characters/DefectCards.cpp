@@ -40,8 +40,10 @@ namespace sts {
                 return true;
 
             case CardId::DUALCAST:
-                // Dualcast.java: evoke the next (leftmost) orb twice.
-                bc.addToBot(Actions::EvokeOrbAction(0, 2));
+                // Dualcast.java: evoke the next (leftmost) orb twice. It addToBot's both evokes at play
+                // time, ahead of on-use triggers such as Hex's Dazed (both roll cardRandomRng), so run
+                // EvokeOrbAction now: it queues the two evokes the same way.
+                Actions::EvokeOrbAction(0, 2).actFunc(bc);
                 return true;
 
             case CardId::COLD_SNAP:
@@ -104,11 +106,19 @@ namespace sts {
                 bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(up ? 12 : 9)));
                 return true;
 
-            case CardId::STACK:
+            case CardId::STACK: {
                 // Stack.java: block equal to the discard pile size; upgraded adds 3.
+                // applyPowers sets baseBlock; a copy (Echo Form, Burst, Duplication)
+                // keeps the original's baseBlock, because useCard only reruns
+                // applyPowersToBlock. The queue item carries the count to the copy.
+                auto &item = bc.curCardQueueItem;
+                if (!item.purgeOnUse || item.stackDiscardSize < 0) {
+                    item.stackDiscardSize = static_cast<int>(bc.cards.discardPile.size());
+                }
                 bc.addToBot(Actions::GainBlock(bc.calculateCardBlock(
-                    static_cast<int>(bc.cards.discardPile.size()) + (up ? 3 : 0))));
+                    item.stackDiscardSize + (up ? 3 : 0))));
                 return true;
+            }
 
             case CardId::TURBO:
                 // Turbo.java: gain energy, then add a Void to the discard pile.
@@ -150,16 +160,16 @@ namespace sts {
                 return true;
 
             case CardId::REPROGRAM:
-                // Reprogram.java: lose Focus, gain Strength and Dexterity.
-                bc.addToBot(Actions::DecrementStatus<PS::FOCUS>(up ? 2 : 1));
+                // Reprogram.java: lose Focus (a FocusPower debuff, so Artifact blocks it), gain Strength and Dexterity.
+                bc.addToBot(Actions::DebuffPlayer<PS::FOCUS>(up ? -2 : -1, false));
                 bc.addToBot(Actions::BuffPlayer<PS::STRENGTH>(up ? 2 : 1));
                 bc.addToBot(Actions::BuffPlayer<PS::DEXTERITY>(up ? 2 : 1));
                 return true;
 
             case CardId::HYPERBEAM:
-                // Hyperbeam.java: attack all enemies, then lose 3 Focus.
+                // Hyperbeam.java: attack all enemies, then lose 3 Focus (a debuff Artifact blocks).
                 bc.addToBot(Actions::AttackAllEnemy(bc.calculateCardDamageMatrix(c, up ? 34 : 26)));
-                bc.addToBot(Actions::DecrementStatus<PS::FOCUS>(3));
+                bc.addToBot(Actions::DebuffPlayer<PS::FOCUS>(-3, false));
                 return true;
 
             case CardId::BIASED_COGNITION:
@@ -229,10 +239,19 @@ namespace sts {
                 }
                 const int count = item.energyOnUse + (up ? 1 : 0)
                     + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
-                for (int i = 0; i < count; ++i) {
-                    bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
-                }
-                bc.addToBot(Actions::EmptyEnergy(bc.curCardQueueItem.freeToPlay || c.freeToPlayOnce));
+                const bool free = bc.curCardQueueItem.freeToPlay || c.freeToPlayOnce;
+                // TempestAction queues the channels when it resolves, so they land behind on-use
+                // triggers such as Hex's Dazed (a full bar's evoke and the Dazed both roll cardRandomRng),
+                // and empties the pool right away, so energy from an evoked Plasma orb is kept.
+                bc.addToBot({[=] (BattleContext &bc) {
+                    if (count <= 0) {
+                        return;
+                    }
+                    for (int i = 0; i < count; ++i) {
+                        bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
+                    }
+                    Actions::EmptyEnergy(free).actFunc(bc);
+                }});
                 return true;
             }
 
@@ -242,8 +261,11 @@ namespace sts {
                 return true;
 
             case CardId::ELECTRODYNAMICS:
-                // Electro.java: lightning orbs hit all enemies, then channel 2 (3).
-                bc.addToBot(Actions::BuffPlayer<PS::ELECTRO>(1));
+                // Electrodynamics.java: applies ElectroPower only when the player has none
+                // (checked at use time, so a second copy never stacks it), then channels 2 (3).
+                if (!bc.player.hasStatus<PS::ELECTRO>()) {
+                    bc.addToBot(Actions::BuffPlayer<PS::ELECTRO>(1));
+                }
                 for (int i = 0; i < (up ? 3 : 2); ++i) {
                     bc.addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
                 }
@@ -320,15 +342,26 @@ namespace sts {
             case CardId::MULTI_CAST: {
                 // MultiCast.java -> MulticastAction: evoke the oldest orb X times,
                 // consuming it once. X = energyOnUse + Chemical X (2) + upgraded (1).
-                // The evokes resolve first, then the card empties the energy pool.
+                // MulticastAction queues the evokes and empties the pool in the same update, and does
+                // neither when the bar holds no orb.
                 auto &item = bc.curCardQueueItem;
                 if (!item.ignoreEnergyTotal && bc.player.energy < item.energyOnUse) {
                     item.energyOnUse = bc.player.energy;
                 }
                 const int times = item.energyOnUse + (up ? 1 : 0)
                     + (bc.player.hasRelic<R::CHEMICAL_X>() ? 2 : 0);
-                bc.addToBot(Actions::MultiCastAction(times));
-                bc.addToBot(Actions::EmptyEnergy(bc.curCardQueueItem.freeToPlay || c.freeToPlayOnce));
+                const bool free = bc.curCardQueueItem.freeToPlay || c.freeToPlayOnce;
+                bc.addToBot({[=] (BattleContext &bc) {
+                    bool hasOrb = false;  // AbstractPlayer.hasOrb: any slot that is not an empty one
+                    for (const auto &orb : bc.player.orbs) {
+                        hasOrb |= orb.type != Orb::EMPTY;
+                    }
+                    if (!hasOrb || times <= 0) {
+                        return;
+                    }
+                    Actions::MultiCastAction(times).actFunc(bc);
+                    Actions::EmptyEnergy(free).actFunc(bc);
+                }});
                 return true;
             }
 
@@ -467,7 +500,7 @@ namespace sts {
             case CardId::WHITE_NOISE:
                 // WhiteNoise.java: add a random Power card, free to play this turn
                 // (it is the one generator that calls setCostForTurn(0)).
-                bc.addToBot(Actions::CreateRandomCardInHandAction(CardType::POWER, false, true));
+                bc.addToBot(Actions::CreateRandomCardInHandAction(bc, CardType::POWER, false, true));
                 return true;
 
             case CardId::CREATIVE_AI:
@@ -513,13 +546,25 @@ namespace sts {
                 bc.addToBot(Actions::BuffPlayer<PS::EQUILIBRIUM>(1));
                 return true;
 
-            case CardId::CLAW:
-                // Claw.java: damage, then every Claw card gains 2 damage for the
-                // rest of combat. calculateCardDamage reads the shared bonus before
-                // this action resolves, so the current hit is not boosted.
-                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, up ? 5 : 3)));
-                bc.addToBot({[] (BattleContext &bc) { bc.player.clawBonus += 2; }});
+            case CardId::CLAW: {
+                // Claw.java: damage, then GashAction raises baseDamage by 2 on this card
+                // and on every Claw in discard, draw and hand. Each card keeps its own
+                // raise in specialData: a copy waiting in limbo (Echo Form, Duplication)
+                // keeps the original's baseDamage, and a Claw made later (Hello World)
+                // starts at 3.
+                bc.addToBot(Actions::AttackEnemy(t, bc.calculateCardDamage(c, t, (up ? 5 : 3) + c.specialData)));
+                bc.addToBot({[] (BattleContext &bc) {
+                    // The played card is still in flight (OnAfterCardUsed files it next).
+                    const auto gash = [] (CardInstance &x) {
+                        if (x.getId() == CardId::CLAW) x.specialData = static_cast<std::int16_t>(x.specialData + 2);
+                    };
+                    gash(bc.curCardQueueItem.card);
+                    for (auto &x : bc.cards.discardPile) gash(x);
+                    for (auto &x : bc.cards.drawPile) gash(x);
+                    for (int i = 0; i < bc.cards.cardsInHand; ++i) gash(bc.cards.hand[i]);
+                }});
                 return true;
+            }
 
             case CardId::STREAMLINE:
                 // Streamline.java: damage; onAfterUseCard lowers its own cost by 1

@@ -297,6 +297,113 @@ int main() {
             check(totalMonsterHp(bc) == hpBefore, "a zero-damage Lightning evoke deals nothing");
         }
 
+        // End-of-turn passives work the same way: LightningOrbPassiveAction rolls its
+        // target and addToTop's the DamageAction, so the second orb's roll sees the
+        // first orb's kill. A Defect run diverged here (floor 41: the first passive
+        // killed a Lock-On'd Exploder, the game's second hit Repulsor, the engine's
+        // hit the corpse). Two Lightning passives on 3-HP slimes must kill two
+        // different slimes on every seed; rolling before the first hit resolved
+        // re-picks the dead slime one time in five.
+        for (std::uint64_t seed = 1; seed <= 40; ++seed) {
+            GameContext game(CharacterClass::DEFECT, seed, 0);
+            game.regainControlAction = [](GameContext&) {};
+            BattleContext bc;
+            bc.init(game, MonsterEncounter::LOTS_OF_SLIMES);
+            bc.cards = CardManager{};
+            bc.setState(InputState::PLAYER_NORMAL);
+            bc.player.orbs.clear();
+            channel_now(bc, Orb::LIGHTNING);
+            channel_now(bc, Orb::LIGHTNING);
+            for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                bc.monsters.arr[i].curHp = 3;
+            }
+            bc.addToBot(Actions::TriggerEndOfTurnOrbsAction());
+            drain(bc);
+            check(aliveCount(bc) == 3, "two Lightning passives must kill two different 3-HP slimes");
+        }
+
+        // Dualcast under Hex: Dualcast.java queues both evokes at play time, and HexPower.onUseCard
+        // queues its Dazed after them, so cardRandomRng rolls target, target, then the Dazed's spot.
+        // A Defect run diverged here (Chosen, floor 22): the engine queued the evokes from inside a
+        // queued action, behind the Dazed, so the Dazed took the first roll.
+        int moved = 0;
+        for (std::uint64_t seed = 1; seed <= 40; ++seed) {
+            GameContext game(CharacterClass::DEFECT, seed, 0);
+            game.regainControlAction = [](GameContext&) {};
+            BattleContext bc;
+            bc.init(game, MonsterEncounter::CULTIST);
+            bc.cards = CardManager{};
+            bc.setState(InputState::PLAYER_NORMAL);
+            bc.player.orbs.clear();
+            channel_now(bc, Orb::LIGHTNING);
+            for (auto id : {CardId::STRIKE_BLUE, CardId::ZAP, CardId::DEFEND_BLUE, CardId::COOLHEADED, CardId::BALL_LIGHTNING}) {
+                bc.cards.drawPile.push_back(CardInstance(id));
+            }
+            bc.player.debuff<PS::HEX>(1, true);
+            Random expected = bc.cardRandomRng;
+            expected.random(0);
+            expected.random(0);
+            const int spot = expected.random(static_cast<int>(bc.cards.drawPile.size()) - 1);
+            Random oldOrder = bc.cardRandomRng;
+            moved += oldOrder.random(static_cast<int>(bc.cards.drawPile.size()) - 1) != spot;
+            bc.curCardQueueItem.card = CardInstance(CardId::DUALCAST);
+            bc.curCardQueueItem.target = 0;
+            bc.useCard();
+            drain(bc);
+            check(bc.cards.drawPile.size() == 6 && bc.cards.drawPile[spot].getId() == CardId::DAZED,
+                  "Hex's Dazed must take its spot from the roll after both Dualcast evokes");
+        }
+        check(moved > 0, "some seed must put the Dazed elsewhere under the old roll order");
+
+        // Tempest and Fission+ under Hex, the other way round from Dualcast. TempestAction queues its
+        // channels when it resolves, behind the Dazed, so a full bar's evoke rolls after the Dazed's spot
+        // (a Defect run diverged here, Chosen, floor 24). FissionAction addToTop's its evokes, energy and
+        // draw, so Fission+ evokes and draws before the Dazed goes in.
+        int tempestMoved = 0, fissionMoved = 0;
+        for (std::uint64_t seed = 1; seed <= 40; ++seed) {
+            for (const bool fission : {false, true}) {
+                GameContext game(CharacterClass::DEFECT, seed, 0);
+                game.regainControlAction = [](GameContext&) {};
+                BattleContext bc;
+                bc.init(game, MonsterEncounter::CULTIST);
+                bc.cards = CardManager{};
+                bc.setState(InputState::PLAYER_NORMAL);
+                bc.player.orbs.clear();
+                while (bc.player.orbs.size() < bc.player.orbSlots) {
+                    channel_now(bc, Orb::LIGHTNING);
+                }
+                const int orbs = static_cast<int>(bc.player.orbs.size());
+                check(orbs == 3, "a fresh Defect has three orb slots");
+                for (auto id : {CardId::STRIKE_BLUE, CardId::ZAP, CardId::DEFEND_BLUE, CardId::COOLHEADED,
+                                CardId::BALL_LIGHTNING, CardId::CHARGE_BATTERY, CardId::BEAM_CELL}) {
+                    bc.cards.drawPile.push_back(CardInstance(id));
+                }
+                bc.player.debuff<PS::HEX>(1, true);
+                bc.player.energy = 1;
+                const int pile = static_cast<int>(bc.cards.drawPile.size());
+                Random expected = bc.cardRandomRng, oldOrder = bc.cardRandomRng;
+                int spot;
+                if (fission) {
+                    for (int i = 0; i < orbs; ++i) expected.random(0);
+                    spot = expected.random(pile - orbs - 1);
+                    fissionMoved += oldOrder.random(pile - 1) != spot;
+                } else {
+                    spot = expected.random(pile - 1);
+                    oldOrder.random(0);
+                    tempestMoved += oldOrder.random(pile - 1) != spot;
+                }
+                bc.curCardQueueItem.card = CardInstance(fission ? CardId::FISSION : CardId::TEMPEST, fission);
+                bc.curCardQueueItem.energyOnUse = 1;
+                bc.curCardQueueItem.target = 0;
+                bc.useCard();
+                drain(bc);
+                check(bc.cards.drawPile[spot].getId() == CardId::DAZED,
+                      fission ? "Fission+ must evoke and draw before Hex's Dazed takes its spot"
+                              : "Tempest's full-bar evoke must roll after Hex's Dazed takes its spot");
+            }
+        }
+        check(tempestMoved > 0 && fissionMoved > 0, "some seed must put the Dazed elsewhere under the old order");
+
         std::cout << "orb_evoke_target: ok\n";
         return 0;
     } catch (const std::exception &e) {

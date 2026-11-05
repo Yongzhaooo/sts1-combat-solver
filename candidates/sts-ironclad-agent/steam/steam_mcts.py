@@ -320,6 +320,9 @@ def card_snapshot(card):
         result["misc"] = int(card["base_damage"]) - 8
     if key == "RITUAL_DAGGER" and "base_damage" in card:
         result["misc"] = int(card["base_damage"])
+    if key == "CLAW" and "base_damage" in card:
+        # GashAction raises each Claw's baseDamage; the engine keeps that raise per card.
+        result["misc"] = int(card["base_damage"]) - (5 if int(card.get("upgrades") or 0) else 3)
     if key == "STEAM_BARRIER" and "base_block" in card:
         # SteamBarrier.java drops its own baseBlock by 1 on every play
         # (ModifyBlockAction) and leaves misc at 0; the engine carries that count in
@@ -344,6 +347,32 @@ def orb_snapshot(orb):
     return {"id": identifier,
             "passive": int(orb.get("passive_amount") or 0),
             "evoke": int(orb.get("evoke_amount") or 0)}
+
+
+def channeled_this_combat(combat):
+    """Lightning and Frost channeled this combat (Thunder Strike and Blizzard count them).
+    The Mod exports both; an older export is exact only at the turn-1 import before any
+    play, when the orbs in the slots are all that start-of-combat relics channeled."""
+    orbs = (combat.get("player") or {}).get("orbs") or []
+    if "lightning_channeled_this_combat" in combat or "frost_channeled_this_combat" in combat:
+        return {"lightning_channeled_this_combat": int(combat.get("lightning_channeled_this_combat") or 0),
+                "frost_channeled_this_combat": int(combat.get("frost_channeled_this_combat") or 0)}
+    if not orbs or int(combat.get("turn") or 1) != 1 or int(combat.get("cards_played_this_turn") or 0) != 0:
+        return {}  # unknown; require_channel_counts refuses a search when a card reads them
+    return {"lightning_channeled_this_combat": sum(o.get("id") == "Lightning" for o in orbs),
+            "frost_channeled_this_combat": sum(o.get("id") == "Frost" for o in orbs)}
+
+
+def require_channel_counts(game_state):
+    """Refuse to search a battle whose channel counts are unknown while Thunder Strike or
+    Blizzard is in a pile; comparison-only imports skip this. shortcut: a counting card made
+    mid-combat (Dead Branch) still undercounts until an import carries the Mod's counts."""
+    combat = game_state.get("combat_state") or {}
+    if "lightning_channeled_this_combat" in channeled_this_combat(combat):
+        return
+    piles = ("hand", "draw_pile", "discard_pile", "exhaust_pile")
+    if any(card.get("id") in ("Thunder Strike", "Blizzard") for pile in piles for card in combat.get(pile) or []):
+        raise ValueError("Defect snapshot needs the Lightning/Frost channel counts; reload the game with the new Mod")
 
 
 def power_snapshot(power, owner):
@@ -627,8 +656,7 @@ def build_snapshot(game_state, counters=None):
             # CommunicationMod always exports the orb list, empty slots included.
             "orb_slots": len(player.get("orbs") or []),
             "orbs": [orb_snapshot(orb) for orb in player.get("orbs") or []],
-            "lightning_channeled_this_combat": int(combat.get("lightning_channeled_this_combat") or 0),
-            "frost_channeled_this_combat": int(combat.get("frost_channeled_this_combat") or 0),
+            **channeled_this_combat(combat),
         },
         "hand": [card_snapshot(card) for card in combat.get("hand") or []],
         "draw_pile": [card_snapshot(card) for card in combat.get("draw_pile") or []],
@@ -749,6 +777,7 @@ def assert_snapshot_matches(snapshot, battle):
 
 
 def recommend(game_state, simulations=2000, determinizations=3, counters=None):
+    require_channel_counts(game_state)
     snapshot = build_snapshot(game_state, counters)
     started = time.perf_counter()
     votes, samples = Counter(), {}

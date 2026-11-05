@@ -124,6 +124,24 @@ channeled_view = {**view, 'game': channeled}
 compared = s.comparator.compare_battle(channeled_view, s.comparator.import_battle(channeled_view))
 assert compared['expected']['player']['lightning_channeled_this_combat'] == 2
 assert not [d for d in compared['differences'] if 'channeled' in d['path']], compared['differences']
+# An older export lacks the counts: the turn-1 opening reads them off the orb bar, a later
+# import stays unknown and a search is refused once Thunder Strike or Blizzard is in a pile.
+opening = copy.deepcopy(with_orbs)
+opening['combat_state'].update(turn=1, cards_played_this_turn=0)
+opening_player = s.comparator.bridge.build_snapshot(opening)['player']
+assert (opening_player['lightning_channeled_this_combat'], opening_player['frost_channeled_this_combat']) == (1, 0)
+later = copy.deepcopy(with_orbs)
+later['combat_state'].update(turn=2, cards_played_this_turn=0)
+assert 'lightning_channeled_this_combat' not in s.comparator.bridge.build_snapshot(later)['player']
+s.comparator.bridge.require_channel_counts(later)
+later['combat_state']['discard_pile'] = [{'id': 'Thunder Strike', 'upgrades': 0, 'cost': 3}]
+try:
+    s.comparator.bridge.require_channel_counts(later)
+    raise AssertionError('a search without channel counts must be refused once Thunder Strike can read them')
+except ValueError:
+    pass
+later['combat_state'].update(lightning_channeled_this_combat=0, frost_channeled_this_combat=0)
+s.comparator.bridge.require_channel_counts(later)
 
 # Defect powers that the game exports under a different id, or folds into another
 # field. Machine Learning applies the game's DrawPower, whose id is "Draw"; the

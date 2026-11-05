@@ -1839,17 +1839,8 @@ void BattleContext::onUseSkillCard() {
         }
     }
 
-    if (p.hasStatus<PS::HEX>()) {
-        addToBot( Actions::MakeTempCardInDrawPile(CardInstance(CardId::DAZED), 1, true) );
-    }
+    onUseNonAttackCardPowers(c.getType());
 
-    if (p.hasStatus<PS::PANACHE>() && --p.panacheCounter == 0) {
-        p.panacheCounter = 5;
-        addToBot( Actions::DamageAllEnemy(p.getStatus<PS::PANACHE>()) );
-    }
-
-    // todo Storm
-    // todo Heatsinks
     // todo BirdFacedUrn
 
     onUseCardRelics();
@@ -1906,14 +1897,7 @@ void BattleContext::onUsePowerCard() {
         }
     }
 
-    if (p.hasStatus<PS::HEX>()) {
-        addToBot( Actions::MakeTempCardInDrawPile(CardInstance(CardId::DAZED), 1, true) );
-    }
-
-    if (p.hasStatus<PS::PANACHE>() && --p.panacheCounter == 0) {
-        p.panacheCounter = 5;
-        addToBot( Actions::DamageAllEnemy(p.getStatus<PS::PANACHE>()) );
-    }
+    onUseNonAttackCardPowers(c.getType());
 
     onUseCardRelics();
 
@@ -1921,6 +1905,39 @@ void BattleContext::onUsePowerCard() {
         const auto &m = monsters.arr[i];
         if (m.isTargetable() && m.hasStatus<MS::CURIOSITY>()) {
             addToBot(Actions::BuffEnemy<MS::STRENGTH>(i, m.getStatus<MS::CURIOSITY>()));
+        }
+    }
+}
+
+// UseCardAction calls the player's onUseCard hooks in power-list order, before Pain and
+// onAfterCardPlayed (Thousand Cuts); Hex's Dazed spot and Storm's Lightning both roll cardRandomRng.
+void BattleContext::onUseNonAttackCardPowers(CardType type) {
+    auto &p = player;
+    for (const auto &power : p.powerOrder) {
+        switch (power.status) {
+            case PS::HEX:
+                addToBot( Actions::MakeTempCardInDrawPile(CardInstance(CardId::DAZED), 1, true) );
+                break;
+            case PS::STORM:
+                if (type == CardType::POWER) {
+                    for (int i = 0; i < p.getStatus<PS::STORM>(); ++i) {
+                        addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
+                    }
+                }
+                break;
+            case PS::HEATSINKS:
+                if (type == CardType::POWER) {
+                    addToTop(Actions::DrawCards(p.getStatus<PS::HEATSINKS>())); // HeatsinkPower uses addToTop
+                }
+                break;
+            case PS::PANACHE:
+                if (--p.panacheCounter == 0) {
+                    p.panacheCounter = 5;
+                    addToBot( Actions::DamageAllEnemy(p.getStatus<PS::PANACHE>()) );
+                }
+                break;
+            default:
+                break;
         }
     }
 }
@@ -2034,14 +2051,7 @@ void BattleContext::onUseStatusOrCurseCard() {
         }
     }
 
-    if (p.hasStatus<PS::HEX>()) {
-        addToBot( Actions::MakeTempCardInDrawPile(CardInstance(CardId::DAZED), 1, true) );
-    }
-
-    if (p.hasStatus<PS::PANACHE>() && --p.panacheCounter == 0) {
-        p.panacheCounter = 5;
-        addToBot( Actions::DamageAllEnemy(p.getStatus<PS::PANACHE>()) );
-    }
+    onUseNonAttackCardPowers(c.getType());
 
     if (c.getType() == CardType::CURSE) {
         if (p.hasRelic<R::BLUE_CANDLE>()) {
@@ -2095,8 +2105,19 @@ void BattleContext::onAfterUseCard() {
     // too; Steam Barrier's own bump lives in DefectCards.cpp for the same reason.
     bool rebound = false;
     c.freeToPlayOnce = false;
-    if (c.getId() == CardId::STREAMLINE) {
+    // These rewrites live in use(), which a card the queue could not play never runs.
+    if (!item.triggerOnUse) {
+    } else if (c.getId() == CardId::STREAMLINE) {
         c.updateCost(-1);
+        if (item.purgeOnUse) {
+            // The original is filed by now (discard, exhaust, Rebound's draw pile or hand),
+            // and GetAllInBattleInstances finds it there.
+            const auto lower = [&](CardInstance &x) { if (x.uniqueId == c.uniqueId) x.updateCost(-1); };
+            for (int i = 0; i < cards.cardsInHand; ++i) lower(cards.hand[i]);
+            for (auto &x : cards.drawPile) lower(x);
+            for (auto &x : cards.discardPile) lower(x);
+            for (auto &x : cards.exhaustPile) lower(x);
+        }
     } else if (c.getId() == CardId::STEAM_BARRIER) {
         // Bumped in DefectCards.cpp, where use() reads it.
     } else if (c.getId() == CardId::GENETIC_ALGORITHM) {
@@ -2888,18 +2909,6 @@ void BattleContext::triggerOnOtherCardPlayed(const CardInstance &usedCard) {
     if (thousandCuts) {
         addToBot(Actions::DamageAllEnemy(thousandCuts));
     }
-
-    // Storm/Heatsinks watch the card type (both use onUseCard in the game).
-    if (usedCard.getType() == CardType::POWER) {
-        if (const int storm = player.getStatus<PS::STORM>(); storm > 0) {
-            for (int i = 0; i < storm; ++i) {
-                addToBot(Actions::ChannelOrb(Orb::LIGHTNING));
-            }
-        }
-        if (const int heatsinks = player.getStatus<PS::HEATSINKS>(); heatsinks > 0) {
-            addToBot(Actions::DrawCards(heatsinks));
-        }
-    }
 }
 
 DamageMatrix BattleContext::calculateCardDamageMatrix(const CardInstance &card, int baseDamage) const {
@@ -2921,10 +2930,6 @@ int BattleContext::calculateCardDamage(const CardInstance &card, int targetIdx, 
 
     if (player.hasRelic<R::STRIKE_DUMMY>() && card.isStrikeCard()) {
         damage += 3;
-    }
-
-    if (card.getId() == CardId::CLAW) {
-        damage += player.clawBonus;
     }
 
     if (player.hasRelic<R::WRIST_BLADE>() && card.costForTurn == 0) {
@@ -3012,6 +3017,7 @@ void BattleContext::queuePurgeCard(const CardInstance &c, int target) {
     item.purgeOnUse = true;
     item.target = target;
     item.energyOnUse = curCardQueueItem.energyOnUse;
+    item.stackDiscardSize = curCardQueueItem.stackDiscardSize;
     item.ignoreEnergyTotal = true;
     item.autoplay = true;
     item.freeToPlay = true;
