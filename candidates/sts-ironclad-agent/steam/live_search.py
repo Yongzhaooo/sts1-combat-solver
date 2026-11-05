@@ -12,6 +12,18 @@ from sim_patch.parity.core import sha256, differences
 from steam.rng_contract import validate
 
 
+def check_selection_screen(view, battle, sts):
+    """Refuse a card play while the game is on a hand picker.
+
+    The plan is searched for one decision boundary. If the game opened a picker the
+    plan does not know about, its next action belongs to a different boundary, and the
+    game answers the card play with InvalidCommandException instead of a state diff.
+    """
+    screen = view["game"].get("screen_type")
+    if screen in ("HAND_SELECT", "GRID") and battle.input_state != sts.InputState.CARD_SELECT:
+        raise ValueError("游戏正在选牌，模拟计划却要出牌：请重新计算后再执行。")
+
+
 class LiveSearch:
     def __init__(self, runtime: Path, repo: Path, simulations=32000, boss_multiplier=12.0):
         self.runtime = runtime.resolve()
@@ -89,6 +101,7 @@ class LiveSearch:
             if self.pending_single is not None:
                 self.pending_single = (*self.pending_single[:-1], True)
             return None, "confirm"
+        check_selection_screen(view, self.battle, self.sts)
         if not self.actions:
             raise ValueError("no active plan; import and plan before executing")
         action = self.sts.SearchAction.from_bits(self.actions[0] & 0xffffffff)
