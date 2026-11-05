@@ -17,13 +17,13 @@ chosen from -- so this runs with no game jar, no save and no network, only the b
 Three grades of result are reported:
 
 * the eight coverage-gap windows below are REQUIRED: every checkpoint must import and match;
-* any other native fixture is graded where it can be. The legacy captures in the same directory
-  predate the harness fix that makes a hand-built monster announce its intent, so their first
-  in-combat checkpoint carries `intent: DEBUG, move: -1` and cannot be imported at all. Those
-  checkpoints are counted as unavailable rather than silently passed;
+* any other native fixture is graded where it can be;
 * a checkpoint the capture could never support -- a value the recording does not carry at all --
-  is counted as UNOBSERVABLE and named by cause, so it stays visible without pretending to be a
-  capture defect. An importable checkpoint that disagrees is still a failure.
+  is counted as UNOBSERVABLE and named by cause. Three causes are known and named: a hand-built
+  monster recorded before the harness fix that made it announce an intent, Steam Barrier's play
+  count, and a Louse's rolled bite damage. Those stay visible without pretending to be capture
+  defects, which keeps `not importable` at zero on the committed fixtures: an entry there is a new
+  defect. An importable checkpoint that disagrees is still a failure.
 """
 from pathlib import Path
 import copy
@@ -142,6 +142,10 @@ def read_case(path):
 # Checkpoints whose value the capture never records. Naming them keeps them out of the
 # "not importable" pool, where a value that was never recorded looks the same as a capture
 # that stopped describing the board -- one is a recording limit, the other a regression.
+# On the committed fixtures `not importable` is therefore expected to be empty: an entry
+# there is a new defect, not one of the known ones.
+DEBUG_INTENT = 'DEBUG'
+
 UNOBSERVABLE = (
     ('steam-barrier-play-count',
      lambda error: isinstance(error, KeyError) and error.args == ('base_block',),
@@ -187,6 +191,14 @@ def check_case(path, root, rng_names):
             terminal += 1
             continue
         what = f'{case["id"]} after {checkpoint["after"]} actions'
+        if (observation.get('monsters') or [{}])[0].get('intent') == DEBUG_INTENT:
+            # A hand-built monster recorded before the harness fix: the capture carries the
+            # recorder's placeholder instead of the intent the game would have announced, so the
+            # board cannot be rebuilt at all. Named here rather than left to the importer's error.
+            unobserved += 1
+            named.append(f'{what}: monster-intent-never-announced -- the capture predates the harness '
+                         f'fix that makes a hand-built monster announce its intent')
+            continue
         try:
             # The fixture already stores the projected shape, so it goes to the importer as is.
             view = to_view(observation, root, rng_names)
