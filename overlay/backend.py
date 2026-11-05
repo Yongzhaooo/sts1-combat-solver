@@ -28,7 +28,8 @@ for s in (sys.stdin, sys.stdout, sys.stderr):
 from recovery import health, future_recovery, incense_targets, carry_weight
 from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature, reply_summary
 from auto_policy import recommend, smoke_opening, smoke_probe_keeps, smoke_threshold
-from solver_search import DEEP_BUDGET, boss_fast_plan, finalize_plan, focus_short, focus_target, search_plan
+from solver_search import (DEEP_BUDGET, better_plan, boss_fast_plan, finalize_plan, focus_short, focus_target,
+                           potion_margin_close, search_plan)
 from runtime_files import OVERLAY_FILES
 from search_status import search_timeout, soft_deadline
 from worker_policy import worker_limit, background_priority
@@ -457,6 +458,9 @@ class Advisor:
                               for c in itertools.combinations([slot for slot, _ in potions if slot not in smoke_slots], n)
                               if (n == 2 or n == len(potions)) and (not good or bool(brew_slots.intersection(c)))]
                     stages.append(combos)
+            if (not self.interrupt.is_set() and not self.plan.get('boss_fast_finish')
+                    and not (context.get('high_speed') is True and not focus_target(self.root_game))):
+                self.research_potion_free(view, budget, credit, started)
         finally:
             # Drain cancelled branches before the next request can resume native search.
             self.native_search.cancel()
@@ -476,6 +480,31 @@ class Advisor:
                     self.branch_info.sort(key=lambda branch: branch['id'] != key)
         s.actions.extend(self.plan['actions'])
         s.mapper = ActionMapper(s.comparator, s.battle, view)
+
+    def research_potion_free(self, view, budget, credit, started):
+        """A bottle that saves under POTION_MARGIN_HP may only beat an under-searched potion-free line: search that
+        line again at twice the deep budget and keep the better of the two."""
+        if not potion_margin_close(self.root_game, self.branch_info):
+            return
+        deeper = 2 * max(budget, DEEP_BUDGET)
+        self.searching = [(0, 'no-potion', '不用药 · 加搜')]
+        try:
+            line = dict(self.search_plan(self.root, deeper, [], credit, 0, False,
+                                         generated_potions(view['game'], (), deeper)))
+        except RuntimeError:
+            if not self.interrupt.is_set():
+                raise
+            return
+        finally:
+            self.searching = []
+        if not better_plan(line, self.branches['no-potion']):
+            return
+        line['seconds'] = round(time.monotonic() - started, 2)
+        self.branches['no-potion'] = line
+        if self.selected_branch == 'no-potion':
+            self.plan = line
+        row = self.branch_summary('no-potion', '不主动用药', line, view)
+        self.branch_info = [row if b['id'] == 'no-potion' else b for b in self.branch_info]
 
     def solve_smoke_opening(self, view, slot, credit, started, before):
         """Automatic policy only: one bounded no-active-potion probe, then keep or escape."""

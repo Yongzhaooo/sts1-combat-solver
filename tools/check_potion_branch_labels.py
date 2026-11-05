@@ -1,4 +1,5 @@
-"""Issue #95: an unavailable bottle row says why, and a bottle-set row never reads like a single-bottle row."""
+"""Issue #95: an unavailable bottle row says why, and a bottle-set row never reads like a single-bottle row.
+A bottle that saves under 3 HP sends the potion-free line to a deeper search (user, 2026-11-06)."""
 import argparse
 from concurrent.futures import Future
 from pathlib import Path
@@ -54,3 +55,30 @@ assert single['available'] and pair['available'] and single['id'] == 'potion-1' 
 assert single['name'] == 'T1 火焰药水', single['name']
 assert pair['name'] == 'T1 火焰药水 · 速度药水 未用', pair['name']
 print('PASS: a bottle-set row that leaves a bottle undrunk is labelled apart from the single-bottle row')
+
+# 3. A bottle line saving under 3 HP re-searches the potion-free line at twice the deep budget and keeps the better line.
+advisor.root_game = game
+calls = []
+advisor.search_plan = lambda root, budget, *rest: calls.append(budget) or dict(deeper)
+
+
+def research(base_loss, bottle_loss, deeper_value):
+    global deeper
+    calls.clear()
+    deeper = dict(win, actions=[strike], value=deeper_value)
+    advisor.branches = {'no-potion': dict(win, actions=[strike, strike])}
+    advisor.selected_branch, advisor.plan = 'no-potion', advisor.branches['no-potion']
+    advisor.branch_info = [dict(id='no-potion', name='old', available=True, won=True, loss=base_loss, potion_uses=[]),
+                           dict(id='potion-1', available=True, won=True, loss=bottle_loss, potion_uses=[{'slot': 1}])]
+    advisor.research_potion_free({'game': game}, 8000, 0, time.monotonic())
+
+
+research(4, 2, 10100)
+assert calls == [256000] and advisor.plan['value'] == 10100 and advisor.branches['no-potion'] is advisor.plan
+assert advisor.branch_info[0]['name'] == '不主动用药' and advisor.searching == []
+research(4, 2, 9000)
+assert calls == [256000] and advisor.plan['actions'] == [strike, strike] and advisor.branch_info[0]['name'] == 'old'
+for base_loss, bottle_loss in [(5, 2), (2, 2), (2, 4)]:
+    research(base_loss, bottle_loss, 10100)
+    assert calls == [], (base_loss, bottle_loss)
+print('PASS: a bottle saving under 3 HP re-searches the potion-free line deeper; larger savings keep the bottle line')
