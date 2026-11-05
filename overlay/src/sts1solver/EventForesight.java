@@ -468,22 +468,19 @@ final class EventForesight {
     }
 
     // reward(n): n x RewardItem(COLORLESS) = getColorlessRewardCards() on cardRng; n = 1/2/3 for the three memories,
-    // so every option takes a prefix of the same sequence.
+    // so every option takes a prefix of the same sequence. Each memory's button names the group it adds (user, 2026-11-05).
     private static void sensoryStone(AbstractEvent e, List<String> out) {
-        if (!onPage(e, "INTRO", "INTRO_2")) return;
-        for (int group = 1; group <= 3; group++) {
+        if (onPage(e, "INTRO")) out.add(I18n.t("下一页每个选项旁标出它那一组无色牌"));
+        if (!onPage(e, "INTRO_2")) return;
+        // INTRO_2 slots (buttonEffect @149): memory 1 -> choice 1, memory 2 -> 2, memory 3 -> 3
+        String[] labels = {I18n.t("第1组："), I18n.t("第2组："), I18n.t("第3组：")};
+        for (int slot = 0; slot < 3; slot++) {
             List<AbstractCard> cards = AbstractDungeon.getColorlessRewardCards();
             for (AbstractCard c : cards)
                 for (AbstractRelic r : AbstractDungeon.player.relics) r.onPreviewObtainCard(c);
-            out.add(I18n.t("第 ") + group + I18n.t(" 组：") + Foresight.cards(cards));
-            if (group == 1 && onPage(e, "INTRO_2")) Foresight.note(0, I18n.t("第1组：") + slashed(cards));
+            Foresight.note(slot, labels[slot] + slashed(cards));
         }
-        out.add(I18n.t("记忆1得第1组，2得1-2组，3得1-3组"));
-        // INTRO_2 slots (buttonEffect @149): memory 1 -> choice 1, memory 2 -> 2, memory 3 -> 3
-        if (onPage(e, "INTRO_2")) {
-            Foresight.note(1, I18n.t("第1+2组，见面板"));
-            Foresight.note(2, I18n.t("第1+2+3组，见面板"));
-        }
+        out.add(I18n.t("记忆1得第1组，2得1-2组，3得1-3组；每组标在对应选项旁"));
     }
 
     // Fight option: boss = first of [Guardian, Hexaghost, Slime Boss] after Collections.shuffle(Random(miscRng.randomLong())).

@@ -189,7 +189,6 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
  次：|: 
  次：遇敌 |: fight 
  点伤害| damage
- 组：| group: 
  血）| HP)
  血）→ 升级| HP) → upgrade
  金币| gold
@@ -240,10 +239,11 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 留下 → 失去 |Stay → lose 
 盒子 → |Box → 
 空|Empty
-第 |#
-第1+2+3组，见面板|Groups 1+2+3; see panel
-第1+2组，见面板|Groups 1+2; see panel
 第1组：|Group 1: 
+第2组：|Group 2: 
+第3组：|Group 3: 
+下一页每个选项旁标出它那一组无色牌|Next page: each option shows its colorless group
+记忆1得第1组，2得1-2组，3得1-3组；每组标在对应选项旁|Memory 1: group 1; 2: groups 1–2; 3: groups 1–3. Each group is shown beside its option
 结果：|Result: 
 胜者：主人 → 押主人赢 250，押杀手输 50|Owner wins → bet owner: +250; murderer: -50
 胜者：杀手 → 押杀手赢 100，押主人输 50|Murderer wins → bet murderer: +100; owner: -50
@@ -251,7 +251,6 @@ Boss 已有合格无药胜线 · 固定路线，结束搜索|Boss: accepted poti
 获得诅咒 |Gain curse 
 落空|Miss
 见面板：20 张牌|See panel: 20 cards
-记忆1得第1组，2得1-2组，3得1-3组|Memory 1: group 1; 2: groups 1–2; 3: groups 1–3
 读完全部 → |Read all → 
 读完得：|After reading: 
 调整 → 自选一张升级（无随机）|Adjust → choose an upgrade (no RNG)
