@@ -14,14 +14,16 @@ is compared. No seed-to-board reconstruction is needed -- the recorder saved the
 chosen from -- so this runs with no game jar, no save and no network, only the built runtime
 (tools/build_solver_runtime.py) that the other `tools/check_*.py` scripts also need.
 
-Two grades of result are reported:
+Three grades of result are reported:
 
 * the eight coverage-gap windows below are REQUIRED: every checkpoint must import and match;
-* any other native fixture is graded where it can be. The legacy captures in the same directory
-  predate the harness fix that makes a hand-built monster announce its intent, so their first
-  in-combat checkpoint carries `intent: DEBUG, move: -1` and cannot be imported at all. Those
-  checkpoints are counted as unavailable rather than silently passed, and an importable checkpoint
-  that disagrees is still a failure.
+* any other native fixture is graded where it can be;
+* a checkpoint the capture could never support -- a value the recording does not carry at all --
+  is counted as UNOBSERVABLE and named by cause. Three causes are known and named: a hand-built
+  monster recorded before the harness fix that made it announce an intent, Steam Barrier's play
+  count, and a Louse's rolled bite damage. Those stay visible without pretending to be capture
+  defects, which keeps `not importable` at zero on the committed fixtures: an entry there is a new
+  defect. An importable checkpoint that disagrees is still a failure.
 """
 from pathlib import Path
 import copy
@@ -137,14 +139,47 @@ def read_case(path):
     return json.loads(path.read_text(encoding='utf-8'))
 
 
+# Checkpoints whose value the capture never records. Naming them keeps them out of the
+# "not importable" pool, where a value that was never recorded looks the same as a capture
+# that stopped describing the board -- one is a recording limit, the other a regression.
+# On the committed fixtures `not importable` is therefore expected to be empty: an entry
+# there is a new defect, not one of the known ones.
+DEBUG_INTENT = 'DEBUG'
+
+UNOBSERVABLE = (
+    ('steam-barrier-play-count',
+     lambda error: isinstance(error, KeyError) and error.args == ('base_block',),
+     'Steam Barrier reports how often it was played through its base block, which the capture omits'),
+    ('louse-bite-damage',
+     lambda error: isinstance(error, ValueError) and 'biteDamage' in str(error),
+     'a Louse derives its bite damage in rollMove and the capture carries only intent and move'),
+)
+
+
+def unobservable(error):
+    """Name the recorded absence behind this import error, or None if nothing explains it."""
+    for kind, matches, why in UNOBSERVABLE:
+        if matches(error):
+            return kind, why
+    return None
+
+
 def check_case(path, root, rng_names):
-    """Grade one fixture. Returns (compared, unavailable, terminal, reasons, failures)."""
+    """Grade one fixture.
+
+    Returns a dict of counters plus the two reason lists. `unobserved` counts the checkpoints
+    whose value the capture never records; `unavailable` counts the ones the importer cannot
+    rebuild for any other reason. Both stay open gaps, but only the second one is a capture
+    defect, so the two must not share a bucket.
+    """
     case = read_case(path)
     compared = 0
+    unobserved = 0
     unavailable = 0
     terminal = 0
     reasons = []
     failures = []
+    named = []
     for checkpoint in case['checkpoints']:
         observation = checkpoint['observation']
         if not observation.get('monsters'):
@@ -156,19 +191,34 @@ def check_case(path, root, rng_names):
             terminal += 1
             continue
         what = f'{case["id"]} after {checkpoint["after"]} actions'
+        if (observation.get('monsters') or [{}])[0].get('intent') == DEBUG_INTENT:
+            # A hand-built monster recorded before the harness fix: the capture carries the
+            # recorder's placeholder instead of the intent the game would have announced, so the
+            # board cannot be rebuilt at all. Named here rather than left to the importer's error.
+            unobserved += 1
+            named.append(f'{what}: monster-intent-never-announced -- the capture predates the harness '
+                         f'fix that makes a hand-built monster announce its intent')
+            continue
         try:
             # The fixture already stores the projected shape, so it goes to the importer as is.
             view = to_view(observation, root, rng_names)
             compare(view, what)
             compared += 1
         except (ValueError, KeyError) as error:
-            # The capture cannot be imported: a legacy board that never announced an intent, or
-            # a monster whose internal state the observation does not carry.
-            unavailable += 1
-            reasons.append(f'{what}: not importable ({error})')
+            cause = unobservable(error)
+            if cause is None:
+                # The capture cannot be imported for a reason nobody has named yet: that is a
+                # defect in the capture until someone shows otherwise.
+                unavailable += 1
+                reasons.append(f'{what}: not importable ({error})')
+            else:
+                kind, why = cause
+                unobserved += 1
+                named.append(f'{what}: {kind} -- {why}')
         except AssertionError as error:
             failures.append(str(error))
-    return compared, unavailable, terminal, reasons, failures
+    return {'compared': compared, 'unobserved': unobserved, 'unavailable': unavailable,
+            'terminal': terminal, 'reasons': reasons, 'failures': failures, 'named': named}
 
 
 def main():
@@ -193,27 +243,35 @@ def main():
     failed = []
     required_seen = set()
     graded = 0
+    unobserved = 0
     skipped = 0
     finished = 0
+    breakdown = {}
     for path in paths:
         case_id = read_case(path)['id']
-        compared, unavailable, terminal, reasons, failures = check_case(path, root, RNG_NAMES)
+        result = check_case(path, root, RNG_NAMES)
+        compared = result['compared']
         required = case_id in EXPECTED
         card_id, purpose = EXPECTED.get(case_id, ('(legacy capture)', 'any in-combat checkpoint'))
         if required:
             required_seen.add(case_id)
         graded += compared
-        skipped += unavailable
-        finished += terminal
-        if failures:
+        unobserved += result['unobserved']
+        skipped += result['unavailable']
+        finished += result['terminal']
+        for line in result['named']:
+            kind = line.split(': ', 1)[1].split(' -- ', 1)[0]
+            breakdown[kind] = breakdown.get(kind, 0) + 1
+        if result['failures']:
             # An importable checkpoint that disagrees is a failure whatever the fixture is.
-            failed.extend(failures)
-            print(f'FAIL  {case_id:40s} {card_id:15s} {failures[0]}')
-        elif required and unavailable:
-            # A required window must be fully replayable: an unavailable checkpoint here means
-            # the capture stopped describing the board, which is a regression of its own.
-            failed.extend(reasons)
-            print(f'FAIL  {case_id:40s} {card_id:15s} {unavailable} checkpoints not importable')
+            failed.extend(result['failures'])
+            print(f'FAIL  {case_id:40s} {card_id:15s} {result["failures"][0]}')
+        elif required and (result['unavailable'] or result['unobserved']):
+            # A required window must be fully replayable: a checkpoint the capture cannot support
+            # is a regression of that window, whatever the reason.
+            failed.extend(result['reasons'] + result['named'])
+            print(f'FAIL  {case_id:40s} {card_id:15s} '
+                  f'{result["unavailable"] + result["unobserved"]} checkpoints not comparable')
         elif compared:
             note = f' ({purpose})' if required else ''
             print(f'PASS  {case_id:40s} {card_id:15s} {compared} checkpoints{note}')
@@ -225,12 +283,16 @@ def main():
         print(f'FAIL  {case_id:40s} {"":15s} missing')
 
     if failed:
-        print(f'\n{len(failed)} problem(s); {graded} checkpoints matched, {skipped} not importable')
+        print(f'\n{len(failed)} problem(s); {graded} checkpoints matched, '
+              f'{unobserved} unobservable, {skipped} not importable')
         for problem in failed:
             print('  ' + problem)
         return 1
     print(f'\nALL {len(EXPECTED)} coverage-gap windows match the game; {graded} checkpoints matched, '
-          f'{finished} post-fight checkpoints skipped, {skipped} legacy checkpoints not importable')
+          f'{finished} post-fight checkpoints skipped, {unobserved} unobservable, '
+          f'{skipped} not importable')
+    for kind, count in sorted(breakdown.items()):
+        print(f'  {count:5d}  {kind}')
     return 0
 
 
