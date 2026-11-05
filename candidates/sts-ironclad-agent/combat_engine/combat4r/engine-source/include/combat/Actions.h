@@ -122,6 +122,10 @@ namespace sts {
         static Action MultiCastAction(int times); // MulticastAction: evoke the oldest orb N times, consume once
         static Action TriggerStartOfTurnOrbsAction();
         static Action TriggerOrbPassiveAction(int orbIdx); // Loop: one orb's full passive
+        // Same, but with the Focus captured when the trigger was queued: LoopPower reads
+        // the orb's stored passiveAmount, so a Focus change that is applied later in the
+        // queue (Bias) must not shrink the trigger it already fired (F22).
+        static Action TriggerOrbPassiveAction(int orbIdx, int focusAtTrigger);
         static Action TriggerEndOfTurnOrbsAction();
         static Action ImpulseAction(); // Emotion Chip: every orb runs start then end passive
         static Action DarkImpulseAction(); // upgraded Darkness: every Dark orb grows once now

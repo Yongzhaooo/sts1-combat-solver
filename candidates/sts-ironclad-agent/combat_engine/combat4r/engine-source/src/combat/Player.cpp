@@ -790,9 +790,12 @@ void Player::applyStartOfTurnPowers(BattleContext &bc) {
 
             case PS::LOOP:
                 // LoopPower: for each stack, trigger the oldest orb's passive
-                // (onStartOfTurn then onEndOfTurn, as the game calls both).
+                // (onStartOfTurn then onEndOfTurn, as the game calls both). The Focus is
+                // captured here because the orb reads its stored passiveAmount, while
+                // BiasPower only queues its decrement: the trigger still fires with the
+                // Focus of the turn that just ended (F22, Defect A20).
                 for (int i = 0; i < pair.second; ++i) {
-                    bc.addToBot(Actions::TriggerOrbPassiveAction(0));
+                    bc.addToBot(Actions::TriggerOrbPassiveAction(0, bc.player.focus));
                 }
                 break;
 
