@@ -30,7 +30,8 @@ extern bool overlayPotionAllowed(const BattleContext &, int);
 extern bool overlayFastReady();
 extern bool overlayHeartFight();
 extern bool overlayAcceptTerminal(const BattleContext &, const std::vector<search::Action> &);
-extern double overlayRecoveryBonus(const BattleContext &);''',1)
+extern double overlayRecoveryBonus(const BattleContext &);
+extern double overlayFocusValue(const BattleContext &);''',1)
 source=source.replace(marker,marker+'\n        if(!overlayPotionAllowed(bc,i))continue;\n',1)
 score='return evaluateEndState4q(bc) + 100.0 * (hp.curHp - bc.player.curHp)'
 assert source.count(score)==1,'upstream recovery score changed'
@@ -45,8 +46,8 @@ source=source.replace(terminal,'''    if (overlayAcceptTerminal(endState, action
 '''+terminal,1)
 victory='    const auto hp = bc.victoryHp();'
 assert source.count(victory)==1
-source=source.replace(victory,'''    // Terminal fight: survival dominates; among wins prefer fewer turns only.
-    if (overlayHeartFight()) return 100000000.0 - 1000.0 * bc.turn;
+source=source.replace(victory,'''    // Terminal fight: survival dominates; among wins prefer fewer turns only (and High Focus mode's Focus).
+    if (overlayHeartFight()) return 100000000.0 - 1000.0 * bc.turn + overlayFocusValue(bc);
 '''+victory,1)
 # Potion branches search in parallel threads; this debug counter is the only shared write.
 counter='std::int64_t simulationIdx = 0;'

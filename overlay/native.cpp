@@ -31,6 +31,7 @@ long long rescuePerSim=160, rescuePerSimNoGate=160;
 long long beamOnlyPerSim=0;
 bool discoveryFrames=false;  // headless truth: vanilla per-frame Discovery regeneration instead of the live single one
 unsigned incenseTargets=0;  // bit c: ending the fight with Incense Burner counter c is worth one Intangible
+int focusTarget=0;  // High Focus mode (mod setting): the Focus a win should end with; 0 is off
 std::map<std::string,std::vector<CardId>> actualPools;
 // Live counters per branch index, read by the progress reporter while plans run.
 struct Progress { std::atomic<long long> simulations{0}, transitions{0}, transitionLimit{0};
@@ -108,6 +109,13 @@ bool overlayPotionAllowed(const BattleContext &bc, int slot) {
 constexpr double EXTRA_PER_MAX_HP=2.0;   // on top of the engine's +1 and the healed current HP
 // Incense Burner on target is a must-hold (user rule, 2026-10-21: at least 30 HP).
 constexpr double ENERGY_HP=4.0, PEN_NIB_HP=4.0, INTANGIBLE_HP=30.0, DRAW_HP=1.5;
+// High Focus mode outranks HP: each Focus point short of the target costs FOCUS_HP, reaching it adds FOCUS_REACH_HP.
+constexpr double FOCUS_HP=10.0, FOCUS_REACH_HP=100.0;
+static bool focusShort(const BattleContext &bc) { return focusTarget>0 && bc.player.focus<focusTarget; }
+double overlayFocusValue(const BattleContext &bc) {
+    if(!focusTarget || bc.outcome!=Outcome::PLAYER_VICTORY)return 0;
+    return 100.0*(FOCUS_HP*std::min(static_cast<int>(bc.player.focus),focusTarget) + (focusShort(bc) ? 0.0 : FOCUS_REACH_HP));
+}
 double carryWeight=1.0;  // recovery.carry_weight: the other counters count x2 before an elite, x3 before a Boss
 thread_local int initialMaxHp=0;
 thread_local double initialDeckCurseHp=0;
@@ -148,6 +156,7 @@ bool overlayAcceptTerminal(const BattleContext &bc, const std::vector<search::Ac
                 && (!initialTail || bc.player.hasRelic<RelicId::LIZARD_TAIL>()))return fastReady=true;
         return false;
     }
+    if(focusShort(bc))return false;  // High Focus mode: an early win short of the target does not end the search
     if(heartFight)return fastReady=true;
     if(!fastBoss || bc.turn-initialTurn>20 || 2*std::max(0,initialHp-bc.player.curHp)>initialMaxHp
             || fairyCount(bc)<initialFairies
@@ -250,7 +259,7 @@ double overlayRecoveryBonus(const BattleContext &bc) {
         && bc.player.hasRelic<RelicId::DARKSTONE_PERIAPT>()
         && !bc.player.hasRelic<RelicId::OMAMORI>()
         ? std::min(6,std::max(0,bc.player.maxHp-initialMaxHp)) : 0;
-    return 100.0*(revivalValue(bc) + std::min(futureHeal,hp.maxHp-hp.curHp)
+    return overlayFocusValue(bc) + 100.0*(revivalValue(bc) + std::min(futureHeal,hp.maxHp-hp.curHp)
         + EXTRA_PER_MAX_HP*std::max(0,bc.player.maxHp-initialMaxHp)
         // Implant's relic reward must not earn Feed's growth premium.
         - (EXTRA_PER_MAX_HP+search::BattleScumSearcher2::maxHpGainWeight)*curseGrowth
@@ -270,7 +279,8 @@ static bool overlaySameVictory(const BattleContext &a, const BattleContext &b) {
         return std::make_tuple(p.curHp,p.maxHp,p.gold,p.relicBits0,p.relicBits1,
             p.happyFlowerCounter,p.incenseBurnerCounter,p.inkBottleCounter,p.inserterCounter,
             p.nunchakuCounter,p.penNibCounter,p.sundialCounter,
-            goldWealth(s),escapedThiefGold(s),escapedThieves(s),deckCurseHp(s));
+            goldWealth(s),escapedThiefGold(s),escapedThieves(s),deckCurseHp(s),
+            focusTarget ? static_cast<int>(p.focus) : 0);
     };
     if (inventory(a)!=inventory(b) || ah.curHp!=bh.curHp || ah.maxHp!=bh.maxHp
             || a.potionCapacity!=b.potionCapacity || a.potionBarkFlip!=b.potionBarkFlip) return false;
@@ -310,7 +320,7 @@ static bool overlayBeamTick() {
     return overlayInterrupted();
 }
 static bool macroFinish(const BattleContext &root, const BattleContext &end) {
-    if (end.outcome != Outcome::PLAYER_VICTORY || end.player.curHp <= 0) return false;
+    if (end.outcome != Outcome::PLAYER_VICTORY || end.player.curHp <= 0 || focusShort(end)) return false;
     if (heartFight) return true;
     auto hp = end.victoryHp();
     if (hp.curHp < hp.maxHp || end.player.maxHp < root.player.maxHp || !relicsHeld(end)
@@ -355,6 +365,10 @@ PYBIND11_MODULE(overlay_search, m) {
     });
     m.def("set_carry_weight",[](double weight) { carryWeight=weight; });
     m.def("set_max_hp_gain_weight", [](double weight) { search::BattleScumSearcher2::maxHpGainWeight=weight; });
+    m.def("set_focus_target", [](int target) {
+        if(target<0)throw std::invalid_argument("negative Focus target");
+        focusTarget=target;
+    });
     m.def("set_incense_targets", [](const std::vector<int> &counters) {
         unsigned mask=0;
         for(int counter:counters) {
@@ -542,6 +556,7 @@ PYBIND11_MODULE(overlay_search, m) {
             // Deep (refinement) budgets: any HP loss is worth a beam; standard budgets: only a loss or a costly line.
             // Heart victory ends the run; further HP or turn improvements have no continuation value.
             if(!macroUsed && beamOnlyPerSim<=0 && !(heartFight && mctsWin) && (!mctsWin || newPermanentCurse(predicted)
+                    || focusShort(predicted)
                     || cost>(simulations>=128000 ? 0 : std::max(6,root.player.maxHp*15/100)))) {
                 beamRan=true;
                 live.phase=3; live.transitionLimit=LOOP_BEAM_PER_SIM*simulations;
@@ -604,6 +619,7 @@ PYBIND11_MODULE(overlay_search, m) {
         out["fast_ready"]=fastReady;
         out["simulations"]=result.simulations;
         out["hp"]=predicted.player.curHp;
+        out["focus"]=static_cast<int>(predicted.player.focus);
         out["post_hp"]=hp.curHp;
         out["max_hp"]=hp.maxHp;
         out["used_tail"]=root.player.hasRelic<RelicId::LIZARD_TAIL>() && !predicted.player.hasRelic<RelicId::LIZARD_TAIL>();

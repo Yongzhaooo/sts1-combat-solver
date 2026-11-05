@@ -67,6 +67,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private int smokeProbeBudget=12000, smokeLossThreshold=15; // Mod config: raw combat HP loss, strict less-than threshold
     private int searchWorkers; // 0: auto; applied only by the Mod backend.
     private boolean feedModeEnabled; // Mod config: max HP gained by Feed counts twice in the plan value
+    private boolean focusModeEnabled; // Settings: Defect plans look for a win ending with 25+ Focus
     private boolean routeMarks = true; // Mod config: draw the planned route on the map
     private AbstractPlayer runAutoPlayer;
     private String autoReason = "";
@@ -122,6 +123,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         return AbstractDungeon.player != null && SUPPORTED.contains(AbstractDungeon.player.chosenClass);
     }
 
+    static boolean defect() {
+        return AbstractDungeon.player != null && AbstractDungeon.player.chosenClass == AbstractPlayer.PlayerClass.DEFECT;
+    }
+
     public static void initialize() {
         communicationmod.CommunicationMod.initializeEmbedded();
         instance = new SolverMod();
@@ -137,6 +142,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("brightEyeMode", "false"); // beyond-SL display hints are opt-in; no policy reads them
             defaults.setProperty("bossFastFinish", "false"); // new key: every player starts with the standard Boss search
             defaults.setProperty("feedMode", "false");
+            defaults.setProperty("focusMode", "false");
             defaults.setProperty("highSpeed", "false");
             defaults.setProperty("streakMode", "false");
             defaults.setProperty("agentBridge", "false");
@@ -157,6 +163,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             Foresight.brightEyeMode = config.getBool("brightEyeMode");
             bossFastFinishEnabled = config.getBool("bossFastFinish");
             feedModeEnabled = config.getBool("feedMode");
+            focusModeEnabled = config.getBool("focusMode");
             highSpeed = config.getBool("highSpeed");
             streakMode = config.getBool("streakMode") && !highSpeed;
             agentBridge = config.getBool("agentBridge");
@@ -414,6 +421,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         out.addProperty("boss_heal",bossHeal);
         out.addProperty("boss_fast_finish",bossFastFinishEnabled && bossHeal);
         out.addProperty("feed_mode",feedModeEnabled);
+        out.addProperty("focus_mode",focusActive());
         out.addProperty("high_speed",highSpeed);
         out.addProperty("streak_mode",streakMode);
         out.addProperty("run_auto",fightAuto());
@@ -1180,6 +1188,14 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         runAuto=keepAuto;
     }
 
+    /** High Focus mode only exists for Defect; another class would chase a Focus it cannot gain. */
+    private boolean focusActive() { return focusModeEnabled && defect(); }
+
+    private void toggleFocusMode() {
+        focusModeEnabled = !focusModeEnabled;
+        saveSetting("focusMode", focusModeEnabled); recalculate("focus_mode");
+    }
+
     private void setSearchTier(int tier) {
         highSpeed = tier == 1; streakMode = tier == 2;
         saveSetting("highSpeed", highSpeed); saveSetting("streakMode", streakMode); recalculate("search_tier");
@@ -1532,6 +1548,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         boolean won=plan.get("won").getAsBoolean();
         String head=I18n.t(won?"预测胜利":"当前路线未找到胜利");
         String metrics=I18n.t("战后 HP")+" "+plan.get("hp").getAsString()+" · "+I18n.t("等效战损")+" "+plan.get("loss").getAsString();
+        if(focusActive() && plan.has("focus")) metrics+=" · "+I18n.t("集中")+" "+plan.get("focus").getAsInt();
         canvas.label(sb,head,PAD,top,WIDTH-2*PAD,1.05f,won?ACCENT:DANGER);
         float x=PAD+canvas.textWidth(head,1.05f)+12;
         if(x+canvas.textWidth(metrics,.8f)<=WIDTH-PAD) canvas.label(sb,metrics,x,top+4,WIDTH-PAD-x,.8f,MUTED);
@@ -1593,6 +1610,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             String summary=available?(branch.get("won").getAsBoolean()?I18n.t("损 ")+branch.get("loss").getAsInt():I18n.t("未胜")):I18n.t("本轮无可选路线");
             String revival=revivalWarning(branch);
             if(!revival.isEmpty()) summary=revival+" · "+summary;
+            if(available && focusActive() && branch.has("focus")) summary+=" · "+I18n.t("集中")+" "+branch.get("focus").getAsInt();
             if(available && branch.has("lost_gold") && branch.get("lost_gold").getAsInt()>0)
                 summary+=I18n.t(" / 金 -")+branch.get("lost_gold").getAsInt();
             if(available && branch.has("potion_gain") && branch.get("potion_gain").getAsInt()>0)
@@ -1677,6 +1695,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             segmented(sb,top,new String[]{"是","仅必经火堆"},nextRest?0:1,index -> { nextRest=index==0; recalculate("rest_setting"); }); top+=p;
         }
         settingLabel(sb,"Boss 快速收尾",top); onOff(sb,top,bossFastFinishEnabled,this::toggleBossFinish); top+=p;
+        if(defect()) { settingLabel(sb,"高集中模式",top); onOff(sb,top,focusModeEnabled,this::toggleFocusMode); top+=p; }
         settingLabel(sb,"辉眼模式",top); onOff(sb,top,Foresight.brightEyeMode,this::toggleBrightEye); top+=p;
         settingLabel(sb,"持续记录",top); onOff(sb,top,backend.runLog(),this::toggleRunLog); top+=p;
         settingLabel(sb,"语言",top);
