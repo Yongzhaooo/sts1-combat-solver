@@ -9,21 +9,29 @@ disagrees with the game.
 
     python tools/check_coverage_gaps.py [path ...]
 
+With no arguments every character directory under `fixtures/native/` is graded, so a new
+character's captures are picked up without editing this file.
+
 Each checkpoint is fed to the simulator's snapshot importer and every field the comparator can see
 is compared. No seed-to-board reconstruction is needed -- the recorder saved the state the play was
 chosen from -- so this runs with no game jar, no save and no network, only the built runtime
 (tools/build_solver_runtime.py) that the other `tools/check_*.py` scripts also need.
 
-Three grades of result are reported:
+Four kinds of result are reported:
 
-* the eight coverage-gap windows below are REQUIRED: every checkpoint must import and match;
-* any other native fixture is graded where it can be;
+* the eight coverage-gap windows below are REQUIRED: every checkpoint must import and match, and a
+  missing window fails the run;
+* any other native fixture is graded where it can be. An importable checkpoint that disagrees is
+  still a failure;
 * a checkpoint the capture could never support -- a value the recording does not carry at all --
   is counted as UNOBSERVABLE and named by cause. Three causes are known and named: a hand-built
   monster recorded before the harness fix that made it announce an intent, Steam Barrier's play
   count, and a Louse's rolled bite damage. Those stay visible without pretending to be capture
   defects, which keeps `not importable` at zero on the committed fixtures: an entry there is a new
-  defect. An importable checkpoint that disagrees is still a failure.
+  defect;
+* a fixture with no compared checkpoint at all is printed as SKIP, so a character whose captures
+  were never really graded cannot read as a pass. The per-character block at the end says how many
+  checkpoints each character actually got compared.
 """
 from pathlib import Path
 import copy
@@ -33,9 +41,11 @@ import sys
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / 'overlay'))
+sys.path.insert(0, str(REPO / 'tools'))
 from backend import Advisor, view_from_state  # noqa: E402
+import parity_differences  # noqa: E402
 
-DEFAULT_DIR = REPO / 'fixtures' / 'native' / 'DEFECT'
+NATIVE_DIR = REPO / 'fixtures' / 'native'
 
 # The cards whose behaviour each required window exists to pin down.
 EXPECTED = {
@@ -59,7 +69,7 @@ def card(card_id, upgrades=0, cost=1):
             'type': 'SKILL', 'misc': 0, 'uuid': None, 'free_to_play_once': False}
 
 
-def to_game_state(observation, template):
+def to_game_state(observation, template, character):
     """Express one recorded observation as a CommunicationMod game_state.
 
     Only the fields the importer reads are filled; everything else comes from the captured
@@ -100,19 +110,19 @@ def to_game_state(observation, template):
     ]
     game['current_hp'] = player['hp']
     game['floor'] = observation['floor']
-    game['class'] = 'DEFECT'
+    game['class'] = character
     game['room_phase'] = 'COMBAT'
     game['screen_type'] = 'NONE'
     return game
 
 
-def to_view(observation, root, rng_names):
+def to_view(observation, root, rng_names, character):
     """The backend view for one observation: recorded state plus the streams the importer needs."""
     # view_from_state only knows how to describe an Ironclad fight, so the captured root is
     # turned into a view first and the recorded state is written over it afterwards. That keeps
     # the run context real while letting a Defect board through, as check_defect_parity does.
     view = view_from_state(copy.deepcopy(root))
-    view['game'] = to_game_state(observation, {'game': root['game_state']})
+    view['game'] = to_game_state(observation, {'game': root['game_state']}, character)
     view['rng'] = {name: _rng(observation['rng'][key]) for key, name in rng_names.items()}
     return view
 
@@ -126,7 +136,7 @@ def compare(view, what):
     search = Advisor().search
     battle = search.comparator.import_battle(view, require_search_state=True)
     result = search.comparator.compare_battle(view, battle)
-    found = [d for d in result['differences'] if not d['path'].startswith('/legacy/')]
+    found = [d for d in result['differences'] if parity_differences.kept(d)]
     if found:
         raise AssertionError(f'{what}: {len(found)} differences; first: {json.dumps(found[0], ensure_ascii=False)}')
     return battle
@@ -201,7 +211,7 @@ def check_case(path, root, rng_names):
             continue
         try:
             # The fixture already stores the projected shape, so it goes to the importer as is.
-            view = to_view(observation, root, rng_names)
+            view = to_view(observation, root, rng_names, case.get('character', 'DEFECT'))
             compare(view, what)
             compared += 1
         except (ValueError, KeyError) as error:
@@ -224,7 +234,10 @@ def check_case(path, root, rng_names):
 def main():
     from sim_patch.parity.adapter import RNG_NAMES
 
-    targets = [Path(arg) for arg in sys.argv[1:]] or [DEFAULT_DIR]
+    targets = [Path(arg) for arg in sys.argv[1:]]
+    if not targets:
+        # Every character directory, so a new one is discovered instead of remembered.
+        targets = sorted(p for p in NATIVE_DIR.iterdir() if p.is_dir()) if NATIVE_DIR.is_dir() else []
     paths = []
     for target in targets:
         if target.is_dir():
@@ -247,12 +260,15 @@ def main():
     skipped = 0
     finished = 0
     breakdown = {}
+    totals = {}
     for path in paths:
-        case_id = read_case(path)['id']
+        case = read_case(path)
+        case_id = case['id']
+        character = case.get('character', 'DEFECT')
         result = check_case(path, root, RNG_NAMES)
         compared = result['compared']
         required = case_id in EXPECTED
-        card_id, purpose = EXPECTED.get(case_id, ('(legacy capture)', 'any in-combat checkpoint'))
+        card_id, purpose = EXPECTED.get(case_id, ('', 'any in-combat checkpoint'))
         if required:
             required_seen.add(case_id)
         graded += compared
@@ -262,6 +278,12 @@ def main():
         for line in result['named']:
             kind = line.split(': ', 1)[1].split(' -- ', 1)[0]
             breakdown[kind] = breakdown.get(kind, 0) + 1
+        per_character = totals.setdefault(character, {'fixtures': 0, 'compared': 0, 'unobserved': 0,
+                                                      'unavailable': 0, 'unimportable': 0})
+        per_character['fixtures'] += 1
+        per_character['compared'] += compared
+        per_character['unobserved'] += result['unobserved']
+        per_character['unavailable'] += result['unavailable']
         if result['failures']:
             # An importable checkpoint that disagrees is a failure whatever the fixture is.
             failed.extend(result['failures'])
@@ -275,12 +297,26 @@ def main():
         elif compared:
             note = f' ({purpose})' if required else ''
             print(f'PASS  {case_id:40s} {card_id:15s} {compared} checkpoints{note}')
-        # else: a legacy capture whose checkpoints are all unimportable -- counted in `skipped`.
+        else:
+            # Nothing was compared, so nothing about this fixture is proven either way. Say so
+            # instead of letting it sit silently inside the unimportable total.
+            per_character['unimportable'] += 1
+            why = (result['reasons'] or result['named'] or ['no in-combat checkpoint'])[0]
+            print(f'SKIP  {case_id:40s} {card_id:15s} nothing compared: {why}')
 
     missing = sorted(set(EXPECTED) - required_seen)
     for case_id in missing:
         failed.append(f'{case_id}: required coverage-gap fixture is missing')
         print(f'FAIL  {case_id:40s} {"":15s} missing')
+
+    print('\nper character:')
+    for character in sorted(totals):
+        per_character = totals[character]
+        print(f'  {character:12s} {per_character["fixtures"]:4d} fixtures, '
+              f'{per_character["compared"]:4d} checkpoints compared, '
+              f'{per_character["unobserved"]:4d} unobservable, '
+              f'{per_character["unavailable"]:4d} not importable, '
+              f'{per_character["unimportable"]:4d} fixtures with nothing compared')
 
     if failed:
         print(f'\n{len(failed)} problem(s); {graded} checkpoints matched, '

@@ -13,7 +13,9 @@ import sys
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "overlay"))
+sys.path.insert(0, str(REPO / "tools"))
 from backend import Advisor, view_from_state  # noqa: E402
+import parity_differences  # noqa: E402
 
 ROOT = json.loads((REPO / "overlay" / "test" / "live-root.json").read_text(encoding="utf-8"))
 
@@ -66,7 +68,7 @@ def check(view, *, expect_difference=False, what=""):
     search = Advisor().search
     battle = search.comparator.import_battle(view, require_search_state=True)
     result = search.comparator.compare_battle(view, battle)
-    found = [d for d in result["differences"] if not d["path"].startswith("/legacy/")]
+    found = [d for d in result["differences"] if parity_differences.kept(d)]
     if expect_difference:
         assert found, f"{what}: expected a difference, got none"
     else:
