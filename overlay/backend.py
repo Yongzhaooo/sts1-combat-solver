@@ -28,7 +28,7 @@ for s in (sys.stdin, sys.stdout, sys.stderr):
 from recovery import health, future_recovery, incense_targets, carry_weight
 from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature, reply_summary
 from auto_policy import recommend, smoke_opening, smoke_probe_keeps, smoke_threshold
-from solver_search import DEEP_BUDGET, boss_fast_plan, finalize_plan, search_plan
+from solver_search import DEEP_BUDGET, boss_fast_plan, finalize_plan, focus_short, focus_target, search_plan
 from runtime_files import OVERLAY_FILES
 from search_status import search_timeout, soft_deadline
 from worker_policy import worker_limit, background_priority
@@ -273,6 +273,7 @@ class Advisor:
         self.native_search.set_discovery_frames(view['game'].get('solver_discovery_frames') is True)
         # Feed mode (mod setting): max HP gained in this combat counts twice in the plan value.
         self.native_search.set_max_hp_gain_weight(2.0 if view['game'].get('solver_auto_context', {}).get('feed_mode') is True else 1.0)
+        self.native_search.set_focus_target(focus_target(view['game']))
         self.native_search.set_incense_targets(incense_targets(view['game']))
         self.native_search.set_carry_weight(carry_weight(view['game']))
         self.native_search.resume()
@@ -329,10 +330,11 @@ class Advisor:
                 self.plan = dict(self.native_search.plan(self.root, budget,
                     list(names), 0, 0, False, True))
                 long_win = self.plan['outcome'] == 1 and len(self.plan['actions']) > LONG_HEART_ACTIONS
-                if (self.plan['outcome'] != 1 or long_win) and budget < DEEP_BUDGET and not self.interrupt.is_set():
+                short = focus_short(self.root_game, self.plan)
+                if (self.plan['outcome'] != 1 or long_win or short) and budget < DEEP_BUDGET and not self.interrupt.is_set():
                     refined = dict(self.native_search.plan(self.root, DEEP_BUDGET,
                         list(names), 0, 0, False, True))
-                    if (refined['value'] > self.plan['value'] if not long_win else
+                    if (refined['value'] > self.plan['value'] if not long_win or short else
                             refined['outcome'] == 1 and len(refined['actions']) < len(self.plan['actions'])):
                         self.plan = refined
                 self.plan = self.finalize_plan(self.root, self.plan)
@@ -390,7 +392,8 @@ class Advisor:
             clean_regular = (initial_plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
                              and health(initial_plan, self.root_game, True)['loss'] <= quiet_loss
                              and not initial_plan.get('used_tail') and not initial_plan.get('used_fairy')
-                             and not toolbox_selection(view['game']))
+                             and not toolbox_selection(view['game'])
+                             and not focus_short(self.root_game, initial_plan))
         context = self.root_game.get('solver_auto_context', {})
         if (_ELITE_DEEP_GATE is not None and self.root_game.get('act', 4) <= 3 and context.get('room') == 'MonsterRoomElite'
                 and context.get('streak_mode') is not True):
@@ -435,6 +438,7 @@ class Advisor:
                             and self.branch_info[0]['loss'] <= quiet_loss
                             and not self.plan.get('used_tail') and not self.plan.get('used_fairy')
                             and not toolbox_selection(view['game'])
+                            and not focus_short(self.root_game, self.plan)
                             and not (brew_order or (budget >= DEEP_BUDGET and brew_slots))):
                         break
                 for slots, future in futures.items():
@@ -442,7 +446,8 @@ class Advisor:
                         self.potion_branch(slots, names, future, started, view, budget)
                 if self.interrupt.is_set():
                     break
-                good = any(b['available'] and b['won'] and b['loss'] <= max(MULTI_POTION_LOSS, quiet_loss) for b in self.branch_info)
+                good = any(b['available'] and b['won'] and b['loss'] <= max(MULTI_POTION_LOSS, quiet_loss)
+                           and not focus_short(self.root_game, b) for b in self.branch_info)
                 if fast_boss and stage is stages[0] and potions:
                     stages.append([(slot,) for slot, _ in potions])
                 singles_done = (not fast_boss and stage is stages[0]) or (
@@ -736,6 +741,7 @@ class Advisor:
                 'empty_potion_slots': plan.get('empty_potion_slots', 0),
                 'smoke_stop_loss': plan.get('smoke_stop_loss', False),
                 'potion_uses': plan.get('potion_uses', []),
+                'focus': plan.get('focus', 0),
                 **health(plan, view['game'], won)}
 
     def choose(self, view, branch_id):
@@ -879,6 +885,7 @@ class Advisor:
                 **healing,
                 'outcome': int(self.plan['outcome']),
                 'won': won,
+                'focus': self.plan.get('focus', 0),
                 'boss_fast_finish': self.plan.get('boss_fast_finish', False),
                 'smoke_policy': self.plan.get('smoke_policy', False),
                 'smoke_opening': self.smoke_opening,
@@ -893,6 +900,7 @@ class Advisor:
                     and (toolbox_selection(view['game'])
                          or self.plan['outcome'] != int(s.sts.Outcome.PLAYER_VICTORY)
                          or healing['loss'] > 0
+                         or focus_short(self.root_game, self.plan)
                          or any(b['available'] and b.get('potion_gain', 0) > 0
                                 for b in self.branch_info)))}
 
@@ -1345,8 +1353,10 @@ if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != 
             act = int(view['game'].get('act', 4))
             context = view['game'].get('solver_auto_context') or {}
             room = context.get('room', '')
-            fast = context.get('high_speed') is True
-            tiered = act <= 3 and context.get('streak_mode') is not True   # streak mode: every act like act 4
+            # Streak and High Focus modes search every act like act 4; High Focus also overrides high speed.
+            focus = context.get('focus_mode') is True
+            fast = context.get('high_speed') is True and not focus
+            tiered = act <= 3 and context.get('streak_mode') is not True and not focus
             _act13_divisor[0] = _FAST_DIVISOR if fast else _ACT13_ROOM_DIVISORS.get(room, _ACT13_DIVISOR) if tiered else 1
             cs = view['game'].get('combat_state') or {}
             feed = room != 'MonsterRoomBoss' and any(c['id'] == 'Feed' for k in ('hand', 'draw_pile', 'discard_pile')

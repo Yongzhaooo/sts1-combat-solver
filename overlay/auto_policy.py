@@ -174,7 +174,13 @@ def recommend(game, branches):
     clean = [b for b in winners if not b.get('new_permanent_curse')]
     if clean:
         winners = clean
-    baseline = min((b for b in winners if not b.get('potion_uses')), key=lambda b: b['loss'], default=None)
+    from solver_search import focus_short
+    # High Focus mode: a line reaching the Focus target beats any HP or bottle saving.
+    focused = [b for b in winners if not focus_short(game, b)]
+    if focused and len(focused) < len(winners):
+        chosen = min(focused, key=lambda b: (b['loss'], len(b.get('potion_uses', []))))
+        return dict(branch=chosen['id'], reason='高集中：选达到集中目标的路线', assessment=profile)
+    baseline =min((b for b in winners if not b.get('potion_uses')), key=lambda b: b['loss'], default=None)
     weight = hp_weight(game)
     heal_note = {1: '', BOSS_HEAL_WEIGHT: '；首领战后回血，战损按 1/4 计', 0: '；首领战后回满血，战损不计'}[weight]
 

@@ -8,6 +8,16 @@ import time
 from recovery import health
 
 DEEP_BUDGET = 128000
+FOCUS_TARGET = 25  # High Focus mode (user, 2026-11-05): look for a win ending with at least this much Focus
+
+
+def focus_target(game):
+    return FOCUS_TARGET if game.get('solver_auto_context', {}).get('focus_mode') is True else 0
+
+
+def focus_short(game, plan):
+    target = focus_target(game)
+    return bool(target) and plan.get('focus', 0) < target
 
 
 def better_plan(candidate, best):
@@ -23,7 +33,8 @@ def boss_fast_plan(game, plan, slots):
             and plan.get('relics_held') is True
             and not plan.get('potion_uses')
             and not any((int(bits) & 0xffffffff) >> 29 == 1 for bits in plan['actions'])
-            and 2 * max(0, game['current_hp'] - plan['hp']) <= game['max_hp'])
+            and 2 * max(0, game['current_hp'] - plan['hp']) <= game['max_hp']
+            and not focus_short(game, plan))
 
 
 def finalize_plan(root, plan):
@@ -58,12 +69,12 @@ def search_plan(native, root, budget, slots, credit, index, kill_thieves, genera
         if boss_fast_plan(game, best, slots):
             best['boss_fast_finish'] = True
             return finalize_plan(root, best)
-    # Standard search gets one bounded refinement when its route still loses HP.
-    if budget == 8000 and not interrupt.is_set() and not best.get('memory_capped') and (
+    # Standard search gets one bounded refinement when its route still loses HP or misses the Focus target.
+    if budget == 8000 and not interrupt.is_set() and not best.get('memory_capped') and (focus_short(game, best) or (
             best['outcome'] != 1
             or health(best, game, True)['loss'] > 0
             or best.get('used_tail') or best.get('used_fairy')) and not (
-            deep_gate is not None and deep_gate(best, slots, seconds)):
+            deep_gate is not None and deep_gate(best, slots, seconds))):
         try:
             refined = dict(native.plan(root, DEEP_BUDGET, slots, credit, index, kill_thieves, generated, fast_boss))
         except RuntimeError:

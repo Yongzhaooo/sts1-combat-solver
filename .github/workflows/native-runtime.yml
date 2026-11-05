@@ -95,6 +95,7 @@ jobs:
       - run: python tools/check_mid_turn_picker.py
       - run: python tools/check_selection_screen_guard.py
       - run: python tools/check_genetic_growth.py
+      - run: python tools/check_focus_mode.py
       - run: python tools/check_discovery_frames.py
       - run: python tools/check_armaments_identity.py
       - run: python tools/check_corruption_snecko.py
