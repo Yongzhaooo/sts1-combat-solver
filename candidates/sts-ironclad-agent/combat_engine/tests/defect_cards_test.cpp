@@ -531,6 +531,21 @@ int main() {
         check(bc.player.orbSlots == 5, "Capacitor should gain 2 orb slots");
     }
     {
+        // LoopPower.atStartOfTurn calls the orb's passive at once, so with Bias earlier in the
+        // power order the Lightning passive uses Focus before Bias's queued loss (a Defect run
+        // diverged here: 3 + 4 in the game, 3 + 3 natively).
+        BattleContext bc = freshBattle();
+        playCard(bc, CardId::BIASED_COGNITION);
+        playCard(bc, CardId::LOOP);
+        const int hp = bc.monsters.arr[0].curHp;
+        bc.player.applyStartOfTurnPowers(bc);
+        for (int i = 0; i < 8 && !bc.actionQueue.isEmpty(); ++i) {
+            bc.actionQueue.popFront()(bc);
+        }
+        check(hp - bc.monsters.arr[0].curHp == 7, "Loop's passive should read Focus before Bias drains it");
+        check(bc.player.focus == 3, "Bias should still drain 1 focus");
+    }
+    {
         // Loop: at turn start, trigger the oldest orb's passive once per stack.
         BattleContext bc = freshBattle();
         playCard(bc, CardId::LOOP);
@@ -820,6 +835,22 @@ int main() {
         const int hp = bc.monsters.arr[0].curHp;
         playCard(bc, CardId::RIP_AND_TEAR);
         check(hp - bc.monsters.arr[0].curHp == 14, "Rip and Tear should hit twice for 7");
+    }
+    {
+        // NewRipAndTearAction rolls each target when it resolves and addToTops the hit, so a hit
+        // that kills is done before the next roll: two Louses at 1 HP always both die. The
+        // engine used to roll both targets first (a Defect run diverged on three Louses).
+        for (int k = 0; k < 8; ++k) {
+            BattleContext bc = freshBattle(MonsterEncounter::TWO_LOUSE);
+            for (int r = 0; r < k; ++r) {
+                (void)bc.cardRandomRng.random(1);
+            }
+            bc.monsters.arr[0].curHp = 1;
+            bc.monsters.arr[1].curHp = 1;
+            playCard(bc, CardId::RIP_AND_TEAR);
+            check(bc.monsters.arr[0].isDeadOrEscaped() && bc.monsters.arr[1].isDeadOrEscaped(),
+                  "Rip and Tear should kill two 1-HP Louses whatever the rolls");
+        }
     }
     {
         // Fission: remove every orb, gaining 1 energy and 1 card per orb.
