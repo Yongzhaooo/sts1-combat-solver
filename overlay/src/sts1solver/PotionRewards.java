@@ -88,6 +88,10 @@ final class PotionRewards {
             case "ElixirPotion": return 18;
             case "SmokeBomb": return 12;
             case "BlessingOfTheForge": return 9;
+            // Defect bottles: Focus lasts the fight and scales every orb; Capacity and Darkness need orb play.
+            case "FocusPotion": return 28;
+            case "EssenceOfDarkness": return 20;
+            case "PotionOfCapacity": return 16;
             default: return -1; // Unknown/modded bottles need manual comparison.
         }
     }

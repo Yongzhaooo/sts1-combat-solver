@@ -31,6 +31,8 @@ public final class PotionRewardsCheck {
         check(PotionRewards.value("UnknownPotion",game)==-1,"unknown remains manual");
         check(PotionRewards.value("GamblersBrew",game)==60,"Gambler's Brew under its game id");
         check(PotionRewards.value("BlessingOfTheForge",game)==9,"Blessing of the Forge: low value, no late bonus");
+        for(String id:new String[]{"FocusPotion","EssenceOfDarkness","PotionOfCapacity"})
+            check(PotionRewards.value(id,game)>0,id+" is a known Defect bottle, not manual");
         game.addProperty("act",2);game.addProperty("floor",50);
         for(int i=0;i<priority.length;i++)check(PotionRewards.value(priority[i],game)==early[i],"Act 2 unchanged");
         game.addProperty("act",4);game.addProperty("floor",54);
