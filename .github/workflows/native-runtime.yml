@@ -77,6 +77,7 @@ jobs:
       - run: python tools/check_search_progress.py
       - run: python tools/check_search_memory.py
       - run: python tools/check_snapshot_import.py
+      - run: python tools/check_empty_orb_slot.py
       - run: python tools/check_card_colors.py
       - run: python tools/check_player_replays.py
       - name: Compare the native Defect fixtures against the simulator
