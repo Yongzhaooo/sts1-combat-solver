@@ -59,7 +59,10 @@ print('PASS: a bottle-set row that leaves a bottle undrunk is labelled apart fro
 # 3. A bottle line saving under 3 HP re-searches the potion-free line at twice the deep budget and keeps the better line.
 advisor.root_game = game
 calls = []
-advisor.search_plan = lambda root, budget, *rest: calls.append(budget) or dict(deeper)
+shown = []
+advisor.search_plan = lambda root, budget, slots, credit, index, *rest: (
+    calls.append(budget), shown.append((index, list(advisor.searching))))[0] or dict(deeper)
+finished = [(0, 'no-potion', '不用药'), (1, 'potion-1', '火焰药水')]
 
 
 def research(base_loss, bottle_loss, deeper_value):
@@ -70,12 +73,15 @@ def research(base_loss, bottle_loss, deeper_value):
     advisor.selected_branch, advisor.plan = 'no-potion', advisor.branches['no-potion']
     advisor.branch_info = [dict(id='no-potion', name='old', available=True, won=True, loss=base_loss, potion_uses=[]),
                            dict(id='potion-1', available=True, won=True, loss=bottle_loss, potion_uses=[{'slot': 1}])]
+    advisor.searching = list(finished)
     advisor.research_potion_free({'game': game}, 8000, 0, time.monotonic())
 
 
 research(4, 2, 10100)
 assert calls == [256000] and advisor.plan['value'] == 10100 and advisor.branches['no-potion'] is advisor.plan
-assert advisor.branch_info[0]['name'] == '不主动用药' and advisor.searching == []
+assert advisor.branch_info[0]['name'] == '不主动用药' and advisor.searching == finished
+# The panel keeps the finished bottle rows while the deeper search runs in a row of its own (F50 export, 2026-11-06).
+assert shown[-1] == (2, finished + [(2, 'no-potion-research', '不用药 · 加搜')]), shown[-1]
 research(4, 2, 9000)
 assert calls == [256000] and advisor.plan['actions'] == [strike, strike] and advisor.branch_info[0]['name'] == 'old'
 for base_loss, bottle_loss in [(5, 2), (2, 2), (2, 4)]:
