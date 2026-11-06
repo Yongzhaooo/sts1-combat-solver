@@ -45,11 +45,14 @@ assert refused(lambda v: v.update(character='SILENT')), 'an unknown character mu
 
 # Absent optional fields mean none.
 player = load()
-assert (player.stance, player.orb_slots, player.has_status(sts.PlayerStatus.MANTRA)) == ('NEUTRAL', 0, False)
+assert (player.stance, player.orb_slots, player.has_status(sts.PlayerStatus.MANTRA)) == ('Neutral', 0, False)
 
-for stance in ('NEUTRAL', 'CALM', 'WRATH', 'DIVINITY'):
+# Stances cross the boundary with the game's own spelling, so a snapshot taken from the game
+# loads unchanged.
+for stance in ('Neutral', 'Calm', 'Wrath', 'Divinity'):
     assert load(lambda v: v['player'].update(stance=stance)).stance == stance, stance
 assert refused(lambda v: v['player'].update(stance='wrath'))
+assert refused(lambda v: v['player'].update(stance='NEUTRAL')), 'the old upper-case spelling is gone'
 assert load(lambda v: v['player'].update(orb_slots=3)).orb_slots == 3
 assert load(lambda v: v['player'].update(orbs=[])).orb_slots == 0
 
