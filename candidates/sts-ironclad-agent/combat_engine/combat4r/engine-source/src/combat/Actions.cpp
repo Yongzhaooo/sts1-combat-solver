@@ -610,7 +610,9 @@ namespace {
                 // <= -8 must not shift cardRandomRng by one for the rest of the fight.
                 const int damage = 8 + bc.player.focus;
                 if (bc.player.hasStatus<PS::ELECTRO>()) {
-                    for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+                    // DamageAllEnemiesAction hits left to right; addToTop reverses, so queue right to left.
+                    // Death order decides which Bronze Orb's Stasis card returns to the hand first.
+                    for (int i = bc.monsters.monsterCount - 1; i >= 0; --i) {
                         if (!bc.monsters.arr[i].isDeadOrEscaped()) {
                             bc.addToTop(Actions::AttackEnemy(i, lockOnDamage(bc, i, damage), DamageType::THORNS));
                         }
