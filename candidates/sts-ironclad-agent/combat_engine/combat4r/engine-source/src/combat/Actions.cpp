@@ -236,13 +236,13 @@ Action Actions::ChangeStance(Stance stance) {
             return;
         }
         if (bc.player.stance == Stance::CALM) {
-            // CalmStance.onExitStance: addToTop(new GainEnergyAction(2)).
-            bc.addToTop(Actions::GainEnergy(2));
+            // CalmStance.onExitStance: addToBottom(new GainEnergyAction(2)).
+            bc.addToBot(Actions::GainEnergy(2));
         }
         bc.player.stance = stance;
         if (stance == Stance::DIVINITY) {
-            // DivinityStance.onEnterStance: addToTop(new GainEnergyAction(3)).
-            bc.addToTop(Actions::GainEnergy(3));
+            // DivinityStance.onEnterStance: addToBottom(new GainEnergyAction(3)).
+            bc.addToBot(Actions::GainEnergy(3));
         }
     }};
 }
