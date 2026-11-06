@@ -1,8 +1,8 @@
-"""Replay recorded player fights action by action and require the game's monster HP, energy and block after every action.
+"""Replay recorded player fights action by action and require the game's monster HP, energy, block and hand after every action.
 
 Each fixture under fixtures/player-replays is cut from a player's state_divergence export: the
-combat root the solver imported, the commands the mod executed, and the monster HP the game
-reported before the next request. A fixture records a fight that once diverged, so a rule that
+combat root the solver imported, the commands the mod executed, and the monster HP, energy, block and hand the
+game reported before the next request. A fixture records a fight that once diverged, so a rule that
 regresses shows up here as the same divergence.
 
   python tools/check_player_replays.py            # check every fixture
@@ -33,7 +33,7 @@ def cut(export_path, name):
         elif event['k'] == 'request' and command is not None and 'snap' in event:
             snap = event['snap']
             steps.append({'command': command, 'monster_hp': [m[1] for m in snap['monsters']],
-                          'energy': snap['energy'], 'block': snap['block']})
+                          'energy': snap['energy'], 'block': snap['block'], 'hand': snap['hand']})
             command = None
         elif event['k'] == 'fault':
             break
@@ -55,6 +55,7 @@ def check():
     from backend import Advisor, view_from_state
     session = Advisor().search
     S = session.sts
+    bridge = session.comparator.bridge
     paths = sorted(FIXTURES.glob('*.json'))
     assert paths, 'no player replay fixtures'
     for path in paths:
@@ -81,10 +82,15 @@ def check():
                 got = [hp for hp in got if hp > 0]
             assert got == step['monster_hp'], '%s step %d (%s): game %s, simulator %s' % (
                 path.name, number, step['command'], step['monster_hp'], got)
-            # Older fixtures recorded monster HP only.
+            # Older fixtures recorded monster HP only, or no hand.
             for field, value in (('energy', battle.player.energy), ('block', battle.player.block)):
                 assert field not in step or int(value) == step[field], '%s step %d (%s): %s game %s, simulator %s' % (
                     path.name, number, step['command'], field, step[field], int(value))
+            if 'hand' in step:
+                want = [bridge.CARD_ALIASES.get(c, bridge.enum_key(c)) for c in step['hand']]
+                hand = [S.CardId(c.id).name for c in battle.hand]
+                assert hand == want, '%s step %d (%s): hand game %s, simulator %s' % (
+                    path.name, number, step['command'], want, hand)
     print('PASS: %d player replays match the game after every action' % len(paths))
 
 
