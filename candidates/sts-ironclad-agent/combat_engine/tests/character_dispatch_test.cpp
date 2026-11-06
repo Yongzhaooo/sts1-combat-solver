@@ -21,7 +21,7 @@ int main() {
         {CharacterClass::SILENT, CardId::SURVIVOR},     // skill
         {CharacterClass::SILENT, CardId::ACCURACY},     // power
         {CharacterClass::WATCHER, CardId::CRUSH_JOINTS},    // attack
-        {CharacterClass::WATCHER, CardId::LIKE_WATER},      // skill
+        {CharacterClass::WATCHER, CardId::EVALUATE},        // skill
         {CharacterClass::WATCHER, CardId::DEVA_FORM},   // power
     };
     const Case implemented[] = {
