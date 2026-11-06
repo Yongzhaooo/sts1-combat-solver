@@ -487,16 +487,18 @@ class Advisor:
         if not potion_margin_close(self.root_game, self.branch_info):
             return
         deeper = 2 * max(budget, DEEP_BUDGET)
-        self.searching = [(0, 'no-potion', '不用药 · 加搜')]
+        # Add a row of its own: the finished rows stay on the panel, and the deeper search is not shown as ready.
+        rows, index = self.searching, len(self.searching)
+        self.searching = rows + [(index, 'no-potion-research', '不用药 · 加搜')]
         try:
-            line = dict(self.search_plan(self.root, deeper, [], credit, 0, False,
+            line = dict(self.search_plan(self.root, deeper, [], credit, index, False,
                                          generated_potions(view['game'], (), deeper)))
         except RuntimeError:
             if not self.interrupt.is_set():
                 raise
             return
         finally:
-            self.searching = []
+            self.searching = rows
         if not better_plan(line, self.branches['no-potion']):
             return
         line['seconds'] = round(time.monotonic() - started, 2)
