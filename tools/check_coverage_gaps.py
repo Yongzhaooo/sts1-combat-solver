@@ -37,7 +37,9 @@ from pathlib import Path
 import copy
 import gzip
 import json
+import re
 import sys
+from collections import Counter
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / 'overlay'))
@@ -60,12 +62,12 @@ EXPECTED = {
 }
 
 
-def card(card_id, upgrades=0, cost=1):
+def card(card_id, upgrades=0, cost=1, retain=False):
     # Deliberately no `is_playable`: the fixture records the board, not which card the game
     # considered legal, so the comparator must treat legality as unobserved instead of
     # comparing the simulator's guess against a value that was never captured.
     return {'id': card_id, 'name': card_id, 'cost': cost, 'base_cost': cost, 'upgrades': upgrades,
-            'retain': False, 'has_target': False, 'target': 'SELF',
+            'retain': retain, 'has_target': False, 'target': 'SELF',
             'type': 'SKILL', 'misc': 0, 'uuid': None, 'free_to_play_once': False}
 
 
@@ -81,8 +83,16 @@ def to_game_state(observation, template, character):
     piles = observation['piles']
     by_id = {}
     for pile in ('hand', 'draw', 'discard', 'exhaust'):
-        by_id[pile] = [dict(card(c['id'], c['upgrades'], c['cost']), uuid=f'{pile}-{index:04d}')
-                       for index, c in enumerate(piles[pile])]
+        by_id[pile] = []
+        for index, c in enumerate(piles[pile]):
+            entry = dict(card(c['id'], c['upgrades'], c['cost']), uuid=f'{pile}-{index:04d}')
+            # Claim the Retain keyword only when the capture recorded it; otherwise the
+            # comparison has to report the bit as unobserved instead of reading a default.
+            if 'retain' in c:
+                entry['retain'] = c['retain']
+            else:
+                entry.pop('retain', None)
+            by_id[pile].append(entry)
     combat['hand'] = by_id['hand']
     combat['draw_pile'] = by_id['draw']
     combat['discard_pile'] = by_id['discard']
@@ -96,6 +106,12 @@ def to_game_state(observation, template, character):
         'orbs': [{'id': orb['id'], 'passive_amount': orb['passive'], 'evoke_amount': orb['evoke']}
                  for orb in player['orbs']],
     }
+    # Written only when the capture recorded the field: every committed capture carries both, but
+    # a hand-made one may not, and then the importer's Neutral/0 default is the honest reading --
+    # this tool does not invent a value.
+    for field in ('stance', 'mantra'):
+        if field in player:
+            combat['player'][field] = player[field]
     prototype = (combat.get('monsters') or [None])[0] or {}
     combat['monsters'] = [
         {**copy.deepcopy(prototype),
@@ -132,14 +148,23 @@ def _rng(counter):
     return {'seed0': 0, 'seed1': 0, 'counter': counter}
 
 
-def compare(view, what):
+def compare_result(view, what):
+    """Import and compare one view; returns the battle with its comparison result.
+
+    Split from `compare` so a caller that accounts for a checkpoint can also see the fields the
+    capture never recorded, while everyone else keeps the assertion-only entry point.
+    """
     search = Advisor().search
     battle = search.comparator.import_battle(view, require_search_state=True)
     result = search.comparator.compare_battle(view, battle)
     found = [d for d in result['differences'] if parity_differences.kept(d)]
     if found:
         raise AssertionError(f'{what}: {len(found)} differences; first: {json.dumps(found[0], ensure_ascii=False)}')
-    return battle
+    return battle, result
+
+
+def compare(view, what):
+    return compare_result(view, what)[0]
 
 
 def read_case(path):
@@ -155,6 +180,11 @@ def read_case(path):
 # On the committed fixtures `not importable` is therefore expected to be empty: an entry
 # there is a new defect, not one of the known ones.
 DEBUG_INTENT = 'DEBUG'
+
+# A capture that names a card the simulator does not implement refuses to import with this
+# message. Reading the name out of it lets the accounting tools report the card rather than the
+# string, and keeps the pattern in one place.
+UNIMPLEMENTED = re.compile(r'unknown enum name: (\w+)')
 
 UNOBSERVABLE = (
     ('steam-barrier-play-count',
@@ -177,10 +207,11 @@ def unobservable(error):
 def check_case(path, root, rng_names):
     """Grade one fixture.
 
-    Returns a dict of counters plus the two reason lists. `unobserved` counts the checkpoints
-    whose value the capture never records; `unavailable` counts the ones the importer cannot
-    rebuild for any other reason. Both stay open gaps, but only the second one is a capture
-    defect, so the two must not share a bucket.
+    Returns a dict of counters plus the reason lists, and one record per checkpoint so an
+    accounting tool can bucket every checkpoint without rebuilding this loop. `unobserved`
+    counts the checkpoints whose value the capture never records; `unavailable` counts the ones
+    the importer cannot rebuild for any other reason. Both stay open gaps, but only the second
+    one is a capture defect, so the two must not share a bucket.
     """
     case = read_case(path)
     compared = 0
@@ -190,17 +221,25 @@ def check_case(path, root, rng_names):
     reasons = []
     failures = []
     named = []
+    records = []
+    unrecorded_fields = Counter()
     for checkpoint in case['checkpoints']:
         observation = checkpoint['observation']
+        what = f'{case["id"]} after {checkpoint["after"]} actions'
         if not observation.get('monsters'):
+            # No board to grade. Named for accounting only: the counters here keep counting
+            # boards, so a comparison run against the committed fixtures is unchanged.
+            records.append({'what': what, 'status': 'no_board', 'unrecorded': [],
+                            'cause': f'out of combat ({observation.get("phase")})'})
             continue
         if observation.get('phase') == 'GAME_OVER':
             # The fight is over: there is no board left to compare, and the importer rebuilds the
             # board but not the outcome, so it answers UNDECIDED where the game says PLAYER_LOSS.
             # That is a gap in the importer's outcome derivation, not in the rules under test here.
             terminal += 1
+            records.append({'what': what, 'status': 'terminal', 'unrecorded': [],
+                            'cause': 'fight is over (GAME_OVER)'})
             continue
-        what = f'{case["id"]} after {checkpoint["after"]} actions'
         if (observation.get('monsters') or [{}])[0].get('intent') == DEBUG_INTENT:
             # A hand-built monster recorded before the harness fix: the capture carries the
             # recorder's placeholder instead of the intent the game would have announced, so the
@@ -208,27 +247,53 @@ def check_case(path, root, rng_names):
             unobserved += 1
             named.append(f'{what}: monster-intent-never-announced -- the capture predates the harness '
                          f'fix that makes a hand-built monster announce its intent')
+            records.append({'what': what, 'status': 'unobserved', 'unrecorded': [],
+                            'cause': 'monster-intent-never-announced'})
             continue
         try:
             # The fixture already stores the projected shape, so it goes to the importer as is.
             view = to_view(observation, root, rng_names, case.get('character', 'DEFECT'))
-            compare(view, what)
+            _, result = compare_result(view, what)
+            if any(g.get('kind') == 'pending_choice_state_and_continuation' for g in result['gaps']):
+                # The checkpoint stops at a card selection: the comparison has nothing to grade
+                # until the choice's continuation is recorded, so this is not agreement.
+                unobserved += 1
+                named.append(f'{what}: pending-choice-state -- the capture stops at a choice '
+                             f'nothing continues from')
+                records.append({'what': what, 'status': 'unobserved', 'unrecorded': [],
+                                'cause': 'pending-choice-state'})
+                continue
             compared += 1
+            unrecorded = ['.'.join(g['path'].split('/')[-2:]) for g in result['gaps']
+                          if g.get('kind') == 'missing_observation']
+            unrecorded_fields.update(unrecorded)
+            records.append({'what': what, 'status': 'compared', 'cause': None,
+                            'unrecorded': unrecorded})
         except (ValueError, KeyError) as error:
             cause = unobservable(error)
             if cause is None:
                 # The capture cannot be imported for a reason nobody has named yet: that is a
-                # defect in the capture until someone shows otherwise.
+                # defect in the capture until someone shows otherwise. Reported as its message,
+                # and flagged when the message names an unimplemented card.
                 unavailable += 1
-                reasons.append(f'{what}: not importable ({error})')
+                missing = UNIMPLEMENTED.search(str(error))
+                label = f'unimplemented card {missing.group(1)}' if missing else f'not importable ({error})'
+                reasons.append(f'{what}: {label}')
+                records.append({'what': what, 'status': 'unavailable', 'unrecorded': [],
+                                'cause': label, 'card': missing.group(1) if missing else None})
             else:
                 kind, why = cause
                 unobserved += 1
                 named.append(f'{what}: {kind} -- {why}')
+                records.append({'what': what, 'status': 'unobserved', 'unrecorded': [],
+                                'cause': kind})
         except AssertionError as error:
             failures.append(str(error))
+            records.append({'what': what, 'status': 'failed', 'unrecorded': [],
+                            'cause': str(error)})
     return {'compared': compared, 'unobserved': unobserved, 'unavailable': unavailable,
-            'terminal': terminal, 'reasons': reasons, 'failures': failures, 'named': named}
+            'terminal': terminal, 'reasons': reasons, 'failures': failures, 'named': named,
+            'records': records, 'unrecorded': unrecorded_fields}
 
 
 def main():
@@ -261,6 +326,7 @@ def main():
     finished = 0
     breakdown = {}
     totals = {}
+    unrecorded_total = Counter()
     for path in paths:
         case = read_case(path)
         case_id = case['id']
@@ -275,6 +341,7 @@ def main():
         unobserved += result['unobserved']
         skipped += result['unavailable']
         finished += result['terminal']
+        unrecorded_total.update(result['unrecorded'])
         for line in result['named']:
             kind = line.split(': ', 1)[1].split(' -- ', 1)[0]
             breakdown[kind] = breakdown.get(kind, 0) + 1
@@ -329,6 +396,13 @@ def main():
           f'{skipped} not importable')
     for kind, count in sorted(breakdown.items()):
         print(f'  {count:5d}  {kind}')
+    if unrecorded_total:
+        # A checkpoint counted as compared can still have skipped a field the capture never
+        # recorded. The counters above keep meaning what they meant; these are named beside them.
+        print('\nfields inside compared checkpoints that the capture never recorded '
+              '(listed so nothing looks checked that was not):')
+        for name, count in unrecorded_total.most_common():
+            print(f'  {count:5d}  {name}')
     return 0
 
 

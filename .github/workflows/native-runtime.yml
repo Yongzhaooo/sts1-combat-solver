@@ -93,6 +93,10 @@ jobs:
       - run: python tools/check_player_replays.py
       - name: Grade the native fixtures of every character against the simulator
         run: python tools/check_coverage_gaps.py
+      - name: Prove the stance, mantra and Retain fields cross the import boundary
+        run: python tools/check_watcher_parity.py
+      - name: Account for every checkpoint of the calibration captures
+        run: python tools/check_calibration_parity.py fixtures/calibration/WATCHER --expect-checkpoints=1052
       - run: python tools/check_headbutt.py
       - run: python tools/check_mid_turn_picker.py
       - run: python tools/check_selection_screen_guard.py

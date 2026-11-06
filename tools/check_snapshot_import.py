@@ -45,11 +45,14 @@ assert refused(lambda v: v.update(character='SILENT')), 'an unknown character mu
 
 # Absent optional fields mean none.
 player = load()
-assert (player.stance, player.orb_slots, player.has_status(sts.PlayerStatus.MANTRA)) == ('Neutral', 0, False)
+assert (player.stance, player.orb_slots, player.has_status(sts.PlayerStatus.MANTRA)) == (
+    sts.STANCE_NAMES[0], 0, False)
 
 # Stances cross the boundary with the game's own spelling, so a snapshot taken from the game
-# loads unchanged.
-for stance in ('Neutral', 'Calm', 'Wrath', 'Divinity'):
+# loads unchanged. The spellings come from the engine table that parses them; nothing here
+# restates them.
+assert len(sts.STANCE_NAMES) == 4, sts.STANCE_NAMES
+for stance in sts.STANCE_NAMES:
     assert load(lambda v: v['player'].update(stance=stance)).stance == stance, stance
 assert refused(lambda v: v['player'].update(stance='wrath'))
 assert refused(lambda v: v['player'].update(stance='NEUTRAL')), 'the old upper-case spelling is gone'
@@ -103,6 +106,38 @@ assert not any(card.retain for card in battle.hand)
 retained = copy.deepcopy(snapshot)
 retained['hand'][0]['retain'] = True
 assert sts.BattleContext.from_snapshot(retained, seed).hand[0].retain
+# A capture that does not carry the Watcher fields gets none of them in the snapshot: the
+# exporter passes through what the game reported instead of inventing a value, and the importer
+# then reads its own default of Neutral, no prayer and nothing retained.
+assert 'stance' not in snapshot['player'] and 'mantra' not in snapshot['player'], snapshot['player']
+assert all('retain' not in card for pile in ('hand', 'draw_pile', 'discard_pile', 'exhaust_pile')
+           for card in snapshot[pile])
+
+
+def exported(edit):
+    capture = copy.deepcopy(game)
+    edit(capture['combat_state'])
+    return s.comparator.bridge.build_snapshot(capture)
+
+
+def round_trip(edit=lambda combat: None):
+    return sts.BattleContext.from_snapshot(exported(edit), seed).player
+
+
+# End to end: what the exporter writes is what the importer reads, for every stance the
+# engine knows and for the Retain bit.
+for stance in sts.STANCE_NAMES:
+    assert round_trip(lambda c: c['player'].update(stance=stance)).stance == stance, stance
+calm = exported(lambda c: c['player'].update(stance=sts.STANCE_NAMES[1], mantra=6))
+assert (calm['player']['stance'], calm['player']['mantra']) == (sts.STANCE_NAMES[1], 6), calm['player']
+assert refused(lambda v: v['player'].update(stance=calm['player']['stance'].lower())), \
+    'a lower-case stance must not import, even when it is the exported one'
+assert round_trip(lambda c: c['player'].update(mantra=7)).get_status(sts.PlayerStatus.MANTRA) == 7
+retaining = copy.deepcopy(game)
+retaining['combat_state']['hand'][0]['retain'] = True
+retaining_snapshot = s.comparator.bridge.build_snapshot(retaining)
+assert retaining_snapshot['hand'][0]['retain'] is True
+assert sts.BattleContext.from_snapshot(retaining_snapshot, seed).hand[0].retain
 # End to end: CommunicationMod's orb list survives the Python producer and the importer.
 with_orbs = copy.deepcopy(game)
 with_orbs['combat_state']['player']['orbs'] = [

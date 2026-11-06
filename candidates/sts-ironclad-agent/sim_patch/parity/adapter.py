@@ -97,12 +97,17 @@ class Comparator:
             misc = (8 if raw["upgrades"] else 6) - raw["base_block"]
         return {"id": name, "upgrades": raw["upgrades"], "cost": raw["cost"],
                 "base_cost": raw["base_cost"], "free_to_play_once": raw["free_to_play_once"],
-                "special_data": misc}
+                "special_data": misc,
+                # Part of the card's shape whether or not the capture recorded it, so
+                # identity mapping compares like with like; whether the bit was actually
+                # observed is decided in compare_battle, not here.
+                "retain": bool(raw.get("retain", False))}
 
     def simulator_card(self, card) -> dict:
         return {"id": self.sts.CardId(card.id).name, "upgrades": int(card.upgrade_count),
                 "cost": int(card.cost_for_turn), "base_cost": int(card.base_cost),
-                "free_to_play_once": bool(card.free_to_play_once), "special_data": int(card.special_data)}
+                "free_to_play_once": bool(card.free_to_play_once), "special_data": int(card.special_data),
+                "retain": bool(card.retain)}
 
     def original_orb(self, raw: dict) -> dict:
         """One filled slot as the game reports it (CommunicationMod's shape)."""
@@ -180,7 +185,11 @@ class Comparator:
         p = battle.player
         state = {"player": {"hp": p.cur_hp, "max_hp": p.max_hp, "block": p.block,
                            "energy": p.energy, "gold": p.gold,
-                           "energy_per_turn": p.energy_per_turn, "card_draw_per_turn": p.card_draw_per_turn},
+                           "energy_per_turn": p.energy_per_turn, "card_draw_per_turn": p.card_draw_per_turn,
+                           # Stance keeps the game's spelling; mantra is a status in the
+                           # engine, so it is exported the way the capture reports it.
+                           "stance": p.stance,
+                           "mantra": int(p.get_status(self.sts.PlayerStatus.MANTRA))},
                 "turn": battle.turn + 1,
                 "piles": {pile: [self.simulator_card(card) for card in getattr(battle, pile)] for pile in PILES},
                 "monsters": [{"id": int(m.id), "hp": m.cur_hp, "max_hp": m.max_hp,
@@ -287,6 +296,15 @@ class Comparator:
             if field == "energy_per_turn":
                 value += sum(power["amount"] for power in combat["player"]["powers"] if power["id"] == "Berserk")
             expected["player"][field] = value
+        # Watcher state is optional in a capture. When the recording has it, the value
+        # is the game's spelling and the comparison reads it directly; when it does
+        # not, the simulator's value was never observed and must not count as agreeing.
+        for field in ("stance", "mantra"):
+            if field not in combat["player"]:
+                gaps.append({"kind": "missing_observation", "path": "/game/combat_state/player/" + field})
+                del actual["player"][field]
+                continue
+            expected["player"][field] = observation.consume("/game/combat_state/player/" + field)
         expected["turn"] = observation.consume("/game/combat_state/turn")
         if "orbs" in combat["player"]:
             # The game exports one entry per orb slot, null for an empty one; the
@@ -315,6 +333,20 @@ class Comparator:
                 for field in (("base_damage",) if card["id"] in ("Rampage", "RitualDagger", "Gash") else ("misc",)):
                     if field in card:
                         observation.consume(f"/game/combat_state/{pile}/{index}/{field}")
+                if "retain" in card:
+                    expected["piles"][pile][index]["retain"] = bool(
+                        observation.consume(f"/game/combat_state/{pile}/{index}/retain"))
+                else:
+                    # The capture does not record the bit (the Mod does not export it). Both
+                    # sides carry one, but neither was observed against the other, so it must
+                    # not pass as agreement: drop it and report the gap below.
+                    expected["piles"][pile][index].pop("retain", None)
+                    if index < len(actual["piles"][pile]):
+                        actual["piles"][pile][index].pop("retain", None)
+            if any("retain" not in c for c in cards):
+                # One gap per pile: the field is a per-card bit, but what the capture left out
+                # is the column, and one entry per card would bury the report.
+                gaps.append({"kind": "missing_observation", "path": f"/game/combat_state/{pile}/retain"})
         canonical, _ = self.bridge.canonical_monsters(combat["monsters"], lambda m: m)
         expected["monsters"] = [{"id": S.monster_id_from_name(self.bridge.MONSTER_ALIASES.get(m["id"], enum_key(m["id"]))),
                                  "hp": m["current_hp"], "max_hp": m["max_hp"], "block": m["block"],
