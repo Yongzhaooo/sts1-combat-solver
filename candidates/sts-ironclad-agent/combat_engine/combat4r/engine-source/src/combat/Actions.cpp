@@ -253,9 +253,9 @@ Action Actions::GainMantra(int amount) {
     // stacks, and MantraPower.stackPower is where the threshold lives: reaching ten enters Divinity
     // once (an if, not a loop), subtracts exactly ten and removes the power when nothing is left.
     return {[=] (BattleContext &bc) {
-        const bool stacked = bc.player.hasStatus<PS::MANTRA>();
+        const bool hadMantra = bc.player.hasStatus<PS::MANTRA>();
         bc.player.buff<PS::MANTRA>(amount);
-        if (!stacked || bc.player.getStatus<PS::MANTRA>() < MANTRA_PRAYER_REQUIRED) {
+        if (!hadMantra || bc.player.getStatus<PS::MANTRA>() < MANTRA_PRAYER_REQUIRED) {
             return;
         }
         bc.addToTop(Actions::ChangeStance(Stance::DIVINITY));
