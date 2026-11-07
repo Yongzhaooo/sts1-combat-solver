@@ -135,6 +135,9 @@ static_assert(sizeof(playerStatusStrings) / sizeof(playerStatusStrings[0]) == st
 static_assert(sizeof(playerStatusEnumStrings) / sizeof(playerStatusEnumStrings[0]) == static_cast<int>(PlayerStatus::STATUS_COUNT),
               "playerStatusEnumStrings must name every PlayerStatus");
 
+// MantraPower.PRAYER_REQUIRED: this much mantra enters Divinity.
+static constexpr int MANTRA_PRAYER_REQUIRED = 10;
+
 enum class Stance : uint8_t {
     NEUTRAL=0,
     CALM,
@@ -142,12 +145,22 @@ enum class Stance : uint8_t {
     DIVINITY,
 };
 
-static constexpr const char* const stanceStrings[] {
-        "NEUTRAL",
-        "WRATH",
-        "CALM",
-        "DIVINITY",
+// The stance ids as the game spells them: AbstractStance.STANCE_ID and the argument of
+// ChangeStanceAction ("Calm", "Wrath", "Divinity", "Neutral"), one per enum value in enum order.
+// The old stanceStrings listed WRATH before CALM, which read as the wrong stance name.
+static constexpr const char* const stanceNames[] {
+        "Neutral",
+        "Calm",
+        "Wrath",
+        "Divinity",
 };
+
+static_assert(sizeof(stanceNames) / sizeof(stanceNames[0]) == static_cast<int>(Stance::DIVINITY) + 1,
+              "stanceNames must name every Stance");
+
+inline const char *getStanceName(Stance stance) {
+    return stanceNames[static_cast<int>(stance)];
+}
 
 enum class Orb : uint8_t {
     EMPTY=0,

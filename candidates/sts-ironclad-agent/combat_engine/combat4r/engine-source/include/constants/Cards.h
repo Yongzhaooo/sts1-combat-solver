@@ -844,6 +844,14 @@ namespace sts {
                 return -2;
 
 
+            // Watcher costs that differ from the historical default of 1. Each one is the card
+            // class's own baseCost, or the argument of the upgradeBaseCost call in its upgrade().
+            case CardId::ERUPTION:
+                return upgraded ? 1 : 2;
+
+            case CardId::VIGILANCE:
+                return 2;
+
             // Defect costs that differ from the historical default of 1. Each one
             // is the card class's own baseCost, or the argument of the
             // upgradeBaseCost call in its upgrade() method.

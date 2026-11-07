@@ -225,7 +225,45 @@ Action Actions::NoOpRollMove() {
 }
 
 Action Actions::ChangeStance(Stance stance) {
-    return sts::Action();
+    // ChangeStanceAction.update(): requesting the current stance does nothing at all, otherwise the
+    // old stance's onExitStance runs before the assignment and the new one's onEnterStance after it.
+    // CalmStance.onExitStance pays 2 energy and DivinityStance.onEnterStance pays 3. The powers' and
+    // relics' onChangeStance hooks (MentalFortress, Rushdown, Violet Lotus),
+    // CannotChangeStancePower and triggerExhaustedCardsOnStanceChange are not modelled: nothing
+    // implemented in this engine reads them yet.
+    return {[=] (BattleContext &bc) {
+        if (bc.player.stance == stance) {
+            return;
+        }
+        if (bc.player.stance == Stance::CALM) {
+            // CalmStance.onExitStance: addToBottom(new GainEnergyAction(2)).
+            bc.addToBot(Actions::GainEnergy(2));
+        }
+        bc.player.stance = stance;
+        if (stance == Stance::DIVINITY) {
+            // DivinityStance.onEnterStance: addToBottom(new GainEnergyAction(3)).
+            bc.addToBot(Actions::GainEnergy(3));
+        }
+    }};
+}
+
+Action Actions::GainMantra(int amount) {
+    // ApplyPowerAction(MantraPower): a player without the power gets it at its full amount, because
+    // ApplyPowerAction adds a new power instead of calling stackPower. A player who already has it
+    // stacks, and MantraPower.stackPower is where the threshold lives: reaching ten enters Divinity
+    // once (an if, not a loop), subtracts exactly ten and removes the power when nothing is left.
+    return {[=] (BattleContext &bc) {
+        const bool hadMantra = bc.player.hasStatus<PS::MANTRA>();
+        bc.player.buff<PS::MANTRA>(amount);
+        if (!hadMantra || bc.player.getStatus<PS::MANTRA>() < MANTRA_PRAYER_REQUIRED) {
+            return;
+        }
+        bc.addToTop(Actions::ChangeStance(Stance::DIVINITY));
+        bc.player.buff<PS::MANTRA>(-MANTRA_PRAYER_REQUIRED);
+        if (bc.player.getStatus<PS::MANTRA>() <= 0) {
+            bc.player.removeStatus<PS::MANTRA>();
+        }
+    }};
 }
 
 Action Actions::GainEnergy(int amount) {

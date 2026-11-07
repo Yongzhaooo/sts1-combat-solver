@@ -664,8 +664,9 @@ void Player::applyStartOfTurnRelics(BattleContext &bc) {
     }
 
     if (hasRelic<R::DAMARU>()) {
-        bc.addToBot( Actions::BuffPlayer<PS::MANTRA>(1) );
-        // todo handle mantra change stance
+        // Damaru.atTurnStart: ApplyPowerAction(new MantraPower(owner, 1)), so it stacks onto any
+        // mantra the player already has and runs MantraPower's threshold check.
+        bc.addToBot( Actions::GainMantra(1) );
     }
 
     if (hasRelic<R::EMOTION_CHIP>()) {
@@ -877,8 +878,17 @@ void Player::applyStartOfTurnPostDrawPowers(BattleContext &bc) {
                 bc.addToBot( Actions::BuffPlayer<PS::STRENGTH>(pair.second) );
                 break;
 
-            case PS::DEVOTION: // the implementation of this is really weird in the game code
-                bc.addToBot( Actions::BuffPlayer<PS::MANTRA>(pair.second) ); // todo make buffing mantra switch stance
+            case PS::DEVOTION:
+                // DevotionPower.atStartOfTurnPostDraw: without a Mantra power this only changes
+                // stance, and only at ten devotion -- it does not create the power. With one it
+                // applies that much mantra, and MantraPower.stackPower owns the threshold.
+                if (!hasStatus<PS::MANTRA>()) {
+                    if (pair.second >= MANTRA_PRAYER_REQUIRED) {
+                        bc.addToBot( Actions::ChangeStance(Stance::DIVINITY) );
+                    }
+                } else {
+                    bc.addToBot( Actions::GainMantra(pair.second) );
+                }
                 break;
 
             case PS::DRAW_CARD_NEXT_TURN:

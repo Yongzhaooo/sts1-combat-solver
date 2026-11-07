@@ -293,13 +293,21 @@ namespace {
             bc.player.powerOrder = ordered;
         }
         // Optional character state. Absent means none: neutral stance, no orb slots, no mantra.
+        // Stances cross the boundary with the game's own spelling ("Neutral", "Calm", ...),
+        // so a snapshot matches the truth engine without a second, order-coupled string table.
         if (player.contains("stance")) {
-            const auto stance = py::cast<std::string>(player["stance"]);
-            if (stance == "NEUTRAL") bc.player.stance = Stance::NEUTRAL;
-            else if (stance == "CALM") bc.player.stance = Stance::CALM;
-            else if (stance == "WRATH") bc.player.stance = Stance::WRATH;
-            else if (stance == "DIVINITY") bc.player.stance = Stance::DIVINITY;
-            else throw std::invalid_argument("unknown snapshot stance: " + stance);
+            const auto stanceName = py::cast<std::string>(player["stance"]);
+            Stance parsed = Stance::NEUTRAL;
+            bool found = false;
+            for (int i = 0; i <= static_cast<int>(Stance::DIVINITY); ++i) {
+                if (stanceName == getStanceName(static_cast<Stance>(i))) {
+                    parsed = static_cast<Stance>(i);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) throw std::invalid_argument("unknown snapshot stance: " + stanceName);
+            bc.player.stance = parsed;
         }
         if (player.contains("orb_slots")) {
             const int orbSlots = py::cast<int>(player["orb_slots"]);
@@ -1650,8 +1658,7 @@ PYBIND11_MODULE(slaythespire, m) {
             return std::string(characterClassEnumNames[static_cast<int>(p.cc)]);
         })
         .def_property_readonly("stance", [](const Player &p) {
-            static const char *const names[] = {"NEUTRAL", "CALM", "WRATH", "DIVINITY"};
-            return std::string(names[static_cast<int>(p.stance)]);
+            return std::string(getStanceName(p.stance));
         })
         .def_readonly("orb_slots", &Player::orbSlots)
         .def_readonly("lightning_channeled_this_combat", &Player::lightningChanneledThisCombat)

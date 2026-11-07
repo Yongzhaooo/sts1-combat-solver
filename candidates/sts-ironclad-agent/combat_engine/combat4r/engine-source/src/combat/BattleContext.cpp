@@ -382,7 +382,9 @@ void BattleContext::initRelics(const GameContext &gc, int extraOpeningDraw) {
                 break;
 
             case R::TEARDROP_LOCKET:
-                p.changeStance<Stance::CALM>();
+                // TeardropLocket.atBattleStart: ChangeStanceAction("Calm"), i.e. through the same
+                // action as every other stance change instead of a bare field write.
+                addToBot(Actions::ChangeStance(Stance::CALM));
                 break;
 
             case R::THREAD_AND_NEEDLE:
