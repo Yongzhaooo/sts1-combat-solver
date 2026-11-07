@@ -56,8 +56,10 @@ assert single['name'] == 'T1 火焰药水', single['name']
 assert pair['name'] == 'T1 火焰药水 · 速度药水 未用', pair['name']
 print('PASS: a bottle-set row that leaves a bottle undrunk is labelled apart from the single-bottle row')
 
-# 3. A bottle line saving under 3 HP re-searches the potion-free line at twice the deep budget and keeps the better line.
-advisor.root_game = game
+# 3. A bottle line saving under 3 HP that the automatic choice would drink re-searches the potion-free line at twice the
+# deep budget and keeps the better line. High Focus picks the lower loss among lines reaching the target, bottle price aside.
+focus_game = dict(game, solver_auto_context={'focus_mode': True})
+advisor.root_game = focus_game
 calls = []
 shown = []
 advisor.search_plan = lambda root, budget, slots, credit, index, *rest: (
@@ -65,14 +67,18 @@ advisor.search_plan = lambda root, budget, slots, credit, index, *rest: (
 finished = [(0, 'no-potion', '不用药'), (1, 'potion-1', '火焰药水')]
 
 
-def research(base_loss, bottle_loss, deeper_value):
+def research(base_loss, bottle_loss, deeper_value, short_bottle=True):
     global deeper
     calls.clear()
     deeper = dict(win, actions=[strike], value=deeper_value)
     advisor.branches = {'no-potion': dict(win, actions=[strike, strike])}
     advisor.selected_branch, advisor.plan = 'no-potion', advisor.branches['no-potion']
-    advisor.branch_info = [dict(id='no-potion', name='old', available=True, won=True, loss=base_loss, potion_uses=[]),
-                           dict(id='potion-1', available=True, won=True, loss=bottle_loss, potion_uses=[{'slot': 1}])]
+    advisor.branch_info = [dict(id='no-potion', name='old', available=True, won=True, loss=base_loss, potion_uses=[],
+                                focus=25),
+                           dict(id='potion-1', available=True, won=True, loss=bottle_loss, potion_uses=[{'slot': 1}],
+                                focus=25),
+                           dict(id='potion-0', available=True, won=True, loss=0, potion_uses=[{'slot': 0}], focus=0)
+                           ][:3 if short_bottle else 2]
     advisor.searching = list(finished)
     advisor.research_potion_free({'game': game}, 8000, 0, time.monotonic())
 
@@ -87,4 +93,9 @@ assert calls == [256000] and advisor.plan['actions'] == [strike, strike] and adv
 for base_loss, bottle_loss in [(5, 2), (2, 2), (2, 4)]:
     research(base_loss, bottle_loss, 10100)
     assert calls == [], (base_loss, bottle_loss)
-print('PASS: a bottle saving under 3 HP re-searches the potion-free line deeper; larger savings keep the bottle line')
+# Without High Focus a bottle saving under 3 HP costs more than it saves, so the choice keeps it and nothing is re-searched.
+advisor.root_game = game
+research(4, 2, 10100, short_bottle=False)
+assert calls == [] and advisor.branch_info[0]['name'] == 'old'
+print('PASS: a bottle saving under 3 HP that would be drunk re-searches the potion-free line deeper; '
+      'larger savings, or a choice that keeps the bottles, do not')

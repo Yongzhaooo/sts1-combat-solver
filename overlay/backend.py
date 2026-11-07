@@ -466,6 +466,10 @@ class Advisor:
         line again at twice the deep budget and keep the better of the two."""
         if not potion_margin_close(self.root_game, self.branch_info):
             return
+        # The deeper search only improves the potion-free line, so it cannot change a choice that already keeps the
+        # bottles (F47 Nemesis export, 2026-11-07: 50 s for the same 157-action line).
+        if recommend(self.root_game, self.branch_info)['branch'] == 'no-potion':
+            return
         # Add a row of its own: the finished rows stay on the panel, and the deeper search is not shown as ready.
         rows, index = self.searching, len(self.searching)
         self.searching = rows + [(index, 'no-potion-research', '不用药 · 加搜')]
