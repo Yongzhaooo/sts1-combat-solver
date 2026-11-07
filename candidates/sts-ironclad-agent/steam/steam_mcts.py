@@ -390,11 +390,13 @@ def channeled_this_combat(combat):
     The Mod exports both; an older export is exact only at the turn-1 import before any
     play, when the orbs in the slots are all that start-of-combat relics channeled."""
     orbs = (combat.get("player") or {}).get("orbs") or []
-    if any(name in combat for name in CHANNELED_FIELDS):
-        return {name: int(combat.get(name) or 0) for name in CHANNELED_FIELDS}
+    if "lightning_channeled_this_combat" in combat or "frost_channeled_this_combat" in combat:
+        return {"lightning_channeled_this_combat": int(combat.get("lightning_channeled_this_combat") or 0),
+                "frost_channeled_this_combat": int(combat.get("frost_channeled_this_combat") or 0)}
     if not orbs or int(combat.get("turn") or 1) != 1 or int(combat.get("cards_played_this_turn") or 0) != 0:
         return {}  # unknown; require_channel_counts refuses a search when a card reads them
-    return {name: sum(o.get("id") == name.split("_")[0].capitalize() for o in orbs) for name in CHANNELED_FIELDS}
+    return {"lightning_channeled_this_combat": sum(o.get("id") == "Lightning" for o in orbs),
+            "frost_channeled_this_combat": sum(o.get("id") == "Frost" for o in orbs)}
 
 
 def require_channel_counts(game_state):
