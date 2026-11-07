@@ -268,6 +268,9 @@ class Comparator:
         expected["player"] = {name: observation.consume("/game/combat_state/player/" + raw)
                               for name, raw in mapping.items()}
         expected["player"]["gold"] = observation.consume("/game/gold")
+        if "class" in game:
+            expected["player"]["character"] = self.bridge.engine_character(observation.consume("/game/class"))
+            actual["player"]["character"] = battle.player.character
         if "health_flags" in actual:
             flags = self.health_flags(view)
             expected["health_flags"] = {name: observation.consume(path) for name, (_, path) in flags.items()}
@@ -298,7 +301,7 @@ class Comparator:
             actual["player"]["orbs"] = [self.simulator_orb(orb, battle.player.focus)
                                         for orb in battle.player.orbs]
             actual["player"]["orb_slots"] = int(battle.player.orb_slots)
-        for field in ("lightning_channeled_this_combat", "frost_channeled_this_combat"):
+        for field in self.bridge.CHANNELED_FIELDS:
             if field in combat:
                 expected["player"][field] = observation.consume("/game/combat_state/" + field)
                 actual["player"][field] = int(getattr(battle.player, field))
