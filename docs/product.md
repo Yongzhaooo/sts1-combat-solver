@@ -1,6 +1,6 @@
 # STS1 Combat Solver product spec
 
-Last confirmed: not yet confirmed
+Last confirmed: 2026-11-07 (character support, potion re-search and open questions)
 
 This spec states the destination for the four-character version and the player's control modes. The released coverage is in the [README](../README.md); the structure and route are in [Architecture](architecture.md); the current simulator inventory is in [Multi-character scope](multi-character.md).
 
@@ -16,6 +16,9 @@ Players of *Slay the Spire 1* install one local Mod and get bounded combat plann
 - In a run with a character that is not yet supported, the panel says the combat engine does not support that character yet. No search starts and nothing crashes.
 - In a supported character's combat, a card, relic, power or potion the simulator does not implement is reported as a limitation, naming the item, before search starts. The simulator never reaches an unimplemented branch mid-search.
 - Ironclad behavior does not regress. Every existing Ironclad check and fixture keeps passing on each change.
+- Ironclad and Defect combat are supported (Defect since v0.9.8); Watcher is in development by an outside contributor, then Silent.
+- Combat support and full autopilot are separate claims. A new character gets Standby and Combat auto first; AI autopilot stays Ironclad only until that character has its own outside-combat model and rules, and the mode switch says so.
+- Before a character's Combat auto opens, the automatic choice prices that character's own bottles; it does not fall back to treating them as ordinary bottles (proposed). Today the keep costs list Ironclad and shared bottles only, so Defect's Focus, Capacity and Essence of Darkness bottles count as ordinary.
 
 ### Combat solving
 
@@ -25,8 +28,8 @@ Players of *Slay the Spire 1* install one local Mod and get bounded combat plann
 - A finished plan carries no action that can be dropped while the fight still ends in the same victory with the same HP, bottles, relic counters and growth. Long looping plans get one full reduction pass, which may add about one second per 50 actions per pass; a 1,100-action Heart line takes about 15 seconds longer (maintainer decision 2026-10-23). Reduction never changes the predicted result.
 - A search has a memory budget of 3 GB (accounted search structures, summed over its parallel potion branches), so one heavy fight cannot exhaust the machine. Reaching it ends the search like a cancel: the best route so far is returned, and a search with no route yet reports the same interrupted error. Normal fights stay far below it (the heaviest of 69 measured roots accounted 2.0 GB with two parallel branches).
 - A search that nears its transport time limit (10 s before the 150 s standard or 600 s deep deadline) is stopped like a cancel and returns the best route found so far, marked as cut short by the time limit. The timeout error remains only when no route exists by the deadline.
-- When the best winning bottle line saves less than 3 HP over the winning potion-free line, the potion-free line is searched again at twice the deep budget before the two are compared, and the better of its two results stands (user, 2026-11-06). High-speed search skips this. On three measured Defect roots the extra search took 4 to 5 seconds.
-- Among wins with the same result the search keeps the one with the fewest actions. A win longer than 64 actions gets one more search pass that charges every play in a turn and replaces it only with a shorter line of at least the same result. Against the Heart, whose victory ends the run (no run fights a second Heart), any shorter win counts as the same result, and a win still longer than 150 actions is searched again at the deep budget, past the loop macro shortcut, keeping the shorter win; a dozen more seconds of search beat hundreds of plays to watch (user, 2026-10-24).
+- When the best winning bottle line saves less than 3 HP over the winning potion-free line, the potion-free line is searched again at twice the deep budget before the two are compared, and the better of its two results stands (user, 2026-11-06). It runs only when the automatic choice would drink that bottle, which today means High Focus: elsewhere a bottle saving under 3 HP costs more than it saves and is kept, and the deeper search could not change the choice (a Nemesis fight spent 50 s on it for the same line; user, 2026-11-07). High-speed search skips this. It applies to every supported character; on three measured Defect roots the extra search took 4 to 5 seconds, and Ironclad's cost is not yet measured.
+- Among wins with the same result the search keeps the one with the fewest actions. A win longer than 64 actions gets one more search pass that charges every play in a turn and replaces it only with a shorter line of at least the same result. Against the Heart, whose victory ends the run (no run fights a second Heart), any shorter win counts as the same result, and a win still longer than 150 actions is searched again at the deep budget, past the loop macro shortcut, keeping the shorter win; a dozen more seconds of search beat hundreds of plays to watch (user, 2026-10-24). In other fights a win that keeps every resource but at most one HP less counts as the same result when it has at most half the actions of the line it replaces; the one HP is counted against the original line, never added up over replacements (user, 2026-11-07).
 
 ### Truth calibration and fixtures
 
@@ -79,16 +82,15 @@ Maintainer decisions of 2026-10-23: the combat panel shows as little as possible
 - Remote or online solving.
 - Changing Ironclad's search objective or outside-combat rules as part of four-character work.
 - Supporting Mods that change combat rules.
-- Full autopilot for the new characters in their first supported release (proposed; see Open questions).
+- Full autopilot for a new character in its first supported release (see Open questions).
 - Run win rate as the acceptance measure for play-mode or panel changes. A run's result also depends on routing, rewards and the player; panel changes are accepted by the observable behavior above (proposed).
 
 ## Open questions
 
-- Order after Silent: Watcher or Defect first. Blocks the order of the second and third character milestones.
-- Whether the new characters get full autopilot, and with what evaluation. Blocks outside-combat rule and model work for them.
+- Whether Watcher and Silent ever get full autopilot, and with what evaluation. Blocks outside-combat rule and model work for them.
+- The bottle keep costs for Watcher and Silent potions. Blocks their Combat auto.
 - Size and composition of each character's acceptance set. Blocks turning on that character's support switch.
 - Scope of the Combat auto "no potions" switch: this fight or the whole run, and whether it covers elites and Bosses. Blocks where the switch lives and whether it is saved.
 - Which constraints Standby plans vary beyond potion use (relic counters, Feed, fewest turns, keeping a bottle). Each adds a search before the fight starts. Blocks the size of the Standby plan list.
 - Whether a re-plan after a divergence needs a new approval. Blocks the Standby execution flow.
-- Whether fights other than the Heart may trade HP for a much shorter line. A long loop turn often rerolls the next draw through extra shuffles, so a shorter line of exactly the same result rarely exists. Blocks shorter loop turns outside the Heart.
 - Who implements the play-mode changes: an outside contributor or the maintainer. Blocks whether a panel state and protocol guide is written for contributors.

@@ -1,7 +1,7 @@
 # 四职业战斗支持：范围与分工
 
-Last confirmed: 2026-10-15，基于分支 `fix/search-timeout-handling`（6dc1e87）的静态阅读，未编译、未运行测试。
-所有里程碑和排序都是提议（proposed），发布顺序仍是 [architecture.md](architecture.md) 里的待决事项。产品目标见 [product.md](product.md)。
+Last confirmed: 2026-11-07，第 2 节基于 `main`（60f0943）的静态阅读；第 1 节的牌数以覆盖清单为准，其余盘点未逐项复核。
+故障机器人已在 v0.9.8 开放战斗支持；观者由协作者推进（PR #145，M2a 姿态状态机）；静默猎手未开始。后续顺序与验收集见 [architecture.md](architecture.md)。产品目标见 [product.md](product.md)。
 
 本文回答三件事：把战斗求解从铁甲战士扩到静默猎手、故障机器人、观者，原生模拟器现在缺多少；模拟器之外哪些地方写死了铁甲战士；外部协作者怎样安全地认领一块。不含任何实现。
 
@@ -58,7 +58,7 @@ Last confirmed: 2026-10-15，基于分支 `fix/search-timeout-handling`（6dc1e8
 | 保留 | 已有：自带保留、单次保留位、回合末保留流程 | `Cards.h:633`，`BattleContext.cpp:2489-2515`；Establishment 缺（`Player.cpp:478-479`） |
 | 姿态药水 | `CHOOSE_STANCE_ACTION` 状态无处理，搜索也不枚举它 | `BattleContext.cpp:2430-2431` |
 
-缺少状态定义的 power 至少有 9 个：Storm、Heatsinks、Self Repair、Machine Learning、Mental Fortress、Rushdown、Study、Nirvana、Nightmare。注意容量：玩家状态位掩码是 64+32=96 位（`Player.h:63-64`、`282-290`），当前枚举用了 87 个（`PlayerStatusEffects.h`），第一批新 power 就会越界，需要先扩容。`PlayerStatusAmounts` 本身有 256 个槽，不是瓶颈。
+缺少状态定义的 power 至少有 9 个：Storm、Heatsinks、Self Repair、Machine Learning、Mental Fortress、Rushdown、Study、Nirvana、Nightmare。玩家状态位掩码已扩到 128 位，`Player.h` 的 `static_assert` 在枚举超出容量时编译失败；新状态只追加在 `STATUS_COUNT` 之前，不重排。`PlayerStatusAmounts` 本身有 256 个槽，不是瓶颈。
 
 搜索层只枚举 `PLAYER_NORMAL` 和 `CARD_SELECT` 两种输入状态，其余走 "invalid input state"（`ES/src/sim/search/BattleScumSearcher2.cpp:384-399`）。新增的姿态选择、预见、弃牌选择都要加进枚举和 `Action.cpp`。已有的 `CardSelectTask`（`ES/include/combat/CardSelectInfo.h:14-35`）里有 Hologram、Seek、Recycle、Meditate、Setup、Secret Technique 等名字，但对应牌没有实现，选择处理函数只有部分存在（`BattleContext.cpp:2985-3190`）。
 
@@ -88,23 +88,17 @@ Last confirmed: 2026-10-15，基于分支 `fix/search-timeout-handling`（6dc1e8
 
 ## 2. 模拟器之外的铁甲战士假设
 
-### 2.1 开关：三处必须同步
+### 2.1 开关：三处列表加一致性检查
 
-- `overlay/backend.py:36` 的 `SUPPORTED_CLASSES = {'IRONCLAD': '战士'}`，`view_from_state`（80-90）据此拒绝其他职业。
-- `overlay/src/sts1solver/SolverMod.java:197-203` 的 `SUPPORTED`，以及 `supported()` 的调用点：287、503、560、650、1078、1109-1111（面板提示"战斗引擎目前支持战士；预测仍可用"）、1268、1384。
-- 局外自动：`OutsidePacket.java:62-63`（`build` 抛 "Student only supports Ironclad"）与 139（`plannedRoute` 对非铁甲返回空路线）。
+- 战斗支持：`overlay/backend.py` 的 `SUPPORTED_CLASSES` 与 `SolverMod.java` 的 `SUPPORTED`，现为战士和机器人。`tools/check_character_registry.py`（CI 运行）断言两者相等。面板文案 `SolverMod.supportedNames()` 是手写的，不在检查里，开开关时一并改。
+- 局外全自动：`OutsidePacket.java` 的 `build` 与 `plannedRoute` 只接受战士，机器人走战斗全自动。检查只要求它是战斗支持的子集。局外网络、路线偏好和删牌顺序按战士数据训练和书写（`Distill2.java` 的别名表、`OutsidePacket.java` 的 Strike/Defend/Bash 删牌顺序），新职业没有现成模型，所以战斗支持和局外全自动分开开放。
 
-三处互不引用，只靠注释"keep in sync"。提议让一个测试同时断言三处一致。
+### 2.2 状态捕获、导入与核对
 
-### 2.2 状态捕获与导入
-
-- 导入固定为铁甲：`ES/bindings/slaythespire.cpp:228` 写死 `bc.player.cc = CharacterClass::IRONCLAD`（这会影响发现、随机牌、随机药水用的职业，见 `Actions.cpp:563`、`580`、`588`，`BattleContext.cpp:163`、`2333`、`2898`）。
-- 快照不含宝珠、姿态、保留位：`AG/steam/steam_mcts.py:544-631`（`build_snapshot`）只带血量、格挡、能量、powers、四堆牌、怪物、遗物、药水、随机数。`slaythespire.cpp:61-65`（`snapshotCard`）和 228-380 的玩家导入也没有这些字段。
-- 游戏侧导出：CommunicationMod 已导出宝珠（`references/CommunicationMod/src/main/java/communicationmod/GameStateConverter.java:735-739`，字段 id、名称、evoke、被动），但不导出姿态，也不导出牌的保留位。`AG/steam/state_export_mod/src/steamstateexport/CombatStatePatch.java:57-97` 补充的是随机数、遗物状态、怪物内部字段，没有这些。`overlay/src/sts1solver/CardExportPatch.java:13-23` 给牌补了费用、伤害、格挡、`misc`，没有保留。
-- 卡牌别名：`steam_mcts.py:18` 的 `CARD_ALIASES` 与 `Distill2.java:89` 只列了 `Strike_R`、`Defend_R`、`Ghostly`。`Strike_G/B/P`、`Defend_G/B/P` 以及 Java ID 与枚举名不一致的牌（如 Underhanded Strike、Gash、Steam、Venomology、Wireheading）需要补，`overlay/test/original-game-ids.json` 只收了 131 个铁甲和无色牌 ID。
-- 牌池导出本身与职业无关：`overlay/src/sts1solver/RecoveryExportPatch.java:41-49` 读取实时牌池，`overlay/backend.py:173-174` 和 `overlay/native.cpp:188-196` 以此覆盖发现和随机牌（`overlay/build_native.py:54-62`）。这一路径换职业后不用改，前提是所有牌 ID 都能映射。
-- 步骤核对只比较血量、格挡、能量、牌堆、怪物、药水、随机数：`steam_mcts.py:676-692`（`assert_snapshot_matches`）与 `AG/sim_patch/parity/adapter.py:128-146`（`simulator_state`）。宝珠、姿态、集中、真言的偏差不会被发现，所以这些字段进入模拟器的同时必须进入核对。
-- Python 绑定没有暴露宝珠和姿态的读取接口（`slaythespire.cpp` 中无相关 def）。
+- 导入器读快照里的 `character`（`ES/bindings/slaythespire.cpp` 的职业映射），缺省时按战士处理，以兼容旧导出。
+- 机器人的宝珠、栏位和 Focus 已进入导出、快照、导入和逐步核对，但这些字段是分散加在约 8 个文件里的，没有共用的字段表。新职业的状态字段按[架构](architecture.md)的角色状态字段契约加入：Mod 导出、快照导入和逐步核对在同一个 PR 里改，由检查保证三处都到位。
+- 观者的姿态、真言、保留尚未导出：`steam_mcts.py` 的 `build_snapshot` 注明它们等 Mod 导出后再加，导入器已能读可选的姿态和真言（缺省为中立、无真言）。导入一个 Mod 不导出的字段只会让模拟器从默认值起算，而核对不比较它就发现不了，所以观者开开关前必须先补导出和核对。
+- 牌池导出与职业无关，换职业不用改；Java 卡牌 ID 与引擎名不一致的牌由覆盖清单的映射表处理。
 
 ### 2.3 搜索评估与启发式
 
@@ -131,7 +125,7 @@ Last confirmed: 2026-10-15，基于分支 `fix/search-timeout-handling`（6dc1e8
 
 原则：每一步合并后产品照常可用，没有完成的职业继续报告"战斗引擎目前支持…"，不改变铁甲行为。
 
-**M0 打地基。** 不改变任何用户行为。职业开关一致性检查、覆盖清单与求解前拒绝、按职业分发、状态位扩容、快照可选字段与导入器读职业、校准运行器骨架已在 PR #8 完成；第一批四职业校准用例和无头引擎参考适配器已发布（见 [真值校准与夹具](truth-calibration.md)）；ID 映射表仍未做。覆盖清单的求解前拒绝依赖 Java ID 与引擎名一致，映射表补齐前，ID 不一致的缺失牌不会被拒绝。
+**M0 打地基（已完成）。** 职业开关一致性检查、覆盖清单与求解前拒绝、按职业分发（`ES/src/combat/characters/`）、状态位扩容、快照可选字段与导入器读职业、校准运行器、四职业首批校准用例和无头引擎参考适配器均已落地（见 [真值校准与夹具](truth-calibration.md)）。以下是 M0 原计划，留作对照。
 - 把"支持的职业"集中成一份清单，加测试断言 2.1 的三处一致。
 - 加覆盖清单工具：从 `RarityCardPool`、三个 switch、遗物钩子生成"已实现和未实现"表，并加一个检查：声明支持的职业必须没有未实现的奖励牌、起始牌、衍生牌、专属遗物。
 - 把"未实现的牌"从常开的运行时异常，改为后端在求解前的明确拒绝（报告限制而不是求解错误）。
@@ -140,15 +134,17 @@ Last confirmed: 2026-10-15，基于分支 `fix/search-timeout-handling`（6dc1e8
 - 扩容玩家状态位掩码，给"状态数不得超过容量"加编译期断言（`Player.h:279` 有被注释掉的 `static_assert`）。
 - 把导入处的 `cc = IRONCLAD` 改为读快照里的职业。
 
-**M1 静默猎手（proposed，建议先做）。** 理由：缺牌数与另两个职业相当，但共享机制欠债最小。中毒、Shiv 生成、手动弃牌钩子、Ring of the Snake 等已有，不需要新子系统，改动集中在牌的 switch 和一个弃牌选择状态。弃牌选择、Shiv、出牌后钩子也是后两个职业会复用的基础。
+**M1 静默猎手（proposed，排在观者之后）。** 原计划先做；实际机器人先完成，观者由协作者先行。静默猎手的共享机制欠债仍最小，中毒、Shiv 生成、手动弃牌钩子、Ring of the Snake 等已有，不需要新子系统，改动集中在牌的 switch 和一个弃牌选择状态。弃牌选择、Shiv、出牌后钩子也是后两个职业会复用的基础。
 - M1a：起始牌（Survivor、Neutralize）、Shiv、不引入新机制的牌。
 - M1b：中毒和 Shiv 系的牌，Accuracy、Envenom、Catalyst 等。
 - M1c：弃牌选择（含搜索枚举）与依赖它的牌，Tools of the Trade、Nightmare 等。
 - M1d：专属遗物（Snecko Skull、Tingsha、Tough Bandages、Hovering Kite）和药水。
 - M1e：验收集通过后，开静默猎手的支持开关，同步 README 和文案。
 
-**M2 观者（proposed）。** 姿态状态机（ChangeStance、平静退出、真言转神）、预见、Miracle 与 Smite 等衍生牌、Wish、Alpha 链、Establishment、Rushdown 和 Mental Fortress。把 stance 加入导出、快照和核对。
-**M3 故障机器人（proposed）。** 宝珠子系统、Focus 联动、全部机器人牌与遗物。把宝珠加入导出（CommunicationMod 已有）、快照和核对。闪电随机目标的随机数流需要和 Java 逐步对齐。
+**M2 观者（进行中，协作者）。** 姿态状态机（ChangeStance、平静退出、真言转神；PR #145 为 M2a）、预见、Miracle 与 Smite 等衍生牌、Wish、Alpha 链、Establishment、Rushdown 和 Mental Fortress。开开关前，姿态、真言和保留按角色状态字段契约进入导出、快照和核对；预见作为新输入状态加进搜索枚举。
+**M3 故障机器人（已完成）。** 宝珠子系统、Focus 联动、全部机器人牌与遗物已实现，v0.9.8 起开放战斗支持；局外全自动仍只支持战士。
+
+带新输入状态的牌和遗物（预见：Melange、Foresight 等；弃牌选择：Tools of the Trade 等），在对应输入状态实现并进入搜索枚举之前，一律留在覆盖清单的缺失里，由求解前拒绝兜底。实现了牌、却跳过其中的预见或弃牌选择，覆盖清单发现不了，会在实机里给出错误路线。
 
 M2 与 M3 的先后取决于协作者兴趣；若只能选一个，观者规模小于机器人。每个里程碑的职业开关，都只在该职业的验收集通过后才打开。
 
@@ -197,7 +193,7 @@ M2 与 M3 的先后取决于协作者兴趣；若只能选一个，观者规模�
 | 搜索枚举 `BattleScumSearcher2.cpp`、`Action.cpp` | 新输入状态（弃牌选择、预见、姿态选择） | 状态由先到的职业添加，后来者复用 |
 | `backend.py`、`SolverMod.java`、`OutsidePacket.java` 的开关 | 三处同步 | 只在打开开关的 PR 里改，由维护者合并 |
 
-一人一职业最稳妥，静默猎手先行；弃牌选择、Shiv 这类跨职业复用的基础件，放在首个职业的 PR 里，其他职业等它合并后再用。
+一人一职业最稳妥；预见、弃牌选择这类跨职业复用的基础件，放在首个用到它的职业的 PR 里，其他职业等它合并后再用。`Player.cpp`、`Actions.cpp` 暂不拆分，冲突靠认领和小 PR 控制。
 
 **协作者需要在本地准备。**
 - 自己的《杀戮尖塔》正版副本（仓库不含游戏 JAR、字体、资源或 Java 源码，见 `THIRD_PARTY_NOTICES.md`）。
