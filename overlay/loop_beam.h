@@ -312,11 +312,14 @@ struct Best {
 // Equal results, fewest actions. A shortening guard can recognize identical carried resources despite a turn penalty.
 // With a floor (shorten() for the Heart, where the run ends on victory) any win keeping that much HP counts as equal.
 using SameVictory = bool (*)(const BattleContext &, const BattleContext &);
+// A win close to a fixed reference (same's test against *reference) may replace a line when it has at most maxLength actions.
+struct NearVictory { SameVictory same = nullptr; const BattleContext *reference = nullptr; int maxLength = -1; };
 inline bool better(const Best &best, double v, const std::shared_ptr<const Path> &path,
-                   const BattleContext &end, int floor, SameVictory sameVictory = nullptr) {
+                   const BattleContext &end, int floor, SameVictory sameVictory = nullptr, const NearVictory &near = {}) {
     const bool shorter = path && (!best.found || path->length < int(best.actions.size()));
     if (floor >= 0) return end.player.curHp >= floor && shorter;
     if (best.found && sameVictory && sameVictory(end, *best.state)) return shorter;
+    if (best.found && near.same && path && path->length <= near.maxLength && near.same(end, *near.reference)) return shorter;
     return !best.found || v > best.value || (v == best.value && shorter);
 }
 
@@ -337,7 +340,7 @@ inline KeyRef keyRef(Node &n) { bucketKey(n); return {&n.key, n.keyHash}; }
 // One beam pass of the given width; stops at `cap` total transitions (stats.transitions) or when cancelled().
 template <class Value, class Cancel>
 void pass(const BattleContext &root, int width, long long cap, Value value, Cancel cancelled, Best &best, bool macros = false,
-          double playWeight = 0, int winFloor = -1, SameVictory sameVictory = nullptr) {
+          double playWeight = 0, int winFloor = -1, SameVictory sameVictory = nullptr, NearVictory near = {}) {
     if (root.loopCount >= BattleContext::ACTION_EXECUTION_LIMIT) return;
     StatePool pool(16 * std::size_t(width) + 1024);  // declared first: it outlives every state cloned from it
     search::BattleScumSearcher2 enumerator(root);
@@ -439,7 +442,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                     auto &b = *child.state;
                     if (b.outcome == Outcome::PLAYER_VICTORY && b.player.curHp > 0) {
                         double v = value(b);
-                        if (better(best, v, child.path, b, winFloor, sameVictory)) { best = {true, v, child.state, actions(child.path)}; }
+                        if (better(best, v, child.path, b, winFloor, sameVictory, near)) { best = {true, v, child.state, actions(child.path)}; }
                         if (best.state->player.curHp >= root.player.curHp) return;
                     } else if (child.path != parent.path && b.outcome == Outcome::UNDECIDED
                             && b.player.curHp > 0 && b.turn < 100 && b.inputState == InputState::PLAYER_NORMAL
@@ -465,7 +468,7 @@ void pass(const BattleContext &root, int width, long long cap, Value value, Canc
                     if (b.outcome == Outcome::PLAYER_VICTORY && b.player.curHp > 0) {
                         materialize(child);
                         double v = value(b);
-                        if (better(best, v, child.path, b, winFloor, sameVictory)) { best.found = true; best.value = v; best.state = std::make_shared<BattleContext>(*child.state); best.actions = actions(child.path); }
+                        if (better(best, v, child.path, b, winFloor, sameVictory, near)) { best.found = true; best.value = v; best.state = std::make_shared<BattleContext>(*child.state); best.actions = actions(child.path); }
                     } else if (b.outcome == Outcome::UNDECIDED && b.player.curHp > 0 && b.turn < 100
                             && b.loopCount < BattleContext::ACTION_EXECUTION_LIMIT) {
                         // turn < 100: stalling lines (end turn behind block forever) otherwise reach the engine's 500-turn limit, which throws
@@ -557,8 +560,8 @@ Best portfolio(const BattleContext &root, long long cap, Value value, Cancel can
 // with winFloor >= 0 any shorter win keeping at least winFloor HP replaces it.
 template <class Value, class Cancel>
 Best shorten(const BattleContext &root, Best best, long long budget, Value value, Cancel cancelled, int winFloor = -1,
-             SameVictory sameVictory = nullptr) {
-    pass(root, 128, stats.transitions + budget, value, cancelled, best, false, 1.0, winFloor, sameVictory);
+             SameVictory sameVictory = nullptr, NearVictory near = {}) {
+    pass(root, 128, stats.transitions + budget, value, cancelled, best, false, 1.0, winFloor, sameVictory, near);
     return best;
 }
 }  // namespace loop_beam
