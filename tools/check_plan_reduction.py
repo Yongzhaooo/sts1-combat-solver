@@ -47,6 +47,14 @@ for worse in (resource_win(hp=71), resource_win(max_hp=79),
     assert not advisor.native_search._same_victory(resource_end, worse)
 print('PASS: shortening guard permits another turn and rejects lost HP, max HP, bottle or Dagger growth')
 
+# Outside the Heart a line one HP short of the reference may replace a line twice as long (user, 2026-11-07).
+near = advisor.native_search._near_victory
+assert near(resource_win(hp=71), resource_end) and near(resource_win(turn=2), resource_end)
+for worse in (resource_win(hp=70), resource_win(hp=73), resource_win(hp=71, potion='EMPTY_POTION_SLOT'),
+              resource_win(hp=71, dagger=14), resource_win(hp=71, max_hp=79)):
+    assert not near(worse, resource_end)
+print('PASS: the one-HP guard accepts one HP less and nothing else, never two HP or a spent bottle or growth')
+
 # A bottle that changes nothing (Speed Potion, then the killing Strike) leaves a no-potion line; a killing Fire Potion does not.
 from concurrent.futures import Future
 import time

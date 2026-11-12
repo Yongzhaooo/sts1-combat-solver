@@ -305,6 +305,16 @@ static bool overlaySameVictory(const BattleContext &a, const BattleContext &b) {
     return supported && ag==bg;
 }
 
+// The same victory as reference except for at most one HP less; with half the actions it replaces a long line outside the
+// Heart (user, 2026-11-07: a 157-action Intangible grind is not worth one HP).
+static bool overlayNearVictory(const BattleContext &a, const BattleContext &reference) {
+    if (a.outcome!=Outcome::PLAYER_VICTORY || a.player.curHp<reference.player.curHp-1 || a.player.curHp>reference.player.curHp)
+        return false;
+    BattleContext lifted=a;
+    lifted.player.curHp=reference.player.curHp;
+    return overlaySameVictory(lifted,reference);
+}
+
 #include "growth_gate.h"
 #include "sim/search/nn_prior.h"
 #include "loop_beam.h"
@@ -340,6 +350,7 @@ static bool macroFinish(const BattleContext &root, const BattleContext &end) {
 }
 PYBIND11_MODULE(overlay_search, m) {
     m.def("_same_victory", &overlaySameVictory);
+    m.def("_near_victory", &overlayNearVictory);
     // Rule-table check for tools/check_loop_gate.py: matched family ids for (card id, upgraded) pairs and relic ids.
     m.def("loop_families", [](const std::vector<std::pair<CardId,bool>> &cards, const std::vector<RelicId> &relics) {
         std::vector<std::string> ids;
@@ -587,12 +598,16 @@ PYBIND11_MODULE(overlay_search, m) {
             }
             // Equal resources, fewest actions: shortening may trade a turn penalty for fewer plays. A Heart
             // victory ends the run and no run fights a second Heart, so there any shorter win is equal (user, 2026-10-24).
+            // Elsewhere a win one HP short of this line also counts when it has at most half the actions (user, 2026-11-07).
             if(predicted.outcome==Outcome::PLAYER_VICTORY && result.actions.size()>64 && !overlayInterrupted()) {
+                const BattleContext reference=predicted;
                 loop_beam::Best seed{true,value(predicted),std::make_shared<BattleContext>(predicted),
                                      result.actions};
                 const int floor=heartFight ? 1 : -1;
+                const loop_beam::NearVictory near=heartFight ? loop_beam::NearVictory{}
+                    : loop_beam::NearVictory{overlayNearVictory,&reference,static_cast<int>(result.actions.size())/2};
                 auto shorter=loop_beam::shorten(root,std::move(seed),std::min(LOOP_BEAM_PER_SIM*simulations,2000000LL),
-                                                value,cancelled,floor,overlaySameVictory);
+                                                value,cancelled,floor,overlaySameVictory,near);
                 if(shorter.actions.size()<result.actions.size()) {
                     shortenedFrom=static_cast<int>(result.actions.size());
                     predicted=*shorter.state; result.actions=shorter.actions; result.bestHp=predicted.player.curHp; beamUsed=true;
