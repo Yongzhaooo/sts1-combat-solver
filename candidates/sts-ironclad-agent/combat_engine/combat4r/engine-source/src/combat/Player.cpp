@@ -879,13 +879,11 @@ void Player::applyStartOfTurnPostDrawPowers(BattleContext &bc) {
                 break;
 
             case PS::DEVOTION:
-                // DevotionPower.atStartOfTurnPostDraw: without a Mantra power this only changes
-                // stance, and only at ten devotion -- it does not create the power. With one it
-                // applies that much mantra, and MantraPower.stackPower owns the threshold.
-                if (!hasStatus<PS::MANTRA>()) {
-                    if (pair.second >= MANTRA_PRAYER_REQUIRED) {
-                        bc.addToBot( Actions::ChangeStance(Stance::DIVINITY) );
-                    }
+                // DevotionPower.atStartOfTurnPostDraw: ten devotion with no Mantra power changes
+                // stance directly without creating the power; otherwise it applies that much mantra,
+                // and MantraPower.stackPower owns the threshold.
+                if (!hasStatus<PS::MANTRA>() && pair.second >= MANTRA_PRAYER_REQUIRED) {
+                    bc.addToBot( Actions::ChangeStance(Stance::DIVINITY) );
                 } else {
                     bc.addToBot( Actions::GainMantra(pair.second) );
                 }

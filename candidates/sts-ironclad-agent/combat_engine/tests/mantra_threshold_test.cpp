@@ -4,7 +4,7 @@
 // drops the power. ApplyPowerAction adds a fresh MantraPower without stackPower at all, which is
 // why the first ten mantra do not change stance but the next application does.
 // DevotionPower.atStartOfTurnPostDraw instead changes stance directly when ten devotion arrive with
-// no MantraPower present, so that path never creates one.
+// no MantraPower present, so that path never creates one; below ten it applies a fresh power.
 #include "combat/Actions.h"
 #include "combat/BattleContext.h"
 #include "game/GameContext.h"
@@ -74,13 +74,13 @@ int main() {
     }
 
     {
-        // Below the threshold and without a Mantra power the original applies nothing at all:
-        // DevotionPower only applies mantra when the player already has the power.
+        // Below the threshold and without a Mantra power the original applies a fresh MantraPower:
+        // the direct stance change needs both no power and ten devotion.
         WatcherBattle b;
         b.battle.player.buff<PS::DEVOTION>(3);
         search::Action(search::ActionType::END_TURN).execute(b.battle);
         check(b.battle.player.stance == Stance::NEUTRAL, "three Devotion must not enter Divinity");
-        check(!b.battle.player.hasStatus<PS::MANTRA>(), "three Devotion without a Mantra power adds none");
+        check(b.battle.player.getStatus<PS::MANTRA>() == 3, "three Devotion without a Mantra power applies three");
     }
 
     {
