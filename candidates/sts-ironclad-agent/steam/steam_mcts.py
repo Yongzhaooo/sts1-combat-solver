@@ -338,6 +338,42 @@ def card_snapshot(card):
 EMPTY_ORB_IDS = frozenset({None, "", "Empty"})
 
 
+# Character state the simulator carries beyond the shared combat fields. Each row gives the game
+# export key (Mod side), the snapshot key (importer side), the comparison paths that must report a
+# difference when the simulator disagrees, `snap` (the value in a snapshot) and `read` (the same
+# value from an imported player). tools/check_character_fields.py fails for a row without a recorded
+# export, an import round trip or a real comparison, and for a snapshot player key the importer
+# reads that is neither here nor a shared combat key.
+_CHANNELED = "_channeled_this_combat"
+_ORB_NAMES = {"Lightning": "LIGHTNING", "Frost": "FROST", "Dark": "DARK", "Plasma": "FUSION"}
+def engine_character(game_class):
+    return {"THE_SILENT": "SILENT"}.get(game_class, game_class)
+
+
+CHARACTER_FIELDS = (
+    {"name": "character", "characters": ("*",), "export": "class", "snapshot": "character",
+     "compare": ("/player/character",),
+     "snap": lambda s: engine_character(s.get("character", "IRONCLAD")),
+     "read": lambda p: p.character},
+    {"name": "orbs", "characters": ("DEFECT",), "export": "combat_state.player.orbs",
+     "snapshot": "player.orbs", "compare": ("/player/orbs",),
+     "snap": lambda s: [_ORB_NAMES[o["id"]] for o in s["player"].get("orbs", []) if o["id"]],
+     "read": lambda p: [o["id"] for o in p.orbs]},
+    {"name": "orb_slots", "characters": ("DEFECT",), "export": "combat_state.player.orbs",
+     "snapshot": "player.orb_slots", "compare": ("/player/orb_slots",),
+     "snap": lambda s: s["player"].get("orb_slots", 0), "read": lambda p: p.orb_slots},
+    {"name": "focus", "characters": ("DEFECT",), "export": "combat_state.player.powers[id=Focus]",
+     "snapshot": "player.powers", "compare": ("/player/orbs", "/legacy/player_powers"),
+     "snap": lambda s: sum(x["amount"] for x in s["player"]["powers"] if x["id"] == int(sts.PlayerStatus.FOCUS)),
+     "read": lambda p: p.focus},
+    *({"name": kind + _CHANNELED, "characters": ("DEFECT",), "export": "combat_state." + kind + _CHANNELED,
+       "snapshot": "player." + kind + _CHANNELED, "compare": ("/player/" + kind + _CHANNELED,),
+       "snap": lambda s, k=kind + _CHANNELED: s["player"].get(k, 0),
+       "read": lambda p, k=kind + _CHANNELED: getattr(p, k)} for kind in ("lightning", "frost")),
+)
+CHANNELED_FIELDS = tuple(f["name"] for f in CHARACTER_FIELDS if f["name"].endswith(_CHANNELED))
+
+
 def orb_snapshot(orb):
     """CommunicationMod's orb entry. An empty slot keeps a null id so the list
     length stays the slot count."""
@@ -623,9 +659,8 @@ def build_snapshot(game_state, counters=None):
         relics.append({"id": sts.relic_id_from_name(identifier),
                        "counter": int(counter if counter is not None else -1)})
     snapshot = {
-        # Optional: the importer reads Ironclad when absent. Stance, mantra and retain are
-        # likewise optional and are only added once the Mod exports them. Orbs come from
-        # CommunicationMod and are always present.
+        # Optional: the importer reads Ironclad when absent. Character fields are listed in
+        # CHARACTER_FIELDS; stance, mantra and retain join it once the Mod exports them.
         **({"character": game_state["class"]} if game_state.get("class") else {}),
         "seed": int(game_state.get("seed") or 0),
         "floor": int(game_state.get("floor") or 0),
