@@ -28,8 +28,9 @@ for s in (sys.stdin, sys.stdout, sys.stderr):
 from recovery import health, future_recovery, incense_targets, carry_weight
 from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature, reply_summary
 from auto_policy import recommend, smoke_opening, smoke_probe_keeps, smoke_threshold
-from solver_search import (DEEP_BUDGET, better_plan, boss_fast_plan, finalize_plan, focus_short, focus_target,
-                           potion_margin_close, search_plan)
+from solver_search import (DEEP_BUDGET, add_follow_ups, boss_fast_plan, clean_no_potion, finalize_plan, first_stage,
+                           focus_short, focus_target, potion_margin_close, research_gate, research_line, search_plan,
+                           stop_after_no_potion)
 from runtime_files import OVERLAY_FILES
 from search_status import search_timeout, soft_deadline
 from worker_policy import worker_limit, background_priority
@@ -44,8 +45,6 @@ COVERAGE_MANIFEST = Path(__file__).with_name('coverage_manifest.json')
 # A Heart win longer than this many actions is searched again at the deep budget, past the loop macro shortcut, and the
 # shorter win is kept: any Heart win ends the run, and hundreds of plays are a poor watch (user, 2026-10-24).
 LONG_HEART_ACTIONS = 150
-# Bottle sets are compared only when no single bottle wins within this effective loss.
-MULTI_POTION_LOSS = 6
 # After a Boss the next act heals (boss_heal): bottles are searched only past this loss or without a win.
 BOSS_HEAL_POTION_LOSS = 50
 # Safety net: if cardRandomRng still drifts after card generation, keep executing the planned
@@ -390,23 +389,18 @@ class Advisor:
                 self.native_search.cancel()
                 self.searching = []
                 raise
-            clean_regular = (initial_plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
-                             and health(initial_plan, self.root_game, True)['loss'] <= quiet_loss
-                             and not initial_plan.get('used_tail') and not initial_plan.get('used_fairy')
-                             and not toolbox_selection(view['game'])
-                             and not focus_short(self.root_game, initial_plan))
+            clean_regular = clean_no_potion(self.root_game, initial_plan,
+                                            lambda: health(initial_plan, self.root_game, True)['loss'],
+                                            quiet_loss, toolbox_selection(view['game']))
         context = self.root_game.get('solver_auto_context', {})
         if (_ELITE_DEEP_GATE is not None and self.root_game.get('act', 4) <= 3 and context.get('room') == 'MonsterRoomElite'
                 and context.get('streak_mode') is not True):
             self.deep_gate = _ELITE_DEEP_GATE.bind(self.root_game, initial_plan, initial_seconds,
                                                    len(potions) - len(smoke_slots))
-        stages = [[()]] if fast_boss or (clean_regular and not brew_order) else [[()] + [(slot,) for slot, _ in potions]]
-        strength_slots = [slot for slot, _ in potions
+        slots_all = [slot for slot, _ in potions]
+        strength_slots = [slot for slot in slots_all
                           if view['game']['potions'][slot]['id'] in ('Strength Potion', 'FlexPotion')]
-        if smoke_slots and strength_slots:
-            stages[0].extend((smoke, strength) for smoke in smoke_slots for strength in strength_slots)
-            if len(strength_slots) > 1:
-                stages[0].extend((smoke, *strength_slots) for smoke in smoke_slots)
+        stages = first_stage(slots_all, smoke_slots, strength_slots, fast_boss, clean_regular, brew_order)
         self.searching = []
         pool = ThreadPoolExecutor(max_workers=min(self.max_workers, max(1, 2 ** len(potions))))
         try:
@@ -435,31 +429,17 @@ class Advisor:
                     self.branch_info = [self.branch_summary('no-potion', '不主动用药', self.plan, view)]
                     if self.plan.get('boss_fast_finish'):
                         break
-                    if (not smoke_slots and self.plan['outcome'] == int(s.sts.Outcome.PLAYER_VICTORY)
-                            and self.branch_info[0]['loss'] <= quiet_loss
-                            and not self.plan.get('used_tail') and not self.plan.get('used_fairy')
-                            and not toolbox_selection(view['game'])
-                            and not focus_short(self.root_game, self.plan)
-                            and not (brew_order or (budget >= DEEP_BUDGET and brew_slots))):
+                    if stop_after_no_potion(self.root_game, self.plan, lambda: self.branch_info[0]['loss'], quiet_loss,
+                                            toolbox_selection(view['game']), smoke_slots, brew_order, budget, brew_slots):
                         break
                 for slots, future in futures.items():
                     if slots:
                         self.potion_branch(slots, names, future, started, view, budget)
                 if self.interrupt.is_set():
                     break
-                good = any(b['available'] and b['won'] and b['loss'] <= max(MULTI_POTION_LOSS, quiet_loss)
-                           and not focus_short(self.root_game, b) for b in self.branch_info)
-                if fast_boss and stage is stages[0] and potions:
-                    stages.append([(slot,) for slot, _ in potions])
-                singles_done = (not fast_boss and stage is stages[0]) or (
-                    fast_boss and len(stages) > 1 and stage is stages[1])
-                if singles_done and not self.interrupt.is_set() and (not good or brew_order) and len(potions) > 1:
-                    combos = [c for n in range(2, len(potions) + 1)
-                              for c in itertools.combinations([slot for slot, _ in potions if slot not in smoke_slots], n)
-                              if (n == 2 or n == len(potions)) and (not good or bool(brew_slots.intersection(c)))]
-                    stages.append(combos)
-            if (not self.interrupt.is_set() and not self.plan.get('boss_fast_finish')
-                    and not (context.get('high_speed') is True and not focus_target(self.root_game))):
+                add_follow_ups(stages, stage, self.root_game, self.branch_info, quiet_loss, fast_boss, slots_all,
+                               smoke_slots, brew_slots, brew_order, self.interrupt)
+            if research_gate(self.root_game, self.plan, self.interrupt):
                 self.research_potion_free(view, budget, credit, started)
         finally:
             # Drain cancelled branches before the next request can resume native search.
@@ -486,20 +466,17 @@ class Advisor:
         line again at twice the deep budget and keep the better of the two."""
         if not potion_margin_close(self.root_game, self.branch_info):
             return
-        deeper = 2 * max(budget, DEEP_BUDGET)
         # Add a row of its own: the finished rows stay on the panel, and the deeper search is not shown as ready.
         rows, index = self.searching, len(self.searching)
         self.searching = rows + [(index, 'no-potion-research', '不用药 · 加搜')]
         try:
-            line = dict(self.search_plan(self.root, deeper, [], credit, index, False,
-                                         generated_potions(view['game'], (), deeper)))
-        except RuntimeError:
-            if not self.interrupt.is_set():
-                raise
-            return
+            line = research_line(self.branches['no-potion'], budget,
+                                 lambda deeper: self.search_plan(self.root, deeper, [], credit, index, False,
+                                                                 generated_potions(view['game'], (), deeper)),
+                                 self.interrupt)
         finally:
             self.searching = rows
-        if not better_plan(line, self.branches['no-potion']):
+        if line is None:
             return
         line['seconds'] = round(time.monotonic() - started, 2)
         self.branches['no-potion'] = line
