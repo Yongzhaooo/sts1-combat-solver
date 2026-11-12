@@ -89,6 +89,8 @@ namespace sts {
         static Action NoOpRollMove();
 
         static Action ChangeStance(Stance stance);
+        // ApplyPowerAction(MantraPower), whose threshold lives in MantraPower.stackPower.
+        static Action GainMantra(int amount);
         static Action GainEnergy(int amount);
         static Action GainBlock(int amount);
         static Action DrawCards(int amount);

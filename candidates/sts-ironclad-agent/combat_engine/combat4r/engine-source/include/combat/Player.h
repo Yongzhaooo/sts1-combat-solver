@@ -181,8 +181,6 @@ namespace sts {
         template <PlayerStatus> void buff(int amount=1);
         template <PlayerStatus> void debuff(int amount, bool isSourceMonster=true);
 
-        template <Stance> void changeStance();
-
         void removeDebuffs();
         void increaseMaxHp(BattleContext &bc, int amount);
         void heal(BattleContext &bc, int amount, bool triggerRedSkull = true);
@@ -560,11 +558,6 @@ namespace sts {
         } else {
             return relicBits1 & (1ULL << ((int)r-64));
         }
-    }
-
-    template<Stance s>
-    void Player::changeStance() {
-        stance = s;
     }
 
 

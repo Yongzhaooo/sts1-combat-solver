@@ -262,11 +262,8 @@
       },
       "starter": {
         "total": 4,
-        "implemented": 2,
-        "missing": [
-          "ERUPTION",
-          "VIGILANCE"
-        ]
+        "implemented": 4,
+        "missing": []
       },
       "generated": {
         "total": 11,
@@ -374,7 +371,6 @@
     "EmptyMind": "EMPTY_MIND",
     "Endless Agony": "ENDLESS_AGONY",
     "Envenom": "ENVENOM",
-    "Eruption": "ERUPTION",
     "Escape Plan": "ESCAPE_PLAN",
     "Establishment": "ESTABLISHMENT",
     "Evaluate": "EVALUATE",
@@ -463,7 +459,6 @@
     "Tools of the Trade": "TOOLS_OF_THE_TRADE",
     "ClearTheMind": "TRANQUILITY",
     "Unload": "UNLOAD",
-    "Vigilance": "VIGILANCE",
     "Wallop": "WALLOP",
     "WaveOfTheHand": "WAVE_OF_THE_HAND",
     "Weave": "WEAVE",

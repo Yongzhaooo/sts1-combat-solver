@@ -20,8 +20,8 @@ int main() {
         {CharacterClass::SILENT, CardId::NEUTRALIZE},   // attack
         {CharacterClass::SILENT, CardId::SURVIVOR},     // skill
         {CharacterClass::SILENT, CardId::ACCURACY},     // power
-        {CharacterClass::WATCHER, CardId::ERUPTION},    // attack
-        {CharacterClass::WATCHER, CardId::VIGILANCE},   // skill
+        {CharacterClass::WATCHER, CardId::CRUSH_JOINTS},    // attack
+        {CharacterClass::WATCHER, CardId::EVALUATE},        // skill
         {CharacterClass::WATCHER, CardId::DEVA_FORM},   // power
     };
     const Case implemented[] = {
