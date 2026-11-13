@@ -51,11 +51,13 @@ assert incense_values(game(act=2, last='Slavers')) == {4: 30}
 assert incense_values(game(act=2, boss='Automaton', ahead=False)) == {0: 30}
 assert incense_values(game(act=2, room='MonsterRoomBoss')) == {4: 30}
 assert incense_values(game(act=4, heart=True, nxt=['boss'])) == {}
-# Act 3 hallway fight next holds 5 (user rule, 2026-11-13); elite or Boss next keeps 4.
+# Act 3: a possible hallway fight holds 5 (user rule, 2026-11-13); only elite or Boss next keeps 4.
 assert incense_values(game(act=3, nxt=['monster'])) == {5: 5}
 assert incense_values(game(act=3, nxt=['elite'])) == {4: 30}
 assert incense_values(game(act=3, nxt=['boss'])) == {4: 30}
-assert incense_values(game(act=3, nxt=['monster', 'elite'])) == {4: 30, 5: 5}
+assert incense_values(game(act=3, nxt=['monster', 'elite'])) == {5: 5}
+assert incense_values(game(act=3, nxt=['monster', 'boss'])) == {5: 5}
+assert incense_values(game(act=3, nxt=['elite', 'boss'])) == {4: 30}
 assert incense_values(game(act=3)) == {4: 30}
 assert incense_values(game(act=3, room='MonsterRoomBoss', nxt=['monster'])) == {4: 30}
 assert carry_weight(game()) == 1

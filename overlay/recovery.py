@@ -79,8 +79,9 @@ def incense_values(game):
     (Intangible on turn 2); Slime Boss keeps 3. Hexaghost's Divider hits 6 times for
     max_hp // 12 + 1, so Intangible saves 6 * (max_hp // 12): the floor 16 campfire
     usually brings HP near full, and using max HP keeps current HP from gaining value.
-    Act 3 hallway fight next: hold 5 (Intangible on turn 1) for HALLWAY_INTANGIBLE_HP; elite
-    or Boss next keeps 4 for INTANGIBLE_HP, and both count when either can come first.
+    Act 3: when a hallway fight can come first, hold 5 (Intangible on turn 1) for
+    HALLWAY_INTANGIBLE_HP, since the elite or Boss can be avoided; only an elite or Boss
+    next keeps 4 for INTANGIBLE_HP.
     Act 2 general case (counter 5 target): 4 or 5 both do, each ACT2_INTANGIBLE_HP.
     Without map data, in act 4 and in the other act 2 cases, every target is worth INTANGIBLE_HP.
     """
@@ -90,10 +91,9 @@ def incense_values(game):
     if act == 2 and game.get('room_type') != 'MonsterRoomBoss' and targets == [5]:
         return {4: ACT2_INTANGIBLE_HP, 5: ACT2_INTANGIBLE_HP}
     if act == 3 and game.get('room_type') != 'MonsterRoomBoss' and targets and kinds:
-        values = {5: HALLWAY_INTANGIBLE_HP} if 'monster' in kinds else {}
-        if {'elite', 'boss'} & set(kinds):
-            values[4] = INTANGIBLE_HP
-        return values
+        if 'monster' in kinds:
+            return {5: HALLWAY_INTANGIBLE_HP}  # the elite or Boss can be avoided
+        return {4: INTANGIBLE_HP}
     if act != 1 or game.get('room_type') == 'MonsterRoomBoss' or not targets or not kinds:
         return {c: INTANGIBLE_HP for c in targets}
     if 'monster' in kinds:
