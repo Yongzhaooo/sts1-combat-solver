@@ -74,6 +74,7 @@ jobs:
       - run: python overlay/check_incense.py
       - run: python tools/build_solver_runtime.py
       - run: python overlay/check_worker_policy.py --native
+      - run: python overlay/check_incense.py --native
       - run: python tools/check_search_boundary.py
       - run: python tools/check_plan_reduction.py
       - run: python tools/check_potion_stages.py
