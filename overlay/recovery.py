@@ -47,6 +47,7 @@ def health(plan, game, won):
 
 INTANGIBLE_HP = 30.0  # one Intangible on target (user rule, 2026-10-21: at least 30 HP)
 HALLWAY_INTANGIBLE_HP = 5.0  # act 3 hallway fight on turn 1 (user rule, 2026-11-13)
+ACT2_INTANGIBLE_HP = 12.0  # act 2 general case, counter 4 or 5 (user rule, 2026-11-13)
 
 
 def incense_targets(game):
@@ -80,11 +81,14 @@ def incense_values(game):
     usually brings HP near full, and using max HP keeps current HP from gaining value.
     Act 3 hallway fight next: hold 5 (Intangible on turn 1) for HALLWAY_INTANGIBLE_HP; elite
     or Boss next keeps 4 for INTANGIBLE_HP, and both count when either can come first.
-    Without map data, and in acts 2 and 4, every target is worth INTANGIBLE_HP.
+    Act 2 general case (counter 5 target): 4 or 5 both do, each ACT2_INTANGIBLE_HP.
+    Without map data, in act 4 and in the other act 2 cases, every target is worth INTANGIBLE_HP.
     """
     targets = incense_targets(game)
     kinds = game.get('solver_next_fights')
     act = game.get('act', 1)
+    if act == 2 and game.get('room_type') != 'MonsterRoomBoss' and targets == [5]:
+        return {4: ACT2_INTANGIBLE_HP, 5: ACT2_INTANGIBLE_HP}
     if act == 3 and game.get('room_type') != 'MonsterRoomBoss' and targets and kinds:
         values = {5: HALLWAY_INTANGIBLE_HP} if 'monster' in kinds else {}
         if {'elite', 'boss'} & set(kinds):

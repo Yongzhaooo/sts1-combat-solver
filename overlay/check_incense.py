@@ -43,7 +43,13 @@ assert incense_values(game(nxt=['elite', 'boss'], boss='Hexaghost', max_hp=75)) 
 assert incense_values(game()) == {3: 30}
 assert incense_values(game(nxt=[])) == {3: 30}
 assert incense_values(game(room='MonsterRoomBoss', boss='Hexaghost', nxt=['monster'])) == {4: 30}
-assert incense_values(game(act=2, boss='Champ', nxt=['monster'])) == {5: 30}
+# Act 2 general case: 4 or 5, 12 HP each (user rule, 2026-11-13); the other act 2 cases keep 30.
+assert incense_values(game(act=2, boss='Champ', nxt=['monster'])) == {4: 12, 5: 12}
+assert incense_values(game(act=2, boss='Champ')) == {4: 12, 5: 12}
+assert incense_values(game(act=2, boss='Automaton')) == {4: 12, 5: 12}
+assert incense_values(game(act=2, last='Slavers')) == {4: 30}
+assert incense_values(game(act=2, boss='Automaton', ahead=False)) == {0: 30}
+assert incense_values(game(act=2, room='MonsterRoomBoss')) == {4: 30}
 assert incense_values(game(act=4, heart=True, nxt=['boss'])) == {}
 # Act 3 hallway fight next holds 5 (user rule, 2026-11-13); elite or Boss next keeps 4.
 assert incense_values(game(act=3, nxt=['monster'])) == {5: 5}
