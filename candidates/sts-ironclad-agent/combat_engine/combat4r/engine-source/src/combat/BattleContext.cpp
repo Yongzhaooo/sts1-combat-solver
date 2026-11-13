@@ -1264,7 +1264,8 @@ void BattleContext::useAttackCard() {
 
         case CardId::SWORD_BOOMERANG:
             for (int i = 0; i < (up ? 4 : 3); ++i) {
-                addToBot(Actions::SwordBoomerangAction(3+player.getStatus<PS::VIGOR>())); // vigor is removed afterwards so this is a necessary (maybe not 100% accurate) hack
+                // Each hit's calculateCardDamage reads Vigor; its removal is queued after these.
+                addToBot(Actions::SwordBoomerangAction(3));
             }
             break;
 
@@ -1775,7 +1776,9 @@ void BattleContext::onUseAttackCard() {
     }
 
     if (p.hasStatus<PS::VIGOR>()) {
-        p.removeStatus<PS::VIGOR>();
+        // VigorPower.onUseCard queues RemoveSpecificPowerAction with addToBot, after
+        // the card's own actions, so hits rolled later (Thunder Strike) still read it.
+        addToBot( Actions::RemoveStatus<PS::VIGOR>() );
     }
 
     if (p.hasStatus<PS::FREE_ATTACK_POWER>()) {
