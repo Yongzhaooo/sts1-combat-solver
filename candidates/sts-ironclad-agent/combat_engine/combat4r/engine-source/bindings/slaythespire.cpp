@@ -1908,6 +1908,14 @@ PYBIND11_MODULE(slaythespire, m) {
           [](const GameContext &gc) { return search::GameAction::getAllActionsInState(gc); },
           "enumerate out-of-combat search actions; shop potion clicks with no purchase are filtered (use get_shop_clicks for UI replay)");
 
+    // One spelling of the four stances, read off the engine table that parses
+    // snapshots, so a Python caller never has to restate the list.
+    pybind11::tuple stance_names(static_cast<int>(Stance::DIVINITY) + 1);
+    for (int i = 0; i <= static_cast<int>(Stance::DIVINITY); ++i) {
+        stance_names[i] = pybind11::cast(getStanceName(static_cast<Stance>(i)));
+    }
+    m.attr("STANCE_NAMES") = stance_names;
+
 #ifdef VERSION_INFO
     m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
 #else
