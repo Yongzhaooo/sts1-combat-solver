@@ -25,7 +25,7 @@ for s in (sys.stdin, sys.stdout, sys.stderr):
         except Exception:
             pass
 
-from recovery import health, future_recovery, incense_targets, carry_weight
+from recovery import health, future_recovery, incense_values, carry_weight
 from diagnostics import AsyncReports, battle_snapshot, export_run, fault_signature, reply_summary
 from auto_policy import recommend, smoke_opening, smoke_probe_keeps, smoke_threshold
 from solver_search import (DEEP_BUDGET, add_follow_ups, boss_fast_plan, clean_no_potion, finalize_plan, first_stage,
@@ -274,7 +274,7 @@ class Advisor:
         # Feed mode (mod setting): max HP gained in this combat counts twice in the plan value.
         self.native_search.set_max_hp_gain_weight(2.0 if view['game'].get('solver_auto_context', {}).get('feed_mode') is True else 1.0)
         self.native_search.set_focus_target(focus_target(view['game']))
-        self.native_search.set_incense_targets(incense_targets(view['game']))
+        self.native_search.set_incense_values(incense_values(view['game']))
         self.native_search.set_carry_weight(carry_weight(view['game']))
         self.native_search.resume()
         if self.interrupt.is_set():
