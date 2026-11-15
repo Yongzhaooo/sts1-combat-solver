@@ -43,6 +43,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private final AgentBridge agent = new AgentBridge();
     private final DeckWatch deckWatch = new DeckWatch();
     private final RunExports exports = new RunExports();
+    private final HeartSim heart = new HeartSim(backend);
     private volatile String rngMods = "";  // names only: the warning is translated when shown, after language switches
     // SuperFastMode multiplies Gdx delta; the solver no longer depends on frame time.
     // x10 is the speed long runs were played at (the author's own setting).
@@ -154,6 +155,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             defaults.setProperty("autoPotionRewards", "true");
             defaults.setProperty("runAutoEnabled", "true");
             defaults.setProperty("runLog", "true");
+            defaults.setProperty("heartSim", "false"); // opt-in: a top-bar heart button that simulates the Heart fight
             config = new SpireConfig("STS1CombatSolver", "config", defaults);
             I18n.setLanguage(config.getString("language"));
             canvas.uiScale = PanelSize.preference(config.getString("uiScale"));
@@ -189,6 +191,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     @Override public void receivePostInitialize() {
         canvas.font();
         registerConfigPanel();
+        heart.setEnabled(config != null && config.getBool("heartSim"));
         TestRecorder.subscribe();
         ShopRecorder.subscribe();
         Thread warmup = new Thread(() -> {
@@ -810,6 +813,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             // Every fight opens the panel unfolded; - or F8 folds it again and autoFold then leaves it folded.
             collapsed=false; autoFolded=false; heldPanelOpen=false;
             if(standby()) status=I18n.t("待命 · 点【计算】开始搜索");
+            heart.onCombatStart(); // before this fight's first solve is sent
         }
         if(!wasCombat && inCombat && runAuto) {
             auto=true;paused=false;branchConfirmed=false;decisionDirty=true;lastKey=null;
@@ -831,6 +835,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(agentBridge)syncAgent();
         pilot.updateRoute(pilotHost);
         deckWatch.update(pilot.pilotRun);
+        heart.update();
         if (!inCombat) {
             status = pilot.prompt || pilot.mode!=0 || !pilot.notice.isEmpty() ? pilot.notice
                 : runAuto ? I18n.t("战斗全自动已开 · 等待下场；其他选择由你决定") : I18n.t("选牌与路线由你决定");
@@ -1135,6 +1140,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
     private void input() {
         layout();
+        heart.input(canvas);
         int previewCount = Foresight.previewCount();
         Object source = AbstractDungeon.currMapNode;
         if (previewCount == 0 || (transformPreview != null && (previewRngCounter != AbstractDungeon.miscRng.counter || previewSource != source)))
@@ -1226,6 +1232,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             {I18n.t("狂宴模式：狂宴得到的生命上限按两倍计价"), feedModeEnabled, (java.util.function.Consumer<Boolean>) v -> { feedModeEnabled = v; saveSetting("feedMode", v); }},
             {I18n.t("测试模式：把本局每张出牌写到桌面 sts1-test-种子.jsonl（只保留最近一局）"), TestRecorder.enabled, (java.util.function.Consumer<Boolean>) v -> { TestRecorder.enabled = v; saveSetting("testMode", v); }},
             {I18n.t("路线标注：在地图上画出规划路线"), routeMarks, (java.util.function.Consumer<Boolean>) v -> { routeMarks = v; saveSetting("routeMarks", v); }},
+            {I18n.t("心脏模拟：顶栏出现心脏按钮，战斗外按一下，用当前卡组模拟打一场心脏（只报胜负）"), config != null && config.getBool("heartSim"), (java.util.function.Consumer<Boolean>) v -> { heart.setEnabled(v); saveSetting("heartSim", v); }},
         };
         for (int i = 0; i < rows.length; i++) {
             @SuppressWarnings("unchecked") java.util.function.Consumer<Boolean> set = (java.util.function.Consumer<Boolean>) rows[i][2];
@@ -1252,7 +1259,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     BitmapFont font() { return canvas.font(); }
-    private static String count(long n) { return n>=10000 ? String.format(I18n.t("%.1f 万"), n/10000.0) : Long.toString(n); }
+    static String count(long n) { return n>=10000 ? String.format(I18n.t("%.1f 万"), n/10000.0) : Long.toString(n); }
     private String progressSummary() {
         long total=0, transitions=0; int turn=0, best=-1;
         for (JsonElement e : progressRows) {
@@ -1309,7 +1316,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     @Override public void receivePostRender(SpriteBatch sb) {
-        try { renderPanel(sb); renderModWarnings(sb); } catch (Throwable failure) { guard("render", failure); }
+        try { renderPanel(sb); renderModWarnings(sb); heart.render(sb, canvas); } catch (Throwable failure) { guard("render", failure); }
     }
 
     private void renderPanel(SpriteBatch sb) {
