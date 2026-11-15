@@ -86,6 +86,7 @@ def main():
                         str(here / 'test/ModeCheck.java'),
                         str(here / 'test/BattleHistoryCheck.java'), str(here / 'test/ShopHistoryCheck.java'),
                         str(here / 'test/SearchStatusCheck.java'),
+                        str(here / 'test/HeartSimCheck.java'),
                         str(here / 'test/PanelBodyCheck.java')], check=True)
         subprocess.run(['javac', '--release', '8', '-proc:none', '-encoding', 'UTF-8', '-cp',
                         os.pathsep.join((str(classes), classpath)), '-d', str(checks),
@@ -104,6 +105,7 @@ def main():
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.BattleHistoryCheck'], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.ShopHistoryCheck'], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.SearchStatusCheck'], check=True)
+        subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.HeartSimCheck'], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.PanelBodyCheck'], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp, 'sts1solver.StateKeyCheck'], check=True)
         subprocess.run(['java', '-Dfile.encoding=UTF-8', '-cp', check_cp,
