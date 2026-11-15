@@ -92,7 +92,7 @@
 
 面板用一行 JSON 发请求，`op` 是 `solve`、`choose`、`advance` 或 `cancel`，`state` 是游戏状态，其中 `game_state.solver_auto_context` 是面板设置（由 `autoContext()` 生成，比如 `high_speed`、`streak_mode`、`feed_mode`）。`choose` 还带 `branch`。
 
-心脏模拟（设置里的开关，默认关）另用 `op: "heart_sim"`：请求 `id` 和它的 `cancel` 的 `id` 都是 -1000 或更小的负数（面板的 `HeartSim` 管理，和战斗请求的正数编号分开），带 `seed`（0 到 2^64-1 的十进制字符串）、`progress: true`、`search_workers`，`state.game_state` 是战斗外的状态，带 `solver_auto_context` 和 `solver_heart_bottles`（每个装了牌的瓶装遗物：`{relic, uuid}`，uuid 是被装瓶牌在牌组里的 uuid；CommunicationMod 不给这个信息）。后台按深搜档（600 秒）计时，进度回复格式同 `solve`；终态是 `ready`（`heart_result` 为 `win`、`no_win`、`timeout`，另有 `seconds`、`simulations`、`seed`，胜时有 `hp`）、`error`（`message`，无法模拟的遗物或牌会写出名字）或 `cancelled`（`id` 是取消请求自己的编号）。每个终态在后台数据目录的 `heart-sim.jsonl` 写一行。检查：`tools/check_heart_sim.py`。
+心脏模拟（设置里的开关，默认关）另用 `op: "heart_sim"`：请求 `id` 和它的 `cancel` 的 `id` 都是 -1000 或更小的负数（面板的 `HeartSim` 管理，和战斗请求的正数编号分开），带 `seed`（0 到 2^64-1 的十进制字符串）、`progress: true`、`search_workers`，`state.game_state` 是战斗外的状态，带 `solver_auto_context` 和 `solver_heart_bottles`（每个装了牌的瓶装遗物：`{relic, uuid}`，uuid 是被装瓶牌在牌组里的 uuid；CommunicationMod 不给这个信息）。后台按深搜档（600 秒）计时，进度回复格式同 `solve`；终态是 `ready`（`heart_result` 为 `win`、`no_win`、`timeout`，另有 `seconds`、`simulations`、`seed`，胜时有 `hp`；搜索因内存上限停下且没赢时是 `timeout` 并带 `memory_capped: true`，面板显示「未算完（内存上限）」而不是「超时未算完」）、`error`（`message`，无法模拟的遗物或牌会写出名字）或 `cancelled`（`id` 是取消请求自己的编号；心脏模拟被另一个非取消请求顶掉时，`id` 是被顶掉的心脏请求自己的编号）。每个终态在后台数据目录的 `heart-sim.jsonl` 写一行（心脏请求、它的回复和错误、负编号的 `cancel` 不进每局的 `runs/` 记录），字段：`time`、`floor`、`hp`、`max_hp`、`deck`、`relics`、`potions`、`seed`、`status`、`heart_result`、`seconds`、`simulations`、`message`；`hp` 和 `max_hp` 是开局（请求时）的生命值，胜时剩余的生命值是 `win_hp`（回复里的 `hp`），搜索因内存上限停下时多一个 `memory_capped: true`。被取消的心脏模拟交回工作进程之前到达的请求按到达顺序排队，交回后依次处理（之后到的取消或重算照常打断前面的请求）。检查：`tools/check_heart_sim.py`。
 
 `solve` 和 `choose` 的回复（`backend.py` 中 `Advisor` 生成路线的那段）主要字段：
 
@@ -136,7 +136,7 @@ python -m venv .venv
 ```sh
 .venv/bin/python tools/check_backend_launcher.py    # 编译启动器，跑 PanelSizeCheck、LanguageCheck
 .venv/bin/python tools/check_backend_protocol.py    # 真实后台进程的请求、取消、出错
-.venv/bin/python tools/check_heart_sim.py           # 心脏模拟：拒绝、胜负、取消、种子、日志
+.venv/bin/python tools/check_heart_sim.py           # 心脏模拟：拒绝、胜负、取消、种子、日志、开局标准答案、取消后排队、内存上限
 .venv/bin/python tools/check_executor_tiers.py      # 搜索档位
 .venv/bin/python overlay/check_worker_policy.py
 ```

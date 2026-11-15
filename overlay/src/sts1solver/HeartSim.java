@@ -57,9 +57,13 @@ final class HeartSim {
         final boolean local;
         final double seconds;      // NaN when the reply did not say
         final long simulations;    // -1 when the reply did not say
+        final boolean memoryCapped;   // a TIMEOUT because the search hit the memory limit, not the clock
         Result(Outcome outcome, String message, boolean local, double seconds, long simulations) {
+            this(outcome, message, local, seconds, simulations, false);
+        }
+        Result(Outcome outcome, String message, boolean local, double seconds, long simulations, boolean memoryCapped) {
             this.outcome = outcome; this.message = message == null ? "" : message; this.local = local;
-            this.seconds = seconds; this.simulations = simulations;
+            this.seconds = seconds; this.simulations = simulations; this.memoryCapped = memoryCapped;
         }
         static Result local(Outcome outcome, String message) { return new Result(outcome, message, true, Double.NaN, -1); }
     }
@@ -98,7 +102,9 @@ final class HeartSim {
                     : verdict.equals("timeout") ? Outcome.TIMEOUT : null;
                 if (outcome == null)
                     return Result.local(Outcome.ERROR, verdict.isEmpty() ? "后台回复缺少心脏模拟结果" : "后台回复了无法识别的心脏模拟结果");
-                return new Result(outcome, "", true, seconds, simulations);
+                boolean capped = outcome == Outcome.TIMEOUT && reply.has("memory_capped") && reply.get("memory_capped").isJsonPrimitive()
+                    && reply.get("memory_capped").getAsJsonPrimitive().isBoolean() && reply.get("memory_capped").getAsBoolean();
+                return new Result(outcome, "", true, seconds, simulations, capped);
             }
             case "error": {
                 String message = text(reply, "message");
@@ -121,7 +127,7 @@ final class HeartSim {
         switch (result.outcome) {
             case WIN: return I18n.t("胜");
             case NO_WIN: return I18n.t("未找到胜线");
-            case TIMEOUT: return I18n.t("超时未算完");
+            case TIMEOUT: return I18n.t(result.memoryCapped ? "未算完（内存上限）" : "超时未算完");
             case CANCELLED: return I18n.t(result.message);
             case NO_RESPONSE: return I18n.t("后台未响应");
             default: return I18n.t("模拟失败");

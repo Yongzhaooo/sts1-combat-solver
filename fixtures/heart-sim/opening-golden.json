@@ -1,0 +1,167 @@
+{
+ "about": "Recorded answers for the opening position of a heart simulation (tools/check_heart_sim.py check_opening): for each fixture, the misc random stream of the room entry (Random(seed + 56), nothing drawn), the relic list the game context carries (a used-up Omamori would be missing) and the first hand and the draw pile in order. Generated from the code at commit 527ebaf (nothing else records them): a difference here means the opening mapping changed, not that this file is right in an absolute sense.",
+ "win": {
+  "fixture": "win-2904945097763423898.json",
+  "seed": "2904945097763423898",
+  "misc_rng": {
+   "seed0": 16147633927517219512,
+   "seed1": 3025772619946705770,
+   "counter": 0
+  },
+  "relics": [
+   [
+    "BURNING_BLOOD",
+    -1
+   ],
+   [
+    "GOLDEN_IDOL",
+    -1
+   ],
+   [
+    "GIRYA",
+    2
+   ],
+   [
+    "INK_BOTTLE",
+    9
+   ],
+   [
+    "LANTERN",
+    -1
+   ],
+   [
+    "CURSED_KEY",
+    -1
+   ],
+   [
+    "ART_OF_WAR",
+    -1
+   ],
+   [
+    "EMPTY_CAGE",
+    -1
+   ],
+   [
+    "DU_VU_DOLL",
+    1
+   ],
+   [
+    "MAW_BANK",
+    -1
+   ],
+   [
+    "CENTENNIAL_PUZZLE",
+    -1
+   ],
+   [
+    "STRIKE_DUMMY",
+    -1
+   ]
+  ],
+  "hand": [
+   "DEFEND_RED",
+   "FEEL_NO_PAIN+1",
+   "POMMEL_STRIKE+1",
+   "POWER_THROUGH+1",
+   "ASCENDERS_BANE"
+  ],
+  "draw": [
+   "DEFEND_RED",
+   "ARMAMENTS+1",
+   "HAVOC+1",
+   "BODY_SLAM+1",
+   "DEFEND_RED",
+   "SECOND_WIND+1",
+   "BLOOD_FOR_BLOOD+1",
+   "BASH",
+   "EVOLVE+1",
+   "FINESSE",
+   "DEFEND_RED",
+   "POMMEL_STRIKE+1"
+  ]
+ },
+ "long": {
+  "fixture": "long-7664671196745433303.json",
+  "seed": "7664671196745433303",
+  "misc_rng": {
+   "seed0": 5272456064332184476,
+   "seed1": 3748874527401287048,
+   "counter": 0
+  },
+  "relics": [
+   [
+    "BLACK_BLOOD",
+    -1
+   ],
+   [
+    "ANCIENT_TEA_SET",
+    -1
+   ],
+   [
+    "BAG_OF_PREPARATION",
+    -1
+   ],
+   [
+    "MAW_BANK",
+    -1
+   ],
+   [
+    "RUNIC_CUBE",
+    -1
+   ],
+   [
+    "RED_MASK",
+    -1
+   ],
+   [
+    "FOSSILIZED_HELIX",
+    -1
+   ],
+   [
+    "WAR_PAINT",
+    -1
+   ],
+   [
+    "CHARONS_ASHES",
+    -1
+   ],
+   [
+    "WHETSTONE",
+    -1
+   ],
+   [
+    "INK_BOTTLE",
+    9
+   ],
+   [
+    "DREAM_CATCHER",
+    -1
+   ],
+   [
+    "RED_SKULL",
+    -1
+   ],
+   [
+    "PANTOGRAPH",
+    -1
+   ]
+  ],
+  "hand": [
+   "POMMEL_STRIKE+1",
+   "RECKLESS_CHARGE+1",
+   "SHRUG_IT_OFF+1",
+   "FIEND_FIRE+1",
+   "DEFEND_RED+1",
+   "BODY_SLAM+1",
+   "ARMAMENTS+1"
+  ],
+  "draw": [
+   "DEFEND_RED+1",
+   "BLOODLETTING+1",
+   "BURNING_PACT+1",
+   "ANGER+1",
+   "ASCENDERS_BANE",
+   "DEFEND_RED+1"
+  ]
+ }
+}

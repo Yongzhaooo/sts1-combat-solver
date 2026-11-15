@@ -495,7 +495,8 @@ class Advisor:
 
     def heart_sim(self, view, seed):
         """Heart simulation: the first turn of a Heart fight built from the outside-combat game state, searched like the
-        Heart in solve(); only win / no win line / out of time is reported (a deadline interrupt arrives as `interrupt`)."""
+        Heart in solve(); only win / no win line / not finished is reported (a deadline interrupt arrives as `interrupt`;
+        a memory-capped search without a win is `timeout` with `memory_capped`)."""
         game = view['game']
         started = time.monotonic()
         self.deep_gate = None
@@ -520,11 +521,13 @@ class Advisor:
             self.native_search.cancel()
             self.searching = []
         won = plan['outcome'] == int(self.search.sts.Outcome.PLAYER_VICTORY)
-        reply = {'status': 'ready', 'heart_result': 'win' if won else 'timeout' if self.interrupt.is_set() else 'no_win',
+        capped = bool(plan.get('memory_capped'))
+        # A search that stopped for the memory cap did not run out of line to try, so without a win it is "not finished".
+        reply = {'status': 'ready', 'heart_result': 'win' if won else 'timeout' if capped or self.interrupt.is_set() else 'no_win',
                  'seconds': round(time.monotonic() - started, 2), 'simulations': sum(stages), 'seed': str(seed)}
         if won:
             reply['hp'] = int(plan['hp'])
-        if plan.get('memory_capped'):
+        if capped:
             reply['memory_capped'] = True
         return reply
 
@@ -1196,7 +1199,8 @@ def request_timeout(request):
 
 def heart_sim_line(state, seed, reply, elapsed):
     """One heart-sim.jsonl record: the inventory the simulation was asked about and how it ended. `hp` and `max_hp` are the
-    player's at the start; the HP left after a win is `win_hp`."""
+    player's at the start; the HP left after a win is `win_hp`; `memory_capped` is present (true) when the search stopped at
+    the memory limit."""
     game = (state or {}).get('game_state') or {}
     line = {'time': datetime.now().astimezone().isoformat(timespec='seconds'), 'floor': game.get('floor'), 'hp': game.get('current_hp'),
             'max_hp': game.get('max_hp')}
@@ -1213,6 +1217,8 @@ def heart_sim_line(state, seed, reply, elapsed):
                 message=reply.get('message'))
     if 'hp' in reply:
         line['win_hp'] = reply['hp']
+    if reply.get('memory_capped'):
+        line['memory_capped'] = True
     return line
 
 
@@ -1266,8 +1272,8 @@ def serve(runs_dir=None):
 
     def emit(value, state=None, record=True):
         value = {k: v for k, v in value.items() if k != '_plan'}
-        if not record and value.get('status') != 'error':
-            pass    # heart_sim writes its own heart-sim.jsonl; its replies stay out of the per-seed run record
+        if not record:
+            pass    # heart_sim writes its own heart-sim.jsonl (errors included); nothing of it goes into a run's record
         elif value.get('status') == 'error':
             tail = '\n'.join((value.get('stderr') or '').strip().splitlines()[-30:])
             note('fault', {'id': value.get('id'), 'message': value.get('message'), 'stderr': tail,
@@ -1304,16 +1310,19 @@ def serve(runs_dir=None):
         # Warm worker: engine import happens before the first fight, not during it.
         start()
         while True:
-            if held and not active:
+            # The worker of a cancelled heart_sim has not handed back yet: killing it for a new request would lose the
+            # cancelled reply, so requests wait their turn, in order, for exactly that long.
+            draining = bool(active and active[4] == 'heart_sim' and active[5] is not None)
+            if held and not draining:
+                # Once the worker is back, the waiting requests go first and one by one, with or without an active request, so
+                # a later cancel or re-solve still reaches the request in front of it instead of queueing behind its search.
                 request = held.pop(0)
             else:
                 try:
                     request = inbox.get(timeout=.03)
                 except queue.Empty:
                     request = 'poll'
-                if request not in (None, 'poll') and (held or (active and active[4] == 'heart_sim' and active[5] is not None)):
-                    # The worker of a cancelled heart_sim is still draining; killing it for this request would lose the
-                    # cancelled reply. The request waits its turn, in order.
+                if request not in (None, 'poll') and draining:
                     held.append(request)
                     request = 'poll'
             if request is None:
@@ -1342,14 +1351,14 @@ def serve(runs_dir=None):
                                          if k in request}, request.get('state') if keep else None,
                                 request.get('seed'))
                     continue
-                if request.get('op') != 'heart_sim':
+                if request.get('op') != 'heart_sim' and not (request.get('op') == 'cancel' and heart_id(request.get('id'))):
                     note('request', {k: request[k] for k in ('id', 'op', 'budget') if k in request},
                                 request.get('state'))  # UI event, no worker mutation or reply/active-ID change.
                 if request.get('op') == 'cancel':
                     running = active[4] if active else None
                     if heart_id(request.get('id')) != (running == 'heart_sim'):
                         # A heart cancel never touches a solver request, nor a solver cancel a heart_sim.
-                        emit({'id': request['id'], 'status': 'cancelled'})
+                        emit({'id': request['id'], 'status': 'cancelled'}, record=not heart_id(request['id']))
                     elif running in ('solve', 'heart_sim'):
                         interrupt.set()
                         active = (*active[:5], request['id'], active[6], time.monotonic(), active[8])
@@ -1364,6 +1373,10 @@ def serve(runs_dir=None):
                             emit({'id': request['id'], 'status': 'cancelled'})
                     continue
                 last_solve_ready = None
+                if active and active[4] == 'heart_sim':
+                    # Another request takes the worker (the panel normally cancels first): the simulation still gets its one
+                    # terminal reply and its heart-sim.jsonl line, before the new request is handled.
+                    emit(heart_final(active, {'status': 'cancelled'}), active[2], record=False)
                 received_at = time.monotonic()
                 if request.get('progress'):
                     emit({'id': request['id'], 'status': 'progress', 'phase': '后台已接收，准备工作进程',

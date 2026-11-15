@@ -100,6 +100,13 @@ public final class HeartSimCheck {
         require(win.outcome == HeartSim.Outcome.WIN && win.seconds == 41.2 && win.simulations == 1234567, "win with time and simulations");
         require(HeartSim.parse(json("{\"id\":-1000,\"status\":\"ready\",\"heart_result\":\"no_win\"}")).outcome == HeartSim.Outcome.NO_WIN, "no_win");
         require(HeartSim.parse(json("{\"id\":-1000,\"status\":\"ready\",\"heart_result\":\"timeout\"}")).outcome == HeartSim.Outcome.TIMEOUT, "timeout");
+        // A search that stopped at the memory limit without a win is a timeout that says so; the flag means nothing on other results.
+        HeartSim.Result capped = HeartSim.parse(json("{\"id\":-1000,\"status\":\"ready\",\"heart_result\":\"timeout\",\"memory_capped\":true}"));
+        require(capped.outcome == HeartSim.Outcome.TIMEOUT && capped.memoryCapped, "memory-capped timeout");
+        require(!HeartSim.parse(json("{\"id\":-1000,\"status\":\"ready\",\"heart_result\":\"timeout\"}")).memoryCapped, "a plain timeout is not memory-capped");
+        require(!HeartSim.parse(json("{\"id\":-1000,\"status\":\"ready\",\"heart_result\":\"timeout\",\"memory_capped\":false}")).memoryCapped, "memory_capped false");
+        require(!HeartSim.parse(json("{\"id\":-1000,\"status\":\"ready\",\"heart_result\":\"timeout\",\"memory_capped\":\"true\"}")).memoryCapped, "a text flag is not a flag");
+        require(!HeartSim.parse(json("{\"id\":-1000,\"status\":\"ready\",\"heart_result\":\"no_win\",\"memory_capped\":true}")).memoryCapped, "only a timeout is memory-capped");
         HeartSim.Result error = HeartSim.parse(json("{\"id\":-1000,\"status\":\"error\",\"message\":\"无法模拟：某某遗物\"}"));
         require(error.outcome == HeartSim.Outcome.ERROR && error.message.equals("无法模拟：某某遗物") && !error.local, "error keeps the backend's message");
         require(HeartSim.parse(json("{\"id\":-1000,\"status\":\"cancelled\"}")).outcome == HeartSim.Outcome.CANCELLED, "cancelled");
@@ -134,6 +141,8 @@ public final class HeartSimCheck {
         require(HeartSim.headline(HeartSim.Result.local(HeartSim.Outcome.WIN, "")).equals("胜"), "win reads 胜");
         require(HeartSim.headline(HeartSim.Result.local(HeartSim.Outcome.NO_WIN, "")).equals("未找到胜线"), "no_win reads 未找到胜线");
         require(HeartSim.headline(HeartSim.Result.local(HeartSim.Outcome.TIMEOUT, "")).equals("超时未算完"), "timeout reads 超时未算完");
+        require(HeartSim.headline(new HeartSim.Result(HeartSim.Outcome.TIMEOUT, "", true, 1, 2, true)).equals("未算完（内存上限）"), "memory-capped timeout reads 未算完（内存上限）");
+        require(HeartSim.headline(new HeartSim.Result(HeartSim.Outcome.TIMEOUT, "", true, 1, 2, false)).equals("超时未算完"), "an uncapped timeout keeps its text");
         require(HeartSim.headline(HeartSim.Result.local(HeartSim.Outcome.NO_RESPONSE, "")).equals("后台未响应"), "no response reads 后台未响应");
     }
 
@@ -322,12 +331,13 @@ public final class HeartSimCheck {
         I18n.setLanguage("en");
         try {
             String[] keys = {"心脏模拟", "只能在局内使用", "战斗中不可用", "暂只支持战士", "正在模拟中", "模拟中", "已等待 ", "用时 ", "胜", "未找到胜线",
-                "超时未算完", "已取消", "已取消：进入战斗", "已取消：离开本局", "后台未响应", "模拟失败", "后台回复缺少心脏模拟结果",
+                "超时未算完", "未算完（内存上限）", "已取消", "已取消：进入战斗", "已取消：离开本局", "后台未响应", "模拟失败", "后台回复缺少心脏模拟结果",
                 "后台回复了无法识别的心脏模拟结果", "后台报告了错误，没有说明原因", "后台回复了无法识别的状态", "另有 ", " 条分支", "取消", "关闭",
                 "用当前卡组、遗物、药水和生命值模拟一场心脏战，只报胜负",
                 "心脏模拟：顶栏出现心脏按钮，战斗外按一下，用当前卡组模拟打一场心脏（只报胜负）"};
             for (String key : keys) require(!I18n.t(key).equals(key), "English text for: " + key);
             require(HeartSim.headline(HeartSim.Result.local(HeartSim.Outcome.NO_WIN, "")).equals("No winning line found"), "English no_win");
+            require(HeartSim.headline(new HeartSim.Result(HeartSim.Outcome.TIMEOUT, "", true, 1, 2, true)).equals("Not finished (memory limit)"), "English memory cap");
             // The switch's label must not be longer than the longest one already in the settings panel (the test mode's).
             String longest = I18n.t("测试模式：把本局每张出牌写到桌面 sts1-test-种子.jsonl（只保留最近一局）");
             String heart = I18n.t("心脏模拟：顶栏出现心脏按钮，战斗外按一下，用当前卡组模拟打一场心脏（只报胜负）");

@@ -422,6 +422,7 @@ AI全自动目前只支持战士，机器人请选战斗全自动|AI autopilot s
 胜|Win
 未找到胜线|No winning line found
 超时未算完|Timed out
+未算完（内存上限）|Not finished (memory limit)
 已取消|Cancelled
 已取消：进入战斗|Cancelled: entered combat
 已取消：离开本局|Cancelled: left the run
