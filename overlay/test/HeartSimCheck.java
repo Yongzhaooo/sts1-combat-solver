@@ -40,9 +40,10 @@ public final class HeartSimCheck {
         enteringCombat();
         progressAndDeadline();
         leavingAndClosing();
+        faults();
         rows();
         englishText();
-        System.out.println("PASS: heart simulation button rules, reply routing and classes, ids and seeds, cancel on entering a fight, deadline, rows, English text");
+        System.out.println("PASS: heart simulation button rules, reply routing and classes, ids and seeds, search workers, cancel on entering a fight, deadline, faults, rows, English text");
     }
 
     /** Every reason the button is unusable has a case that fails alone; the one good case passes. */
@@ -144,6 +145,11 @@ public final class HeartSimCheck {
         require(first.get("id").getAsLong() == -1000, "the first id is -1000");
         require(first.get("op").getAsString().equals("heart_sim"), "op");
         require(first.get("progress").getAsBoolean(), "progress is requested");
+        require(first.get("search_workers").getAsInt() == 0, "the default worker count is auto (0)");
+        HeartSim threads = new HeartSim(null, null, () -> 3, () -> 77L);
+        JsonObject threaded = threads.begin(state, 0);
+        require(threaded.get("search_workers").getAsInt() == 3 && threaded.get("seed").getAsString().equals("77"), "the solver's worker setting travels with the request");
+        threads.cancel("已取消", 1);
         require(first.get("state") == state, "the whole state travels");
         require(first.get("seed").getAsJsonPrimitive().isString() && first.get("seed").getAsString().matches("[0-9]+"), "the seed is a decimal string");
         require(heart.seed().equals(first.get("seed").getAsString()), "the seed is remembered for the panel and the log");
@@ -271,6 +277,33 @@ public final class HeartSimCheck {
         require(HeartSim.canStart(true, true, false, IRONCLAD, closing.running()), "usable again after closing");
     }
 
+    /** A failure in the heart feature itself ends in an error on its own panel, never an exception for the caller. */
+    static void faults() {
+        HeartSim running = running();
+        long id = running.activeId();
+        running.fault("update", new IllegalStateException("boom"));
+        require(running.phase() == HeartSim.Phase.DONE && running.result().outcome == HeartSim.Outcome.ERROR, "a fault while running ends in an error");
+        require(running.result().message.equals("update: boom") && !running.result().local, "the error names where and why: " + running.result().message);
+        require(running.open(), "the error is on a visible panel");
+        require(!running.running(), "a faulted simulation no longer runs, so the button is usable again");
+        running.accept(json("{\"id\":" + id + ",\"status\":\"ready\",\"heart_result\":\"win\"}"), 9);
+        require(running.result().outcome == HeartSim.Outcome.ERROR, "a late reply does not undo the error");
+        running.fault("update", new IllegalStateException("boom"));
+        require(running.result().message.equals("update: boom"), "the same fault again changes nothing");
+
+        // An exception without a message, and a null message anywhere, never turn into an exception while showing.
+        HeartSim silent = fresh();
+        silent.fault("render", new NullPointerException());
+        require(silent.phase() == HeartSim.Phase.DONE && silent.open() && silent.result().message.equals("render: NullPointerException"),
+            "no message: the exception's name is shown: " + silent.result().message);
+        require(HeartSim.reason(new java.io.IOException()).equals("IOException"), "an IOException without a message is named");
+        require(HeartSim.reason(new java.io.IOException("pipe closed")).equals("pipe closed"), "a message is kept");
+        require(new HeartSim.Result(HeartSim.Outcome.ERROR, null, false, Double.NaN, -1).message.equals(""), "a null message becomes empty");
+        require(!HeartSim.headline(new HeartSim.Result(HeartSim.Outcome.ERROR, null, false, Double.NaN, -1)).isEmpty(), "an error without a message still has a headline");
+        silent.close();
+        require(silent.phase() == HeartSim.Phase.IDLE, "a faulted panel closes like any finished one");
+    }
+
     static void rows() {
         String basic = HeartSim.rowText(json("{\"phase\":\"mcts\",\"budget\":8000,\"simulations\":5000,\"name\":\"不用药\"}"));
         require(basic.equals("基础搜索 · 5000次 · 不用药"), basic);
@@ -289,12 +322,21 @@ public final class HeartSimCheck {
         I18n.setLanguage("en");
         try {
             String[] keys = {"心脏模拟", "只能在局内使用", "战斗中不可用", "暂只支持战士", "正在模拟中", "模拟中", "已等待 ", "用时 ", "胜", "未找到胜线",
-                "超时未算完", "已取消", "已取消：进入战斗", "已取消：离开本局", "已取消：心脏模拟已关闭", "后台未响应", "模拟失败", "后台回复缺少心脏模拟结果",
+                "超时未算完", "已取消", "已取消：进入战斗", "已取消：离开本局", "后台未响应", "模拟失败", "后台回复缺少心脏模拟结果",
                 "后台回复了无法识别的心脏模拟结果", "后台报告了错误，没有说明原因", "后台回复了无法识别的状态", "另有 ", " 条分支", "取消", "关闭",
                 "用当前卡组、遗物、药水和生命值模拟一场心脏战，只报胜负",
                 "心脏模拟：顶栏出现心脏按钮，战斗外按一下，用当前卡组模拟打一场心脏（只报胜负）"};
             for (String key : keys) require(!I18n.t(key).equals(key), "English text for: " + key);
             require(HeartSim.headline(HeartSim.Result.local(HeartSim.Outcome.NO_WIN, "")).equals("No winning line found"), "English no_win");
+            // The switch's label must not be longer than the longest one already in the settings panel (the test mode's).
+            String longest = I18n.t("测试模式：把本局每张出牌写到桌面 sts1-test-种子.jsonl（只保留最近一局）");
+            String heart = I18n.t("心脏模拟：顶栏出现心脏按钮，战斗外按一下，用当前卡组模拟打一场心脏（只报胜负）");
+            require(heart.length() <= longest.length(), "English switch label (" + heart.length() + ") is within the longest existing one (" + longest.length() + ")");
+            require(!heart.equals(longest) && !heart.isEmpty(), "the two labels are different texts");
+            // The backend's own wording for this feature is translated too.
+            require(I18n.backend("无法模拟：暂只支持战士").equals("Cannot simulate: Ironclad only for now"), "refusal text: " + I18n.backend("无法模拟：暂只支持战士"));
+            require(I18n.backend("无法模拟：Tingsha").equals("Cannot simulate: Tingsha"), "refusal prefix: " + I18n.backend("无法模拟：Tingsha"));
+            require(I18n.backend("拼出心脏战局面").equals("Building the Heart fight") && I18n.backend("搜索心脏战").equals("Searching the Heart fight"), "stage names");
         } finally { I18n.setLanguage("zh"); }
     }
 }

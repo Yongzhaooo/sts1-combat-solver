@@ -9,19 +9,24 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.helpers.ImageMaster;
 import com.megacrit.cardcrawl.helpers.TipHelper;
 import com.megacrit.cardcrawl.helpers.input.InputHelper;
+import com.megacrit.cardcrawl.relics.AbstractRelic;
+import com.megacrit.cardcrawl.relics.BottledFlame;
+import com.megacrit.cardcrawl.relics.BottledLightning;
+import com.megacrit.cardcrawl.relics.BottledTornado;
 import communicationmod.CommandExecutor;
-import communicationmod.GameStateConverter;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.Locale;
+import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 
 /**
  * Heart simulation (opt-in, off by default): a heart button in the top bar asks the backend to play the current deck against
@@ -53,7 +58,7 @@ final class HeartSim {
         final double seconds;      // NaN when the reply did not say
         final long simulations;    // -1 when the reply did not say
         Result(Outcome outcome, String message, boolean local, double seconds, long simulations) {
-            this.outcome = outcome; this.message = message; this.local = local;
+            this.outcome = outcome; this.message = message == null ? "" : message; this.local = local;
             this.seconds = seconds; this.simulations = simulations;
         }
         static Result local(Outcome outcome, String message) { return new Result(outcome, message, true, Double.NaN, -1); }
@@ -138,6 +143,8 @@ final class HeartSim {
     // ---- Request life cycle (no game classes) ----
 
     private final BackendClient backend;
+    private final Supplier<JsonObject> capture;   // the solver's own state capture (with solver_auto_context); null in checks
+    private final IntSupplier workers;            // the solver's search_workers setting
     private final LongSupplier seeds;
     private long nextId = FIRST_ID, activeId;
     private Phase phase = Phase.IDLE;
@@ -149,13 +156,23 @@ final class HeartSim {
     private String seed = "";
     private boolean enabled, open;
 
+    HeartSim(BackendClient backend, Supplier<JsonObject> capture, IntSupplier workers) {
+        this(backend, capture, workers, new SecureRandom()::nextLong);
+    }
+
+    HeartSim(BackendClient backend, Supplier<JsonObject> capture, IntSupplier workers, LongSupplier seeds) {
+        this.backend = backend;
+        this.capture = capture;
+        this.workers = workers;
+        this.seeds = seeds;
+    }
+
     HeartSim(BackendClient backend) {
-        this(backend, new SecureRandom()::nextLong);
+        this(backend, null, () -> 0);
     }
 
     HeartSim(BackendClient backend, LongSupplier seeds) {
-        this.backend = backend;
-        this.seeds = seeds;
+        this(backend, null, () -> 0, seeds);
     }
 
     boolean running() { return phase == Phase.RUNNING; }
@@ -184,6 +201,7 @@ final class HeartSim {
         request.addProperty("op", "heart_sim");
         request.addProperty("seed", seed);
         request.addProperty("progress", true);
+        request.addProperty("search_workers", workers.getAsInt());
         request.add("state", state);
         return request;
     }
@@ -271,7 +289,8 @@ final class HeartSim {
             if (!added) { BaseMod.addTopPanelItem(button); added = true; }
         } else {
             if (added) { BaseMod.removeTopPanelItem(button); added = false; }
-            send(cancel("已取消：心脏模拟已关闭", System.currentTimeMillis()));
+            // Turning the switch off ends a running simulation and hides the panel at once, so no reason is shown.
+            send(cancel("已取消", System.currentTimeMillis()));
             close();
         }
     }
@@ -291,16 +310,61 @@ final class HeartSim {
         if (liveBlock() != Block.NONE) return;
         long now = System.currentTimeMillis();
         try {
-            JsonObject state = new JsonParser().parse(GameStateConverter.getCommunicationState()).getAsJsonObject();
+            JsonObject state = capture.get();
+            if (state.has("game_state")) state.getAsJsonObject("game_state").add("solver_heart_bottles", bottles(AbstractDungeon.player));
             backend.start();
             JsonObject request = begin(state, now);
             try { backend.write(request); }
-            catch (IOException failure) { finish(new Result(Outcome.ERROR, failure.getMessage(), false, Double.NaN, -1), now); }
+            catch (IOException failure) { finish(new Result(Outcome.ERROR, reason(failure), false, Double.NaN, -1), now); }
         } catch (Exception failure) {
             open = true;
-            finish(new Result(Outcome.ERROR, String.valueOf(failure.getMessage()), false, Double.NaN, -1), now);
+            finish(new Result(Outcome.ERROR, reason(failure), false, Double.NaN, -1), now);
             System.err.println("[STS1Solver] " + failure);
         }
+    }
+
+    /** What went wrong, in words: the message, or the exception's name when it has none. */
+    static String reason(Throwable failure) {
+        String message = failure.getMessage();
+        return message == null || message.isEmpty() ? failure.getClass().getSimpleName() : message;
+    }
+
+    /**
+     * Which deck card each Bottled Flame / Lightning / Tornado holds, as [{relic, uuid}]: CommunicationMod does not say, and
+     * the backend must not guess. A bottle relic with no card has no entry, which the backend refuses by name.
+     */
+    static JsonArray bottles(AbstractPlayer player) {
+        JsonArray out = new JsonArray();
+        if (player == null) return out;
+        for (AbstractRelic relic : player.relics) {
+            AbstractCard card = relic instanceof BottledFlame ? ((BottledFlame) relic).card
+                : relic instanceof BottledLightning ? ((BottledLightning) relic).card
+                : relic instanceof BottledTornado ? ((BottledTornado) relic).card : null;
+            if (card == null || card.uuid == null) continue;
+            JsonObject entry = new JsonObject();
+            entry.addProperty("relic", relic.relicId);
+            entry.addProperty("uuid", card.uuid.toString());
+            out.add(entry);
+        }
+        return out;
+    }
+
+    /**
+     * A failure inside this feature's own update, input or drawing: shown on the heart panel and kept away from the solver.
+     * A running simulation is cancelled, since nothing will watch its reply any more.
+     */
+    void fault(String where, Throwable failure) {
+        try {
+            long now = System.currentTimeMillis();
+            String text = where + ": " + reason(failure);
+            boolean repeat = phase == Phase.DONE && result != null && result.outcome == Outcome.ERROR && result.message.equals(text);
+            if (phase == Phase.RUNNING) send(cancel(text, now));
+            if (!repeat) {
+                open = true;
+                finish(new Result(Outcome.ERROR, text, false, Double.NaN, -1), now);
+                System.err.println("[STS1Solver] heart simulation " + where + " failed: " + failure);
+            }
+        } catch (Throwable ignored) { /* the panel must never take the game down either */ }
     }
 
     /** The panel's cancel button. */
@@ -320,7 +384,7 @@ final class HeartSim {
     void onCombatStart() { send(enterCombat(System.currentTimeMillis())); }
 
     private void send(JsonObject request) {
-        if (request == null || !backend.started()) return;
+        if (request == null || backend == null || !backend.started()) return;
         try { backend.write(request); }
         catch (IOException failure) { System.err.println("[STS1Solver] " + failure); }
     }

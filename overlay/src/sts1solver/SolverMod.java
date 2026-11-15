@@ -43,7 +43,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     private final AgentBridge agent = new AgentBridge();
     private final DeckWatch deckWatch = new DeckWatch();
     private final RunExports exports = new RunExports();
-    private final HeartSim heart = new HeartSim(backend);
+    private final HeartSim heart = new HeartSim(backend, this::capture, () -> this.searchWorkers);
     private volatile String rngMods = "";  // names only: the warning is translated when shown, after language switches
     // SuperFastMode multiplies Gdx delta; the solver no longer depends on frame time.
     // x10 is the speed long runs were played at (the author's own setting).
@@ -808,12 +808,15 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(AbstractDungeon.player!=null && AbstractDungeon.player.isDead)runAuto=false;
         if (Gdx.input.isKeyJustPressed(Input.Keys.F9)) stopAll();
         boolean inCombat = combat();
+        // Before the fight handling below: a heart reply that arrived this frame is taken first, then a fight cancels what still
+        // runs. A failure here stays on the heart panel; it is not the solver's.
+        try { heart.update(); } catch (Throwable failure) { heart.fault("update", failure); }
         if(!wasCombat && inCombat) {
             heldThisFight=false;
             // Every fight opens the panel unfolded; - or F8 folds it again and autoFold then leaves it folded.
             collapsed=false; autoFolded=false; heldPanelOpen=false;
             if(standby()) status=I18n.t("待命 · 点【计算】开始搜索");
-            heart.onCombatStart(); // before this fight's first solve is sent
+            try { heart.onCombatStart(); } catch (Throwable failure) { heart.fault("combat start", failure); } // before this fight's first solve is sent
         }
         if(!wasCombat && inCombat && runAuto) {
             auto=true;paused=false;branchConfirmed=false;decisionDirty=true;lastKey=null;
@@ -835,7 +838,6 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
         if(agentBridge)syncAgent();
         pilot.updateRoute(pilotHost);
         deckWatch.update(pilot.pilotRun);
-        heart.update();
         if (!inCombat) {
             status = pilot.prompt || pilot.mode!=0 || !pilot.notice.isEmpty() ? pilot.notice
                 : runAuto ? I18n.t("战斗全自动已开 · 等待下场；其他选择由你决定") : I18n.t("选牌与路线由你决定");
@@ -1140,7 +1142,7 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
     private void input() {
         layout();
-        heart.input(canvas);
+        try { heart.input(canvas); } catch (Throwable failure) { heart.fault("input", failure); }
         int previewCount = Foresight.previewCount();
         Object source = AbstractDungeon.currMapNode;
         if (previewCount == 0 || (transformPreview != null && (previewRngCounter != AbstractDungeon.miscRng.counter || previewSource != source)))
@@ -1316,7 +1318,8 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
     }
 
     @Override public void receivePostRender(SpriteBatch sb) {
-        try { renderPanel(sb); renderModWarnings(sb); heart.render(sb, canvas); } catch (Throwable failure) { guard("render", failure); }
+        try { renderPanel(sb); renderModWarnings(sb); } catch (Throwable failure) { guard("render", failure); }
+        try { heart.render(sb, canvas); } catch (Throwable failure) { heart.fault("render", failure); }
     }
 
     private void renderPanel(SpriteBatch sb) {

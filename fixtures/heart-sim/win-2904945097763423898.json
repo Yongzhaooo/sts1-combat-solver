@@ -1,0 +1,131 @@
+{
+ "about": "A Heart fight position that the native engine wins (heart-sim W1: recorded Heart fight, run-log seed 2904945097763423898, 2000-simulation search found a win). Inventory only: deck, relics with counters, potions, HP, seed. Ascension 20 is assumed (the run log has no ascension; the Heart's 800 HP is the A19+ value).",
+ "seed": "2904945097763423898",
+ "ascension_level": 20,
+ "current_hp": 72,
+ "max_hp": 72,
+ "deck": [
+  {
+   "id": "AscendersBane",
+   "upgrades": 0
+  },
+  {
+   "id": "Defend_R",
+   "upgrades": 0
+  },
+  {
+   "id": "Defend_R",
+   "upgrades": 0
+  },
+  {
+   "id": "Defend_R",
+   "upgrades": 0
+  },
+  {
+   "id": "Defend_R",
+   "upgrades": 0
+  },
+  {
+   "id": "Bash",
+   "upgrades": 0
+  },
+  {
+   "id": "Blood for Blood",
+   "upgrades": 1
+  },
+  {
+   "id": "Second Wind",
+   "upgrades": 1
+  },
+  {
+   "id": "Pommel Strike",
+   "upgrades": 1
+  },
+  {
+   "id": "Pommel Strike",
+   "upgrades": 1
+  },
+  {
+   "id": "Armaments",
+   "upgrades": 1
+  },
+  {
+   "id": "Finesse",
+   "upgrades": 0
+  },
+  {
+   "id": "Body Slam",
+   "upgrades": 1
+  },
+  {
+   "id": "Power Through",
+   "upgrades": 1
+  },
+  {
+   "id": "Feel No Pain",
+   "upgrades": 1
+  },
+  {
+   "id": "Evolve",
+   "upgrades": 1
+  },
+  {
+   "id": "Havoc",
+   "upgrades": 1
+  }
+ ],
+ "relics": [
+  {
+   "id": "Burning Blood",
+   "counter": -1
+  },
+  {
+   "id": "Golden Idol",
+   "counter": -1
+  },
+  {
+   "id": "Girya",
+   "counter": 2
+  },
+  {
+   "id": "InkBottle",
+   "counter": 9
+  },
+  {
+   "id": "Lantern",
+   "counter": -1
+  },
+  {
+   "id": "Cursed Key",
+   "counter": -1
+  },
+  {
+   "id": "Art of War",
+   "counter": -1
+  },
+  {
+   "id": "Empty Cage",
+   "counter": -1
+  },
+  {
+   "id": "Du-Vu Doll",
+   "counter": 1
+  },
+  {
+   "id": "MawBank",
+   "counter": -1
+  },
+  {
+   "id": "Centennial Puzzle",
+   "counter": -1
+  },
+  {
+   "id": "StrikeDummy",
+   "counter": -1
+  }
+ ],
+ "potions": [
+  "PowerPotion",
+  "DistilledChaos"
+ ]
+}
