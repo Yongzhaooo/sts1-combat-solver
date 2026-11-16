@@ -94,3 +94,14 @@ T1 收割后烟雾弹逃跑|T1 Reaper then Smoke Bomb
 T1 烟雾弹 · 立即逃跑|T1 immediate Smoke Bomb escape
 无药预算内未找到低战损胜线，执行T1烟雾止损候选|No low-loss potion-free win within budget; use the T1 escape candidate
 药水不改变结果，已并入不用药路线|Potion does not change the result; merged into the no-potion route
+无法模拟：|Cannot simulate: 
+无法模拟：暂只支持战士|Cannot simulate: Ironclad only for now
+无法模拟：游戏不在局内|Cannot simulate: not in a run
+瓶装牌：|Bottled card: 
+卡组为空|Deck is empty
+局外状态缺失|Run state missing
+无效的种子：需要 0 到 2^64-1 的十进制数|Invalid seed: needs a decimal number from 0 to 2^64-1
+拼出心脏战局面|Building the Heart fight
+搜索心脏战|Searching the Heart fight
+次数无法识别：|charges not readable: 
+的牌类型与卡组不符| holds a card of the wrong type
