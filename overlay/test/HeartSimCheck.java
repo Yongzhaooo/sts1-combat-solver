@@ -44,10 +44,10 @@ public final class HeartSimCheck {
         rows();
         englishText();
         icon();
-        System.out.println("PASS: heart simulation button rules, reply routing and classes, ids and seeds, search workers, cancel on entering a fight, deadline, faults, rows, English text, icon outline and beat");
+        System.out.println("PASS: heart simulation button rules, reply routing and classes, ids and seeds, search workers, cancel on entering a fight, deadline, faults, rows, English text, icon without outline, edge fade and beat");
     }
 
-    /** The drawn icon's outline and edge fade, on a synthetic drawing; the beat's range and rest. */
+    /** The drawn icon has no outline and fades its cut edge, on a synthetic drawing; the beat's range and rest. */
     static void icon() {
         int size = 64;
         int[] art = new int[size * size];
@@ -59,10 +59,9 @@ public final class HeartSimCheck {
             }
         int[] out = HeartIcon.decorate(art, size, .1f / 1.2f);
         require(out[40 * size + 30] == 0xffcc2233, "inside the body the drawing is untouched");
-        int rim = out[40 * size + 30 + 13];
-        require((rim >>> 24) > 150 && (rim >>> 16 & 255) < 80, "just outside the body there is a dark outline: " + Integer.toHexString(rim));
-        int halo = out[40 * size + 30 + 15];
-        require((halo >>> 24) > 0 && (halo >>> 16 & 255) > 100, "further out a grey halo: " + Integer.toHexString(halo));
+        int side = out[40 * size + 30 + 14], below = out[(40 + 14) * size + 30];
+        require(side == 0, "no outline beside the body: " + Integer.toHexString(side));
+        require((below >>> 24) > 0 && (below >>> 24) < 100, "only a faint drop shadow under it: " + Integer.toHexString(below));
         require(out[size * size - 1] == 0 && out[0] == 0, "the corners stay empty");
         int at = 30, top = out[6 * size + at] >>> 24, lower = out[18 * size + at] >>> 24;
         require(top < lower, "the cut vessel fades toward the top edge: " + top + " < " + lower);

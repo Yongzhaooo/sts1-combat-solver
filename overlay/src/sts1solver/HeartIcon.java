@@ -21,8 +21,8 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 
 /**
- * The top-bar heart: the Corrupt Heart as the game draws it in combat, cropped to its body and outlined like the game's own
- * top-bar icons. It is drawn once, at run time, from the game's own skeleton, so no game art ships in the jar.
+ * The top-bar heart: the Corrupt Heart as the game draws it in combat, cropped to its body, with no outline (user, 2026-11-16).
+ * It is drawn once, at run time, from the game's own skeleton, so no game art ships in the jar.
  */
 final class HeartIcon {
     static final int SIZE = 128;
@@ -30,7 +30,7 @@ final class HeartIcon {
     // The body in skeleton units (idle pose, first frame). The vessels above and to the right are cut and faded out.
     private static final float CROP_LEFT = -235, CROP_BOTTOM = 95, CROP_SIDE = 535, MARGIN = .1f;
     private static final float FADE_TOP = .2f, FADE_RIGHT = .14f;
-    private static final int OUTLINE = 0xff1a1d20, HALO = 0xbf969899, SHADOW = 0x73000000;
+    private static final int SHADOW = 0x59000000;
 
     private HeartIcon() {}
 
@@ -103,8 +103,8 @@ final class HeartIcon {
     }
 
     /**
-     * Fades the cut vessels at the top and right edges of the body crop, then lays the drawing over a dark outline, a grey
-     * halo and a soft drop shadow, as the game's top-bar icons have. {@code argb} is row-major from the top, straight alpha;
+     * Fades the cut vessels at the top and right edges of the body crop and lays the drawing over a faint drop shadow, so it
+     * sits on the top bar without an outline. {@code argb} is row-major from the top, straight alpha;
      * {@code margin} is the empty border around the crop as a share of the side.
      */
     static int[] decorate(int[] argb, int size, float margin) {
@@ -116,15 +116,13 @@ final class HeartIcon {
                 alpha[y * size + x] = (argb[y * size + x] >>> 24) / 255f * fade;
             }
         float unit = size / 64f;
-        float[] outline = grow(alpha, size, 1.6f * unit), halo = grow(alpha, size, 3.2f * unit), shadow = grow(alpha, size, 2.4f * unit);
+        float[] shadow = grow(alpha, size, unit);
         int drop = Math.round(2 * unit);
         int[] out = new int[argb.length];
         for (int y = 0; y < size; y++)
             for (int x = 0; x < size; x++) {
                 int i = y * size + x;
                 int pixel = y >= drop ? scaled(SHADOW, shadow[i - drop * size]) : 0;
-                pixel = over(scaled(HALO, halo[i]), pixel);
-                pixel = over(scaled(OUTLINE, outline[i]), pixel);
                 out[i] = over(argb[i] & 0xffffff | Math.round(alpha[i] * 255) << 24, pixel);
             }
         return out;
