@@ -76,6 +76,16 @@ Maintainer decisions of 2026-10-23: the combat panel shows as little as possible
 - Every text in the panel shows whole or wraps; Chinese wraps between characters and English between words.
 - Export log (or F6) writes the current seed's record as one file on the desktop. The record says why each re-search started: the player, a changed game state, a stale route under automation, the Smoke Bomb opening, or a settings change (maintainer request 2026-10-23).
 
+### Heart simulation
+
+Player request (vey-1, 2026-11-15). The whole section is (proposed).
+
+- A switch in the mod's config panel, off by default, adds a heart button to the top bar. Out of combat, one press plays the current deck, relics, potions and HP against the Heart in a fight built from data, without touching the real run or the save, and reports only one of: win, no winning line found, or not finished in time (proposed).
+- The fight uses the native engine's own encounter start for the Heart and the existing Heart search unchanged; each press shuffles with a fresh seed, and a seed can be replayed. A relic or card the simulator lacks is refused by name instead of guessed (proposed).
+- Ironclad only for now. The button is dimmed in combat, outside a run and for other characters, and its tip says why; entering a fight cancels a running simulation and the solver searches that fight as usual (proposed).
+- While it runs, a small panel under the button shows the same waiting bar, stages and simulation counts as the solver's search, with a Cancel button; the button itself beats. Each finished request adds one line to `heart-sim.jsonl` in the solver's data folder (proposed).
+- The button shows the Corrupt Heart as the game draws it in combat, cropped to its body and drawn at run time from the game's own skeleton; no game art ships with the mod (proposed).
+
 ## Non-goals
 
 - Distributing the game JAR, decompiled game source, or any truth engine (the maintainer's or an upstream one), including through fixtures or patches.
