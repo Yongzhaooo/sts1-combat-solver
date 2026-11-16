@@ -14,7 +14,6 @@ import com.megacrit.cardcrawl.characters.AbstractPlayer;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.helpers.ImageMaster;
-import com.megacrit.cardcrawl.helpers.TipHelper;
 import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.relics.BottledFlame;
@@ -42,7 +41,7 @@ final class HeartSim {
     static final long FIRST_ID = BackendClient.HEART_FIRST_ID;
     private static final String ITEM_ID = "sts1solver:heart_sim";
     private static final String HEART_IMAGE = "images/ui/map/boss/heart.png";
-    private static final float WIDTH = 380, PAD = 14, TOP_GAP = 70;
+    private static final float WIDTH = 380, PAD = 14, TOP_GAP = 70, TIP_WIDTH = 320;
     private static final int MAX_ROWS = 12;
 
     /** Why the button cannot be pressed; NONE when it can. */
@@ -285,6 +284,10 @@ final class HeartSim {
     private float anchorRight = -1; // right edge of the button as last drawn
     private PanelCanvas panel;
     private float panelHeight = 120;
+    private boolean iconTried;           // the drawn heart is built once, on the first update after the button exists
+    private PanelCanvas tipCanvas;
+    private Block tipBlock;              // set by the button while hovered, drawn and cleared by render() in the same frame
+    private float tipRight, tipTop;
 
     /** Applies the ModConfig switch: the button exists in the top bar only while it is on. */
     void setEnabled(boolean on) {
@@ -380,6 +383,13 @@ final class HeartSim {
     void update() {
         long now = System.currentTimeMillis();
         JsonObject reply;
+        if (button != null && !iconTried) {
+            iconTried = true;
+            // Outside any batch here, so the frame buffer is safe. If the game's skeleton cannot be drawn, the map's line
+            // drawing of the heart stays, as before.
+            try { button.useImage(HeartIcon.build()); }
+            catch (Throwable failure) { System.err.println("[STS1Solver] heart icon: " + failure); }
+        }
         while ((reply = backend.heartReply()) != null) accept(reply, now);
         if (!CommandExecutor.isInDungeon()) send(leaveRun(now));
         send(tick(now, backend.alive()));
@@ -395,7 +405,10 @@ final class HeartSim {
         catch (IOException failure) { System.err.println("[STS1Solver] " + failure); }
     }
 
-    /** The heart in the top bar, drawn at the game's top-bar size from the game's own 512-pixel image. */
+    /**
+     * The heart in the top bar at the game's top-bar size: the drawn Corrupt Heart ({@link HeartIcon}), or the map's line
+     * drawing until then. Dimmed while it cannot be pressed; beats while a simulation runs.
+     */
     static final class Button extends basemod.TopPanelItem {
         private final HeartSim owner;
 
@@ -406,19 +419,21 @@ final class HeartSim {
 
         @Override protected void onClick() { owner.press(); }
 
+        void useImage(Texture drawn) { image = drawn; }
+
         @Override public void render(SpriteBatch sb, Color color) {
             owner.anchorRight = hitbox.x + hitbox.width;
             Block block = owner.liveBlock();
             float size = 64f * Settings.scale;
-            Color tint = block == Block.NONE ? (hitbox.hovered ? Color.WHITE : READY)
-                : block == Block.RUNNING ? ACCENT : BLOCKED;
-            sb.setColor(tint);
-            if (image != null) sb.draw(image, x, y, size, size);
+            float drawn = size * (block == Block.RUNNING ? HeartIcon.beat(System.currentTimeMillis()) : 1);
+            sb.setColor(block == Block.NONE ? (hitbox.hovered ? Color.WHITE : READY) : block == Block.RUNNING ? Color.WHITE : BLOCKED);
+            float inset = (size - drawn) / 2;
+            if (image != null) sb.draw(image, x + inset, y + inset, drawn, drawn);
             else sb.draw(ImageMaster.WHITE_SQUARE_IMG, x + size * .2f, y + size * .2f, size * .6f, size * .6f);
             sb.setColor(Color.WHITE);
-            if (hitbox.hovered)
-                TipHelper.renderGenericTip(Math.min(hitbox.x, Settings.WIDTH - 340f * Settings.scale),
-                    Settings.HEIGHT - 80f * Settings.scale, I18n.t("心脏模拟"), tip(block));
+            // The game's tip box drops the spaces of English text when the game is set to Chinese, so the tip is drawn by
+            // render() with the panel's own font and wrapping, after the top bar.
+            if (hitbox.hovered) { owner.tipBlock = block; owner.tipRight = hitbox.x + hitbox.width; owner.tipTop = hitbox.y; }
         }
     }
 
@@ -436,7 +451,31 @@ final class HeartSim {
 
     /** Draws the panel under the button, in the solver panel's style. {@code main} lends its font and scale. */
     void render(SpriteBatch sb, PanelCanvas main) {
-        if (!panelVisible()) return;
+        Block hovered = tipBlock;
+        tipBlock = null;
+        if (panelVisible()) renderPanel(sb, main);
+        if (hovered != null && enabled) renderTip(sb, main, hovered);
+    }
+
+    /** The button's hover tip under it, right-aligned with it like the panel, kept on screen. */
+    private void renderTip(SpriteBatch sb, PanelCanvas main, Block block) {
+        if (tipCanvas == null) { tipCanvas = new PanelCanvas(); tipCanvas.shareFont(main); }
+        PanelCanvas c = tipCanvas;
+        c.uiScale = main.uiScale;
+        java.util.List<String> body = c.wrap(tip(block), TIP_WIDTH - 2 * PAD, .76f);
+        float height = 40 + body.size() * .76f * 24 + 10;
+        c.x = tipRight - TIP_WIDTH * c.scale();
+        c.y = tipTop - 6 * Settings.scale;
+        c.layout(TIP_WIDTH, height);
+        c.box(sb, 0, 0, TIP_WIDTH, height, BORDER);
+        c.box(sb, 1, 1, TIP_WIDTH - 2, height - 2, BACKGROUND);
+        c.label(sb, I18n.t("心脏模拟"), PAD, 10, TIP_WIDTH - 2 * PAD, .9f, Color.WHITE);
+        float top = 40;
+        for (String line : body) { c.label(sb, line, PAD, top, TIP_WIDTH - 2 * PAD, .76f, MUTED); top += .76f * 24; }
+        sb.setColor(Color.WHITE);
+    }
+
+    private void renderPanel(SpriteBatch sb, PanelCanvas main) {
         PanelCanvas c = place(main);
         c.clearHits();
         c.dry = true;

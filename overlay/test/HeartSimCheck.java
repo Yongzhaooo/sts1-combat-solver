@@ -43,7 +43,38 @@ public final class HeartSimCheck {
         faults();
         rows();
         englishText();
-        System.out.println("PASS: heart simulation button rules, reply routing and classes, ids and seeds, search workers, cancel on entering a fight, deadline, faults, rows, English text");
+        icon();
+        System.out.println("PASS: heart simulation button rules, reply routing and classes, ids and seeds, search workers, cancel on entering a fight, deadline, faults, rows, English text, icon outline and beat");
+    }
+
+    /** The drawn icon's outline and edge fade, on a synthetic drawing; the beat's range and rest. */
+    static void icon() {
+        int size = 64;
+        int[] art = new int[size * size];
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++) {
+                boolean disc = (x - 30) * (x - 30) + (y - 40) * (y - 40) <= 12 * 12;
+                boolean vessel = x >= 28 && x <= 32 && y < 30;   // runs off the top edge, as the cut vessels do
+                if (disc || vessel) art[y * size + x] = 0xffcc2233;
+            }
+        int[] out = HeartIcon.decorate(art, size, .1f / 1.2f);
+        require(out[40 * size + 30] == 0xffcc2233, "inside the body the drawing is untouched");
+        int rim = out[40 * size + 30 + 13];
+        require((rim >>> 24) > 150 && (rim >>> 16 & 255) < 80, "just outside the body there is a dark outline: " + Integer.toHexString(rim));
+        int halo = out[40 * size + 30 + 15];
+        require((halo >>> 24) > 0 && (halo >>> 16 & 255) > 100, "further out a grey halo: " + Integer.toHexString(halo));
+        require(out[size * size - 1] == 0 && out[0] == 0, "the corners stay empty");
+        int at = 30, top = out[6 * size + at] >>> 24, lower = out[18 * size + at] >>> 24;
+        require(top < lower, "the cut vessel fades toward the top edge: " + top + " < " + lower);
+        require((out[at] >>> 24) < 40, "nothing solid on the top edge: " + (out[at] >>> 24));
+        int[] empty = HeartIcon.decorate(new int[size * size], size, .1f);
+        for (int pixel : empty) require(pixel == 0, "no drawing, no outline");
+
+        float least = 9, most = 0;
+        for (long t = 0; t < 1000; t++) { float f = HeartIcon.beat(t); least = Math.min(least, f); most = Math.max(most, f); }
+        require(least == 1f, "the beat rests at full size between beats");
+        require(most > 1.05f && most <= 1.1f, "the beat grows by 5 to 10 percent: " + most);
+        require(HeartIcon.beat(250) == HeartIcon.beat(1250) && HeartIcon.beat(1600) == 1f, "once a second, at rest at 0.6 s");
     }
 
     /** Every reason the button is unusable has a case that fails alone; the one good case passes. */
