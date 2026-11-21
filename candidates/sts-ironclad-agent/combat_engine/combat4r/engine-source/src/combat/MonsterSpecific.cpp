@@ -699,7 +699,7 @@ void Monster::takeTurn(BattleContext &bc) {     // todo, maybe for monsters that
                     continue;
                 }
                 minion.buff<MS::STRENGTH>(strGain);
-                minion.addBlock(asc3 ? 10 : 6);
+                minion.addBlock(asc18 ? 10 : 6);
             }
             buff<MS::STRENGTH>(strGain);
             bc.addToBot( Actions::RollMove(idx) );
