@@ -1042,6 +1042,55 @@ int main() {
         check(hp - bc.monsters.arr[0].curHp == 14, "Thunder Strike should hit twice for 7 on a lone enemy");
     }
     {
+        // Vigor (Akabeko): VigorPower.onUseCard removes itself with addToBot, after
+        // the card's damage actions, so every queued Thunder Strike hit reads it.
+        // Run report seed 3811344390125964379 F48: 2 hits of 9 + 8 = 17 each.
+        for (bool weak : {false, true}) {
+            BattleContext bc = freshBattle();
+            bc.monsters.arr[0].curHp = bc.monsters.arr[0].maxHp = 200;
+            Actions::ChannelOrb(Orb::LIGHTNING).actFunc(bc); // 2 Lightning channeled
+            bc.player.buff<PS::VIGOR>(8);
+            if (weak) {
+                bc.player.debuff<PS::WEAK>(2, false);
+            }
+            playCard(bc, CardId::THUNDER_STRIKE, 1);
+            // Weak: floor(17 * 0.75) = 12 per hit (F38: Writhing Mass 151 -> 127).
+            check(200 - bc.monsters.arr[0].curHp == (weak ? 24 : 34),
+                  "Vigor should add to every Thunder Strike hit");
+            check(!bc.player.hasStatus<PS::VIGOR>(), "Thunder Strike should consume Vigor");
+        }
+    }
+    {
+        // Vigor applies to one attack only: the second Strike gets none.
+        BattleContext bc = freshBattle();
+        bc.monsters.arr[0].curHp = bc.monsters.arr[0].maxHp = 200;
+        bc.player.buff<PS::VIGOR>(8);
+        playCard(bc, CardId::STRIKE_BLUE);
+        check(200 - bc.monsters.arr[0].curHp == 14, "Strike should deal 6 + 8 Vigor");
+        check(!bc.player.hasStatus<PS::VIGOR>(), "Strike should consume Vigor");
+        playCard(bc, CardId::STRIKE_BLUE);
+        check(200 - bc.monsters.arr[0].curHp == 20, "a second Strike should get no Vigor");
+    }
+    {
+        // Sword Boomerang reads Vigor once per hit, not twice: 3 hits of 3 + 8.
+        BattleContext bc = freshBattle();
+        bc.monsters.arr[0].curHp = bc.monsters.arr[0].maxHp = 200;
+        bc.player.buff<PS::VIGOR>(8);
+        playCard(bc, CardId::SWORD_BOOMERANG);
+        check(200 - bc.monsters.arr[0].curHp == 33, "Sword Boomerang should hit 3 times for 11");
+        check(!bc.player.hasStatus<PS::VIGOR>(), "Sword Boomerang should consume Vigor");
+    }
+    {
+        // Double Tap: the copy plays after the original's actions, Vigor removal
+        // included, so only the first Strike gets Vigor: 14 + 6.
+        BattleContext bc = freshBattle();
+        bc.monsters.arr[0].curHp = bc.monsters.arr[0].maxHp = 200;
+        bc.player.buff<PS::VIGOR>(8);
+        bc.player.buff<PS::DOUBLE_TAP>(1);
+        playCard(bc, CardId::STRIKE_BLUE);
+        check(200 - bc.monsters.arr[0].curHp == 20, "a Double Tap copy should get no Vigor");
+    }
+    {
         // Blizzard: hits all enemies for 2 per Frost orb channeled this combat.
         BattleContext bc = freshBattle();
         Actions::ChannelOrb(Orb::FROST).actFunc(bc);
