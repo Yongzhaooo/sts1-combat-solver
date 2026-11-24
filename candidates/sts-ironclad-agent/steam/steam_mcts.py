@@ -316,6 +316,10 @@ def card_snapshot(card):
     for field in ("base_cost", "free_to_play_once", "exhausts"):
         if field in card:
             result[field] = card[field]
+    if "retain" in card:
+        # Only when the capture recorded it; the importer defaults to not retained, which is
+        # the same value the game showed while the Mod does not export the keyword.
+        result["retain"] = bool(card["retain"])
     if key == "RAMPAGE" and "base_damage" in card:
         result["misc"] = int(card["base_damage"]) - 8
     if key == "RITUAL_DAGGER" and "base_damage" in card:
@@ -660,7 +664,9 @@ def build_snapshot(game_state, counters=None):
                        "counter": int(counter if counter is not None else -1)})
     snapshot = {
         # Optional: the importer reads Ironclad when absent. Character fields are listed in
-        # CHARACTER_FIELDS; stance, mantra and retain join it once the Mod exports them.
+        # CHARACTER_FIELDS; stance, mantra and retain join it once the Mod exports them, so
+        # here they pass through only when the capture carries them: an unrecorded value must
+        # not be invented by the exporter.
         **({"character": game_state["class"]} if game_state.get("class") else {}),
         "seed": int(game_state.get("seed") or 0),
         "floor": int(game_state.get("floor") or 0),
@@ -679,6 +685,11 @@ def build_snapshot(game_state, counters=None):
             "max_hp": int(player.get("max_hp") or game_state.get("max_hp") or 0),
             "block": int(player.get("block") or 0),
             "energy": int(player.get("energy") or 0),
+            # Passed through only when the capture carries it, in the game's own spelling and
+            # untranslated; when it is absent the importer defaults to neutral / no mantra,
+            # which is what a game that never reported the field actually held.
+            **({"stance": player["stance"]} if "stance" in player else {}),
+            **({"mantra": int(player["mantra"])} if "mantra" in player else {}),
             "energy_per_turn": int(combat.get("energy_per_turn") or 3) + berserk_energy,
             "card_draw_per_turn": int(combat.get("card_draw_per_turn", 5 - int(any(p.get("id")=="Draw Reduction" for p in player_powers)))) ,
             # The engine folds two game powers into dedicated fields rather than
@@ -797,12 +808,19 @@ def assert_snapshot_matches(snapshot, battle):
     assert int(battle.encounter) == snapshot["encounter"]
     assert (battle.player.cur_hp, battle.player.max_hp, battle.player.block, battle.player.energy) == (
         player["current_hp"], player["max_hp"], player["block"], player["energy"])
+    # A field the capture carried goes out in the snapshot, so the importer must hand it back
+    # unchanged; one it did not carry is left to the importer's default.
+    if "stance" in player:
+        assert battle.player.stance == player["stance"], battle.player.stance
+    if "mantra" in player:
+        assert int(battle.player.get_status(sts.PlayerStatus.MANTRA)) == int(player["mantra"])
     for key, cards in (("hand", battle.hand), ("draw_pile", battle.draw_pile),
                        ("discard_pile", battle.discard_pile), ("exhaust_pile", battle.exhaust_pile)):
         expected = snapshot[key]
         assert len(cards) == len(expected), (key, len(cards), len(expected))
         assert [(int(card.id), int(card.cost_for_turn), bool(card.upgraded)) for card in cards] == [
             (card["id"], card["cost"], card["upgrades"] > 0) for card in expected], key
+        assert [bool(card.retain) for card in cards] == [bool(card.get("retain", False)) for card in expected], key
     assert len(battle.monsters) == len(snapshot["monsters"])
     for expected, monster in zip(snapshot["monsters"], battle.monsters):
         assert (monster.cur_hp, monster.max_hp, monster.block) == (
