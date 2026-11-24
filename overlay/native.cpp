@@ -3,6 +3,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <combat_search_reuse.h>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <map>
@@ -30,7 +31,7 @@ long long rescuePerSim=160, rescuePerSimNoGate=160;
 // Experiment (set_beam_only): > 0 skips MCTS and gives the rescue portfolio this many transitions per simulation.
 long long beamOnlyPerSim=0;
 bool discoveryFrames=false;  // headless truth: vanilla per-frame Discovery regeneration instead of the live single one
-unsigned incenseTargets=0;  // bit c: ending the fight with Incense Burner counter c is worth one Intangible
+std::array<double,6> incenseValues{};  // [c]: HP that ending the fight with Incense Burner counter c is worth
 int focusTarget=0;  // High Focus mode (mod setting): the Focus a win should end with; 0 is off
 std::map<std::string,std::vector<CardId>> actualPools;
 // Live counters per branch index, read by the progress reporter while plans run.
@@ -108,6 +109,7 @@ bool overlayPotionAllowed(const BattleContext &bc, int slot) {
 // ponytail: hand-set weights, not fitted; replace with values estimated from paired runs.
 constexpr double EXTRA_PER_MAX_HP=2.0;   // on top of the engine's +1 and the healed current HP
 // Incense Burner on target is a must-hold (user rule, 2026-10-21: at least 30 HP).
+// Live fights get per-counter values from recovery.incense_values; INTANGIBLE_HP prices set_incense_targets lists.
 constexpr double ENERGY_HP=4.0, PEN_NIB_HP=4.0, INTANGIBLE_HP=30.0, DRAW_HP=1.5;
 // High Focus mode outranks HP: each Focus point short of the target costs FOCUS_HP, reaching it adds FOCUS_REACH_HP.
 constexpr double FOCUS_HP=10.0, FOCUS_REACH_HP=100.0;
@@ -203,9 +205,9 @@ static double carriedRelicValue(const BattleContext &bc, bool best=false) {
     if(p.hasRelic<RelicId::PEN_NIB>()) value+=PEN_NIB_HP*part(p.penNibCounter,10);
     if(p.hasRelic<RelicId::INK_BOTTLE>()) value+=DRAW_HP*part(p.inkBottleCounter,10);
     value*=carryWeight;
-    // Targets come from recovery.incense_targets (user rule); none means the counter is worthless.
-    if(p.hasRelic<RelicId::INCENSE_BURNER>() && p.incenseBurnerCounter>=0)
-        value+=INTANGIBLE_HP*(best ? incenseTargets!=0 : incenseTargets>>p.incenseBurnerCounter & 1u);
+    // Values come from recovery.incense_values (user rule); 0 means the counter is worthless.
+    if(p.hasRelic<RelicId::INCENSE_BURNER>() && p.incenseBurnerCounter>=0 && p.incenseBurnerCounter<6)
+        value+=best ? *std::max_element(incenseValues.begin(),incenseValues.end()) : incenseValues[p.incenseBurnerCounter];
     return value;
 }
 static bool relicsHeld(const BattleContext &bc) { return carriedRelicValue(bc)+1e-9>=carriedRelicValue(bc,true); }
@@ -380,13 +382,23 @@ PYBIND11_MODULE(overlay_search, m) {
         if(target<0)throw std::invalid_argument("negative Focus target");
         focusTarget=target;
     });
+    // Combat-exam fixtures store target lists: each target is worth one Intangible.
     m.def("set_incense_targets", [](const std::vector<int> &counters) {
-        unsigned mask=0;
+        std::array<double,6> values{};
         for(int counter:counters) {
             if(counter<0 || counter>5)throw std::invalid_argument("incense counter outside 0-5");
-            mask|=1u<<counter;
+            values[counter]=INTANGIBLE_HP;
         }
-        incenseTargets=mask;
+        incenseValues=values;
+    });
+    m.def("set_incense_values", [](const std::map<int,double> &byCounter) {
+        std::array<double,6> values{};
+        for(auto &entry:byCounter) {
+            if(entry.first<0 || entry.first>5)throw std::invalid_argument("incense counter outside 0-5");
+            if(!(entry.second>=0))throw std::invalid_argument("incense value must be non-negative");
+            values[entry.first]=entry.second;
+        }
+        incenseValues=values;
     });
     m.def("set_card_pools", [](const std::map<std::string,std::vector<CardId>> &pools) {
         for(auto &entry:pools)if(entry.second.size()<3)

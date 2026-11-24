@@ -45,12 +45,18 @@ def health(plan, game, won):
                 used_tail=bool(plan.get('used_tail')), used_fairy=int(plan.get('used_fairy', 0)))
 
 
+INTANGIBLE_HP = 30.0  # one Intangible on target (user rule, 2026-10-21: at least 30 HP)
+HALLWAY_INTANGIBLE_HP = 5.0  # act 3 hallway fight on turn 1 (user rule, 2026-11-13)
+ACT2_INTANGIBLE_HP = 12.0  # act 2 general case, counter 4 or 5 (user rule, 2026-11-13)
+
+
 def incense_targets(game):
     """Incense Burner counters worth ending this fight with (user rule, 2026-10-15).
 
     Counter c gives Intangible on turn 6-c of the next fight (5 = turn 1, 0 = turn 6).
     The game never rolls the same elite twice in a row (populateMonsterList), so an
     elite is possible next exactly when it was not the last elite of the act.
+    Act 1 follows incense_values; this is the rule without map data.
     """
     if any(m['id'] == 'CorruptHeart' for m in game['combat_state']['monsters']):
         return []
@@ -62,6 +68,48 @@ def incense_targets(game):
     if boss == 'Automaton' and not game.get('solver_elite_ahead', True):
         return [0]
     return [5] if last != 'Slavers' else [4]
+
+
+def incense_values(game):
+    """HP each Incense Burner counter is worth when this fight ends (user rule, 2026-11-13).
+
+    Act 1 looks at the next fight on every path (solver_next_fights). If a hallway fight
+    can come first, the elite or Boss can be avoided and no counter is worth holding.
+    Elites keep the act 1 targets. Boss next: Hexaghost and The Guardian hold 4
+    (Intangible on turn 2); Slime Boss keeps 3. Hexaghost's Divider hits 6 times for
+    max_hp // 12 + 1, so Intangible saves 6 * (max_hp // 12): the floor 16 campfire
+    usually brings HP near full, and using max HP keeps current HP from gaining value.
+    Act 3: when a hallway fight can come first, hold 5 (Intangible on turn 1) for
+    HALLWAY_INTANGIBLE_HP, since the elite or Boss can be avoided; only an elite or Boss
+    next keeps 4 for INTANGIBLE_HP.
+    Act 2 general case (counter 5 target): 4 or 5 both do, each ACT2_INTANGIBLE_HP.
+    Without map data, in act 4 and in the other act 2 cases, every target is worth INTANGIBLE_HP.
+    """
+    targets = incense_targets(game)
+    kinds = game.get('solver_next_fights')
+    act = game.get('act', 1)
+    if act == 2 and game.get('room_type') != 'MonsterRoomBoss' and targets == [5]:
+        return {4: ACT2_INTANGIBLE_HP, 5: ACT2_INTANGIBLE_HP}
+    if act == 3 and game.get('room_type') != 'MonsterRoomBoss' and targets and kinds:
+        if 'monster' in kinds:
+            return {5: HALLWAY_INTANGIBLE_HP}  # the elite or Boss can be avoided
+        return {4: INTANGIBLE_HP}
+    if act != 1 or game.get('room_type') == 'MonsterRoomBoss' or not targets or not kinds:
+        return {c: INTANGIBLE_HP for c in targets}
+    if 'monster' in kinds:
+        return {}
+    values = {c: INTANGIBLE_HP for c in targets} if 'elite' in kinds else {}
+    if 'boss' in kinds:
+        boss = game.get('act_boss')
+        if boss == 'Hexaghost':
+            value = 6.0 * (int(game.get('max_hp', 0)) // 12)
+        elif boss == 'The Guardian':
+            value = INTANGIBLE_HP
+        else:
+            value = None  # Slime Boss and unknown Bosses: the act 1 targets
+        for c in ([4] if value is not None else targets):
+            values[c] = max(values.get(c, 0.0), INTANGIBLE_HP if value is None else value)
+    return values
 
 
 def carry_weight(game):

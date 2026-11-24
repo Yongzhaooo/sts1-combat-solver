@@ -157,6 +157,15 @@ def reply_summary(value):
     return summary
 
 
+def _incense_values(game):
+    """The Incense Burner values the search gets; None when the state cannot be read."""
+    try:
+        from recovery import incense_values
+        return {str(c): v for c, v in incense_values(game).items()}
+    except (KeyError, TypeError, ValueError, ImportError):
+        return None
+
+
 def combat_open_summary(state):
     """Extract key summary without dumping the raw state tree (kept under 1 KB)."""
     game = (state or {}).get('game_state', {})
@@ -178,6 +187,8 @@ def combat_open_summary(state):
         'room': game.get('room_type'),
         'last_elite': game.get('solver_last_elite'),
         'elite_ahead': game.get('solver_elite_ahead'),
+        'next_fights': game.get('solver_next_fights'),
+        'incense_values': _incense_values(game),
         'fast_boss': (game.get('solver_auto_context') or {}).get('boss_fast_finish'),
         'relic_counters': relic_counters(game),
         'hp': game.get('current_hp'),
