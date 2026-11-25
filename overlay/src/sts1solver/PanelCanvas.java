@@ -127,6 +127,13 @@ final class PanelCanvas {
         return uiFont;
     }
 
+    /** Draws with another canvas's font instead of building a second copy (the heart panel shares the solver panel's). */
+    void shareFont(PanelCanvas owner) {
+        owner.font();
+        uiFont = owner.uiFont;
+        fontScale = owner.fontScale;
+    }
+
     /** One line of translated text, cut with an ellipsis to fit the width. */
     void label(SpriteBatch sb, String value, float left, float top, float width, float size, Color color) {
         if (dry) return;

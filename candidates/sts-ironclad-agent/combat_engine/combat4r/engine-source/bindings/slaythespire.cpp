@@ -627,6 +627,25 @@ PYBIND11_MODULE(slaythespire, m) {
              "add a card to the deck"
         )
         .def("obtain_relic", &GameContext::obtainRelic, "obtain a relic and resolve its on-equip effects")
+        // Heart simulation builds a run state from the player's current inventory, whose on-equip effects already happened.
+        .def("set_relics_raw", [](GameContext &gc, const std::vector<std::pair<int,int>> &relics) {
+            gc.relics = RelicContainer{};
+            for (const auto &r : relics) gc.relics.add(RelicInstance{static_cast<RelicId>(r.first), r.second});
+        }, "replace the relics (id, counter) without on-equip effects")
+        .def("set_potions_raw", [](GameContext &gc, const std::vector<int> &slots) {
+            if (slots.size() > gc.potions.size()) throw std::invalid_argument("more potion slots than the simulator holds");
+            gc.potions.fill(Potion::EMPTY_POTION_SLOT);
+            gc.potionCapacity = static_cast<int>(slots.size());
+            gc.potionCount = 0;
+            for (std::size_t i = 0; i < slots.size(); ++i) {
+                gc.potions[i] = static_cast<Potion>(slots[i]);
+                if (gc.potions[i] != Potion::EMPTY_POTION_SLOT) ++gc.potionCount;
+            }
+        }, "replace the potion slots without obtain effects")
+        .def("bottle_card", [](GameContext &gc, int idx, CardType type) {
+            if (idx < 0 || idx >= gc.deck.size()) throw std::invalid_argument("bottle index outside the deck");
+            gc.deck.bottleCard(idx, type);
+        }, "mark a deck card as bottled (Bottled Flame / Lightning / Tornado)")
         .def("remove_card",
             [](GameContext &gc, int idx) {
                 if (idx < 0 || idx >= gc.deck.size()) {

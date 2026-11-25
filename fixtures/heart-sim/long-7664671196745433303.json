@@ -1,0 +1,123 @@
+{
+ "about": "A Heart fight position the native engine cannot win quickly: its search runs for about two minutes without finding a win (heart-sim W2 measurement). Used to keep a heart simulation running while it is cancelled or runs out of time. Inventory only: deck, relics with counters, potions, HP, seed. Ascension 20 is assumed.",
+ "seed": "7664671196745433303",
+ "ascension_level": 20,
+ "current_hp": 71,
+ "max_hp": 71,
+ "deck": [
+  {
+   "id": "AscendersBane",
+   "upgrades": 0
+  },
+  {
+   "id": "Defend_R",
+   "upgrades": 1
+  },
+  {
+   "id": "Defend_R",
+   "upgrades": 1
+  },
+  {
+   "id": "Defend_R",
+   "upgrades": 1
+  },
+  {
+   "id": "Reckless Charge",
+   "upgrades": 1
+  },
+  {
+   "id": "Armaments",
+   "upgrades": 1
+  },
+  {
+   "id": "Bloodletting",
+   "upgrades": 1
+  },
+  {
+   "id": "Anger",
+   "upgrades": 1
+  },
+  {
+   "id": "Pommel Strike",
+   "upgrades": 1
+  },
+  {
+   "id": "Fiend Fire",
+   "upgrades": 1
+  },
+  {
+   "id": "Burning Pact",
+   "upgrades": 1
+  },
+  {
+   "id": "Body Slam",
+   "upgrades": 1
+  },
+  {
+   "id": "Shrug It Off",
+   "upgrades": 1
+  }
+ ],
+ "relics": [
+  {
+   "id": "Black Blood",
+   "counter": -1
+  },
+  {
+   "id": "Ancient Tea Set",
+   "counter": -1
+  },
+  {
+   "id": "Bag of Preparation",
+   "counter": -1
+  },
+  {
+   "id": "MawBank",
+   "counter": -1
+  },
+  {
+   "id": "Runic Cube",
+   "counter": -1
+  },
+  {
+   "id": "Red Mask",
+   "counter": -1
+  },
+  {
+   "id": "FossilizedHelix",
+   "counter": -1
+  },
+  {
+   "id": "War Paint",
+   "counter": -1
+  },
+  {
+   "id": "Charon's Ashes",
+   "counter": -1
+  },
+  {
+   "id": "Whetstone",
+   "counter": -1
+  },
+  {
+   "id": "InkBottle",
+   "counter": 9
+  },
+  {
+   "id": "Dream Catcher",
+   "counter": -1
+  },
+  {
+   "id": "Red Skull",
+   "counter": -1
+  },
+  {
+   "id": "Pantograph",
+   "counter": -1
+  }
+ ],
+ "potions": [
+  "GamblersBrew",
+  "DistilledChaos"
+ ]
+}

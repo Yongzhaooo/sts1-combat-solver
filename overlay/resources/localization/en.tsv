@@ -409,3 +409,30 @@ F6 导出日志 · F8 收起 · F9 停止|F6 export log · F8 fold · F9 stop
 本轮未提供原因，请重新计算或导出日志|No reason provided; recalculate or export the log
  · 滚轮查看完整路线与原因| · Scroll for all routes and reasons
 AI全自动目前只支持战士，机器人请选战斗全自动|AI autopilot supports only the Ironclad; for the Defect choose Combat auto
+心脏模拟|Heart sim
+心脏模拟：顶栏出现心脏按钮，战斗外按一下，用当前卡组模拟打一场心脏（只报胜负）|Heart simulation: top-bar heart button; press it outside combat to simulate the Heart (win or not)
+用当前卡组、遗物、药水和生命值模拟一场心脏战，只报胜负|Simulate a Heart fight with your current deck, relics, potions and HP; reports win or not only
+只能在局内使用|Only available during a run
+战斗中不可用|Not available in combat
+暂只支持战士|Ironclad only for now
+正在模拟中|Simulation running
+模拟中|Simulating
+已等待 |Waited 
+用时 |Took 
+胜|Win
+未找到胜线|No winning line found
+超时未算完|Timed out
+未算完（内存上限）|Not finished (memory limit)
+已取消|Cancelled
+已取消：进入战斗|Cancelled: entered combat
+已取消：离开本局|Cancelled: left the run
+后台未响应|Backend not responding
+模拟失败|Simulation failed
+后台回复缺少心脏模拟结果|Backend reply has no heart simulation result
+后台回复了无法识别的心脏模拟结果|Backend returned an unrecognized heart simulation result
+后台报告了错误，没有说明原因|Backend reported an error without a reason
+后台回复了无法识别的状态|Backend replied with an unrecognized status
+另有 |And 
+ 条分支| more branches
+取消|Cancel
+关闭|Close

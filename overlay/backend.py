@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from datetime import datetime
 import functools
 import os
 import importlib.machinery
@@ -32,6 +33,7 @@ from solver_search import (DEEP_BUDGET, add_follow_ups, boss_fast_plan, clean_no
                            focus_short, focus_target, potion_margin_close, research_gate, research_line, search_plan,
                            stop_after_no_potion)
 from runtime_files import OVERLAY_FILES
+import heart_sim
 from search_status import search_timeout, soft_deadline
 from worker_policy import worker_limit, background_priority
 
@@ -225,6 +227,18 @@ def view_from_state(state):
     return view
 
 
+def heart_view(state):
+    """The outside-combat game state of a heart_sim request, dressed as the Heart fight it will start: the search settings
+    (solve's helpers) read the act, room and monsters from it. The player's own data is kept as sent."""
+    game = state.get('game_state') if isinstance(state, dict) else None
+    if not isinstance(game, dict) or not state.get('in_game'):
+        raise ValueError('无法模拟：游戏不在局内')
+    context = game.get('solver_auto_context')
+    context = {**(context if isinstance(context, dict) else {}), 'room': 'MonsterRoomBoss'}
+    return {'game': {**game, 'act': 4, 'room_type': 'MonsterRoomBoss', 'screen_type': 'NONE', 'solver_auto_context': context,
+                     'combat_state': {'turn': 1, 'monsters': [{'id': 'CorruptHeart'}]}}}
+
+
 class Advisor:
     def __init__(self):
         from steam.live_search import LiveSearch
@@ -258,27 +272,33 @@ class Advisor:
                            kill_thieves, generated, game=self.root_game,
                            interrupt=self.interrupt, initial_plan=initial_plan, deep_gate=self.deep_gate)
 
+    def configure_search(self, game):
+        """Native search settings read from the game state: card pools, Discovery rules, feed/focus/carry weights; leaves a
+        pending interrupt in force. Shared by solve and heart_sim."""
+        s = self.search
+        pools={name:[s.sts.CardId(s.sts.card_id_from_name(s.comparator.bridge.CARD_ALIASES.get(card,s.comparator.bridge.enum_key(card))))
+                     for card in cards] for name,cards in game.get('solver_card_pools',{}).items()}
+        self.native_search.set_card_pools(pools)
+        reroll=game.get('solver_discovery_reroll',True)
+        if type(reroll) is not bool:
+            raise ValueError('无效的 Discovery 随机规则')
+        self.native_search.set_discovery_reroll(reroll)
+        self.native_search.set_discovery_frames(game.get('solver_discovery_frames') is True)
+        # Feed mode (mod setting): max HP gained in this combat counts twice in the plan value.
+        self.native_search.set_max_hp_gain_weight(2.0 if game.get('solver_auto_context', {}).get('feed_mode') is True else 1.0)
+        self.native_search.set_focus_target(focus_target(game))
+        self.native_search.set_incense_targets(incense_targets(game))
+        self.native_search.set_carry_weight(carry_weight(game))
+        self.native_search.resume()
+        if self.interrupt.is_set():
+            self.native_search.cancel()
+
     def solve(self, view, budget):
         self.deep_gate = None
         self.phase('导入战斗状态')
         from sim_patch.parity.adapter import ActionMapper
         s = self.search
-        pools={name:[s.sts.CardId(s.sts.card_id_from_name(s.comparator.bridge.CARD_ALIASES.get(card,s.comparator.bridge.enum_key(card))))
-                     for card in cards] for name,cards in view['game'].get('solver_card_pools',{}).items()}
-        self.native_search.set_card_pools(pools)
-        reroll=view['game'].get('solver_discovery_reroll',True)
-        if type(reroll) is not bool:
-            raise ValueError('无效的 Discovery 随机规则')
-        self.native_search.set_discovery_reroll(reroll)
-        self.native_search.set_discovery_frames(view['game'].get('solver_discovery_frames') is True)
-        # Feed mode (mod setting): max HP gained in this combat counts twice in the plan value.
-        self.native_search.set_max_hp_gain_weight(2.0 if view['game'].get('solver_auto_context', {}).get('feed_mode') is True else 1.0)
-        self.native_search.set_focus_target(focus_target(view['game']))
-        self.native_search.set_incense_targets(incense_targets(view['game']))
-        self.native_search.set_carry_weight(carry_weight(view['game']))
-        self.native_search.resume()
-        if self.interrupt.is_set():
-            self.native_search.cancel()
+        self.configure_search(view['game'])
         s.actions.clear()
         s.pending_multi = None
         self.plan = None
@@ -327,22 +347,7 @@ class Advisor:
         if heart_fight(self.root_game):
             self.searching = [(0, 'heart-all', '心脏：全部资源求胜')]
             try:
-                self.plan = dict(self.native_search.plan(self.root, budget,
-                    list(names), 0, 0, False, True))
-                long_win = self.plan['outcome'] == 1 and len(self.plan['actions']) > LONG_HEART_ACTIONS
-                short = focus_short(self.root_game, self.plan)
-                if (self.plan['outcome'] != 1 or long_win or short) and budget < DEEP_BUDGET and not self.interrupt.is_set():
-                    refined = dict(self.native_search.plan(self.root, DEEP_BUDGET,
-                        list(names), 0, 0, False, True))
-                    if (refined['value'] > self.plan['value'] if not long_win or short else
-                            refined['outcome'] == 1 and len(refined['actions']) < len(self.plan['actions'])):
-                        self.plan = refined
-                self.plan = self.finalize_plan(self.root, self.plan)
-                replay = self.root.clone()
-                for bits in self.plan['actions']:
-                    self.native_search.execute(replay, bits & 0xffffffff)
-                if int(replay.outcome) != self.plan['outcome'] or replay.player.cur_hp != self.plan['hp']:
-                    raise RuntimeError('心脏路线回放与搜索结果不一致')
+                self.plan = self.heart_plan(self.root, self.root_game, budget, list(names))
                 if before != s.comparator.clone_fingerprint(s.battle):
                     raise RuntimeError('搜索修改了输入快照')
                 self.plan['seconds'] = round(time.monotonic() - started, 2)
@@ -460,6 +465,71 @@ class Advisor:
                     self.branch_info.sort(key=lambda branch: branch['id'] != key)
         s.actions.extend(self.plan['actions'])
         s.mapper = ActionMapper(s.comparator, s.battle, view)
+
+    def heart_plan(self, root, game, budget, slots, stages=None, partial_ok=False):
+        """The Heart search, shared by solve and heart_sim: every bottle in `slots` allowed; searched at `budget`, then
+        again at the deep budget when it found no win, found a very long one or missed the Focus target; the finished
+        route is shortened and replayed against the search result. `stages` collects each search's simulation count;
+        `partial_ok` returns an interrupted search without a win as it is (nobody will walk that route)."""
+        plan = dict(self.native_search.plan(root, budget, slots, 0, 0, False, True))
+        if stages is not None:
+            stages.append(plan['simulations'])
+        long_win = plan['outcome'] == 1 and len(plan['actions']) > LONG_HEART_ACTIONS
+        short = focus_short(game, plan)
+        if (plan['outcome'] != 1 or long_win or short) and budget < DEEP_BUDGET and not self.interrupt.is_set():
+            refined = dict(self.native_search.plan(root, DEEP_BUDGET, slots, 0, 0, False, True))
+            if stages is not None:
+                stages.append(refined['simulations'])
+            if (refined['value'] > plan['value'] if not long_win or short else
+                    refined['outcome'] == 1 and len(refined['actions']) < len(plan['actions'])):
+                plan = refined
+        if partial_ok and plan['outcome'] != 1 and self.interrupt.is_set():
+            return plan
+        plan = self.finalize_plan(root, plan)
+        replay = root.clone()
+        for bits in plan['actions']:
+            self.native_search.execute(replay, bits & 0xffffffff)
+        if int(replay.outcome) != plan['outcome'] or replay.player.cur_hp != plan['hp']:
+            raise RuntimeError('心脏路线回放与搜索结果不一致')
+        return plan
+
+    def heart_sim(self, view, seed):
+        """Heart simulation: the first turn of a Heart fight built from the outside-combat game state, searched like the
+        Heart in solve(); only win / no win line / not finished is reported (a deadline interrupt arrives as `interrupt`;
+        a memory-capped search without a win is `timeout` with `memory_capped`)."""
+        game = view['game']
+        started = time.monotonic()
+        self.deep_gate = None
+        self.phase('拼出心脏战局面')
+        seed = heart_sim.parse_seed(seed)
+        root = heart_sim.build_heart_battle(game, seed, coverage_gaps)
+        self.configure_search(game)
+        self.plan = None
+        self.branches = {}
+        self.branch_info = []
+        self.root_game = game
+        self.root = root
+        # Every held bottle may be drunk, as in the Heart branch of solve(); a Smoke Bomb cannot be used against a Boss.
+        slots = [slot for slot, potion in enumerate(game['potions'])
+                 if potion['id'] not in ('Potion Slot', 'FairyPotion', 'SmokeBomb')]
+        self.phase('搜索心脏战')
+        stages = []
+        self.searching = [(0, 'heart-all', '心脏：全部资源求胜')]
+        try:
+            plan = self.heart_plan(self.root, game, 8000, slots, stages, partial_ok=True)
+        finally:
+            self.native_search.cancel()
+            self.searching = []
+        won = plan['outcome'] == int(self.search.sts.Outcome.PLAYER_VICTORY)
+        capped = bool(plan.get('memory_capped'))
+        # A search that stopped for the memory cap did not run out of line to try, so without a win it is "not finished".
+        reply = {'status': 'ready', 'heart_result': 'win' if won else 'timeout' if capped or self.interrupt.is_set() else 'no_win',
+                 'seconds': round(time.monotonic() - started, 2), 'simulations': sum(stages), 'seed': str(seed)}
+        if won:
+            reply['hp'] = int(plan['hp'])
+        if capped:
+            reply['memory_capped'] = True
+        return reply
 
     def research_potion_free(self, view, budget, credit, started):
         """A bottle that saves under POTION_MARGIN_HP may only beat an under-searched potion-free line: search that
@@ -918,6 +988,8 @@ class Advisor:
 
     def handle(self, request):
         self.max_workers = worker_limit(request.get('search_workers', 0))
+        if request.get('op') == 'heart_sim':
+            return self.heart_sim(heart_view(request.get('state')), request.get('seed'))
         view = view_from_state(request['state'])
         budget = request.get('budget', 8000)
         if type(budget) is not int or budget not in (2000, 8000, DEEP_BUDGET):
@@ -998,7 +1070,7 @@ def worker(connection, interrupt):
                     advisor.native_search.cancel()
             watcher = threading.Thread(target=watch_interrupt, daemon=True)
             watcher.start()
-            if request.get('progress') and request.get('op') == 'solve':
+            if request.get('progress') and request.get('op') in ('solve', 'heart_sim'):
                 reporter = threading.Thread(target=report_progress, daemon=True,
                                             args=(advisor, connection, request, stop, send_lock))
                 reporter.start()
@@ -1035,7 +1107,7 @@ def worker(connection, interrupt):
                     sys.stderr.flush()
 
                 result = {'status': 'error', 'message': err_msg, 'traceback': tb_str}
-                if isinstance(error, UnsupportedCombat):
+                if isinstance(error, (UnsupportedCombat, heart_sim.HeartUnsupported)):
                     result['limitation'] = error.items
             finally:
                 was_interrupted = interrupt.is_set()
@@ -1110,9 +1182,51 @@ ALLOWED_DIAGNOSTIC_EVENTS = {
 }
 
 
+# Heart simulation requests and their cancels count down from here (BackendClient.HEART_FIRST_ID); the solver's ids are positive.
+HEART_FIRST_ID = -1000
+# A cancelled heart_sim has this long to hand its worker back before the worker is replaced (the cancel must answer in 2 s).
+HEART_CANCEL_GRACE = 1.5
+
+
+def heart_id(value):
+    return type(value) is int and value <= HEART_FIRST_ID
+
+
+def request_timeout(request):
+    """Seconds a request may run. A heart_sim has no budget of its own and runs the Heart's deep search: deep tier."""
+    return search_timeout(DEEP_BUDGET if request.get('op') == 'heart_sim' else request.get('budget', 0))
+
+
+def heart_sim_line(state, seed, reply, elapsed):
+    """One heart-sim.jsonl record: the inventory the simulation was asked about and how it ended. `hp` and `max_hp` are the
+    player's at the start; the HP left after a win is `win_hp`; `memory_capped` is present (true) when the search stopped at
+    the memory limit."""
+    game = (state or {}).get('game_state') or {}
+    line = {'time': datetime.now().astimezone().isoformat(timespec='seconds'), 'floor': game.get('floor'), 'hp': game.get('current_hp'),
+            'max_hp': game.get('max_hp')}
+    try:
+        line['deck'] = [card['id'] + ('+%d' % card['upgrades'] if card.get('upgrades') else '') for card in game.get('deck') or []]
+        line['relics'] = [relic['id'] for relic in game.get('relics') or []]
+        line['potions'] = [potion['id'] for potion in game.get('potions') or [] if potion['id'] != 'Potion Slot']
+    except (KeyError, TypeError):
+        line.setdefault('deck', None)
+    ready = reply.get('status') == 'ready'
+    line.update(seed=None if seed is None else str(seed), status=reply.get('status'),
+                heart_result=reply.get('heart_result') if ready else None,
+                seconds=reply.get('seconds', round(elapsed, 2)), simulations=reply.get('simulations') if ready else None,
+                message=reply.get('message'))
+    if 'hp' in reply:
+        line['win_hp'] = reply['hp']
+    if reply.get('memory_capped'):
+        line['memory_capped'] = True
+    return line
+
+
 def serve(runs_dir=None):
     inbox = queue.Queue()
+    held = []   # requests that arrived while a cancelled heart_sim was still handing its worker back, in arrival order
     data_dir = Path(os.environ.get('STS_SOLVER_DATA', Path(__file__).parent/'runtime'))
+    heart_log = data_dir/'heart-sim.jsonl'
     runs_dir = Path(runs_dir or data_dir/'runs')
     reports = AsyncReports(runs_dir)
     error_log = data_dir/'backend.log'
@@ -1156,9 +1270,11 @@ def serve(runs_dir=None):
             connection.close()
         process = connection = active = interrupt = None
 
-    def emit(value, state=None):
+    def emit(value, state=None, record=True):
         value = {k: v for k, v in value.items() if k != '_plan'}
-        if value.get('status') == 'error':
+        if not record:
+            pass    # heart_sim writes its own heart-sim.jsonl (errors included); nothing of it goes into a run's record
+        elif value.get('status') == 'error':
             tail = '\n'.join((value.get('stderr') or '').strip().splitlines()[-30:])
             note('fault', {'id': value.get('id'), 'message': value.get('message'), 'stderr': tail,
                                   'exitcode': value.get('exitcode'), 'traceback': value.get('traceback'),
@@ -1166,6 +1282,19 @@ def serve(runs_dir=None):
         elif value.get('status') not in ('progress',):
             note('reply', reply_summary(value), state)
         print(json.dumps(value, ensure_ascii=False), flush=True)
+
+    def heart_final(act, reply):
+        """The one terminal reply of a heart_sim request, and its line in heart-sim.jsonl. A cancel that is pending wins over
+        whatever the worker returned: the player has already been told it was cancelled."""
+        reply = {'id': act[5], 'status': 'cancelled'} if act[5] is not None else {**reply, 'id': act[0]}
+        try:
+            data_dir.mkdir(parents=True, exist_ok=True)
+            with heart_log.open('a', encoding='utf-8') as handle:
+                handle.write(json.dumps(heart_sim_line(act[2], act[8], reply, time.monotonic() - act[1]),
+                                        ensure_ascii=False) + '\n')
+        except OSError:
+            pass
+        return reply
 
     def start():
         nonlocal process, connection, loaded_version, interrupt
@@ -1181,10 +1310,21 @@ def serve(runs_dir=None):
         # Warm worker: engine import happens before the first fight, not during it.
         start()
         while True:
-            try:
-                request = inbox.get(timeout=.03)
-            except queue.Empty:
-                request = 'poll'
+            # The worker of a cancelled heart_sim has not handed back yet: killing it for a new request would lose the
+            # cancelled reply, so requests wait their turn, in order, for exactly that long.
+            draining = bool(active and active[4] == 'heart_sim' and active[5] is not None)
+            if held and not draining:
+                # Once the worker is back, the waiting requests go first and one by one, with or without an active request, so
+                # a later cancel or re-solve still reaches the request in front of it instead of queueing behind its search.
+                request = held.pop(0)
+            else:
+                try:
+                    request = inbox.get(timeout=.03)
+                except queue.Empty:
+                    request = 'poll'
+                if request not in (None, 'poll') and draining:
+                    held.append(request)
+                    request = 'poll'
             if request is None:
                 break
             if request != 'poll':
@@ -1211,12 +1351,17 @@ def serve(runs_dir=None):
                                          if k in request}, request.get('state') if keep else None,
                                 request.get('seed'))
                     continue
-                note('request', {k: request[k] for k in ('id', 'op', 'budget') if k in request},
-                            request.get('state'))  # UI event, no worker mutation or reply/active-ID change.
+                if request.get('op') != 'heart_sim' and not (request.get('op') == 'cancel' and heart_id(request.get('id'))):
+                    note('request', {k: request[k] for k in ('id', 'op', 'budget') if k in request},
+                                request.get('state'))  # UI event, no worker mutation or reply/active-ID change.
                 if request.get('op') == 'cancel':
-                    if active and active[4] == 'solve':
+                    running = active[4] if active else None
+                    if heart_id(request.get('id')) != (running == 'heart_sim'):
+                        # A heart cancel never touches a solver request, nor a solver cancel a heart_sim.
+                        emit({'id': request['id'], 'status': 'cancelled'}, record=not heart_id(request['id']))
+                    elif running in ('solve', 'heart_sim'):
                         interrupt.set()
-                        active = (*active[:4], active[4], request['id'], active[6])
+                        active = (*active[:5], request['id'], active[6], time.monotonic(), active[8])
                     else:
                         # Executing or idle work has no partial search to retain.
                         if active:
@@ -1228,13 +1373,17 @@ def serve(runs_dir=None):
                             emit({'id': request['id'], 'status': 'cancelled'})
                     continue
                 last_solve_ready = None
+                if active and active[4] == 'heart_sim':
+                    # Another request takes the worker (the panel normally cancels first): the simulation still gets its one
+                    # terminal reply and its heart-sim.jsonl line, before the new request is handled.
+                    emit(heart_final(active, {'status': 'cancelled'}), active[2], record=False)
                 received_at = time.monotonic()
                 if request.get('progress'):
                     emit({'id': request['id'], 'status': 'progress', 'phase': '后台已接收，准备工作进程',
-                          'timeout_seconds': search_timeout(request.get('budget', 0))}, request.get('state'))
+                          'timeout_seconds': request_timeout(request)}, request.get('state'))
                 if active:
                     stop()
-                if request.get('op') == 'solve' and worker_version() != loaded_version:
+                if request.get('op') in ('solve', 'heart_sim') and worker_version() != loaded_version:
                     stop()  # A plan starts against one build; never switch midway through it.
                 start()
                 if request.get('progress'):
@@ -1251,9 +1400,10 @@ def serve(runs_dir=None):
                     stop()
                     start()
                     connection.send(request)
-                timeout_limit = search_timeout(request.get('budget', 0))
+                timeout_limit = request_timeout(request)
                 deadline_cut = False
-                active = (request['id'], received_at, request.get('state'), log_offset, request.get('op'), None, timeout_limit)
+                active = (request['id'], received_at, request.get('state'), log_offset, request.get('op'), None, timeout_limit,
+                          None, request.get('seed'))
             while active and connection.poll():
                 completed_active = active
                 active_state = active[2]
@@ -1264,6 +1414,15 @@ def serve(runs_dir=None):
                     result = {'id': active[0], 'status': 'error', 'message': '求解进程意外退出；请重新计算。',
                               'exitcode': process.exitcode}
                     stop()
+                if result.get('status') != 'progress' and completed_active[4] == 'heart_sim':
+                    if deadline_cut and result.get('status') == 'ready':
+                        result['deadline'] = True
+                    result['backend_seconds'] = round(time.monotonic()-completed_active[1], 3)
+                    if result.get('status') == 'error':
+                        result['stderr'] = stderr_since(log_offset)
+                    active = None
+                    emit(heart_final(completed_active, result), active_state, record=False)
+                    continue
                 if result.get('status') != 'progress':
                     result['backend_seconds'] = round(time.monotonic()-completed_active[1], 3)
                     if completed_active[5] is not None:
@@ -1278,17 +1437,33 @@ def serve(runs_dir=None):
                 if result.get('status') == 'error':
                     result['stderr'] = stderr_since(log_offset)
                 emit(result, active_state)
-            if (active and active[4] == 'solve' and not deadline_cut
+            if (active and active[4] in ('solve', 'heart_sim') and not deadline_cut
                     and time.monotonic() - active[1] > soft_deadline(active[6])):
                 # Same path as a player cancel: the worker returns its best plan so far; the hard kill below stays as the fallback.
                 deadline_cut = True
                 interrupt.set()
+            if active and active[4] == 'heart_sim' and active[5] is not None and time.monotonic() - active[7] > HEART_CANCEL_GRACE:
+                # The worker did not hand back in time (a cancel must answer within 2 s): replace it, answer the cancel.
+                cancelled_active = active
+                stop()
+                start()
+                emit(heart_final(cancelled_active, {}), cancelled_active[2], record=False)
             if active and (not process.is_alive() or time.monotonic() - active[1] > active[6]):
                 request_id = active[0]
                 active_state = active[2]
                 exitcode = process.exitcode
                 log_offset = active[3]
+                late = active[4] == 'heart_sim' and process.is_alive()
+                failed = active
                 stop()
+                if failed[4] == 'heart_sim':
+                    # Past the limit the worker is killed and the run counts as not finished; a dead worker is an error.
+                    reply = ({'status': 'ready', 'heart_result': 'timeout', 'seed': str(failed[8]), 'deadline': True,
+                              'seconds': round(time.monotonic() - failed[1], 2)} if late else
+                             {'status': 'error', 'message': '求解进程意外退出；请重新计算。', 'exitcode': exitcode,
+                              'stderr': stderr_since(log_offset)})
+                    emit(heart_final(failed, reply), active_state, record=False)
+                    continue
                 emit({'id': request_id, 'status': 'error', 'message': '搜索超时，请手动接管当前战斗并选择路线（或在设置中降低预算）。',
                       'exitcode': exitcode, 'stderr': stderr_since(log_offset)}, active_state)
     finally:
@@ -1387,6 +1562,7 @@ if _ACT13_DIVISOR > 1 or _ACT13_ROOM_DIVISORS or _NN_WEIGHTS or _RESCUE_ARGS != 
 
     Advisor.solve = _tier_wrap(Advisor.solve)
     Advisor.advance = _tier_wrap(Advisor.advance)
+    Advisor.heart_sim = _tier_wrap(Advisor.heart_sim)   # a Heart fight is act 4: the same tiers as the Heart in solve
 
 
 if __name__ == '__main__':

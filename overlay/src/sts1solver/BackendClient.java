@@ -18,6 +18,7 @@ final class BackendClient {
     private final Gson gson = new Gson();
     private final ConcurrentLinkedQueue<JsonObject> replies = new ConcurrentLinkedQueue<>();
     private final ConcurrentLinkedQueue<JsonObject> debugReplies = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<JsonObject> heartReplies = new ConcurrentLinkedQueue<>();
     private Process process;
     private BufferedWriter writer;
     private volatile boolean runLog = true;
@@ -45,6 +46,7 @@ final class BackendClient {
                 while ((line = input.readLine()) != null) {
                     JsonObject reply = new JsonParser().parse(line).getAsJsonObject();
                     if (reply.has("status") && reply.get("status").getAsString().startsWith("debug_")) debugReplies.add(reply);
+                    else if (isHeartReply(reply)) heartReplies.add(reply);
                     else replies.add(reply);
                 }
             } catch (Exception failure) {
@@ -67,11 +69,24 @@ final class BackendClient {
         writer.flush();
     }
 
+    /** Heart simulation requests count down from here; the solver's ids are positive and the transport_error uses -1. */
+    static final long HEART_FIRST_ID = -1000;
+
+    /** True for a reply whose numeric id is at or below HEART_FIRST_ID; no id, a text id, solver ids and -1 are the solver's. */
+    static boolean isHeartReply(JsonObject reply) {
+        if (reply == null || !reply.has("id") || !reply.get("id").isJsonPrimitive()
+                || !reply.get("id").getAsJsonPrimitive().isNumber()) return false;
+        try { return reply.get("id").getAsLong() <= HEART_FIRST_ID; }
+        catch (NumberFormatException invalid) { return false; }
+    }
+
     boolean started() { return writer != null; }
     boolean alive() { return process != null && process.isAlive(); }
     JsonObject reply() { return replies.poll(); }
     /** Replies to export requests, which carry no request id. */
     JsonObject debugReply() { return debugReplies.poll(); }
+    /** Replies to heart simulation requests (ids at or below HEART_FIRST_ID); the solver's own queue never sees them. */
+    JsonObject heartReply() { return heartReplies.poll(); }
 
     boolean runLog() { return runLog; }
 
