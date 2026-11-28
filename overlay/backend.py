@@ -724,13 +724,18 @@ class Advisor:
         """Live per-branch search counters while solve() runs; empty otherwise."""
         rows = []
         accepted = {branch['id']: branch for branch in list(self.branch_info) if branch['available']}
+        root = self.root
+        can_revive = root is not None and any(self.native_search.revival_inventory(root))
         for index, branch_id, name in list(self.searching):
             p = self.native_search.progress(index)
             done = accepted.get(branch_id, {})
-            # A finished route's HP can include a Fairy or Lizard Tail revival; the row must say so.
+            ready = branch_id in accepted
+            # The running HP maximum has no revival metadata. Ready rows describe the accepted route.
             rows.append({'id': branch_id, 'name': name, 'simulations': p['simulations'], 'turn': p['turn'],
-                         'best_hp': p['best_hp'], 'done': p['done'], 'ready': branch_id in accepted,
-                         'phase': 'ready' if branch_id in accepted else 'finalizing' if p['done'] else p['phase'],
+                         'best_hp': done.get('raw_hp', p['best_hp']),
+                         'hp_provisional': can_revive and not ready and p['best_hp'] > 0,
+                         'done': p['done'], 'ready': ready,
+                         'phase': 'ready' if ready else 'finalizing' if p['done'] else p['phase'],
                          'transitions': p['transitions'], 'transition_limit': p['transition_limit'],
                          'budget': p['budget'], 'used_tail': bool(done.get('used_tail')),
                          'used_fairy': int(done.get('used_fairy', 0))})

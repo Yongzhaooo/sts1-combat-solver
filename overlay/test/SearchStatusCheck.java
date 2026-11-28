@@ -13,6 +13,13 @@ public class SearchStatusCheck {
         String beam = SearchStatus.phase(row);
         row.addProperty("phase", "finalizing");
         if (beam.equals(SearchStatus.phase(row))) throw new AssertionError("stage is hidden");
+        row.addProperty("best_hp", 37);
+        row.addProperty("hp_provisional", true);
+        if (!I18n.t("复活待核实").equals(SearchStatus.hpLabel(row)))
+            throw new AssertionError("unverified revival HP is visible");
+        row.addProperty("hp_provisional", false);
+        row.addProperty("best_hp", 19);
+        if (!"HP 19".equals(SearchStatus.hpLabel(row))) throw new AssertionError("accepted route HP is hidden");
         float previous = SearchStatus.waitingFill(-5);
         if (previous != 0 || Math.abs(SearchStatus.waitingFill(8000) - .5f) > 1e-6) throw new AssertionError("search bar start or midpoint");
         for (long t = 500; t <= 3600000; t *= 2) {

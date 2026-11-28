@@ -92,6 +92,10 @@ def main():
                 reply = send({'id': 3, 'op': 'solve', 'state': state, 'budget': 2000, 'progress': True})
                 assert reply['status'] == 'progress' and reply['timeout_seconds'] == 150, reply
                 while reply.get('status') == 'progress':
+                    for row in reply.get('branches', []):
+                        assert isinstance(row.get('hp_provisional'), bool), row
+                        if row['hp_provisional']:
+                            assert row['best_hp'] > 0 and not row['ready'], row
                     reply = replies.get(timeout=30)
                 assert reply.get('id') == 3 and reply.get('status') == 'ready' and reply.get('command'), reply
                 assert reply.get('search_workers', 0) >= 1 and reply.get('search_priority') in ('below_normal', 'unchanged'), reply
