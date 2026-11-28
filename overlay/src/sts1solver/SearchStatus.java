@@ -27,6 +27,12 @@ final class SearchStatus {
         float seconds = Math.max(0, elapsedMillis) / 1000f;
         return Math.min(.95f, seconds / (seconds + 8));
     }
+    static String hpLabel(JsonObject row) {
+        if (row.has("hp_provisional") && row.get("hp_provisional").getAsBoolean())
+            return I18n.t("复活待核实");
+        int hp = row.get("best_hp").getAsInt();
+        return hp > 0 ? "HP " + hp : I18n.t("未胜");
+    }
     static String phase(JsonObject row) {
         String phase = row.has("phase") ? row.get("phase").getAsString() : "mcts";
         switch (phase) {

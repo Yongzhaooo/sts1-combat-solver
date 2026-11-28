@@ -1524,11 +1524,10 @@ public class SolverMod implements PostUpdateSubscriber, PostRenderSubscriber, Po
             List<String> rows=new ArrayList<>(); List<Color> colors=new ArrayList<>(); int done=0;
             for(JsonElement e:progressRows) {
                 JsonObject row=e.getAsJsonObject();
-                int best=row.get("best_hp").getAsInt();
                 boolean ready=row.has("ready") && row.get("ready").getAsBoolean() && row.has("id");
                 String revival=ready?revivalWarning(row):"";
                 String phase=row.get("phase").getAsString();
-                rows.add((revival.isEmpty()?"":revival+" · ")+(best>0?"HP "+best:I18n.t("未胜"))+" · T"+row.get("turn").getAsInt()+" · "
+                rows.add((revival.isEmpty()?"":revival+" · ")+SearchStatus.hpLabel(row)+" · T"+row.get("turn").getAsInt()+" · "
                     +SearchStatus.phase(row)+" · "+(row.has("transitions") && (phase.equals("beam") || phase.equals("cycle"))
                         ? count(row.get("transitions").getAsLong())+I18n.t("步") : count(row.get("simulations").getAsLong())+I18n.t("次"))
                     +" · "+I18n.backend(row.get("name").getAsString()));
